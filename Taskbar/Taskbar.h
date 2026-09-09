@@ -13,6 +13,7 @@
 #include <QString>
 #include <QRect>
 #include <QColor>
+#include <QPixmap>
 #include <QGraphicsOpacityEffect>
 #include <QPropertyAnimation>
 #include <QList>
@@ -25,7 +26,6 @@
 
 class QScreen;
 class QStackedLayout;
-class QGraphicsColorizeEffect;
 class QVariantAnimation;
 class QResizeEvent;
 class TaskbarSettingsDialog;
@@ -56,8 +56,8 @@ private:
     QTimer* timer;                       // 时间刷新定时器
     QLabel* timeLabel;                   // 时间文本标签
     QLabel* contentLabel;                // 左侧当前用户名文本，警报态与其它 Taskbar 文本同步变为白色。
-    QLabel* logoLabel;                   // 左侧 Logo，地震时通过图形效果跟随警报前景色。
-    QGraphicsColorizeEffect* logoColorEffect; // 左侧 Logo 的警报态前景色着色效果。
+    QLabel* logoLabel;                   // 左侧 Logo 标签。
+    QPixmap logoPixmap;                  // 左侧 Logo 原图，保留透明通道用于警报态着色。
 
     QWidget* networkSpeedContainer;      // 网络速率显示容器
     QLabel* uploadSpeedLabel;            // 上行速率文本标签
