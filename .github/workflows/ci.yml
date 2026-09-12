@@ -272,12 +272,18 @@ jobs:
             throw 'HVM control-arithmetic unit tests failed.'
           }
 
+      # --fail-on-risk is the point of this step.  Without it the auditor ran,
+      # wrote a report nobody opened, and the HIGH findings it recorded sat
+      # untouched for over a month - which is exactly how a confirmed local
+      # privilege escalation stayed in the tree.  A check that cannot fail the
+      # build is documentation, not a gate.
       - name: Audit IOCTL registry and access policy
         run: >-
           python tools/ioctl_audit/ksword_ioctl_audit.py
           --repo-root .
           --format markdown
           --out artifacts/ioctl-audit.md
+          --fail-on-risk
 
       - name: Upload IOCTL audit report
         if: always()

@@ -1,5 +1,10 @@
 {
-  "allowedAnyAccess": [],
+  "allowedAnyAccess": [
+    "IOCTL_KSWORD_ARK_QUERY_UNLOADED_DRIVERS",
+    "IOCTL_KSWORD_ARK_HWID_DISPATCH_QUERY",
+    "IOCTL_KSWORD_ARK_QUERY_APP_CONTROL_STATUS",
+    "IOCTL_KSWORD_ARK_QUERY_PROCESS_PROTECT_STATE"
+  ],
   "mutatingKeywords": [
     "SET",
     "WRITE",
@@ -35,6 +40,8 @@
   "notes": {
     "purpose": "Policy file for the KswordARKDriver IOCTL static auditor.",
     "allowedAnyAccess": "Add a full IOCTL_KSWORD_ARK_* name here only when FILE_ANY_ACCESS is intentional and documented.",
+    "allowedAnyAccessWhy": "All four are keyword false positives, not exceptions: QUERY_UNLOADED_DRIVERS matches UNLOAD, HWID_DISPATCH_QUERY matches PATCH, QUERY_APP_CONTROL_STATUS matches CONTROL, QUERY_PROCESS_PROTECT_STATE matches PROTECT. Each is a read-only query; requiring FILE_WRITE_ACCESS would break the read path without closing anything. The list exists so the audit can gate the build on HIGH findings - it stays empty of genuine exceptions.",
+    "readPrimitiveGap": "The auditor classifies by mutating/query keyword only, so it does not flag read primitives that are themselves privilege escalation - arbitrary physical or virtual memory reads disclose whatever the caller cannot otherwise see. Those were gated by hand on 2026-09-12 and now show up as query_write_access MEDIUM findings, which is the expected shape rather than a regression.",
     "mutatingKeywords": "Tokens that usually indicate state-changing or destructive operations and should not stay FILE_ANY_ACCESS by default.",
     "queryKeywords": "Tokens that usually indicate read-only/query operations and should not require FILE_WRITE_ACCESS unless there is a documented reason.",
     "ignoredHeaders": "Use repository-relative paths or basenames for protocols owned by a different driver project."

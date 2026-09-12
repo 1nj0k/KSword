@@ -48,6 +48,9 @@
 
 /* 协议的唯一真值来源。手抄一份就等于给自己埋一个静默的漂移。 */
 #include "../../shared/driver/KswordArkHvmIoctl.h"
+/* acl-probe 要对这两条破坏性 IOCTL 验访问位闸门，取它们的控制码。 */
+#include "../../shared/driver/KswordArkProcessIoctl.h"
+#include "../../shared/driver/KswordArkMemoryIoctl.h"
 
 #define KSW_DEVICE_PATH L"\\\\.\\KswordARKLog"
 
@@ -4246,6 +4249,84 @@ static const char* NestedProbeStatusName(unsigned long s)
     }
 }
 
+/*
+ * 用**只读句柄**去调破坏性 IOCTL，看 I/O 管理器挡不挡。
+ *
+ * 这是访问位那次修复唯一算数的判据。光看头文件里写着 FILE_WRITE_ACCESS 证明不了
+ * 什么 —— 访问位是 CTL_CODE 的一部分，驱动和客户端如果版本不一致，控制码根本对不上，
+ * 那时"调不通"的原因与权限无关，而两者从外面看一模一样。所以这里同时验两面：
+ * 只读句柄必须被拒（win32=5），读写句柄必须能走到驱动（拿到的是驱动的语义结果，
+ * 不是 5）。只有两面都成立，才说明是闸门在起作用而不是控制码错位。
+ */
+static int DoAclProbe(HANDLE rw, int asJson)
+{
+    static const struct { const char* name; DWORD code; } probes[] = {
+        { "TERMINATE_PROCESS",    IOCTL_KSWORD_ARK_TERMINATE_PROCESS },
+        { "SUSPEND_PROCESS",      IOCTL_KSWORD_ARK_SUSPEND_PROCESS },
+        { "READ_PHYSICAL_MEMORY", IOCTL_KSWORD_ARK_READ_PHYSICAL_MEMORY },
+        { "READ_VIRTUAL_MEMORY",  IOCTL_KSWORD_ARK_READ_VIRTUAL_MEMORY },
+    };
+    unsigned char scratch[512];
+    HANDLE ro;
+    size_t i;
+    int failed = 0;
+
+    ro = CreateFileW(KSW_DEVICE_PATH, GENERIC_READ,
+                     FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (ro == INVALID_HANDLE_VALUE) {
+        fprintf(stderr, "只读句柄都打不开：win32=%lu —— 这一项测不了\n",
+                GetLastError());
+        return 1;
+    }
+    if (!asJson) {
+        printf("\n=== 访问位闸门（只读句柄 vs 读写句柄）===\n");
+    }
+    for (i = 0; i < sizeof(probes) / sizeof(probes[0]); ++i) {
+        DWORD returned = 0;
+        DWORD roErr, rwErr;
+
+        memset(scratch, 0, sizeof(scratch));
+        SetLastError(0);
+        (void)DeviceIoControl(ro, probes[i].code, scratch, (DWORD)sizeof(scratch),
+                              scratch, (DWORD)sizeof(scratch), &returned, NULL);
+        roErr = GetLastError();
+        memset(scratch, 0, sizeof(scratch));
+        SetLastError(0);
+        (void)DeviceIoControl(rw, probes[i].code, scratch, (DWORD)sizeof(scratch),
+                              scratch, (DWORD)sizeof(scratch), &returned, NULL);
+        rwErr = GetLastError();
+        /*
+         * 只读必须是 5（拒绝访问）；读写必须**不是** 5。
+         *
+         * 读写那一侧返回什么语义错误都算通过 —— 我们喂的是一片零，驱动多半会
+         * 判无效参数，那恰恰说明请求到达了驱动。
+         */
+        {
+            const int pass = (roErr == ERROR_ACCESS_DENIED) &&
+                             (rwErr != ERROR_ACCESS_DENIED);
+            if (!pass) { failed = 1; }
+            if (asJson) {
+                printf("%s{\"kind\":\"acl-probe\",\"ioctl\":\"%s\","
+                       "\"readOnlyWin32\":%lu,\"readWriteWin32\":%lu,"
+                       "\"pass\":%d}\n",
+                       "", probes[i].name, roErr, rwErr, pass);
+            } else {
+                printf("  %-22s 只读 win32=%-5lu  读写 win32=%-5lu  => %s\n",
+                       probes[i].name, roErr, rwErr,
+                       pass ? "**PASS**" : "FAIL");
+            }
+        }
+    }
+    CloseHandle(ro);
+    if (!asJson) {
+        printf("\n  判据：只读句柄必须 win32=5（被 I/O 管理器挡在驱动之外），\n"
+               "        且同一条在读写句柄上**不是** 5 —— 后者排除\"控制码对不上\"\n"
+               "        这个与权限无关却长得一样的原因。\n");
+    }
+    return failed ? 2 : 0;
+}
+
 /* 判定一行是否达到正向判据。 */
 static int NestedProbeRowPassed(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
 {
@@ -4511,6 +4592,10 @@ static void PrintUsage(void)
            "GS base）\n");
     printf("  probe-flags      负向探针（ENFORCE、能力 flag、互斥组合是否被"
            "**正确地**拒绝）\n");
+    printf("  acl-probe        访问位闸门验收：拿**只读句柄**去调破坏性 IOCTL，"
+           "必须被 I/O 管理器挡掉（win32=5），\n"
+           "                   同一条在读写句柄上必须**不是** 5 —— 后者排除"
+           "\"驱动与客户端控制码对不上\"这个长得一样的原因。\n");
     printf("  nested-probe     嵌套 VMX 自检：在**客户机上下文**里真的执行一遍 "
            "VMXON/VMPTRLD/VMWRITE/VMREAD/VMPTRST/VMXOFF，逐条看架构结果。\n"
            "                   前提：常驻在跑**且**起常驻时给了 ENABLE_NESTED_VMX；"
@@ -4599,6 +4684,8 @@ int main(int argc, char** argv)
 
     if (strcmp(cmd, "status") == 0) {
         rc = DoQuery(h, asJson);
+    } else if (strcmp(cmd, "acl-probe") == 0) {
+        rc = DoAclProbe(h, asJson);
     } else if (strcmp(cmd, "nested-probe") == 0) {
         rc = DoNestedProbe(h, asJson, 0);
     } else if (strcmp(cmd, "nested-probe-all") == 0) {
