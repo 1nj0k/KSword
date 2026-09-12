@@ -34,6 +34,13 @@ Environment:
 #define KSW_PROBE_VMCS_GUEST_RIP 0x681EUL
 /* Name a value with no architectural meaning, chosen to be recognizable. */
 #define KSW_PROBE_PATTERN 0x00005357444E3142ULL
+/*
+ * A second, different pattern for the second vmcs12.
+ *
+ * Different in every byte from the first, so a switch that returns the wrong
+ * VMCS's value cannot be mistaken for a partial read or a torn one.
+ */
+#define KSW_PROBE_PATTERN_B 0x00002A6F6E654D4BULL
 
 /* Name the VMCS fields the L2 construction writes by hand. */
 #define KSW_PROBE_VMCS_LINK_POINTER 0x2800UL
@@ -125,6 +132,16 @@ typedef struct _KSW_HVM_NESTED_PROBE_CONTEXT
     ULONGLONG VmxonPhysical;
     PVOID Vmcs12Virtual;
     ULONGLONG Vmcs12Physical;
+    /*
+     * A second vmcs12 region, for the one question a single region cannot ask.
+     *
+     * A hypervisor keeps several VMCSs and switches between them constantly.
+     * Whether fields survive that switch is a prerequisite for hosting one,
+     * and with one region the dispatcher can model a single vmcs12 and still
+     * pass everything.
+     */
+    PVOID Vmcs12bVirtual;
+    ULONGLONG Vmcs12bPhysical;
     /* One page of L2 code, plus the stack L2 runs on. */
     PVOID L2CodeVirtual;
     /* The stack this probe's own L1 VM-exit handler runs on. */
@@ -545,6 +562,56 @@ KswordARKHvmNestedProbeExecute(
             response->vmptrstMatched =
                 (storedPointer == Probe->Vmcs12Physical) ? 1UL : 0UL;
             /*
+             * Two vmcs12 regions, alternated.
+             *
+             * Everything above uses one VMCS and therefore cannot see whether
+             * a second one exists.  A real hypervisor keeps several - one per
+             * vCPU at minimum - and VMPTRLDs between them constantly, so
+             * "fields survive a switch" is a prerequisite for hosting one, not
+             * an optimization.
+             *
+             * The sequence is deliberately the smallest that can fail:
+             * write A, write B, read A, read B.  A dispatcher that models a
+             * single vmcs12 returns B's value (or zero) for A, and nothing
+             * else in this probe would notice.
+             */
+            {
+                ULONGLONG secondPhysical = Probe->Vmcs12bPhysical;
+                ULONGLONG firstPhysical = Probe->Vmcs12Physical;
+                ULONGLONG backA = 0ULL;
+                ULONGLONG backB = 0ULL;
+
+                response->vmcsSwitchResult =
+                    KSWORD_ARK_HVM_NESTED_PROBE_STEP_SKIPPED;
+                response->vmcsSwitchMatched = 0UL;
+                if (secondPhysical != 0ULL) {
+                    ULONG step = 0UL;
+
+                    /* A already holds KSW_PROBE_PATTERN from the write above. */
+                    step |= (ULONG)__vmx_vmptrld(&secondPhysical);
+                    step |= (ULONG)__vmx_vmwrite(
+                        (SIZE_T)KSW_PROBE_VMCS_GUEST_RIP,
+                        (SIZE_T)KSW_PROBE_PATTERN_B);
+                    step |= (ULONG)__vmx_vmptrld(&firstPhysical);
+                    step |= (ULONG)__vmx_vmread(
+                        (SIZE_T)KSW_PROBE_VMCS_GUEST_RIP,
+                        (SIZE_T*)&backA);
+                    step |= (ULONG)__vmx_vmptrld(&secondPhysical);
+                    step |= (ULONG)__vmx_vmread(
+                        (SIZE_T)KSW_PROBE_VMCS_GUEST_RIP,
+                        (SIZE_T*)&backB);
+                    /* Leave the first one current for everything downstream. */
+                    step |= (ULONG)__vmx_vmptrld(&firstPhysical);
+                    response->vmcsSwitchResult = step;
+                    response->vmcsSwitchValueA = backA;
+                    response->vmcsSwitchValueB = backB;
+                    response->vmcsSwitchMatched =
+                        (step == 0UL &&
+                         backA == KSW_PROBE_PATTERN &&
+                         backB == KSW_PROBE_PATTERN_B) ? 1UL : 0UL;
+                }
+            }
+            /*
              * Issue INVEPT from L1 and see whether we accept it.
              *
              * Reusing the driver's own stub is deliberate: executed from guest
@@ -795,6 +862,8 @@ KswordARKHvmNestedProbeRunOne(
         PAGE_SIZE, lowest, highest, boundary, MmCached);
     probe.Vmcs12Virtual = MmAllocateContiguousMemorySpecifyCache(
         PAGE_SIZE, lowest, highest, boundary, MmCached);
+    probe.Vmcs12bVirtual = MmAllocateContiguousMemorySpecifyCache(
+        PAGE_SIZE, lowest, highest, boundary, MmCached);
     probe.L2CodeVirtual = MmAllocateContiguousMemorySpecifyCache(
         PAGE_SIZE, lowest, highest, boundary, MmCached);
     probe.Ept12Pml4Virtual = MmAllocateContiguousMemorySpecifyCache(
@@ -939,6 +1008,12 @@ KswordARKHvmNestedProbeRunOne(
      */
     *(volatile ULONG*)probe.VmxonVirtual = revision;
     *(volatile ULONG*)probe.Vmcs12Virtual = revision;
+    if (probe.Vmcs12bVirtual != NULL) {
+        RtlZeroMemory(probe.Vmcs12bVirtual, PAGE_SIZE);
+        *(volatile ULONG*)probe.Vmcs12bVirtual = revision;
+        physical = MmGetPhysicalAddress(probe.Vmcs12bVirtual);
+        probe.Vmcs12bPhysical = (ULONGLONG)physical.QuadPart;
+    }
     physical = MmGetPhysicalAddress(probe.VmxonVirtual);
     probe.VmxonPhysical = (ULONGLONG)physical.QuadPart;
     physical = MmGetPhysicalAddress(probe.Vmcs12Virtual);
@@ -960,6 +1035,9 @@ KswordARKHvmNestedProbeRunOne(
     KeRevertToUserGroupAffinityThread(&previous);
     MmFreeContiguousMemory(probe.VmxonVirtual);
     MmFreeContiguousMemory(probe.Vmcs12Virtual);
+    if (probe.Vmcs12bVirtual != NULL) {
+        MmFreeContiguousMemory(probe.Vmcs12bVirtual);
+    }
     MmFreeContiguousMemory(probe.L2CodeVirtual);
     MmFreeContiguousMemory(probe.Ept12Pml4Virtual);
     MmFreeContiguousMemory(probe.Ept12PdptVirtual);

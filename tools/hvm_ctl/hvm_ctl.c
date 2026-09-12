@@ -4663,6 +4663,16 @@ static void PrintNestedProbeRow(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
     /*
      * MSR 路由的判据行。停在哪里就是答案，三种结局各有确定的偏移。
      */
+    /*
+     * 两份 vmcs12 的切换。单份 VMCS 问不出这件事，而真 hypervisor 一定会切。
+     */
+    printf("    vmcs12 切换  %s   A 读回 0x%016llX   B 读回 0x%016llX\n",
+           (r->vmcsSwitchResult == KSWORD_ARK_HVM_NESTED_PROBE_STEP_SKIPPED)
+               ? "**没执行到**"
+               : (r->vmcsSwitchMatched
+                      ? "**两份各自的字段都还在**"
+                      : "**字段丢了 —— 只建模了一份 vmcs12**"),
+           r->vmcsSwitchValueA, r->vmcsSwitchValueB);
     printf("    MSR 路由     L1 用位图 %s   合并 %s   L2 停在 +%llu %s\n",
            r->l1UsesMsrBitmap ? "是" : "否",
            r->bitmapMergeComplete ? "完整" : "**不完整（回退成全部拦截）**",

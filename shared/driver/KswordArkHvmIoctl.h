@@ -2048,6 +2048,20 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
      * 情形 —— 半套传播比完全没有更糟，L1 会读到"这些页写过、那些没写过"，
      * 而后半句是假的且它无从察觉。
      */
+    /*
+     * 两份 vmcs12 交替之后，各自的字段还在不在。
+     *
+     * 单份 VMCS 问不出这件事：派发器只建模一份 vmcs12 也能把上面每一项都跑过。
+     * 而真 hypervisor（VMware、VirtualBox、Hyper-V）每个 vCPU 至少一份 VMCS 并
+     * 不断 VMPTRLD 切换 —— 字段能不能活过一次切换，是能不能托住它们的前提。
+     *
+     * 序列是最小可失败的那一个：写 A、写 B、读 A、读 B。只建模一份的派发器会
+     * 把 B 的值（或零）当成 A 的还回来。
+     */
+    unsigned long vmcsSwitchResult;
+    unsigned long vmcsSwitchMatched;
+    unsigned long long vmcsSwitchValueA;
+    unsigned long long vmcsSwitchValueB;
     unsigned long accessedDirtyActive;
     unsigned long adPropagatedCount;
     unsigned long adOverflowCount;
