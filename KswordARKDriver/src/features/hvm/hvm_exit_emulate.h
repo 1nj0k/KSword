@@ -69,6 +69,24 @@ KswordARKHvmExitEmulateXsetbv(
  * HypervisorPresent enables forwarding the reserved 0x40000000-0x4FFFFFFF
  * window to the hypervisor beneath us; every other index still faults.
  */
+/*
+ * Answer a VMX capability MSR read with what we actually implement.
+ *
+ * Returns TRUE when the access was fully serviced and the caller should
+ * advance RIP.  Returns FALSE for every index outside the capability range,
+ * leaving those to the paths that already own them.
+ *
+ * Deliberately consulted before the policy engine and not overridable by it.
+ * A policy that passed one of these through natively would hand a guest the
+ * machine's real capabilities, which is the single thing this exists to stop -
+ * and it would do so silently, because a pass-through leaves no trace anywhere.
+ */
+BOOLEAN
+KswordARKHvmExitFilterVmxCapabilityMsr(
+    _Inout_ KSW_HVM_GPR_FRAME* Frame,
+    _In_ BOOLEAN IsWrite
+    );
+
 BOOLEAN
 KswordARKHvmExitEmulateMsr(
     _Inout_ KSW_HVM_GPR_FRAME* Frame,

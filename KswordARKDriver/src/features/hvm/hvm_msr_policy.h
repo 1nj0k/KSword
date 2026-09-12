@@ -41,6 +41,19 @@ KswordARKHvmMsrPolicyResetLocked(
     _Inout_ KSW_HVM_RUNTIME* Runtime
     );
 
+/*
+ * Make every VMX capability MSR read exit, so it can be narrowed.
+ *
+ * Not a policy: it carries no table slot, cannot be removed, and is not
+ * something a caller asked for.  It lives in this module only because the
+ * bitmap's bits are owned here, and going through the same choke point is what
+ * keeps the "does our half of the bitmap contribute anything" count exact.
+ */
+VOID
+KswordARKHvmMsrArmVmxCapabilityInterceptLocked(
+    _Inout_ KSW_HVM_RUNTIME* Runtime
+    );
+
 /* Apply the policy covering one intercepted MSR access, if any. */
 ULONG
 KswordARKHvmMsrPolicyApply(

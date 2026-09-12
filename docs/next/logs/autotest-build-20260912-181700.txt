@@ -1,0 +1,8 @@
+
+  Win32kTimerEvidenceModel.cpp
+  InjectionSurvey.cpp
+  EvidenceContractTests.cpp
+  InjectionSurveyTests.cpp
+  KswordARKLightTests.cpp
+  正在生成代码...
+  KswordARKLightTests.vcxproj -> C:\Users\Felix\CLionProjects\KSword\KswordARKLightTests\x64\Release\KswordARKLightTests.exe

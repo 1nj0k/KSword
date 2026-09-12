@@ -204,11 +204,25 @@ KswordARKHvmNestedBitmapMerge(
         /*
          * With nothing of our own to add, point vmcs02 at L1's page directly.
          *
-         * The merge exists to union two bitmaps.  When our side is empty - the
-         * default, since bits only appear there when an MSR policy is
-         * installed - the union *is* L1's page, and copying it produces a
-         * byte-identical duplicate at the cost of a 4 KiB window read plus a
-         * 4 KiB OR on every single L2 entry.  Measured at 21-27% of entry cost.
+         * The merge exists to union two bitmaps.  When our side is empty the
+         * union *is* L1's page, and copying it produces a byte-identical
+         * duplicate at the cost of a 4 KiB window read plus a 4 KiB OR on
+         * every single L2 entry.  Measured at 21-27% of entry cost.
+         *
+         * The test is the bitmap's own bit count, not a proxy for it.  It
+         * asked "are there zero MSR policies" while the only thing that ever
+         * set a bit was a policy; once the VMX capability interception began
+         * setting bits, that proxy would have shared L1's page and silently
+         * dropped our interception for L2 - which is to say, it would have let
+         * L2 read the machine's real VMX capabilities out from under the
+         * filter that exists precisely to stop that.
+         *
+         * With capability interception armed our half is never empty, so this
+         * path no longer runs during normal residency.  It is kept rather than
+         * deleted because emptiness is a property of the bitmap, not a
+         * permanent fact: the interception is armed at preparation and a build
+         * that does not arm it - or a future narrowing of what we intercept -
+         * gets the fast path back without anyone having to rediscover it.
          *
          * Sharing is also strictly more correct than copying here.  A copy is
          * a snapshot: L1 editing its bitmap in place between entries - which
@@ -224,7 +238,7 @@ KswordARKHvmNestedBitmapMerge(
          * Alignment is checked because the field feeds hardware directly here,
          * not a reader that would have refused a bad address on our behalf.
          */
-        if (Context->Runtime->MsrPolicyCount == 0UL &&
+        if (Context->Runtime->MsrBitmapInterceptCount == 0UL &&
             address != 0ULL &&
             (address & (KSW_NB_PAGE_BYTES - 1ULL)) == 0ULL) {
             Result->MsrBitmapPhysical = address;

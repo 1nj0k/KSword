@@ -286,6 +286,56 @@ KswordARKHvmExitEmulateXsetbv(
 #define KSW_HVM_HYPERVISOR_MSR_LIMIT 0x4FFFFFFFUL
 
 BOOLEAN
+KswordARKHvmExitFilterVmxCapabilityMsr(
+    _Inout_ KSW_HVM_GPR_FRAME* Frame,
+    _In_ BOOLEAN IsWrite
+    )
+{
+    ULONG index = 0UL;
+    ULONGLONG value = 0ULL;
+
+    /* Refuse to run without the register frame the answer goes into. */
+    if (Frame == NULL) {
+        /* Report that nothing was serviced. */
+        return FALSE;
+    }
+    /* The architectural MSR index always arrives in ECX. */
+    index = (ULONG)Frame->Rcx;
+    if (!KswordArkHvmIsVmxCapabilityMsr(index)) {
+        /* Report that this index belongs to somebody else. */
+        return FALSE;
+    }
+    /*
+     * Writes are not intercepted, so one arriving here did not come from our
+     * bitmap.  These MSRs are read-only: leave it to the path that already
+     * turns an unhandled MSR access into the architectural #GP rather than
+     * inventing a second answer for the same fault.
+     */
+    if (IsWrite != FALSE) {
+        /* Report that the write was not serviced here. */
+        return FALSE;
+    }
+    /*
+     * Read the machine's own value, then narrow it.
+     *
+     * Read rather than cached: these are fixed for the life of the processor,
+     * but caching them would add a second source of truth that has to be kept
+     * in step with the one the capability-adjustment code already reads, and
+     * an RDMSR costs far less than that risk.  No structured exception handler
+     * here on purpose - the index range is architecturally defined on every
+     * processor that has VMX, and we only got this exit because VMX is on.
+     */
+    value = __readmsr(index);
+    value = KswordArkHvmFilterVmxCapabilityMsr(index, value);
+    /* Publish the low half exactly as RDMSR would. */
+    Frame->Rax = (ULONGLONG)(ULONG)value;
+    /* Publish the high half exactly as RDMSR would. */
+    Frame->Rdx = (ULONGLONG)(ULONG)(value >> 32);
+    /* Report a completely serviced read. */
+    return TRUE;
+}
+
+BOOLEAN
 KswordARKHvmExitEmulateMsr(
     _Inout_ KSW_HVM_GPR_FRAME* Frame,
     _In_ BOOLEAN IsWrite,
@@ -458,6 +508,17 @@ KswordARKHvmExitEmulateMsr(
     if (InjectFault != NULL) {
         *InjectFault = FALSE;
     }
+    return FALSE;
+}
+
+BOOLEAN
+KswordARKHvmExitFilterVmxCapabilityMsr(
+    _Inout_ KSW_HVM_GPR_FRAME* Frame,
+    _In_ BOOLEAN IsWrite
+    )
+{
+    UNREFERENCED_PARAMETER(Frame);
+    UNREFERENCED_PARAMETER(IsWrite);
     return FALSE;
 }
 

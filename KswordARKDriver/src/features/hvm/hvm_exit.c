@@ -1215,40 +1215,56 @@ KswordARKHvmResidentVmExitDispatch(
                basicReason == KSW_VMX_EXIT_WRMSR) {
         const BOOLEAN isWrite =
             (BOOLEAN)(basicReason == KSW_VMX_EXIT_WRMSR);
-        /*
-         * An index inside the bitmap only exits because a policy opened a hole
-         * for it, so the policy engine gets first refusal.  Anything it does
-         * not claim fell outside the bitmap entirely.
-         */
-        const ULONG policyResult = KswordARKHvmMsrPolicyApply(
-            Context->Runtime,
-            Frame,
-            isWrite);
 
-        if (policyResult == KSW_HVM_MSR_POLICY_RESULT_HANDLED) {
-            /* Continue at the instruction following the MSR access. */
+        /*
+         * The VMX capability MSRs come first, and no policy can take them.
+         *
+         * What we advertise has to equal what we implement: an L1 that reads
+         * the machine's real capabilities will enable features whose vmcs02
+         * fields we never write, and nothing on that path reports an error.
+         * A policy that passed one of these through would undo exactly that,
+         * silently, so the filter is placed where a policy cannot reach it.
+         */
+        if (KswordARKHvmExitFilterVmxCapabilityMsr(Frame, isWrite)) {
+            /* Continue at the instruction following the MSR read. */
             handled = KswordARKHvmExitAdvanceRip(
                 telemetry.InstructionLength);
-        } else if (policyResult ==
-            KSW_HVM_MSR_POLICY_RESULT_INJECT_FAULT) {
-            /* Restart the instruction after the guest takes #GP. */
-            handled = KswordARKHvmExitInjectGeneralProtection();
         } else {
-            /* Classify the index against the architectural bitmap coverage. */
-            handled = KswordARKHvmExitEmulateMsr(
+            /*
+             * An index inside the bitmap only exits because a policy opened a
+             * hole for it, so the policy engine gets first refusal.  Anything
+             * it does not claim fell outside the bitmap entirely.
+             */
+            const ULONG policyResult = KswordARKHvmMsrPolicyApply(
+                Context->Runtime,
                 Frame,
-                isWrite,
-                (BOOLEAN)((Context->Runtime->FeatureFlags &
-                    KSWORD_ARK_HVM_FEATURE_HYPERVISOR_PRESENT) != 0ULL),
-                &injectFault);
-            /* Advance only after a complete emulation wrote every result. */
-            if (handled) {
+                isWrite);
+
+            if (policyResult == KSW_HVM_MSR_POLICY_RESULT_HANDLED) {
                 /* Continue at the instruction following the MSR access. */
                 handled = KswordARKHvmExitAdvanceRip(
                     telemetry.InstructionLength);
-            } else if (injectFault) {
+            } else if (policyResult ==
+                KSW_HVM_MSR_POLICY_RESULT_INJECT_FAULT) {
                 /* Restart the instruction after the guest takes #GP. */
                 handled = KswordARKHvmExitInjectGeneralProtection();
+            } else {
+                /* Classify the index against architectural bitmap coverage. */
+                handled = KswordARKHvmExitEmulateMsr(
+                    Frame,
+                    isWrite,
+                    (BOOLEAN)((Context->Runtime->FeatureFlags &
+                        KSWORD_ARK_HVM_FEATURE_HYPERVISOR_PRESENT) != 0ULL),
+                    &injectFault);
+                /* Advance only after emulation wrote every result. */
+                if (handled) {
+                    /* Continue at the instruction following the access. */
+                    handled = KswordARKHvmExitAdvanceRip(
+                        telemetry.InstructionLength);
+                } else if (injectFault) {
+                    /* Restart the instruction after the guest takes #GP. */
+                    handled = KswordARKHvmExitInjectGeneralProtection();
+                }
             }
         }
     /* Apply control-register policy to a masked bit or a tracked CR3 load. */

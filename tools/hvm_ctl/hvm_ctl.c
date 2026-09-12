@@ -48,6 +48,8 @@
 
 /* 协议的唯一真值来源。手抄一份就等于给自己埋一个静默的漂移。 */
 #include "../../shared/driver/KswordArkHvmIoctl.h"
+/* 能力过滤的白名单常量，判据与驱动引用同一份。 */
+#include "../../shared/driver/KswordArkHvmControls.h"
 /* acl-probe 要对这两条破坏性 IOCTL 验访问位闸门，取它们的控制码。 */
 #include "../../shared/driver/KswordArkProcessIoctl.h"
 #include "../../shared/driver/KswordArkMemoryIoctl.h"
@@ -4643,6 +4645,27 @@ static int NestedProbeRowPassed(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
                 ((((1ULL << r->vmcs12DepthSurvived) - 1ULL) << 2) &
                  ((1ULL << r->vmcs12DepthRegions) - 1ULL)) &&
             r->vmcs12EvictionDelta >= 1UL &&
+            /*
+             * 我们宣告的能力必须等于我们实现了的能力。
+             *
+             * 这三位是"L1 最可能去开、而我们最没实现"的：VPID、VMFUNC、
+             * VMCS shadowing，它们各自的 vmcs02 字段我们一个都不拷。不过滤的话
+             * L1 读到宿主真值就会去开，然后我们静默地不兑现 —— 整条路上没有
+             * 任何一处报错，这正是 MSR 位图那个缺陷的同一族。
+             *
+             * 读数取自来宾上下文的 RDMSR，所以这一格同时也验了两件事：位图里
+             * 那几位真的设上了，退出真的走到了过滤函数。少了任何一件，这里读到
+             * 的就是宿主真值，VPID 位会亮着。
+             *
+             * 非零要求单列：全零意味着这一格根本没填（旧驱动、或者读发生在常驻
+             * 起来之前），而"全零"恰好也能让下面三个判断成立 —— 一个没跑过的
+             * 检查不能看起来像通过了。
+             */
+            r->guestVmxEptVpidCap != 0ULL &&
+            (r->guestVmxEptVpidCap &
+                ((1ULL << 32) | (0xFULL << 40))) == 0ULL &&
+            ((r->guestVmxProcbased2 >> 32) &
+                ((1ULL << 5) | (1ULL << 13) | (1ULL << 14))) == 0ULL &&
             r->l1UsesMsrBitmap == 1UL &&
             r->bitmapMergeComplete == 1UL &&
             /* 那一条 RDMSR 是投递给 L1 的，不是我们就地吃掉的。 */
@@ -4740,6 +4763,29 @@ static void PrintNestedProbeRow(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
             printf("%c", ((r->vmcs12DepthMask >> slot) & 1ULL) ? '#' : '.');
         }
         printf("   （左=最先写，右=最后写；'.' 是被挤掉的）\n");
+    }
+    /*
+     * 来宾读到的 VMX 能力 —— 能力过滤唯一能被证伪的地方。
+     *
+     * 列出来的三位是"L1 最可能去开、而我们最没实现"的：VPID 要 VPID 字段与
+     * INVVPID、VMFUNC 要 0x2018、VMCS shadowing 要 0x2026/0x2028，三者的字段
+     * 我们一个都不往 vmcs02 里拷。它们还亮着，就说明过滤没生效。
+     */
+    if (r->guestVmxProcbased2 != 0ULL || r->guestVmxEptVpidCap != 0ULL) {
+        const unsigned long long secondary = r->guestVmxProcbased2 >> 32;
+        const unsigned long long vpidBits =
+            r->guestVmxEptVpidCap &
+            ((1ULL << 32) | (0xFULL << 40));
+
+        printf("    来宾看到的   secondary 可置位=0x%08llX  "
+               "ept_vpid=0x%016llX\n",
+               secondary, r->guestVmxEptVpidCap);
+        printf("                 VPID %s   VMFUNC %s   VMCS影子 %s   "
+               "INVVPID %s\n",
+               ((secondary >> 5) & 1ULL) ? "**还宣告着**" : "已收",
+               ((secondary >> 13) & 1ULL) ? "**还宣告着**" : "已收",
+               ((secondary >> 14) & 1ULL) ? "**还宣告着**" : "已收",
+               (vpidBits != 0ULL) ? "**还宣告着**" : "已收");
     }
     printf("    MSR 路由     L1 用位图 %s   合并 %s   L2 停在 +%llu %s\n",
            r->l1UsesMsrBitmap ? "是" : "否",
@@ -4993,6 +5039,9 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                    "\"vmcs12DepthSurvived\":%lu,"
                    "\"vmcs12DepthMask\":\"0x%llX\","
                    "\"vmcs12EvictionDelta\":%lu,"
+                   /* 能力过滤：来宾此刻读到的值，判据依赖它。 */
+                   "\"guestVmxProcbased2\":\"0x%016llX\","
+                   "\"guestVmxEptVpidCap\":\"0x%016llX\","
                    "\"pass\":%d}",
                    (i == 0) ? "" : ",",
                    r->processorIndex, r->status, r->vmxonResult,
@@ -5012,6 +5061,7 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                    r->vmcsSwitchValueA, r->vmcsSwitchValueB,
                    r->vmcs12DepthRegions, r->vmcs12DepthSurvived,
                    r->vmcs12DepthMask, r->vmcs12EvictionDelta,
+                   r->guestVmxProcbased2, r->guestVmxEptVpidCap,
                    NestedProbeRowPassed(r));
         }
         printf("]}\n");
@@ -5039,6 +5089,11 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                "        regions-2 份还在，且活下来的必须是最后写的那几份（掩码低两位\n"
                "        清）——个数一样而挤错人的驱逐策略，只有掩码能看出来。驱逐\n"
                "        计数也必须动过，否则这个数与一个坏掉的计数器读起来一模一样。\n"
+               "        最后一格是**能力过滤**：来宾自己 RDMSR 读回来的能力里，VPID、\n"
+               "        VMFUNC、VMCS shadowing 必须已经收掉 —— 这三样的 vmcs02 字段我们\n"
+               "        一个都不拷，宣告了就是答应做不到的事，而 L1 照着开之后整条路\n"
+               "        上不会有任何一处报错。对照 status 里的 EPT/VPID cap（那是驱动\n"
+               "        加载时采的硬件真值），两个数不一样才说明过滤是活的。\n"
                "        多核模式下，**任何一行 FAIL 就是整体 FAIL** —— 这正是它要验的东西。\n");
     }
     for (i = 0; i < rsp.returnedRows &&

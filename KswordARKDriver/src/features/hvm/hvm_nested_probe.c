@@ -21,6 +21,8 @@ Environment:
 #include "hvm_vmcs.h"
 #include "hvm_ept.h"
 #include "driver/KswordArkHvmIoctl.h"
+/* For the capability MSR indices the in-guest readout below names. */
+#include "driver/KswordArkHvmControls.h"
 
 #if defined(_M_AMD64)
 #include <intrin.h>
@@ -986,6 +988,24 @@ KswordARKHvmNestedProbeRunOne(
     Response->vmlaunchResult = KSWORD_ARK_HVM_NESTED_PROBE_STEP_SKIPPED;
     Response->inveptResult = KSWORD_ARK_HVM_NESTED_PROBE_STEP_SKIPPED;
     revision = (ULONG)(__readmsr(KSW_PROBE_IA32_VMX_BASIC) & 0x7FFFFFFFULL);
+    /*
+     * Record what a guest reading the capability MSRs gets right now.
+     *
+     * This runs in guest context with residency up, so these two RDMSRs take
+     * the same path any other guest's would: bitmap, exit, filter.  The query
+     * IOCTL reports the same MSRs sampled at driver load, before any of that -
+     * so the pair of readouts is a before/after with the filter in between,
+     * and the filter being inert shows up as the two being identical.
+     *
+     * Chosen because they carry the features most likely to be enabled by an
+     * L1 and least likely to be implemented by us: secondary controls holds
+     * VPID, VMFUNC and VMCS shadowing; the EPT/VPID capability holds the
+     * INVVPID forms.
+     */
+    Response->guestVmxProcbased2 =
+        __readmsr(KSWORD_ARK_HVM_VMX_MSR_PROCBASED2);
+    Response->guestVmxEptVpidCap =
+        __readmsr(KSWORD_ARK_HVM_VMX_MSR_EPT_VPID_CAP);
     highest.QuadPart = MAXLONGLONG;
     probe.VmxonVirtual = MmAllocateContiguousMemorySpecifyCache(
         PAGE_SIZE, lowest, highest, boundary, MmCached);

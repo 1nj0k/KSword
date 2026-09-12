@@ -2116,6 +2116,18 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
     unsigned long vmcs12DepthSurvived;
     unsigned long vmcs12EvictionDelta;
     unsigned long vmcs12DepthReserved;
+    /*
+     * 来宾**此刻**读到的 VMX 能力，取自来宾上下文里的 RDMSR。
+     *
+     * 这是能力过滤唯一能被证伪的地方。查询接口报的是驱动加载时采的原始值（走
+     * IOCTL，不经过 MSR 位图），所以它永远是硬件真相；而这两格走的是 RDMSR，
+     * 常驻起来之后就会退出到我们手里被收窄。两个数不一样，才说明过滤是活的。
+     *
+     * 没有这一格的话，"我们过滤了能力"就只是一句代码读起来是对的断言 —— 而
+     * 位图里少设一个位、或者退出路由没走到过滤函数，表现都是**什么都不变**。
+     */
+    unsigned long long guestVmxProcbased2;
+    unsigned long long guestVmxEptVpidCap;
 } KSWORD_ARK_HVM_NESTED_PROBE_ROW;
 
 typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE

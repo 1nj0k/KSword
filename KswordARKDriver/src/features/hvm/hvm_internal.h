@@ -648,6 +648,16 @@ typedef struct _KSW_HVM_RUNTIME
      * ran, which is the fastest way to make a real warning unbelievable.
      */
     volatile LONG NestedVmcs12EvictionCount;
+    /*
+     * How many bits our own MSR bitmap holds.
+     *
+     * The nested merge points vmcs02 straight at L1's bitmap page when our
+     * half adds nothing, which is worth 15-20% of an L2 entry.  That decision
+     * needs to test the bitmap, not a proxy for it: it used to ask whether any
+     * MSR policy existed, which stopped meaning "our page is empty" the moment
+     * the VMX capability interception started setting bits of its own.
+     */
+    ULONG MsrBitmapInterceptCount;
     /* Publish the current eVMCS state. */
     ULONG EvmcsState;
     /* Publish the TLFS eVMCS version discovered from CPUID. */

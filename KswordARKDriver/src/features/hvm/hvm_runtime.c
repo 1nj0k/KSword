@@ -1358,6 +1358,18 @@ KswordARKHvmAllocateProcessorResourcesLocked(
             (SIZE_T)KSW_HVM_PAGE_BYTES);
         Runtime->MsrBitmapPhysical =
             MmGetPhysicalAddress(Runtime->MsrBitmapVirtual);
+        Runtime->MsrBitmapInterceptCount = 0UL;
+        /*
+         * Make the VMX capability MSRs exit, so what we advertise can be
+         * narrowed to what we implement.
+         *
+         * Armed here, at the one place the bitmap is created, because a guest
+         * that reads these before we intercept them has already been told the
+         * machine's real capabilities - and a hypervisor reads them once, at
+         * its own initialization, then never again.  There is no second chance
+         * to correct the answer.
+         */
+        KswordARKHvmMsrArmVmxCapabilityInterceptLocked(Runtime);
     }
     groupCount = KeQueryActiveGroupCount();
     for (group = 0U;

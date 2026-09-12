@@ -435,3 +435,221 @@ KswordArkHvmEptLocalFitsBudget(
 {
     return PageCost != 0ULL && PageCost <= Cap ? 1 : 0;
 }
+
+/* ------------------------------------------------------------------ */
+/* VMX 能力 MSR 过滤                                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * 我们**宣告**支持什么，必须等于我们**实现**了什么。
+ *
+ * L1 打开一个 VMX 特性之前，只会读这几个 MSR。不过滤的话它读到的是宿主的真实
+ * 能力，于是它会去开 VPID、unrestricted guest、VMFUNC、posted interrupt 这些我们
+ * 根本没有把字段拷进 vmcs02 的东西 —— 它设了控制位，我们不写配套字段，处理器
+ * 按 vmcs02 里那个陈旧值（通常是 0）去做。整条路上没有任何一处会报错。
+ *
+ * 这跟 MSR 位图那个缺陷是同一族：**控制位与配套字段分家**。区别只在于那次是
+ * 我们自己漏拷，这次是我们主动答应了做不到的事。
+ *
+ * 所以这里是一份**白名单**：只有明确列出的位才允许被宣告，其余一律清掉。新的
+ * Intel 特性默认落到"不宣告"一侧 —— 反过来（黑名单）意味着每出一个新特性我们
+ * 就默认答应一次，而且没人会注意到。
+ */
+
+/* 能力 MSR 的索引区间，全都是只读的。 */
+#define KSWORD_ARK_HVM_VMX_MSR_BASIC            0x480UL
+#define KSWORD_ARK_HVM_VMX_MSR_PINBASED         0x481UL
+#define KSWORD_ARK_HVM_VMX_MSR_PROCBASED        0x482UL
+#define KSWORD_ARK_HVM_VMX_MSR_EXIT_CTLS        0x483UL
+#define KSWORD_ARK_HVM_VMX_MSR_ENTRY_CTLS       0x484UL
+#define KSWORD_ARK_HVM_VMX_MSR_MISC             0x485UL
+#define KSWORD_ARK_HVM_VMX_MSR_CR0_FIXED0       0x486UL
+#define KSWORD_ARK_HVM_VMX_MSR_CR0_FIXED1       0x487UL
+#define KSWORD_ARK_HVM_VMX_MSR_CR4_FIXED0       0x488UL
+#define KSWORD_ARK_HVM_VMX_MSR_CR4_FIXED1       0x489UL
+#define KSWORD_ARK_HVM_VMX_MSR_VMCS_ENUM        0x48AUL
+#define KSWORD_ARK_HVM_VMX_MSR_PROCBASED2       0x48BUL
+#define KSWORD_ARK_HVM_VMX_MSR_EPT_VPID_CAP     0x48CUL
+#define KSWORD_ARK_HVM_VMX_MSR_TRUE_PINBASED    0x48DUL
+#define KSWORD_ARK_HVM_VMX_MSR_TRUE_PROCBASED   0x48EUL
+#define KSWORD_ARK_HVM_VMX_MSR_TRUE_EXIT_CTLS   0x48FUL
+#define KSWORD_ARK_HVM_VMX_MSR_TRUE_ENTRY_CTLS  0x490UL
+#define KSWORD_ARK_HVM_VMX_MSR_VMFUNC           0x491UL
+
+/* 判断一个索引是不是 VMX 能力 MSR。 */
+static __inline int
+KswordArkHvmIsVmxCapabilityMsr(
+    unsigned long MsrIndex
+    )
+{
+    return (MsrIndex >= KSWORD_ARK_HVM_VMX_MSR_BASIC &&
+            MsrIndex <= KSWORD_ARK_HVM_VMX_MSR_VMFUNC) ? 1 : 0;
+}
+
+/*
+ * pin-based 控制里允许宣告的位。
+ *
+ * bit 0 外部中断退出 / bit 3 NMI 退出 / bit 5 虚拟 NMI：只是控制位，合并时并进
+ * vmcs02，没有配套地址字段。
+ * 清掉 bit 6（VMX 抢占计时器，要 0x482E 与退出控制 22）与 bit 7（posted
+ * interrupt，要 0x2016 描述符地址 + 通知向量），两者的字段我们都不拷。
+ */
+#define KSWORD_ARK_HVM_VMX_PIN_ALLOWED 0x00000029UL
+
+/*
+ * primary processor-based 控制里允许宣告的位。
+ *
+ * 清掉的几个都是"要一个配套地址字段而我们不写"的：
+ *   bit 3  TSC offsetting  -> 0x2010，不写则 L2 看到裸 TSC，时间直接跳
+ *   bit 21 use TPR shadow  -> 0x2012 virtual-APIC 页
+ *   bit 27 monitor trap flag -> 我们没为 L2 实现 MTF
+ * 保留 bit 25 使用 I/O 位图与 bit 28 使用 MSR 位图（这两条路已经端到端验过），
+ * 以及 bit 31 激活 secondary。
+ */
+#define KSWORD_ARK_HVM_VMX_PROC_ALLOWED 0xF3D99E84UL
+
+/*
+ * secondary 控制里允许宣告的位：只有 EPT。
+ *
+ * 这是整份白名单里最窄的一条，也是最诚实的一条 —— secondary 控制里几乎每一位
+ * 都要一个我们没拷进 vmcs02 的字段：VPID 要 VPID 字段与 INVVPID 处理、VMFUNC 要
+ * 0x2018、VMCS shadowing 要 0x2026/0x2028、PML 要 0x200E、#VE 要 0x202A、
+ * EPTP 切换要 0x2024、TSC scaling 要 0x2032。
+ *
+ * 后果要说清楚：这么窄的一份能力，很多 hypervisor 会直接拒绝启动。那正是想要的
+ * 结果 —— 干净地拒绝，好过答应了再静默地做不到。
+ */
+#define KSWORD_ARK_HVM_VMX_PROC2_ALLOWED 0x00000002UL
+
+/*
+ * VM-exit 控制里允许宣告的位。
+ *
+ * 只留 bit 9（host address-space size）—— x64 上它本来就是强制位。其余全是
+ * "退出时保存/装载某个 MSR"，各自要一条 MSR 区或一个专用字段：
+ * 12 PERF_GLOBAL_CTRL(0x2808)、18/19 PAT(0x2804/0x2C00)、20/21 EFER(0x2806/0x2C02)、
+ * 22 抢占计时器(0x482E)。bit 15（退出时应答中断）会改变退出语义，同样不留。
+ */
+#define KSWORD_ARK_HVM_VMX_EXIT_ALLOWED 0x00000200UL
+
+/*
+ * VM-entry 控制里允许宣告的位。
+ *
+ * 只留 bit 9（IA-32e 模式来宾），否则 64 位 L2 根本进不去。其余的 load-xxx 与
+ * exit 侧同理，都要各自的字段。
+ */
+#define KSWORD_ARK_HVM_VMX_ENTRY_ALLOWED 0x00000200UL
+
+/*
+ * EPT/VPID 能力里允许宣告的位。
+ *
+ * 留下的是影子 EPT 真的走过的那些：4 级页表走、UC/WB 内存类型、2 MiB 与 1 GiB
+ * 叶、INVEPT 及其两种上下文，外加 bit 21 accessed/dirty —— A/D 是这条线上唯一
+ * 一个已经实测折回过 L1 表的能力位。
+ *
+ * 全部 VPID 位清零（bit 32 与 40-43）：我们没开 VPID，INVVPID 也没实现。
+ * bit 0 execute-only 也清掉 —— 影子合成是否逐位保留 execute-only 没有验过，
+ * 没验过的位不宣告。
+ *
+ * **这份白名单必须是我们自己在来宾里用到的位的超集。**
+ *
+ * 容易漏的一点：驱动自己也是这些 MSR 的读者，而常驻起来之后驱动就跑在来宾里，
+ * 于是我们读到的是自己过滤后的值。今天有两个这样的读者：
+ *   hvm_nested_ept.c  查 bit 21 决定要不要维护 A/D
+ *   hvm_nested_probe.c 查 bit 17 决定 EPT12 能不能用 1 GiB 叶搭
+ * bit 17 起初不在这份表里，那会让探针的 EPT12 装不起来、整行判 FAIL —— 故障现象
+ * 跟"嵌套坏了"一模一样，而真因是我们把自己要用的能力给自己屏蔽了。
+ */
+#define KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED 0x0000000006334140ULL
+
+/* MISC 里 CR3-target 个数字段的位置；我们不拷 CR3-target 字段，所以必须报 0。 */
+#define KSWORD_ARK_HVM_VMX_MISC_CR3_TARGET_MASK 0x01FF0000ULL
+
+/*
+ * 把一个成对格式的控制能力 MSR 收窄。
+ *
+ * 低 32 位是 allowed-0（置 1 表示"必须为 1"），高 32 位是 allowed-1（置 1 表示
+ * "可以为 1"）。收窄只动高半部。
+ *
+ * `| low` 这一步不能省：硬件强制为 1 的位必然也是允许为 1 的，把它从高半部清掉
+ * 会造出一个自相矛盾的 MSR —— L1 照着它算出来的控制值会被处理器判非法，而报出
+ * 来的错误指向 L1 自己的计算，不指向我们。宁可宣告一个我们没实现但被强制打开
+ * 的位，也不能给出一份不自洽的能力。
+ */
+static __inline unsigned long long
+KswordArkHvmFilterPairedControlMsr(
+    unsigned long long HostValue,
+    unsigned long AllowedHigh
+    )
+{
+    unsigned long long low = HostValue & 0xFFFFFFFFULL;
+    unsigned long long high = (HostValue >> 32) & 0xFFFFFFFFULL;
+
+    high &= (unsigned long long)AllowedHigh;
+    high |= low;
+    return (high << 32) | low;
+}
+
+/*
+ * 按索引收窄一个能力 MSR。返回要交给来宾的值。
+ *
+ * 不在过滤范围内的索引原样返回 —— 调用方已经用 KswordArkHvmIsVmxCapabilityMsr
+ * 把范围框住了，这里再判一次是为了让这个函数单独拿出来也是对的。
+ */
+static __inline unsigned long long
+KswordArkHvmFilterVmxCapabilityMsr(
+    unsigned long MsrIndex,
+    unsigned long long HostValue
+    )
+{
+    switch (MsrIndex) {
+    case KSWORD_ARK_HVM_VMX_MSR_PINBASED:
+    case KSWORD_ARK_HVM_VMX_MSR_TRUE_PINBASED:
+        return KswordArkHvmFilterPairedControlMsr(
+            HostValue, KSWORD_ARK_HVM_VMX_PIN_ALLOWED);
+    case KSWORD_ARK_HVM_VMX_MSR_PROCBASED:
+    case KSWORD_ARK_HVM_VMX_MSR_TRUE_PROCBASED:
+        return KswordArkHvmFilterPairedControlMsr(
+            HostValue, KSWORD_ARK_HVM_VMX_PROC_ALLOWED);
+    case KSWORD_ARK_HVM_VMX_MSR_EXIT_CTLS:
+    case KSWORD_ARK_HVM_VMX_MSR_TRUE_EXIT_CTLS:
+        return KswordArkHvmFilterPairedControlMsr(
+            HostValue, KSWORD_ARK_HVM_VMX_EXIT_ALLOWED);
+    case KSWORD_ARK_HVM_VMX_MSR_ENTRY_CTLS:
+    case KSWORD_ARK_HVM_VMX_MSR_TRUE_ENTRY_CTLS:
+        return KswordArkHvmFilterPairedControlMsr(
+            HostValue, KSWORD_ARK_HVM_VMX_ENTRY_ALLOWED);
+    case KSWORD_ARK_HVM_VMX_MSR_PROCBASED2:
+        return KswordArkHvmFilterPairedControlMsr(
+            HostValue, KSWORD_ARK_HVM_VMX_PROC2_ALLOWED);
+    case KSWORD_ARK_HVM_VMX_MSR_EPT_VPID_CAP:
+        /* 单值格式，不是成对的：直接与白名单相与。 */
+        return HostValue & KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED;
+    case KSWORD_ARK_HVM_VMX_MSR_VMFUNC:
+        /*
+         * secondary 里 VMFUNC 已经清了，这里把功能位也清空。
+         *
+         * 两处都清是故意的：L1 若只读这一个 MSR 就去用 VMFUNC，得到的是"一个
+         * 功能都没有"，而不是"有功能但激活位打不开"。后者会让它以为是配置问题
+         * 而重试。
+         */
+        return 0ULL;
+    case KSWORD_ARK_HVM_VMX_MSR_MISC:
+        /*
+         * 只清 CR3-target 个数。
+         *
+         * 这个字段是个**承诺**：报 N 就是说 vmcs 里有 N 个 CR3-target 值可用，
+         * 而我们一个都不往 vmcs02 里拷。其余各位是描述性的（活动状态、MSEG
+         * 版本、抢占计时器频率），不构成我们必须兑现的功能。
+         */
+        return HostValue & ~KSWORD_ARK_HVM_VMX_MISC_CR3_TARGET_MASK;
+    default:
+        /*
+         * BASIC / CR0 与 CR4 的固定位 / VMCS_ENUM 原样透传。
+         *
+         * BASIC 尤其不能动：低 31 位是 VMCS 修订号，改了它，来宾按新号去建
+         * VMCS 区域，VMXON 与 VMPTRLD 会因为区域头部对不上而失败 —— 那是一个
+         * 跟能力毫无关系的故障，却会被当成嵌套坏了。
+         */
+        return HostValue;
+    }
+}

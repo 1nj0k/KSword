@@ -82,13 +82,56 @@ KswordARKHvmMsrPolicySetBit(
         /* An uncovered index has no bit to change. */
         return;
     }
-    /* Publish the requested interception state. */
+    /*
+     * Keep an exact count of the bits our half of the bitmap holds.
+     *
+     * The nested merge decides whether it can point vmcs02 straight at L1's
+     * page, and that is only valid when our half adds nothing.  It used to ask
+     * "are there zero MSR policies", which was true of the bitmap right up
+     * until something other than a policy set a bit - and then it would have
+     * shared L1's page and silently dropped our interception for L2.
+     *
+     * Counted here rather than by scanning the page because this is the only
+     * place a bit changes, and read on every L2 entry.
+     */
     if (Intercept) {
+        if ((bitmap[byteOffset] & mask) == 0U) {
+            Runtime->MsrBitmapInterceptCount += 1UL;
+        }
         /* Make the access exit. */
         bitmap[byteOffset] |= mask;
     } else {
+        if ((bitmap[byteOffset] & mask) != 0U &&
+            Runtime->MsrBitmapInterceptCount != 0UL) {
+            Runtime->MsrBitmapInterceptCount -= 1UL;
+        }
         /* Return the access to the native pass-through path. */
         bitmap[byteOffset] &= (UCHAR)~mask;
+    }
+}
+
+VOID
+KswordARKHvmMsrArmVmxCapabilityInterceptLocked(
+    _Inout_ KSW_HVM_RUNTIME* Runtime
+    )
+{
+    ULONG index = 0UL;
+
+    /* Do nothing when the bitmap was never reserved. */
+    if (Runtime == NULL || Runtime->MsrBitmapVirtual == NULL) {
+        /* Return without arming what has no bitmap. */
+        return;
+    }
+    /*
+     * Reads only.  A WRMSR to any of these indices is architecturally #GP
+     * because they are read-only, and the processor delivers that itself -
+     * intercepting the write would mean emulating a fault we get for free,
+     * and would put a second page of exits on a path nothing needs.
+     */
+    for (index = KSWORD_ARK_HVM_VMX_MSR_BASIC;
+         index <= KSWORD_ARK_HVM_VMX_MSR_VMFUNC;
+         ++index) {
+        KswordARKHvmMsrPolicySetBit(Runtime, index, FALSE, TRUE);
     }
 }
 
