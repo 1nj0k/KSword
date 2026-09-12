@@ -500,13 +500,15 @@ KswordArkHvmIsVmxCapabilityMsr(
  * primary processor-based 控制里允许宣告的位。
  *
  * 清掉的几个都是"要一个配套地址字段而我们不写"的：
- *   bit 3  TSC offsetting  -> 0x2010，不写则 L2 看到裸 TSC，时间直接跳
  *   bit 21 use TPR shadow  -> 0x2012 virtual-APIC 页
  *   bit 27 monitor trap flag -> 我们没为 L2 实现 MTF
  * 保留 bit 25 使用 I/O 位图与 bit 28 使用 MSR 位图（这两条路已经端到端验过），
  * 以及 bit 31 激活 secondary。
+ *
+ * bit 3（TSC offsetting）曾在清除之列，配套字段 0x2010 补上之后收了回来 ——
+ * 这份表的用法就是这样：**实现一个，点亮一位**，反过来不行。
  */
-#define KSWORD_ARK_HVM_VMX_PROC_ALLOWED 0xF3D99E84UL
+#define KSWORD_ARK_HVM_VMX_PROC_ALLOWED 0xF3D99E8CUL
 
 /*
  * secondary 控制里允许宣告的位：只有 EPT。

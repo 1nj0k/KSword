@@ -34,6 +34,25 @@ Environment:
 #define KSW_L2_IO_BITMAP_A 0x2000UL
 #define KSW_L2_IO_BITMAP_B 0x2002UL
 #define KSW_L2_MSR_BITMAP 0x2004UL
+/*
+ * The MSR areas and the TSC offset: fields L1 writes and we never copied.
+ *
+ * Same shape as the bitmap defect above, one step worse.  A bitmap at least
+ * has a control bit that could in principle be cleared; the MSR-area counts
+ * are honoured unconditionally, so there was no capability we could have
+ * stopped advertising - L1 asks for a list of MSRs to be loaded into its
+ * guest, and we simply do not do it.  L2 then runs with our MSR values where
+ * L1 intended its own, and nothing anywhere reports a problem.
+ *
+ * The VM-exit MSR-LOAD address (0x2008) is deliberately absent from this
+ * list; see where the others are written for why copying it would corrupt
+ * our own host state.
+ */
+#define KSW_L2_EXIT_MSR_STORE_ADDRESS 0x2006UL
+#define KSW_L2_ENTRY_MSR_LOAD_ADDRESS 0x200AUL
+#define KSW_L2_TSC_OFFSET 0x2010UL
+#define KSW_L2_EXIT_MSR_STORE_COUNT 0x400EUL
+#define KSW_L2_ENTRY_MSR_LOAD_COUNT 0x4014UL
 #define KSW_L2_VMCS_LINK_POINTER 0x2800UL
 #define KSW_L2_EPT_POINTER 0x201AUL
 #define KSW_L2_PIN_CONTROLS 0x4000UL
@@ -403,6 +422,55 @@ KswordARKHvmNestedL2Enter(
     KswordARKHvmNestedL2Write(
         KSW_L2_IO_BITMAP_B,
         bitmaps.IoBitmapBPhysical);
+    /*
+     * Hand L2 the TSC offset and MSR areas L1 asked for.
+     *
+     * Passed through unchanged rather than translated, for the same reason the
+     * shared bitmap pages are: EPT01 is an identity map, so an L1 physical
+     * address is a host physical address.  The EPT12 walk already depends on
+     * that; if it stops holding, these break together with it rather than one
+     * of them going quietly wrong.
+     *
+     * The TSC offset is L1's alone because we do not use TSC offsetting - if
+     * we ever do, the two compose by addition and this becomes a sum.  Without
+     * this write L2 reads the raw TSC while L1 believes it shifted time for
+     * its guest, which is invisible until something inside L2 compares clocks.
+     *
+     * Three of the four MSR-area fields are copied and the fourth is not:
+     *
+     *   entry MSR-load (0x200A) applies to the guest being entered, which is
+     *   L2, so L1's list is exactly right;
+     *
+     *   exit MSR-store (0x2006) saves L2's MSRs on the way out, into L1's own
+     *   page, which is where L1 will look for them;
+     *
+     *   exit MSR-LOAD (0x2008) loads *host* MSRs after the exit - and the host
+     *   is us, not L1.  Copying L1's list there would have the processor load
+     *   L1's host values into our root context on every single L2 exit, which
+     *   is a way to lose the machine rather than a missing feature.  This
+     *   version therefore drops it; servicing it correctly means applying that
+     *   list while reflecting the exit to L1, in the reflection path, where
+     *   "L1's host state" is the thing being restored anyway.
+     */
+    value = 0ULL;
+    (void)KswordARKHvmNestedVmcs12Read(vmcs12, KSW_L2_TSC_OFFSET, &value);
+    KswordARKHvmNestedL2Write(KSW_L2_TSC_OFFSET, value);
+    value = 0ULL;
+    (void)KswordARKHvmNestedVmcs12Read(
+        vmcs12, KSW_L2_ENTRY_MSR_LOAD_ADDRESS, &value);
+    KswordARKHvmNestedL2Write(KSW_L2_ENTRY_MSR_LOAD_ADDRESS, value);
+    value = 0ULL;
+    (void)KswordARKHvmNestedVmcs12Read(
+        vmcs12, KSW_L2_ENTRY_MSR_LOAD_COUNT, &value);
+    KswordARKHvmNestedL2Write(KSW_L2_ENTRY_MSR_LOAD_COUNT, value);
+    value = 0ULL;
+    (void)KswordARKHvmNestedVmcs12Read(
+        vmcs12, KSW_L2_EXIT_MSR_STORE_ADDRESS, &value);
+    KswordARKHvmNestedL2Write(KSW_L2_EXIT_MSR_STORE_ADDRESS, value);
+    value = 0ULL;
+    (void)KswordARKHvmNestedVmcs12Read(
+        vmcs12, KSW_L2_EXIT_MSR_STORE_COUNT, &value);
+    KswordARKHvmNestedL2Write(KSW_L2_EXIT_MSR_STORE_COUNT, value);
     /* The hierarchy is ours: either the composed shadow or our own. */
     KswordARKHvmNestedL2Write(KSW_L2_EPT_POINTER, eptPointer);
     /*
@@ -430,6 +498,17 @@ KswordARKHvmNestedL2Enter(
         KswordARKHvmNestedL2Read(KSW_L2_IO_BITMAP_A);
     nested->LastEntryIoBitmapB =
         KswordARKHvmNestedL2Read(KSW_L2_IO_BITMAP_B);
+    /* The newly propagated fields, read back for exactly the same reason. */
+    nested->LastEntryTscOffset =
+        KswordARKHvmNestedL2Read(KSW_L2_TSC_OFFSET);
+    nested->LastEntryMsrLoadAddress =
+        KswordARKHvmNestedL2Read(KSW_L2_ENTRY_MSR_LOAD_ADDRESS);
+    nested->LastEntryMsrLoadCount =
+        (ULONG)KswordARKHvmNestedL2Read(KSW_L2_ENTRY_MSR_LOAD_COUNT);
+    nested->LastEntryMsrStoreAddress =
+        KswordARKHvmNestedL2Read(KSW_L2_EXIT_MSR_STORE_ADDRESS);
+    nested->LastEntryMsrStoreCount =
+        (ULONG)KswordARKHvmNestedL2Read(KSW_L2_EXIT_MSR_STORE_COUNT);
     /* Close the entry measurement before the instruction that does not return. */
     nested->L2EntryCycles += (__rdtsc() - entryStart);
     /* Publish that this processor is about to be running L2. */

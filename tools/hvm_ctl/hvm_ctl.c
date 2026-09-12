@@ -4661,6 +4661,21 @@ static int NestedProbeRowPassed(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
              * 起来之前），而"全零"恰好也能让下面三个判断成立 —— 一个没跑过的
              * 检查不能看起来像通过了。
              */
+            /*
+             * L1 写进 vmcs12 的字段必须真的到 vmcs02 里。
+             *
+             * TSC 偏移比的是一个具体常量，不是"非零"：非零只能说明有人写过，
+             * 而这里要问的是**写进去的是不是 L1 那个值**。
+             *
+             * MSR 载入表更进一步 —— 这一行能 PASS 就意味着 vmlaunch 成功且
+             * l2Reached 为真（上面已经要求），而表是真表、计数为 1，所以处理器
+             * 确实走了 L1 那张表，不只是我们把字段填上了。
+             */
+            r->vmcs02TscOffset ==
+                KSWORD_ARK_HVM_NESTED_PROBE_TSC_OFFSET &&
+            r->vmcs02EntryMsrLoadAddress != 0ULL &&
+            r->vmcs02EntryMsrLoadCount == 1UL &&
+            r->vmcs02ExitMsrStoreAddress != 0ULL &&
             r->guestVmxEptVpidCap != 0ULL &&
             (r->guestVmxEptVpidCap &
                 ((1ULL << 32) | (0xFULL << 40))) == 0ULL &&
@@ -4728,6 +4743,23 @@ static void PrintNestedProbeRow(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
                : "",
            r->vmcs02IoBitmapA,
            r->vmcs02IoBitmapB);
+    /*
+     * L1 写了、我们此前从不拷的那几个字段。
+     *
+     * MSR 区比位图更隐蔽：它的计数字段无条件生效，没有任何能力位可以用来表示
+     * "我不支持"。所以不拷就是 L1 让装的那批 MSR 根本没装，而 L2 拿着我们的值
+     * 在跑，两边都不会有任何报错。
+     */
+    printf("    vmcs02 透传  tsc_offset=0x%016llX%s  "
+           "entry_msr=0x%016llX x%lu  exit_msr=0x%016llX x%lu\n",
+           r->vmcs02TscOffset,
+           (r->vmcs02TscOffset == KSWORD_ARK_HVM_NESTED_PROBE_TSC_OFFSET)
+               ? " **L1 的值到位了**"
+               : ((r->vmcs02TscOffset == 0ULL)
+                      ? " **是 0 —— 字段没写过**"
+                      : " **不是 L1 写的值**"),
+           r->vmcs02EntryMsrLoadAddress, r->vmcs02EntryMsrLoadCount,
+           r->vmcs02ExitMsrStoreAddress, r->vmcs02ExitMsrStoreCount);
     /*
      * MSR 路由的判据行。停在哪里就是答案，三种结局各有确定的偏移。
      */
@@ -5042,6 +5074,12 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                    /* 能力过滤：来宾此刻读到的值，判据依赖它。 */
                    "\"guestVmxProcbased2\":\"0x%016llX\","
                    "\"guestVmxEptVpidCap\":\"0x%016llX\","
+                   /* 新补的字段透传：判据依赖这几格。 */
+                   "\"vmcs02TscOffset\":\"0x%016llX\","
+                   "\"vmcs02EntryMsrLoadAddress\":\"0x%016llX\","
+                   "\"vmcs02EntryMsrLoadCount\":%lu,"
+                   "\"vmcs02ExitMsrStoreAddress\":\"0x%016llX\","
+                   "\"vmcs02ExitMsrStoreCount\":%lu,"
                    "\"pass\":%d}",
                    (i == 0) ? "" : ",",
                    r->processorIndex, r->status, r->vmxonResult,
@@ -5062,6 +5100,9 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                    r->vmcs12DepthRegions, r->vmcs12DepthSurvived,
                    r->vmcs12DepthMask, r->vmcs12EvictionDelta,
                    r->guestVmxProcbased2, r->guestVmxEptVpidCap,
+                   r->vmcs02TscOffset,
+                   r->vmcs02EntryMsrLoadAddress, r->vmcs02EntryMsrLoadCount,
+                   r->vmcs02ExitMsrStoreAddress, r->vmcs02ExitMsrStoreCount,
                    NestedProbeRowPassed(r));
         }
         printf("]}\n");
@@ -5094,6 +5135,11 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                "        一个都不拷，宣告了就是答应做不到的事，而 L1 照着开之后整条路\n"
                "        上不会有任何一处报错。对照 status 里的 EPT/VPID cap（那是驱动\n"
                "        加载时采的硬件真值），两个数不一样才说明过滤是活的。\n"
+               "        还要求 L1 写进 vmcs12 的 **TSC 偏移与 MSR 载入表真的到了\n"
+               "        vmcs02**：偏移比的是具体常量而非非零，载入表是真表且计数为 1\n"
+               "        ——这一行 PASS 就意味着 VM entry 带着这张表成功了，也就是处理器\n"
+               "        确实走了 L1 那张表。MSR 区的计数字段无条件生效，没有任何能力位\n"
+               "        能表示「我不支持」，所以不拷就是**静默地不装**。\n"
                "        多核模式下，**任何一行 FAIL 就是整体 FAIL** —— 这正是它要验的东西。\n");
     }
     for (i = 0; i < rsp.returnedRows &&

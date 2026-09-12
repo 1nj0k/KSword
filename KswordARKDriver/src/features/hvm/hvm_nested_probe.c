@@ -68,6 +68,28 @@ C_ASSERT(KSW_PROBE_DEPTH_REGIONS <= 64UL);
 #define KSW_PROBE_DEPTH_PATTERN(index) \
     (0x0000335045454400ULL | (ULONGLONG)((index) + 1UL))
 
+/* vmcs12 encodings for the fields whose propagation is under test. */
+#define KSW_PROBE_TSC_OFFSET 0x2010UL
+#define KSW_PROBE_EXIT_MSR_STORE_ADDRESS 0x2006UL
+#define KSW_PROBE_ENTRY_MSR_LOAD_ADDRESS 0x200AUL
+#define KSW_PROBE_EXIT_MSR_STORE_COUNT 0x400EUL
+#define KSW_PROBE_ENTRY_MSR_LOAD_COUNT 0x4014UL
+/* Primary control bit 3: use TSC offsetting. */
+#define KSW_PROBE_PRIMARY_USE_TSC_OFFSET 0x00000008UL
+/*
+ * The MSR the entry list loads, written back with the value it already holds.
+ *
+ * IA32_STAR exists on every x64 processor, is not one of the MSRs VM entry
+ * handles through a dedicated control, and loading it with what it already
+ * contains changes nothing.  The point is to exercise the processor's walk of
+ * L1's list, not to alter L2's state - a list that changed something would
+ * make a failure look like a state bug instead of a propagation bug.
+ */
+#define KSW_PROBE_MSR_AREA_INDEX 0xC0000081UL
+/* Where in the page each of the two areas starts; both 16-byte aligned. */
+#define KSW_PROBE_MSR_LOAD_OFFSET 0x000UL
+#define KSW_PROBE_MSR_STORE_OFFSET 0x100UL
+
 /* Name the VMCS fields the L2 construction writes by hand. */
 #define KSW_PROBE_VMCS_LINK_POINTER 0x2800UL
 #define KSW_PROBE_GUEST_EFER 0x2806UL
@@ -178,6 +200,16 @@ typedef struct _KSW_HVM_NESTED_PROBE_CONTEXT
      */
     PVOID DepthBlockVirtual;
     ULONGLONG DepthBlockPhysical;
+    /*
+     * One page holding L1's VM-entry MSR-load list.
+     *
+     * A real list rather than a plausible address: the processor walks it at
+     * every VM entry, so a malformed one fails entry outright.  That makes the
+     * test say more than "the field was written" - it says the processor
+     * accepted L1's list through vmcs02.
+     */
+    PVOID MsrAreaVirtual;
+    ULONGLONG MsrAreaPhysical;
     /* One page of L2 code, plus the stack L2 runs on. */
     PVOID L2CodeVirtual;
     /* The stack this probe's own L1 VM-exit handler runs on. */
@@ -421,7 +453,8 @@ KswordARKHvmNestedProbeBuildVmcs12(
         KswordARKHvmNestedProbeVmcs12Write(
             KSW_PROBE_PRIMARY_CONTROLS,
             KSW_PROBE_PRIMARY_ACTIVATE_SECONDARY |
-                KSW_PROBE_PRIMARY_USE_MSR_BITMAPS);
+                KSW_PROBE_PRIMARY_USE_MSR_BITMAPS |
+                KSW_PROBE_PRIMARY_USE_TSC_OFFSET);
         KswordARKHvmNestedProbeVmcs12Write(
             KSW_PROBE_SECONDARY_CONTROLS,
             KSW_PROBE_SECONDARY_ENABLE_EPT);
@@ -431,7 +464,40 @@ KswordARKHvmNestedProbeBuildVmcs12(
     } else {
         KswordARKHvmNestedProbeVmcs12Write(
             KSW_PROBE_PRIMARY_CONTROLS,
-            KSW_PROBE_PRIMARY_USE_MSR_BITMAPS);
+            KSW_PROBE_PRIMARY_USE_MSR_BITMAPS |
+                KSW_PROBE_PRIMARY_USE_TSC_OFFSET);
+    }
+    /*
+     * The fields this version newly propagates, set to something recognizable.
+     *
+     * The TSC offset is pure readback: a value that cannot be confused with
+     * the zero an unwritten field holds.  Its control bit goes on above, since
+     * without it the processor would ignore the offset and the field would
+     * propagate with nothing depending on it.
+     *
+     * The entry MSR-load list is a real one-entry list, so the processor walks
+     * it at VM entry.  The exit MSR-store count stays zero on purpose: a
+     * malformed store area is a VMX abort rather than a clean entry failure,
+     * and an abort takes the machine down instead of reporting a result.  Its
+     * address still propagates and is still checked, so the field write is
+     * covered even though the processor's use of it is not.
+     */
+    KswordARKHvmNestedProbeVmcs12Write(
+        KSW_PROBE_TSC_OFFSET,
+        KSWORD_ARK_HVM_NESTED_PROBE_TSC_OFFSET);
+    if (Probe->MsrAreaPhysical != 0ULL) {
+        KswordARKHvmNestedProbeVmcs12Write(
+            KSW_PROBE_ENTRY_MSR_LOAD_ADDRESS,
+            Probe->MsrAreaPhysical + KSW_PROBE_MSR_LOAD_OFFSET);
+        KswordARKHvmNestedProbeVmcs12Write(
+            KSW_PROBE_ENTRY_MSR_LOAD_COUNT,
+            1ULL);
+        KswordARKHvmNestedProbeVmcs12Write(
+            KSW_PROBE_EXIT_MSR_STORE_ADDRESS,
+            Probe->MsrAreaPhysical + KSW_PROBE_MSR_STORE_OFFSET);
+        KswordARKHvmNestedProbeVmcs12Write(
+            KSW_PROBE_EXIT_MSR_STORE_COUNT,
+            0ULL);
     }
     KswordARKHvmNestedProbeVmcs12Write(KSW_PROBE_EXCEPTION_BITMAP, 0ULL);
     KswordARKHvmNestedProbeVmcs12Write(
@@ -856,6 +922,17 @@ KswordARKHvmNestedProbeExecute(
                         vcpu->Nested.LastEntryIoBitmapA;
                     response->vmcs02IoBitmapB =
                         vcpu->Nested.LastEntryIoBitmapB;
+                    /* The newly propagated fields, from the same readback. */
+                    response->vmcs02TscOffset =
+                        vcpu->Nested.LastEntryTscOffset;
+                    response->vmcs02EntryMsrLoadAddress =
+                        vcpu->Nested.LastEntryMsrLoadAddress;
+                    response->vmcs02EntryMsrLoadCount =
+                        vcpu->Nested.LastEntryMsrLoadCount;
+                    response->vmcs02ExitMsrStoreAddress =
+                        vcpu->Nested.LastEntryMsrStoreAddress;
+                    response->vmcs02ExitMsrStoreCount =
+                        vcpu->Nested.LastEntryMsrStoreCount;
                     /*
                      * Where L2 stopped, relative to its own code page.
                      *
@@ -1016,6 +1093,8 @@ KswordARKHvmNestedProbeRunOne(
     probe.DepthBlockVirtual = MmAllocateContiguousMemorySpecifyCache(
         (SIZE_T)KSW_PROBE_DEPTH_REGIONS * PAGE_SIZE,
         lowest, highest, boundary, MmCached);
+    probe.MsrAreaVirtual = MmAllocateContiguousMemorySpecifyCache(
+        PAGE_SIZE, lowest, highest, boundary, MmCached);
     probe.L2CodeVirtual = MmAllocateContiguousMemorySpecifyCache(
         PAGE_SIZE, lowest, highest, boundary, MmCached);
     probe.Ept12Pml4Virtual = MmAllocateContiguousMemorySpecifyCache(
@@ -1059,6 +1138,9 @@ KswordARKHvmNestedProbeRunOne(
         }
         if (probe.DepthBlockVirtual != NULL) {
             MmFreeContiguousMemory(probe.DepthBlockVirtual);
+        }
+        if (probe.MsrAreaVirtual != NULL) {
+            MmFreeContiguousMemory(probe.MsrAreaVirtual);
         }
         if (probe.L1StackVirtual != NULL) {
             ExFreePool(probe.L1StackVirtual);
@@ -1193,6 +1275,30 @@ KswordARKHvmNestedProbeRunOne(
         physical = MmGetPhysicalAddress(probe.DepthBlockVirtual);
         probe.DepthBlockPhysical = (ULONGLONG)physical.QuadPart;
     }
+    /*
+     * Build L1's VM-entry MSR-load list: one entry, written back unchanged.
+     *
+     * Layout is architectural - index, four reserved bytes that must be zero,
+     * then the value.  The reserved word is the easy one to get wrong: a
+     * non-zero there fails VM entry with an MSR-loading failure that names the
+     * entry number and nothing else.
+     */
+    if (probe.MsrAreaVirtual != NULL) {
+        volatile ULONG* entry = NULL;
+
+        RtlZeroMemory(probe.MsrAreaVirtual, PAGE_SIZE);
+        entry = (volatile ULONG*)((PUCHAR)probe.MsrAreaVirtual +
+            KSW_PROBE_MSR_LOAD_OFFSET);
+        entry[0] = KSW_PROBE_MSR_AREA_INDEX;
+        entry[1] = 0UL;
+        *(volatile ULONGLONG*)&entry[2] =
+            __readmsr(KSW_PROBE_MSR_AREA_INDEX);
+        /* The store area only needs its index; nothing walks it at count 0. */
+        *(volatile ULONG*)((PUCHAR)probe.MsrAreaVirtual +
+            KSW_PROBE_MSR_STORE_OFFSET) = KSW_PROBE_MSR_AREA_INDEX;
+        physical = MmGetPhysicalAddress(probe.MsrAreaVirtual);
+        probe.MsrAreaPhysical = (ULONGLONG)physical.QuadPart;
+    }
     physical = MmGetPhysicalAddress(probe.VmxonVirtual);
     probe.VmxonPhysical = (ULONGLONG)physical.QuadPart;
     physical = MmGetPhysicalAddress(probe.Vmcs12Virtual);
@@ -1219,6 +1325,9 @@ KswordARKHvmNestedProbeRunOne(
     }
     if (probe.DepthBlockVirtual != NULL) {
         MmFreeContiguousMemory(probe.DepthBlockVirtual);
+    }
+    if (probe.MsrAreaVirtual != NULL) {
+        MmFreeContiguousMemory(probe.MsrAreaVirtual);
     }
     MmFreeContiguousMemory(probe.L2CodeVirtual);
     MmFreeContiguousMemory(probe.Ept12Pml4Virtual);

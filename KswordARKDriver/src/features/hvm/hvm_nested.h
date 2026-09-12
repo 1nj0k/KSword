@@ -89,6 +89,19 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONGLONG LastEntryIoBitmapA;
     ULONGLONG LastEntryIoBitmapB;
     /*
+     * The TSC offset and MSR areas vmcs02 actually carried.
+     *
+     * Read back from the loaded VMCS like the three above, and for the same
+     * reason: a field we believe we propagated and a field the processor will
+     * act on only differ when the write did not happen, which is precisely the
+     * failure that leaves no other trace.
+     */
+    ULONGLONG LastEntryTscOffset;
+    ULONGLONG LastEntryMsrLoadAddress;
+    ULONGLONG LastEntryMsrStoreAddress;
+    ULONG LastEntryMsrLoadCount;
+    ULONG LastEntryMsrStoreCount;
+    /*
      * Preserve what L1 itself asked for, as of the last merge.
      *
      * The exit path cannot recover these from vmcs02: its controls are the

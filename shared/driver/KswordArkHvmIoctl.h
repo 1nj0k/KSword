@@ -2128,7 +2128,33 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
      */
     unsigned long long guestVmxProcbased2;
     unsigned long long guestVmxEptVpidCap;
+    /*
+     * L1 写了、我们此前从不往 vmcs02 里拷的那几个字段，进 entry 前从**加载着的
+     * vmcs02 里读回来**的值。
+     *
+     * 跟 msr 位图那组是同一个手法，也是同一个理由：算出来的值与处理器真正会用的
+     * 值，只在"这个字段根本没被写过"的时候才不一样，而那恰恰是不留任何痕迹的
+     * 那种失败。
+     *
+     * MSR 区比位图更隐蔽一层：位图至少还有个控制位，理论上可以不宣告；而 MSR
+     * 区的**计数字段是无条件生效的**，没有任何能力位可以用来表示"我不支持"。
+     * L1 让我们在进 L2 时装一批 MSR，我们就是不装，L2 于是拿着我们的 MSR 值跑，
+     * 而 L1 以为是它自己那批。
+     */
+    unsigned long long vmcs02TscOffset;
+    unsigned long long vmcs02EntryMsrLoadAddress;
+    unsigned long long vmcs02ExitMsrStoreAddress;
+    unsigned long vmcs02EntryMsrLoadCount;
+    unsigned long vmcs02ExitMsrStoreCount;
 } KSWORD_ARK_HVM_NESTED_PROBE_ROW;
+
+/*
+ * 探针写进 vmcs12 的 TSC 偏移。
+ *
+ * 值本身没有架构含义，只要求一眼认得出、且不可能是"字段没写"留下的 0。判据两侧
+ * 共用这一个定义，免得一边改了另一边还在比旧值 —— 那会变成一条永远为真的判据。
+ */
+#define KSWORD_ARK_HVM_NESTED_PROBE_TSC_OFFSET 0x0000ABCD00000000ULL
 
 typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE
 {
