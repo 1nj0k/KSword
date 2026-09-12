@@ -45,6 +45,17 @@ typedef struct _KSW_HVM_NESTED_BITMAP_MERGE
     BOOLEAN L1UsesIoBitmap;
     /* Publish whether L1 asked for unconditional I/O exiting. */
     BOOLEAN L1UncondIo;
+    /*
+     * Publish that vmcs02 points at L1's own MSR page rather than a merge.
+     *
+     * Happens whenever we have nothing to add, which is the default. Worth
+     * reporting because it changes where the exit path looks: a shared page
+     * has no local copy to consult, so routing reads L1's bits through the
+     * window instead.
+     */
+    BOOLEAN SharedMsrBitmap;
+    /* Publish the same for the two I/O pages, which we never contribute to. */
+    BOOLEAN SharedIoBitmaps;
     /* Hand back the physical address vmcs02's MSR-bitmap field must carry. */
     ULONGLONG MsrBitmapPhysical;
     /* Hand back the two I/O-bitmap physical addresses for vmcs02. */

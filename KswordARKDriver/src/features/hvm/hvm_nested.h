@@ -90,6 +90,19 @@ typedef struct _KSW_HVM_NESTED_VCPU
     BOOLEAN L2UncondIoFromL1;
     /* Publish whether the last merge read every page it needed. */
     BOOLEAN L2BitmapMergeComplete;
+    /*
+     * Publish that vmcs02 carries L1's own bitmap pages, not copies.
+     *
+     * The exit path has to know: with a shared page there is no local copy to
+     * consult, so routing reads the one byte it needs out of L1's page through
+     * the window rather than out of a snapshot.
+     */
+    BOOLEAN L2MsrBitmapShared;
+    BOOLEAN L2IoBitmapsShared;
+    /* Retain where L1's pages live, for those per-exit reads. */
+    ULONGLONG L2MsrBitmapL1Gpa;
+    ULONGLONG L2IoBitmapAL1Gpa;
+    ULONGLONG L2IoBitmapBL1Gpa;
     /* Count MSR exits from L2 delivered to L1 rather than serviced here. */
     ULONGLONG L2MsrExitsReflected;
     /* Count MSR exits from L2 serviced here because only we armed them. */
