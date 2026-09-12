@@ -28,10 +28,32 @@ Environment:
 #pragma alloc_text (PAGE, KswordARKDriverEvtDevicePrepareHardware)
 #endif
 
-// Security descriptor for control device:
-// SYSTEM full access, Administrators read/write/execute, World read-only, Restricted read.
+/*
+ * Control device security: SYSTEM full, Administrators read/write/execute.
+ * Nobody else can open it at all.
+ *
+ * World and Restricted used to hold GENERIC_READ here, on the reasoning that
+ * reading the log stream is harmless.  That reasoning does not survive contact
+ * with how the IOCTLs are declared: FILE_ANY_ACCESS tells the I/O manager to
+ * perform no access check on the request, so a read-only handle can issue any
+ * IOCTL declared that way.  101 of them still are.  The effect was that every
+ * user on the machine could reach a hundred kernel entry points through a
+ * handle the descriptor described as read-only.
+ *
+ * Removing the two ACEs costs nothing in this repository.  Every consumer -
+ * including the one that opens with GENERIC_READ alone to read the log stream -
+ * also performs read/write operations elsewhere, so all of them already require
+ * Administrators, and Administrators keep GENERIC_READ through the BA entry.
+ * What changes is that a non-administrator can no longer open the device, which
+ * is the whole of the unprivileged reach.
+ *
+ * This narrows who may knock.  It does not make the 101 FILE_ANY_ACCESS
+ * declarations correct - an IOCTL that mutates state should say so in its
+ * control code, so that a read-only handle held by an administrator is refused
+ * too.  That work is separate and still open.
+ */
 static const WCHAR g_KswordArkControlDeviceSddl[] =
-    L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GR;;;WD)(A;;GR;;;RC)";
+    L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)";
 
 NTSTATUS
 KswordARKDriverCreateControlDevice(
