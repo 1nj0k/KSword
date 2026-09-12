@@ -117,7 +117,7 @@ void KernelHvmTab::startResident()
          */
         warning += kernelText(
             "kernel.hvm.resident.start.nested_enabled",
-            QStringLiteral("\n\n本次还会打开 Nested VMX 指令分派。它不再是失败桩：来宾里的驱动可以真的 VMXON、维护自己的 vmcs12、并把 L2 跑起来——退出会先落到我们手上，按所有权决定自己处理还是投递给它；L1 要 EPT 时由影子层次（EPT01 ∘ EPT12）按需合成。也就是说，勾上它之后，这台机器上任何 ring 0 代码都能在你底下起一台虚拟机。关掉它时 VMX 指令会被注 #UD——在 CPUID 不报 VMX 的前提下那是架构正确的行为。尚未实现：L2 的 I/O 与 MSR 位图路由（全部退出并投递给 L1，正确但慢）、EPT 的 accessed/dirty 位传播（如实报不支持）。"));
+            QStringLiteral("\n\n本次还会打开 Nested VMX 指令分派。它不再是失败桩：来宾里的驱动可以真的 VMXON、维护自己的 vmcs12、并把 L2 跑起来——退出会先落到我们手上，按所有权决定自己处理还是投递给它；L1 要 EPT 时由影子层次（EPT01 ∘ EPT12）按需合成。也就是说，勾上它之后，这台机器上任何 ring 0 代码都能在你底下起一台虚拟机。关掉它时 VMX 指令会被注 #UD——在 CPUID 不报 VMX 的前提下那是架构正确的行为。L2 的 MSR 与 I/O 拦截按 L1 自己的位图路由：L1 要的退出投递给它，只有我们要的就地服务掉。尚未实现的是 EPT 的 accessed/dirty 位传播（如实报不支持）。"));
     }
     else if (onNestedPage)
     {
@@ -174,7 +174,7 @@ void KernelHvmTab::validateNested()
      */
     const QString warning = kernelText(
         "kernel.hvm.nested.validate.warning",
-        QStringLiteral("该检查探测并报告 Nested VMX 分派能力。分派本身已经不是失败桩：VMXON、VMPTRLD、VMREAD/VMWRITE 都能成功，VMLAUNCH 会真的把 L2 跑起来，退出反射与影子 EPT（EPT01 ∘ EPT12）都已实现。但这条命令只做探测，不会让常驻带上嵌套派发——那一位由虚拟化菜单的「允许来宾嵌套（我们作为宿主）」决定。尚未实现的部分：L2 的 I/O 与 MSR 位图路由、EPT 的 accessed/dirty 位传播。"));
+        QStringLiteral("该检查探测并报告 Nested VMX 分派能力。分派本身已经不是失败桩：VMXON、VMPTRLD、VMREAD/VMWRITE 都能成功，VMLAUNCH 会真的把 L2 跑起来，退出反射与影子 EPT（EPT01 ∘ EPT12）都已实现。但这条命令只做探测，不会让常驻带上嵌套派发——那一位由虚拟化菜单的「允许来宾嵌套（我们作为宿主）」决定。L2 的 MSR 与 I/O 拦截也已按 L1 自己的位图路由。尚未实现的是 EPT 的 accessed/dirty 位传播。"));
     if (confirmTyped(warning, kernelText("kernel.hvm.nested.validate", QStringLiteral("验证 Nested VMX 分派能力"))))
     {
         runControlAsync(

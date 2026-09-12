@@ -186,6 +186,45 @@ typedef struct _KSW_HVM_CPU_RESOURCE
     PVOID Vmcs02Virtual;
     /* Retain the processor-owned vmcs02 physical address. */
     PHYSICAL_ADDRESS Vmcs02Physical;
+    /*
+     * Retain the three bitmap pages vmcs02 points at while L2 runs.
+     *
+     * These exist because a control bit and its companion address are separate
+     * VMCS fields, and vmcs02's controls are the union of L1's and ours.  Our
+     * own USE_MSR_BITMAPS therefore survives into vmcs02 whether or not L1 set
+     * it - and without an address to go with it the processor consults
+     * whatever the field already held, which on a fresh vmcs02 is physical
+     * page zero.  Measured on the 2 vCPU target: primary 0xB40065F2 with bit
+     * 28 set and MSR_BITMAP 0x0.  Nothing else in any readout changes, because
+     * VM entry succeeds and L2 runs; only which MSRs exit becomes whatever
+     * bits happen to live in the BIOS area.
+     *
+     * The MSR page is a merge - L1's bitmap ORed with ours - because an MSR
+     * has to exit if either side wants it.  The two I/O pages are copies of
+     * L1's, since we request no I/O exiting of our own and so have nothing to
+     * contribute to a union.
+     */
+    PVOID L2MsrBitmapVirtual;
+    /* Retain the merged MSR-bitmap physical address for vmcs02. */
+    PHYSICAL_ADDRESS L2MsrBitmapPhysical;
+    /* Retain L2's I/O bitmap A (ports 0x0000-0x7FFF) virtual address. */
+    PVOID L2IoBitmapAVirtual;
+    /* Retain L2's I/O bitmap A physical address for vmcs02. */
+    PHYSICAL_ADDRESS L2IoBitmapAPhysical;
+    /* Retain L2's I/O bitmap B (ports 0x8000-0xFFFF) virtual address. */
+    PVOID L2IoBitmapBVirtual;
+    /* Retain L2's I/O bitmap B physical address for vmcs02. */
+    PHYSICAL_ADDRESS L2IoBitmapBPhysical;
+    /*
+     * Retain an unmerged copy of L1's MSR bitmap.
+     *
+     * Kept separately because the merged page cannot answer the question the
+     * exit path asks.  A set bit in the union means "somebody wanted this
+     * MSR"; routing needs "did *L1* want it", and once ORed the two are
+     * indistinguishable.  Never handed to hardware, so ordinary pool memory
+     * is enough.
+     */
+    PVOID L2MsrBitmapL1Copy;
     /* Retain the processor-owned #VE information-area virtual address. */
     PVOID VeInfoVirtual;
     /* Retain the processor-owned #VE information-area physical address. */

@@ -59,6 +59,45 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONGLONG L2EntryCount;
     /* Count L2 exits delivered to L1 rather than handled here. */
     ULONGLONG L2ExitReflectedCount;
+    /*
+     * Preserve what vmcs02 actually carried into the last VM entry.
+     *
+     * Read back from the loaded vmcs02 immediately before VMLAUNCH, not
+     * computed - the point is to see what the processor will act on rather
+     * than what the merge intended.  A control bit that survives the union
+     * while its companion address never gets written is invisible to every
+     * other readout: the entry succeeds, the guest runs, and the processor
+     * quietly consults whatever page the stale field names.
+     */
+    ULONG LastEntryPrimaryControls;
+    /* Preserve the secondary controls from the same read-back. */
+    ULONG LastEntrySecondaryControls;
+    /* Preserve the MSR-bitmap address vmcs02 actually carried. */
+    ULONGLONG LastEntryMsrBitmap;
+    /* Preserve the two I/O-bitmap addresses vmcs02 actually carried. */
+    ULONGLONG LastEntryIoBitmapA;
+    ULONGLONG LastEntryIoBitmapB;
+    /*
+     * Preserve what L1 itself asked for, as of the last merge.
+     *
+     * The exit path cannot recover these from vmcs02: its controls are the
+     * union of both sides, so "USE_MSR_BITMAPS is set" there says nothing
+     * about whether L1 set it.  Routing needs L1's own answer, and this is the
+     * only place it survives.
+     */
+    BOOLEAN L2MsrFilterFromL1;
+    BOOLEAN L2IoFilterFromL1;
+    BOOLEAN L2UncondIoFromL1;
+    /* Publish whether the last merge read every page it needed. */
+    BOOLEAN L2BitmapMergeComplete;
+    /* Count MSR exits from L2 delivered to L1 rather than serviced here. */
+    ULONGLONG L2MsrExitsReflected;
+    /* Count MSR exits from L2 serviced here because only we armed them. */
+    ULONGLONG L2MsrExitsHandled;
+    /* Count port exits from L2 delivered to L1. */
+    ULONGLONG L2IoExitsReflected;
+    /* Count port exits from L2 serviced here. */
+    ULONGLONG L2IoExitsHandled;
     /* Preserve the L1 VMXON-region physical address. */
     ULONGLONG VmxonRegion;
     /* Preserve the current L1 vmcs12 physical address. */

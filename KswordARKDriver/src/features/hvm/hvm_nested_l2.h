@@ -55,6 +55,23 @@ KswordARKHvmNestedL2Enter(
 #define KSW_HVM_L2_ROUTE_NOT_L2 0UL
 #define KSW_HVM_L2_ROUTE_REFLECTED 1UL
 #define KSW_HVM_L2_ROUTE_HANDLED 2UL
+/*
+ * Ours, and still needing the ordinary handling to run on vmcs02.
+ *
+ * Distinct from HANDLED, and the distinction is load-bearing in both
+ * directions.  A shadow-resolved EPT violation is finished: resuming
+ * re-executes the access and it now succeeds, while letting the ordinary
+ * handling run would evaluate an L2 guest-physical against our own hierarchy,
+ * which does not describe it.  An MSR or port access is the opposite: nothing
+ * has serviced it, so resuming re-executes the same instruction against the
+ * same interception forever - RIP never advanced because nobody emulated
+ * anything.
+ *
+ * Collapsing the two into HANDLED costs a hang with no error anywhere; into
+ * NOT_L2, an EPT violation gets re-judged against the wrong hierarchy and the
+ * refusal path tears residency down while L2 is running.
+ */
+#define KSW_HVM_L2_ROUTE_SERVICE_LOCALLY 3UL
 
 /*
  * Route one L2 exit.
@@ -68,6 +85,7 @@ KswordARKHvmNestedL2Enter(
 ULONG
 KswordARKHvmNestedL2Reflect(
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context,
+    _In_ struct _KSW_HVM_GPR_FRAME* Frame,
     _In_ ULONG ExitReason
     );
 

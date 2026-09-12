@@ -18,6 +18,11 @@ Environment:
 --*/
 
 #include "hvm_internal.h"
+// KswordARKAllocateNonPagedPool：L1 位图副本不进硬件，用普通池即可。
+#include "../../platform/pool_compat.h"
+
+/* Tag the per-processor copy of L1's MSR bitmap. */
+#define KSW_HVM_L2_BITMAP_POOL_TAG 'BvHK'
 #include "hvm_cr_policy.h"
 #include "hvm_ept_view.h"
 #include "hvm_inject.h"
@@ -1163,6 +1168,21 @@ KswordARKHvmFreeResourcesLocked(
             MmFreeContiguousMemory(
                 Runtime->Processors[index].Vmcs02Virtual);
         }
+        if (Runtime->Processors[index].L2MsrBitmapVirtual != NULL) {
+            MmFreeContiguousMemory(
+                Runtime->Processors[index].L2MsrBitmapVirtual);
+        }
+        if (Runtime->Processors[index].L2IoBitmapAVirtual != NULL) {
+            MmFreeContiguousMemory(
+                Runtime->Processors[index].L2IoBitmapAVirtual);
+        }
+        if (Runtime->Processors[index].L2IoBitmapBVirtual != NULL) {
+            MmFreeContiguousMemory(
+                Runtime->Processors[index].L2IoBitmapBVirtual);
+        }
+        if (Runtime->Processors[index].L2MsrBitmapL1Copy != NULL) {
+            ExFreePool(Runtime->Processors[index].L2MsrBitmapL1Copy);
+        }
         RtlZeroMemory(
             &Runtime->Processors[index],
             sizeof(Runtime->Processors[index]));
@@ -1411,12 +1431,84 @@ KswordARKHvmAllocateProcessorResourcesLocked(
                     highest,
                     boundary,
                     MmCached);
+            /*
+             * The three bitmap pages vmcs02 points at while L2 runs.
+             *
+             * Reserved on the same unconditional basis as vmcs02 itself: the
+             * residency start flags are not known here, and three pages per
+             * processor is cheaper than a second allocation path that only
+             * runs on the rarer branch.  They must be contiguous and
+             * page-aligned because the processor reads them by physical
+             * address out of the VMCS.
+             */
+            cpu->L2MsrBitmapVirtual =
+                MmAllocateContiguousMemorySpecifyCache(
+                    (SIZE_T)KSW_HVM_PAGE_BYTES,
+                    lowest,
+                    highest,
+                    boundary,
+                    MmCached);
+            cpu->L2IoBitmapAVirtual =
+                MmAllocateContiguousMemorySpecifyCache(
+                    (SIZE_T)KSW_HVM_PAGE_BYTES,
+                    lowest,
+                    highest,
+                    boundary,
+                    MmCached);
+            cpu->L2IoBitmapBVirtual =
+                MmAllocateContiguousMemorySpecifyCache(
+                    (SIZE_T)KSW_HVM_PAGE_BYTES,
+                    lowest,
+                    highest,
+                    boundary,
+                    MmCached);
+            /* L1's unmerged copy never reaches hardware, so pool suffices. */
+            cpu->L2MsrBitmapL1Copy =
+                KswordARKAllocateNonPagedPool(
+                    (SIZE_T)KSW_HVM_PAGE_BYTES,
+                    KSW_HVM_L2_BITMAP_POOL_TAG);
             if (cpu->VmxonVirtual == NULL ||
                 cpu->VmcsVirtual == NULL ||
                 cpu->VeInfoVirtual == NULL ||
-                cpu->Vmcs02Virtual == NULL) {
+                cpu->Vmcs02Virtual == NULL ||
+                cpu->L2MsrBitmapVirtual == NULL ||
+                cpu->L2IoBitmapAVirtual == NULL ||
+                cpu->L2IoBitmapBVirtual == NULL ||
+                cpu->L2MsrBitmapL1Copy == NULL) {
                 return STATUS_INSUFFICIENT_RESOURCES;
             }
+            /*
+             * Start every bitmap at all-ones, not zero.
+             *
+             * Zero means "nothing exits", so a merge that never ran would hand
+             * L2 unmediated access to every MSR and every port.  All-ones
+             * means "everything exits", which is merely slow and keeps both
+             * hypervisors in control.  The failure direction has to be the
+             * conservative one, because nothing downstream can detect the
+             * other.
+             */
+            RtlFillMemory(
+                cpu->L2MsrBitmapVirtual,
+                (SIZE_T)KSW_HVM_PAGE_BYTES,
+                0xFF);
+            RtlFillMemory(
+                cpu->L2IoBitmapAVirtual,
+                (SIZE_T)KSW_HVM_PAGE_BYTES,
+                0xFF);
+            RtlFillMemory(
+                cpu->L2IoBitmapBVirtual,
+                (SIZE_T)KSW_HVM_PAGE_BYTES,
+                0xFF);
+            RtlFillMemory(
+                cpu->L2MsrBitmapL1Copy,
+                (SIZE_T)KSW_HVM_PAGE_BYTES,
+                0xFF);
+            cpu->L2MsrBitmapPhysical =
+                MmGetPhysicalAddress(cpu->L2MsrBitmapVirtual);
+            cpu->L2IoBitmapAPhysical =
+                MmGetPhysicalAddress(cpu->L2IoBitmapAVirtual);
+            cpu->L2IoBitmapBPhysical =
+                MmGetPhysicalAddress(cpu->L2IoBitmapBVirtual);
             RtlZeroMemory(
                 cpu->Vmcs02Virtual,
                 (SIZE_T)KSW_HVM_PAGE_BYTES);

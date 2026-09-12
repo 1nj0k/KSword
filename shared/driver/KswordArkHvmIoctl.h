@@ -1968,6 +1968,45 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
     unsigned long inveptResult;
     /* INVEPT 之后影子的代次有没有真的往前走。 */
     unsigned long shadowGenerationAdvanced;
+    /*
+     * vmcs02 在 VM entry 那一刻实际携带的控制位与三个位图地址。
+     *
+     * 这一组是**读回来的**，不是合并过程算出来的——两者只在"某个字段根本没被
+     * 写过"时才不同，而那正是它要暴露的故障。控制位是 L1 的与我们的并集，所以
+     * `USE_MSR_BITMAPS`（bit 28）会因为我们需要它而恒定活下来；如果配套的
+     * `msrBitmap` 是 0，处理器就会拿物理页 0 当 MSR 位图用。
+     *
+     * 那种状态下没有任何别的读数会变：VM entry 成功、L2 照跑、退出照来。只有
+     * 把这两格摆在一起看，才说得清 L2 的 MSR/IO 拦截到底由谁决定。
+     */
+    unsigned long vmcs02PrimaryControls;
+    unsigned long vmcs02SecondaryControls;
+    unsigned long long vmcs02MsrBitmap;
+    unsigned long long vmcs02IoBitmapA;
+    unsigned long long vmcs02IoBitmapB;
+    /*
+     * L2 停下来时距代码页起点的偏移。
+     *
+     * 这一格自己就是 MSR 位图合并的判据，不需要别的佐证。L2 的程序是两条
+     * RDMSR：第一条 L1 的位图里是清的（不该退出），第二条是置的（该退出）。
+     *
+     *   12 = 停在第二条 —— 处理器查的确实是 L1 那张位图
+     *    5 = 停在第一条 —— 查的是"全部拦截"的回退页，说明 L1 的页没读到
+     *   14 = 走到了 CPUID —— MSR 拦截根本没发生
+     *
+     * 三种结局都产生退出、都能反射成功，只有停在哪里能把它们分开。
+     */
+    unsigned long long l2RipOffset;
+    /* L2 的 MSR 退出各有多少条投递给了 L1、多少条由我们就地服务。 */
+    unsigned long long l2MsrExitsReflected;
+    unsigned long long l2MsrExitsHandled;
+    /* 同上，端口退出。 */
+    unsigned long long l2IoExitsReflected;
+    unsigned long long l2IoExitsHandled;
+    /* 上一次合并是否把需要的每一页都读到了。 */
+    unsigned long bitmapMergeComplete;
+    /* L1 自己有没有要求 MSR 位图过滤（决定归属判定走哪条分支）。 */
+    unsigned long l1UsesMsrBitmap;
 } KSWORD_ARK_HVM_NESTED_PROBE_ROW;
 
 typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE

@@ -96,7 +96,7 @@ QString KernelHvmTab::buildDetail(
             "\nNested 实现：%7；状态 %8"
             "\neVMCS 实现：%9；状态 %10；版本 %11；标志 0x%12"
             "\nVP-assist MSR：0x%13"
-            "\n\n实验边界：Nested 的 VMXON/VMCS 操作数解码、vmcs02 合并、L2 exit reflection 与 shadow EPT 都已实现并在硬件上验证过；尚未实现的是 L2 的 I/O 与 MSR 位图路由（全部退出后投递给 L1）和 EPT 的 accessed/dirty 位传播。eVMCS 仍只按 TLFS 探测来宾分区能力与所有权，未接管 VP-assist 页面或 clean fields，因此不得解释为 active。Resident 的 capability-only 表示生命周期保护已就绪；只有全 CPU rendezvous 成功后才报告 active。"))
+            "\n\n实验边界：Nested 的 VMXON/VMCS 操作数解码、vmcs02 合并、L2 exit reflection 与 shadow EPT 都已实现并在硬件上验证过；L2 的 MSR 与 I/O 位图按 L1 自己的那份合并并路由，每次进入 L2 重算一遍、不缓存。尚未实现的是 EPT 的 accessed/dirty 位传播。eVMCS 仍只按 TLFS 探测来宾分区能力与所有权，未接管 VP-assist 页面或 clean fields，因此不得解释为 active。Resident 的 capability-only 表示生命周期保护已就绪；只有全 CPU rendezvous 成功后才报告 active。"))
         .arg(implementationText(
             response.residentImplementation))
         .arg(response.residentProcessorCount)

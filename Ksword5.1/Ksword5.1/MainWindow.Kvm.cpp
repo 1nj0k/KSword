@@ -709,7 +709,7 @@ void MainWindow::showKvmMenu(const QPoint& globalPosition)
             QStringLiteral("KvmEnableNestedDispatch"),
             ks::i18n::sourceText(QStringLiteral("允许来宾嵌套")),
             ks::i18n::sourceText(QStringLiteral("本机全部 ring 0 代码")),
-            ks::i18n::sourceText(QStringLiteral("打开后，这台机器上任何 ring 0 代码都能在我们底下起一台虚拟机，而我们只看得到它产生的退出，看不到它在里面跑什么。影子 EPT 层次按需合成，每核要额外占用若干页。尚未实现 L2 的 I/O 与 MSR 位图路由，因此来宾的每一次 I/O 和 MSR 访问都会退出一次再投递给它——正确，但慢。")));
+            ks::i18n::sourceText(QStringLiteral("打开后，这台机器上任何 ring 0 代码都能在我们底下起一台虚拟机，而我们只看得到它产生的退出，看不到它在里面跑什么。影子 EPT 层次按需合成，MSR 与 I/O 位图按 L1 自己的那份合并，每核要额外占用若干页。位图在每次进入 L2 时重算一遍、不缓存，所以来宾越频繁地进出 L2 越贵。")));
         if (!confirmed)
         {
             nestedDispatchAction->setChecked(false);

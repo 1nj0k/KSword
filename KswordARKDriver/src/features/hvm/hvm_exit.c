@@ -743,17 +743,27 @@ KswordARKHvmResidentVmExitDispatch(
     if (Context->Nested.InL2) {
         const ULONG route = KswordARKHvmNestedL2Reflect(
             Context,
+            Frame,
             nestedBasicReason);
 
         /*
-         * Both routed outcomes end the exit here.
+         * Two of the four outcomes end the exit here.
          *
          * REFLECTED resumes L1 at its own handler; HANDLED resumes L2 on
-         * vmcs02.  Neither may fall through: the handling below reads fields
-         * describing whichever guest is loaded and acts on our own hierarchy,
-         * which is not the one L2's addresses belong to.
+         * vmcs02 after routing already fixed whatever caused the exit.
+         * Neither may fall through: the handling below reads fields describing
+         * whichever guest is loaded and acts on our own hierarchy, which is
+         * not the one an L2 address belongs to.
+         *
+         * SERVICE_LOCALLY falls through on purpose.  An MSR or port access
+         * that only we intercepted has not been emulated by anyone yet, and
+         * the ordinary handling is what emulates it - operating on vmcs02, so
+         * on L2, which is correct.  Ending the exit here instead would resume
+         * straight back into the same instruction and the same interception,
+         * with nothing to break the loop and no error to report it.
          */
-        if (route != KSW_HVM_L2_ROUTE_NOT_L2) {
+        if (route != KSW_HVM_L2_ROUTE_NOT_L2 &&
+            route != KSW_HVM_L2_ROUTE_SERVICE_LOCALLY) {
             /* Resume whichever guest routing left loaded. */
             return KSW_HVM_EXIT_ACTION_RESUME;
         }

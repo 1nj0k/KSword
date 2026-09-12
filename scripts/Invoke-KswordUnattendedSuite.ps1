@@ -260,6 +260,12 @@ try {
         @{ S = 'probe-flags';    W = '负向：ENFORCE 与能力 flag 是否在该拒的地方拒';      Soak = 0 }
         @{ S = 'launch-guest';   W = '一次性受控 guest：VMCS 构造 + EPTP + VMLAUNCH';     Soak = 0 }
         @{ S = 'resident';       W = '常驻活过发起进程（HOST_CR3 + 退虚拟化 CR3 恢复）';  Soak = 0 }
+        # 嵌套端到端，排在 resident 之后、soak 之前。
+        #
+        # 之前这一整条线只能手工跑，于是它验过的东西没有一样会被回归再碰一次
+        # —— 而嵌套里出错最贵的那条路径（MSR 退出判给我们之后没人服务它）的
+        # 症状是**静默挂死**，不是报错。一次没人跑的验证等于没有验证。
+        @{ S = 'nested';         W = 'L2 端到端：vmcs02 合并 + 影子 EPT + MSR 位图路由';  Soak = 0 }
         @{ S = 'soak';           W = "长跑 $SoakMs ms（驱动上限 30000）：StateFlags 全量 interlocked 之后仍稳"; Soak = $SoakMs }
         # 视图归因探针只发一次 VIEW_OP_ADD、不进 VMX，所以排在会退虚拟化的两级之前。
         @{ S = 'view-probe';     W = '分离视图安装期归因：拒绝发生在该拒的那道门上';      Soak = 0 }

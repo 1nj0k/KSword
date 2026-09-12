@@ -70,6 +70,21 @@ Environment:
 #define KSW_PROBE_EPT_POINTER 0x201AUL
 /* Name the primary control that makes the secondary controls take effect. */
 #define KSW_PROBE_PRIMARY_ACTIVATE_SECONDARY 0x80000000UL
+/* Name the primary control that makes L1's MSR bitmap take effect. */
+#define KSW_PROBE_PRIMARY_USE_MSR_BITMAPS 0x10000000UL
+/* Name the vmcs12 field carrying L1's MSR-bitmap address. */
+#define KSW_PROBE_MSR_BITMAP 0x2004UL
+/*
+ * The two MSRs L2 reads, and what each one is for.
+ *
+ * OPEN is left out of L1's bitmap and must run without exiting; TRAPPED is put
+ * into it and must exit.  Both are architecturally present everywhere, so the
+ * one that is allowed through reads a real register rather than faulting.
+ */
+#define KSW_PROBE_L2_OPEN_MSR 0x00000010UL
+#define KSW_PROBE_L2_TRAPPED_MSR 0x00000174UL
+/* Where L2 stops when the merge honoured L1's bitmap exactly. */
+#define KSW_PROBE_L2_EXPECTED_RIP_OFFSET 12ULL
 /* Name the secondary control that turns on EPT for L2. */
 #define KSW_PROBE_SECONDARY_ENABLE_EPT 0x00000002UL
 /* Name the four-level walk length and write-back type of an EPT pointer. */
@@ -112,6 +127,17 @@ typedef struct _KSW_HVM_NESTED_PROBE_CONTEXT
     ULONGLONG Ept12PdptPhysical;
     /* The EPT pointer written into vmcs12, or zero when EPT is not asked for. */
     ULONGLONG Ept12Pointer;
+    /*
+     * The MSR bitmap this probe's L1 hands its guest.
+     *
+     * Present so the probe can pose the only question that distinguishes a
+     * merge that read L1's page from one that gave up and intercepted
+     * everything: one MSR whose bit is clear and must not exit, followed by
+     * one whose bit is set and must.  Both answers produce an exit; only where
+     * L2 stopped says which page the processor was really consulting.
+     */
+    PVOID L1MsrBitmapVirtual;
+    ULONGLONG L1MsrBitmapPhysical;
 } KSW_HVM_NESTED_PROBE_CONTEXT;
 
 /*
@@ -318,10 +344,22 @@ KswordARKHvmNestedProbeBuildVmcs12(
     KswordARKHvmCaptureSegments(&snapshot);
     /* Controls: 64-bit entry and exit, plus EPT when one was built. */
     KswordARKHvmNestedProbeVmcs12Write(KSW_PROBE_PIN_CONTROLS, 0ULL);
+    /*
+     * L1 always asks for MSR filtering here.
+     *
+     * Without it every L2 MSR access belongs to L1 by architecture and the
+     * merge has nothing to decide, so the interesting half of the routing
+     * would never be exercised.  With it, the bitmap L1 supplies is the only
+     * thing that can tell the two reads below apart.
+     */
+    KswordARKHvmNestedProbeVmcs12Write(
+        KSW_PROBE_MSR_BITMAP,
+        Probe->L1MsrBitmapPhysical);
     if (Probe->Ept12Pointer != 0ULL) {
         KswordARKHvmNestedProbeVmcs12Write(
             KSW_PROBE_PRIMARY_CONTROLS,
-            KSW_PROBE_PRIMARY_ACTIVATE_SECONDARY);
+            KSW_PROBE_PRIMARY_ACTIVATE_SECONDARY |
+                KSW_PROBE_PRIMARY_USE_MSR_BITMAPS);
         KswordARKHvmNestedProbeVmcs12Write(
             KSW_PROBE_SECONDARY_CONTROLS,
             KSW_PROBE_SECONDARY_ENABLE_EPT);
@@ -329,7 +367,9 @@ KswordARKHvmNestedProbeBuildVmcs12(
             KSW_PROBE_EPT_POINTER,
             Probe->Ept12Pointer);
     } else {
-        KswordARKHvmNestedProbeVmcs12Write(KSW_PROBE_PRIMARY_CONTROLS, 0ULL);
+        KswordARKHvmNestedProbeVmcs12Write(
+            KSW_PROBE_PRIMARY_CONTROLS,
+            KSW_PROBE_PRIMARY_USE_MSR_BITMAPS);
     }
     KswordARKHvmNestedProbeVmcs12Write(KSW_PROBE_EXCEPTION_BITMAP, 0ULL);
     KswordARKHvmNestedProbeVmcs12Write(
@@ -592,6 +632,48 @@ KswordARKHvmNestedProbeExecute(
                         vcpu->Nested.ShadowEpt.DenyCount;
                     response->shadowExhaustionCount =
                         vcpu->Nested.ShadowEpt.ExhaustionCount;
+                    /*
+                     * Report what vmcs02 actually carried into VM entry.
+                     *
+                     * Captured by L2Enter from the loaded VMCS, so a field the
+                     * merge never wrote shows up as whatever the VMCS already
+                     * held rather than as the value the merge believed it set.
+                     */
+                    response->vmcs02PrimaryControls =
+                        vcpu->Nested.LastEntryPrimaryControls;
+                    response->vmcs02SecondaryControls =
+                        vcpu->Nested.LastEntrySecondaryControls;
+                    response->vmcs02MsrBitmap =
+                        vcpu->Nested.LastEntryMsrBitmap;
+                    response->vmcs02IoBitmapA =
+                        vcpu->Nested.LastEntryIoBitmapA;
+                    response->vmcs02IoBitmapB =
+                        vcpu->Nested.LastEntryIoBitmapB;
+                    /*
+                     * Where L2 stopped, relative to its own code page.
+                     *
+                     * Reported as an offset rather than an address because the
+                     * criterion is positional: the page moves every run, but
+                     * "stopped on the second RDMSR" does not.
+                     */
+                    response->l2RipOffset =
+                        (slot->L2GuestRip >=
+                            (ULONGLONG)(ULONG_PTR)Probe->L2CodeVirtual)
+                            ? (slot->L2GuestRip -
+                                (ULONGLONG)(ULONG_PTR)Probe->L2CodeVirtual)
+                            : 0ULL;
+                    response->l2MsrExitsReflected =
+                        vcpu->Nested.L2MsrExitsReflected;
+                    response->l2MsrExitsHandled =
+                        vcpu->Nested.L2MsrExitsHandled;
+                    response->l2IoExitsReflected =
+                        vcpu->Nested.L2IoExitsReflected;
+                    response->l2IoExitsHandled =
+                        vcpu->Nested.L2IoExitsHandled;
+                    response->bitmapMergeComplete =
+                        vcpu->Nested.L2BitmapMergeComplete ? 1UL : 0UL;
+                    response->l1UsesMsrBitmap =
+                        vcpu->Nested.L2MsrFilterFromL1 ? 1UL : 0UL;
                     response->status =
                         KSWORD_ARK_HVM_NESTED_PROBE_STATUS_OK;
                     /* Return without a second VMXOFF. */
@@ -668,12 +750,18 @@ KswordARKHvmNestedProbeRunOne(
         PAGE_SIZE, lowest, highest, boundary, MmCached);
     probe.Ept12PdptVirtual = MmAllocateContiguousMemorySpecifyCache(
         PAGE_SIZE, lowest, highest, boundary, MmCached);
+    probe.L1MsrBitmapVirtual = MmAllocateContiguousMemorySpecifyCache(
+        PAGE_SIZE, lowest, highest, boundary, MmCached);
     probe.L1StackVirtual = KswordARKAllocateNonPagedPool(
         KSW_PROBE_L1_STACK_BYTES,
         'pnHK');
     if (probe.VmxonVirtual == NULL || probe.Vmcs12Virtual == NULL ||
         probe.L2CodeVirtual == NULL || probe.L1StackVirtual == NULL ||
-        probe.Ept12Pml4Virtual == NULL || probe.Ept12PdptVirtual == NULL) {
+        probe.Ept12Pml4Virtual == NULL || probe.Ept12PdptVirtual == NULL ||
+        probe.L1MsrBitmapVirtual == NULL) {
+        if (probe.L1MsrBitmapVirtual != NULL) {
+            MmFreeContiguousMemory(probe.L1MsrBitmapVirtual);
+        }
         if (probe.Ept12Pml4Virtual != NULL) {
             MmFreeContiguousMemory(probe.Ept12Pml4Virtual);
         }
@@ -701,18 +789,69 @@ KswordARKHvmNestedProbeRunOne(
     RtlZeroMemory(probe.Vmcs12Virtual, PAGE_SIZE);
     RtlZeroMemory(probe.L1StackVirtual, KSW_PROBE_L1_STACK_BYTES);
     /*
-     * L2's entire program: CPUID, then an unreachable self-loop.
+     * L1's MSR bitmap: everything clear except the read bit for the MSR the
+     * program below is supposed to be stopped on.
      *
-     * CPUID exits unconditionally under VMX, so L2 executes exactly one
-     * instruction before control returns - the shortest program that proves it
-     * ran.  The loop after it exists so that a reflection which fails to stop
-     * L2 parks it instead of running off the page into whatever follows.
+     * Region 0 (bytes 0x000-0x3FF) is the read bitmap for MSRs 0x0-0x1FFF, one
+     * bit per MSR.  Clearing the page means L1 intercepts nothing; setting one
+     * bit means it intercepts exactly that read.  Both halves matter: without
+     * the cleared bits there is no evidence the merge honours a "do not
+     * intercept", and without the set bit none that it honours an "intercept".
+     */
+    RtlZeroMemory(probe.L1MsrBitmapVirtual, PAGE_SIZE);
+    ((volatile UCHAR*)probe.L1MsrBitmapVirtual)
+        [KSW_PROBE_L2_TRAPPED_MSR / 8U] |=
+            (UCHAR)(1U << (KSW_PROBE_L2_TRAPPED_MSR % 8U));
+    physical = MmGetPhysicalAddress(probe.L1MsrBitmapVirtual);
+    probe.L1MsrBitmapPhysical = (ULONGLONG)physical.QuadPart;
+    /*
+     * L2's program, chosen so that where it stops is itself the answer.
+     *
+     *   +0   mov ecx, IA32_TIME_STAMP_COUNTER
+     *   +5   rdmsr                 <- L1's bit is clear: must NOT exit
+     *   +7   mov ecx, IA32_SYSENTER_CS
+     *   +12  rdmsr                 <- L1's bit is set: must exit
+     *   +14  cpuid                 <- only reached if the exit never happened
+     *   +16  jmp $
+     *
+     * Three outcomes, all distinguishable by the reflected RIP alone:
+     * stopping at +12 means the processor consulted a bitmap that really was
+     * L1's; stopping at +5 means it consulted one that intercepts everything,
+     * which is what the merge falls back to when it cannot read L1's page;
+     * reaching +14 means MSR interception did not happen at all.
+     *
+     * Both MSRs are architecturally present on every processor this driver
+     * runs on, so the read that is allowed through cannot fault.
      */
     RtlZeroMemory(probe.L2CodeVirtual, PAGE_SIZE);
-    ((volatile UCHAR*)probe.L2CodeVirtual)[0] = 0x0FU;
-    ((volatile UCHAR*)probe.L2CodeVirtual)[1] = 0xA2U;
-    ((volatile UCHAR*)probe.L2CodeVirtual)[2] = 0xEBU;
-    ((volatile UCHAR*)probe.L2CodeVirtual)[3] = 0xFEU;
+    {
+        volatile UCHAR* code = (volatile UCHAR*)probe.L2CodeVirtual;
+
+        /* mov ecx, imm32 */
+        code[0] = 0xB9U;
+        code[1] = (UCHAR)(KSW_PROBE_L2_OPEN_MSR & 0xFFU);
+        code[2] = (UCHAR)((KSW_PROBE_L2_OPEN_MSR >> 8) & 0xFFU);
+        code[3] = (UCHAR)((KSW_PROBE_L2_OPEN_MSR >> 16) & 0xFFU);
+        code[4] = (UCHAR)((KSW_PROBE_L2_OPEN_MSR >> 24) & 0xFFU);
+        /* rdmsr */
+        code[5] = 0x0FU;
+        code[6] = 0x32U;
+        /* mov ecx, imm32 */
+        code[7] = 0xB9U;
+        code[8] = (UCHAR)(KSW_PROBE_L2_TRAPPED_MSR & 0xFFU);
+        code[9] = (UCHAR)((KSW_PROBE_L2_TRAPPED_MSR >> 8) & 0xFFU);
+        code[10] = (UCHAR)((KSW_PROBE_L2_TRAPPED_MSR >> 16) & 0xFFU);
+        code[11] = (UCHAR)((KSW_PROBE_L2_TRAPPED_MSR >> 24) & 0xFFU);
+        /* rdmsr */
+        code[12] = 0x0FU;
+        code[13] = 0x32U;
+        /* cpuid */
+        code[14] = 0x0FU;
+        code[15] = 0xA2U;
+        /* jmp $ */
+        code[16] = 0xEBU;
+        code[17] = 0xFEU;
+    }
     RtlZeroMemory(probe.Ept12Pml4Virtual, PAGE_SIZE);
     RtlZeroMemory(probe.Ept12PdptVirtual, PAGE_SIZE);
     physical = MmGetPhysicalAddress(probe.Ept12Pml4Virtual);
@@ -763,6 +902,7 @@ KswordARKHvmNestedProbeRunOne(
     MmFreeContiguousMemory(probe.L2CodeVirtual);
     MmFreeContiguousMemory(probe.Ept12Pml4Virtual);
     MmFreeContiguousMemory(probe.Ept12PdptVirtual);
+    MmFreeContiguousMemory(probe.L1MsrBitmapVirtual);
     ExFreePool(probe.L1StackVirtual);
     /* Return a completed probe whatever the individual steps reported. */
     return STATUS_SUCCESS;

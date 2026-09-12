@@ -92,6 +92,9 @@
     <ClCompile Include="src\features\hvm\hvm_nested_vmcs.c">
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
+    <ClCompile Include="src\features\hvm\hvm_nested_bitmap.c">
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
     <ClCompile Include="src\features\hvm\hvm_nested_ept.c">
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
@@ -464,6 +467,7 @@
     <ClInclude Include="src\features\hvm\hvm_phys_window.h" />
     <ClInclude Include="src\features\hvm\hvm_nested_decode.h" />
     <ClInclude Include="src\features\hvm\hvm_nested_vmcs.h" />
+    <ClInclude Include="src\features\hvm\hvm_nested_bitmap.h" />
     <ClInclude Include="src\features\hvm\hvm_nested_ept.h" />
     <ClInclude Include="src\features\hvm\hvm_nested.h" />
     <ClInclude Include="src\features\hvm\hvm_exit.h" />

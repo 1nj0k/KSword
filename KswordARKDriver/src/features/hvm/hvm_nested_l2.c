@@ -15,6 +15,7 @@ Environment:
 --*/
 
 #include "hvm_nested_l2.h"
+#include "hvm_nested_bitmap.h"
 #include "hvm_nested_ept.h"
 #include "hvm_resident.h"
 #include "hvm_exit.h"
@@ -30,6 +31,9 @@ Environment:
 #define KSW_L2_ERROR_INVALID_HOST_STATE 8UL
 
 /* Name the VMCS fields this module addresses by hand. */
+#define KSW_L2_IO_BITMAP_A 0x2000UL
+#define KSW_L2_IO_BITMAP_B 0x2002UL
+#define KSW_L2_MSR_BITMAP 0x2004UL
 #define KSW_L2_VMCS_LINK_POINTER 0x2800UL
 #define KSW_L2_EPT_POINTER 0x201AUL
 #define KSW_L2_PIN_CONTROLS 0x4000UL
@@ -185,6 +189,7 @@ KswordARKHvmNestedL2Enter(
 {
     KSW_HVM_NESTED_VCPU* nested = &Context->Nested;
     KSW_HVM_VMCS12_STATE* vmcs12 = &nested->Vmcs12;
+    KSW_HVM_NESTED_BITMAP_MERGE bitmaps = { 0 };
     ULONGLONG hostFields[RTL_NUMBER_OF(g_KswordL2HostFields)] = { 0 };
     ULONGLONG vmcs01Physical = 0ULL;
     ULONGLONG vmcs02Physical = 0ULL;
@@ -252,6 +257,25 @@ KswordARKHvmNestedL2Enter(
     /* Refuse rather than enter L2 without a hierarchy to run it under. */
     if (eptPointer == 0ULL) {
         /* Return the exact unusable-EPT-pointer error. */
+        return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
+    }
+    /*
+     * Build the bitmaps before touching vmcs02.
+     *
+     * Reading L1's pages needs the physical window, not a loaded VMCS, so this
+     * runs while vmcs01 is still current - a refusal can then return with
+     * nothing disturbed instead of leaving vmcs02 half-written.
+     */
+    KswordARKHvmNestedBitmapMerge(Context, primary, &bitmaps);
+    if (bitmaps.MsrBitmapPhysical == 0ULL ||
+        bitmaps.IoBitmapAPhysical == 0ULL ||
+        bitmaps.IoBitmapBPhysical == 0ULL) {
+        /*
+         * Refuse rather than enter with an address the processor would read as
+         * page zero.  An incomplete *merge* is survivable - it intercepts
+         * everything - but a missing *page* is not, because there is nothing
+         * to point the control at.
+         */
         return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
     }
     /* Capture our host state while vmcs01 is still the loaded VMCS. */
@@ -345,6 +369,27 @@ KswordARKHvmNestedL2Enter(
         KswordARKHvmNestedL2ClampControl(
             (ULONG)value | Context->Runtime->ActiveControls.Entry,
             Context->Runtime->ActiveControls.EntryCapability));
+    /*
+     * Point vmcs02 at bitmaps that actually exist.
+     *
+     * These three addresses are separate VMCS fields from the controls that
+     * consult them, and the union above always leaves USE_MSR_BITMAPS set
+     * because we need it whether or not L1 asked.  Leaving the address field
+     * alone therefore does not disable filtering - it aims the processor at
+     * whatever the field already held, which on a fresh vmcs02 is physical
+     * page zero.  Measured before this existed: primary 0xB40065F2 with bit 28
+     * set and MSR_BITMAP 0x0, VM entry succeeding, L2 running, and which MSRs
+     * exited decided by whatever bits live in the BIOS area.
+     */
+    KswordARKHvmNestedL2Write(
+        KSW_L2_MSR_BITMAP,
+        bitmaps.MsrBitmapPhysical);
+    KswordARKHvmNestedL2Write(
+        KSW_L2_IO_BITMAP_A,
+        bitmaps.IoBitmapAPhysical);
+    KswordARKHvmNestedL2Write(
+        KSW_L2_IO_BITMAP_B,
+        bitmaps.IoBitmapBPhysical);
     /* The hierarchy is ours: either the composed shadow or our own. */
     KswordARKHvmNestedL2Write(KSW_L2_EPT_POINTER, eptPointer);
     /*
@@ -354,6 +399,24 @@ KswordARKHvmNestedL2Enter(
      * that vmcs02 shadows a VMCS that does not exist from its point of view.
      */
     KswordARKHvmNestedL2Write(KSW_L2_VMCS_LINK_POINTER, ~0ULL);
+    /*
+     * Read back what vmcs02 will actually run with, before handing it to the
+     * processor.
+     *
+     * Deliberately a read of the loaded VMCS rather than a copy of the values
+     * computed above: the two differ exactly when a field was never written,
+     * and that is the failure this exists to make visible.
+     */
+    nested->LastEntryPrimaryControls =
+        (ULONG)KswordARKHvmNestedL2Read(KSW_L2_PRIMARY_CONTROLS);
+    nested->LastEntrySecondaryControls =
+        (ULONG)KswordARKHvmNestedL2Read(KSW_L2_SECONDARY_CONTROLS);
+    nested->LastEntryMsrBitmap =
+        KswordARKHvmNestedL2Read(KSW_L2_MSR_BITMAP);
+    nested->LastEntryIoBitmapA =
+        KswordARKHvmNestedL2Read(KSW_L2_IO_BITMAP_A);
+    nested->LastEntryIoBitmapB =
+        KswordARKHvmNestedL2Read(KSW_L2_IO_BITMAP_B);
     /* Publish that this processor is about to be running L2. */
     nested->InL2 = TRUE;
     nested->State = KSWORD_ARK_HVM_NESTED_STATE_L2_ACTIVE;
@@ -378,17 +441,26 @@ KswordARKHvmNestedL2Enter(
         : KSW_L2_ERROR_INVALID_HOST_STATE;
 }
 
+/* Name what the ownership test concluded about one L2 exit. */
+#define KSW_L2_OWNER_L1 0UL
+#define KSW_L2_OWNER_US_RESOLVED 1UL
+#define KSW_L2_OWNER_US_NEEDS_SERVICE 2UL
+
 /*
- * Decide whether one L2 exit is L1's to receive.
+ * Decide who owns one L2 exit, and if it is ours, whether anything remains.
  *
- * The question is ownership: did this exit happen because of a control *L1*
- * set, or only because of one we set?  Anything L1 asked for must reach L1,
- * and anything only we asked for must not - handing L1 an exit it never armed
- * makes it demultiplex an event it has no case for.
+ * Two questions, not one.  Ownership asks whether this exit happened because
+ * of a control *L1* set or only one we set: anything L1 asked for must reach
+ * L1, and handing L1 an exit it never armed makes it demultiplex an event it
+ * has no case for.  The second question only matters for our own exits, and
+ * the two answers are not interchangeable - a shadow-resolved EPT violation
+ * needs nothing further, while an MSR access nobody emulated will re-execute
+ * forever if we simply resume.
  */
-static BOOLEAN
-KswordARKHvmNestedL2ExitBelongsToL1(
+static ULONG
+KswordARKHvmNestedL2ExitOwner(
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context,
+    _In_ struct _KSW_HVM_GPR_FRAME* Frame,
     _In_ ULONG ExitReason
     )
 {
@@ -408,8 +480,17 @@ KswordARKHvmNestedL2ExitBelongsToL1(
                 0x7ULL);
 
         if (!nested->ShadowEpt.Active) {
-            /* Report our own hierarchy's violation as ours. */
-            return FALSE;
+            /*
+             * No shadow means L2 is running on our own hierarchy, so this is
+             * a violation against our leaves - our views and tripwires - and
+             * the ordinary handling is exactly what evaluates those.
+             *
+             * This used to resolve to "ours, nothing further", which is only
+             * true when something already fixed the leaf.  Here nothing has:
+             * resuming re-executes the same access against the same leaf, and
+             * the processor faults again with no error and no progress.
+             */
+            return KSW_L2_OWNER_US_NEEDS_SERVICE;
         }
         if (KswordARKHvmNestedEptFill(
                 Context->Runtime,
@@ -417,11 +498,11 @@ KswordARKHvmNestedL2ExitBelongsToL1(
                 Context->PhysWindow,
                 guestPhysical,
                 access)) {
-            /* Report the satisfied violation as ours. */
-            return FALSE;
+            /* Report the satisfied violation as needing nothing further. */
+            return KSW_L2_OWNER_US_RESOLVED;
         }
         /* Report the refused violation as L1's. */
-        return TRUE;
+        return KSW_L2_OWNER_L1;
     }
     case 18UL:
         /*
@@ -431,7 +512,56 @@ KswordARKHvmNestedL2ExitBelongsToL1(
          * VMCALL two levels down is L1's guest talking to L1, and answering it
          * ourselves would impersonate L1 to its own guest.
          */
-        return TRUE;
+        return KSW_L2_OWNER_L1;
+    case 30UL: {
+        /*
+         * A port access is L1's exactly when L1's own I/O controls asked for
+         * it.  We request no I/O exiting at all, so anything left over is an
+         * exit only the merge could have produced.
+         *
+         * Exit qualification for an I/O instruction (SDM 28.2.1): bits 2:0
+         * hold size minus one and bits 31:16 hold the port.
+         */
+        const ULONGLONG qualification =
+            KswordARKHvmNestedL2Read(KSW_L2_EXIT_QUALIFICATION);
+        const ULONG port = (ULONG)((qualification >> 16) & 0xFFFFULL);
+        const ULONG bytes = (ULONG)((qualification & 0x7ULL) + 1ULL);
+
+        if (KswordARKHvmNestedBitmapL1WantsPort(Context, port, bytes)) {
+            nested->L2IoExitsReflected += 1ULL;
+            /* Report the port access as L1's. */
+            return KSW_L2_OWNER_L1;
+        }
+        nested->L2IoExitsHandled += 1ULL;
+        /* Report the port access as ours and still unserviced. */
+        return KSW_L2_OWNER_US_NEEDS_SERVICE;
+    }
+    case 31UL:
+    case 32UL: {
+        /*
+         * RDMSR (31) and WRMSR (32) route on L1's own bitmap, not vmcs02's.
+         *
+         * vmcs02's bitmap is the union, so a set bit there means "somebody
+         * wanted this MSR" and cannot say who.  Handing L1 an MSR exit only we
+         * armed makes it demultiplex an event it has no case for; withholding
+         * one it did arm loses its guest's event silently.
+         *
+         * ECX carries the MSR index for both instructions.
+         */
+        const ULONG msrIndex = (ULONG)((Frame != NULL)
+            ? (Frame->Rcx & 0xFFFFFFFFULL)
+            : 0ULL);
+        const BOOLEAN isWrite = (ExitReason == 32UL);
+
+        if (KswordARKHvmNestedBitmapL1WantsMsr(Context, msrIndex, isWrite)) {
+            nested->L2MsrExitsReflected += 1ULL;
+            /* Report the MSR access as L1's. */
+            return KSW_L2_OWNER_L1;
+        }
+        nested->L2MsrExitsHandled += 1ULL;
+        /* Report the MSR access as ours and still unserviced. */
+        return KSW_L2_OWNER_US_NEEDS_SERVICE;
+    }
     default:
         break;
     }
@@ -444,12 +574,13 @@ KswordARKHvmNestedL2ExitBelongsToL1(
      * resume from.  The first is a silent correctness loss, the second is
      * overhead - so the default is to reflect.
      */
-    return TRUE;
+    return KSW_L2_OWNER_L1;
 }
 
 ULONG
 KswordARKHvmNestedL2Reflect(
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context,
+    _In_ struct _KSW_HVM_GPR_FRAME* Frame,
     _In_ ULONG ExitReason
     )
 {
@@ -464,16 +595,31 @@ KswordARKHvmNestedL2Reflect(
         return KSW_HVM_L2_ROUTE_NOT_L2;
     }
     /*
-     * An exit that was never L1's is finished here.
+     * An exit that was never L1's stops here, in one of two ways.
      *
-     * The ownership test already did the work - a shadow-EPT violation is
-     * "ours" precisely because composing the leaf resolved it - so there is
-     * nothing left for the ordinary handling to do, and letting it run would
-     * re-evaluate an L2 address against a hierarchy that does not describe it.
+     * RESOLVED means the ownership test itself finished the job - composing a
+     * shadow leaf is both the test and the fix - so the caller resumes and the
+     * access succeeds on retry.  Letting the ordinary handling run instead
+     * would re-evaluate an L2 guest-physical against our own hierarchy, which
+     * does not describe it.
+     *
+     * NEEDS_SERVICE means nothing has happened yet: an MSR or port access that
+     * only we intercepted still has to be emulated, and RIP still has to
+     * advance.  Resuming without that re-executes the same instruction into
+     * the same interception, forever, with no error raised anywhere.
      */
-    if (!KswordARKHvmNestedL2ExitBelongsToL1(Context, ExitReason)) {
-        /* Report that the exit needs nothing further before resuming. */
-        return KSW_HVM_L2_ROUTE_HANDLED;
+    {
+        const ULONG owner =
+            KswordARKHvmNestedL2ExitOwner(Context, Frame, ExitReason);
+
+        if (owner == KSW_L2_OWNER_US_RESOLVED) {
+            /* Report that the exit needs nothing further before resuming. */
+            return KSW_HVM_L2_ROUTE_HANDLED;
+        }
+        if (owner == KSW_L2_OWNER_US_NEEDS_SERVICE) {
+            /* Report that the ordinary handling must run on vmcs02. */
+            return KSW_HVM_L2_ROUTE_SERVICE_LOCALLY;
+        }
     }
     /* Record where L2 got to so L1 can inspect and later resume it. */
     for (index = 0UL;
@@ -593,10 +739,12 @@ KswordARKHvmNestedL2Enter(
 ULONG
 KswordARKHvmNestedL2Reflect(
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context,
+    _In_ struct _KSW_HVM_GPR_FRAME* Frame,
     _In_ ULONG ExitReason
     )
 {
     UNREFERENCED_PARAMETER(Context);
+    UNREFERENCED_PARAMETER(Frame);
     UNREFERENCED_PARAMETER(ExitReason);
     /* Report that the caller owns this exit. */
     return KSW_HVM_L2_ROUTE_NOT_L2;

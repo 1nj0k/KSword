@@ -4353,7 +4353,22 @@ static int NestedProbeRowPassed(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
             r->vmwriteResult == 0UL && r->vmreadResult == 0UL &&
             r->vmreadMatched == 1UL && r->vmptrstMatched == 1UL &&
             r->l2Reached == 1UL &&
-            (r->l2ExitReason & 0xFFFFULL) == 10ULL &&
+            /*
+             * 终止退出是第二条 RDMSR，不再是 CPUID。
+             *
+             * L2 的程序是两条 RDMSR：第一条 L1 的位图里是清的、必须放行，
+             * 第二条是置的、必须退出。两条都产生"某个退出"，只有**停在哪里**
+             * 能区分处理器查的是 L1 那张位图还是"全部拦截"的回退页。所以判据
+             * 是原因与偏移一起，缺一格就退化成"反射链路通了"而已。
+             */
+            (r->l2ExitReason & 0xFFFFULL) == 31ULL &&
+            r->l2RipOffset == 12ULL &&
+            r->l1UsesMsrBitmap == 1UL &&
+            r->bitmapMergeComplete == 1UL &&
+            /* 那一条 RDMSR 是投递给 L1 的，不是我们就地吃掉的。 */
+            r->l2MsrExitsReflected >= 1ULL &&
+            /* 位图地址必须真的写进了 vmcs02。 */
+            r->vmcs02MsrBitmap != 0ULL &&
             r->inveptResult == 0UL &&
             r->shadowGenerationAdvanced == 1UL) ? 1 : 0;
 }
@@ -4389,10 +4404,105 @@ static void PrintNestedProbeRow(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
     printf("    INVEPT %s   影子代次 %s\n",
            NestedProbeStepName(r->inveptResult),
            r->shadowGenerationAdvanced ? "**真的前进了**" : "没变");
+    /*
+     * vmcs02 进入那一刻的控制位与位图地址。
+     *
+     * 控制位是 L1 的与我们的并集，所以 USE_MSR_BITMAPS（bit 28）恒定活着；
+     * 配套地址为 0 就意味着处理器拿物理页 0 当位图用。两格分开看都正常，
+     * 只有摆在一起才看得出 L2 的 MSR/IO 拦截归谁管。
+     */
+    printf("    vmcs02 控制  primary=0x%08lX%s  secondary=0x%08lX\n",
+           r->vmcs02PrimaryControls,
+           ((r->vmcs02PrimaryControls & (1UL << 28)) != 0UL)
+               ? " [USE_MSR_BITMAPS]"
+               : "",
+           r->vmcs02SecondaryControls);
+    printf("    vmcs02 位图  msr=0x%016llX%s  io_a=0x%016llX  io_b=0x%016llX\n",
+           r->vmcs02MsrBitmap,
+           (((r->vmcs02PrimaryControls & (1UL << 28)) != 0UL) &&
+            r->vmcs02MsrBitmap == 0ULL)
+               ? "  **位开着而地址为 0：处理器会读物理页 0**"
+               : "",
+           r->vmcs02IoBitmapA,
+           r->vmcs02IoBitmapB);
+    /*
+     * MSR 路由的判据行。停在哪里就是答案，三种结局各有确定的偏移。
+     */
+    printf("    MSR 路由     L1 用位图 %s   合并 %s   L2 停在 +%llu %s\n",
+           r->l1UsesMsrBitmap ? "是" : "否",
+           r->bitmapMergeComplete ? "完整" : "**不完整（回退成全部拦截）**",
+           r->l2RipOffset,
+           (r->l2RipOffset == 12ULL)
+               ? "**第二条 RDMSR —— 查的确实是 L1 那张位图**"
+               : ((r->l2RipOffset == 5ULL)
+                      ? "**第一条 RDMSR —— 本该放行却拦了，查的不是 L1 的页**"
+                      : ((r->l2RipOffset == 14ULL)
+                             ? "**走到了 CPUID —— MSR 拦截根本没发生**"
+                             : "（预期之外的位置）")));
+    printf("    MSR/IO 归属  MSR 投递 %llu / 就地 %llu   IO 投递 %llu / 就地 %llu\n",
+           r->l2MsrExitsReflected, r->l2MsrExitsHandled,
+           r->l2IoExitsReflected, r->l2IoExitsHandled);
     printf("    派发 %llu 条   嵌套状态 %lu   末次错误号 %lu   => %s\n",
            r->dispatchedInstructions, r->nestedStateAfter,
            r->lastInstructionError,
            NestedProbeRowPassed(r) ? "**PASS**" : "FAIL");
+}
+
+/*
+ * 装一条「拦截该 MSR 的读，然后原生执行」策略。
+ *
+ * 存在的理由只有一个：嵌套路由里「这次退出是我们的、还得有人服务它」那条分支
+ * 没有别的办法触发。L1 的位图由探针自己造，我们这一侧的位图默认全零——两边都
+ * 不拦，合并出来的位就是清的，那条分支一次都跑不到。而它恰恰是出错时**静默
+ * 挂死**的那一条：没人模拟指令，RIP 不前进，L2 原地重执行到天荒地老。
+ *
+ * LOG 动作的语义正好是「记一笔再原生执行」，与就地服务要做的事一致。
+ * 策略要改共享位图，所以驱动只在常驻停着时接受——必须在 resident 之前装。
+ */
+static int DoMsrPolicy(HANDLE h, unsigned long operation,
+                       unsigned long msrIndex, int asJson)
+{
+    KSWORD_ARK_HVM_MSR_POLICY_REQUEST req;
+    KSWORD_ARK_HVM_MSR_POLICY_RESPONSE rsp;
+    DWORD returned = 0;
+    BOOL ok;
+
+    memset(&req, 0, sizeof(req));
+    req.version = KSWORD_ARK_HVM_MSR_POLICY_PROTOCOL_VERSION;
+    req.size = (unsigned long)sizeof(req);
+    req.operation = operation;
+    req.flags = KSWORD_ARK_HVM_MSR_POLICY_FLAG_UI_CONFIRMED;
+    req.confirmationToken = KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN;
+    req.msrIndex = msrIndex;
+    req.access = KSWORD_ARK_HVM_MSR_ACCESS_READ;
+    req.action = KSWORD_ARK_HVM_MSR_ACTION_LOG;
+    memset(&rsp, 0, sizeof(rsp));
+    ok = DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_MSR_POLICY,
+                         &req, (DWORD)sizeof(req),
+                         &rsp, (DWORD)sizeof(rsp), &returned, NULL);
+    if (returned < sizeof(rsp)) {
+        fprintf(stderr,
+                "MSR_POLICY IOCTL 无完整响应：ok=%d returned=%lu win32=%lu\n",
+                (int)ok, returned, GetLastError());
+        return 1;
+    }
+    if (asJson) {
+        printf("{\"kind\":\"msr-policy\",\"op\":%lu,\"msr\":\"0x%lX\","
+               "\"status\":%lu,\"policyId\":%lu,\"count\":%lu}\n",
+               operation, msrIndex, rsp.status, rsp.policyId,
+               rsp.policyCount);
+    } else {
+        printf("=== MSR 策略 ===\n");
+        printf("  操作     : %lu   MSR 0x%lX   访问=读   动作=LOG（记一笔再原生执行）\n",
+               operation, msrIndex);
+        printf("  status   : %lu%s\n", rsp.status,
+               (rsp.status == 8UL)
+                   ? "  **RESIDENT_BUSY：策略要改共享位图，先停常驻**"
+                   : "");
+        printf("  策略 id  : %lu   当前条数 %lu\n",
+               rsp.policyId, rsp.policyCount);
+    }
+    return (rsp.status == KSWORD_ARK_HVM_MSR_POLICY_STATUS_OK) ? 0 : 2;
 }
 
 static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
@@ -4457,7 +4567,12 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
             PrintNestedProbeRow(&rsp.rows[i]);
         }
         printf("\n  判据：每一行都要 VMXON/VMPTRLD/VMWRITE/VMREAD/VMPTRST 全成功、\n"
-               "        读回逐位相同、指针相符，且「L2 跑过」为是、退出原因低 16 位为 10（CPUID）。\n"
+               "        读回逐位相同、指针相符、「L2 跑过」为是，且终止退出是\n"
+               "        **第二条 RDMSR（原因 31，停在 +12）并被投递给 L1**。\n"
+               "        L2 先读一个 L1 位图里清着的 MSR（必须放行），再读一个置着的\n"
+               "        （必须退出）；两种结局都产生退出，只有停在哪里能区分处理器\n"
+               "        查的是 L1 那张位图还是\"全部拦截\"的回退页。停在 +5 就是回退，\n"
+               "        走到 +14 就是 MSR 拦截根本没发生。\n"
                "        多核模式下，**任何一行 FAIL 就是整体 FAIL** —— 这正是它要验的东西。\n");
     }
     for (i = 0; i < rsp.returnedRows &&
@@ -4708,6 +4823,14 @@ int main(int argc, char** argv)
         rc = DoNestedProbe(h, asJson, 0);
     } else if (strcmp(cmd, "nested-probe-all") == 0) {
         rc = DoNestedProbe(h, asJson, 1);
+    } else if (strcmp(cmd, "msr-log") == 0) {
+        /* 第二个参数是 MSR 号（十六进制，可带 0x）。 */
+        unsigned long msr = (argc > 2)
+            ? (unsigned long)strtoul(argv[2], NULL, 16)
+            : 0x10UL;
+        rc = DoMsrPolicy(h, KSWORD_ARK_HVM_MSR_POLICY_OP_ADD, msr, asJson);
+    } else if (strcmp(cmd, "msr-clear") == 0) {
+        rc = DoMsrPolicy(h, KSWORD_ARK_HVM_MSR_POLICY_OP_CLEAR, 0UL, asJson);
     } else if (strcmp(cmd, "probe-xonly") == 0) {
         rc = DoProbeExecuteOnly(h, asJson);
     } else if (strcmp(cmd, "rule-allowonce") == 0) {

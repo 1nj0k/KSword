@@ -53,7 +53,7 @@
 param(
     [ValidateSet('safe', 'status', 'prepare', 'self-test', 'launch-guest',
                  'resident', 'probe-platform', 'probe-flags', 'probe-xonly',
-                 'view-probe', 'view-effect',
+                 'view-probe', 'view-effect', 'nested',
                  'soak', 'stop', 'teardown', 'reset-fault', 'full')]
     [string] $Stage         = 'safe',
     [string] $VMName        = 'KSword-HVM-Target',
@@ -435,6 +435,14 @@ try {
         # 视图表常驻期间不可变，所以顺序只能是 装视图 → 起常驻 → 读 → 停 → 卸，
         # 而那一页是工具进程的内存，必须活到常驻起来，只能同进程做完。
         'view-effect' { @('self-test', 'view-effect') }
+        # 嵌套端到端。必须自己起常驻并且**要带嵌套派发位**，所以用
+        # resident-nested 而不是 resident —— 后者起来的常驻里 VMX 指令仍被注
+        # #UD，探针会在 VMXON 那一步就停。
+        #
+        # 探针的 L2 程序是两条 RDMSR：第一条 L1 的位图里清着、必须放行，第二条
+        # 置着、必须退出。判据在 hvm_ctl 里（原因 31、停在 +12、投递给 L1），
+        # 这里只看它的退出码。收尾的 stop 不能省：常驻会活过发起它的进程。
+        'nested'    { @('self-test', 'resident-nested', 'nested-probe-all', 'stop') }
         'soak'      { @('self-test', 'soak') }
         'full'      { @('self-test', 'soak', 'stop', 'teardown') }
         default     { @() }
@@ -452,7 +460,10 @@ try {
         # view-effect 自己会起一次常驻并且**真的让 EPT 强制一次访问**，
         # 是这条路上唯一会走到 EPTP 切换退出路径的一级，所以必须打检查点。
         # view-probe 只发请求、不进 VMX，不算 risky。
+        # resident-nested 与 resident 同样危险，而且更甚：它起的常驻允许来宾
+        # 执行 VMX 指令，随后探针真的会进出 L2 一次。
         $risky = $step -in @('self-test', 'launch-test-guest', 'resident',
+                             'resident-nested', 'nested-probe-all',
                              'soak', 'probe-flags', 'probe-xonly', 'view-effect')
         $snap = $null
         $bootBefore = $null
