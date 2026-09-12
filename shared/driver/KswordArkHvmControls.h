@@ -505,8 +505,10 @@ KswordArkHvmIsVmxCapabilityMsr(
  * 保留 bit 25 使用 I/O 位图与 bit 28 使用 MSR 位图（这两条路已经端到端验过），
  * 以及 bit 31 激活 secondary。
  *
- * bit 3（TSC offsetting）曾在清除之列，配套字段 0x2010 补上之后收了回来 ——
- * 这份表的用法就是这样：**实现一个，点亮一位**，反过来不行。
+ * bit 3（TSC offsetting）曾被清掉，那是个错误：0x2010 一直在
+ * g_KswordL2CopiedControlFields 里拷着，我却按"它没被拷"把它停止宣告了 ——
+ * 一次自己造出来的倒退。判断一位该不该留，**去 hvm_nested_l2.c 的字段表里查，
+ * 不要 grep 宏名**：那三张表是循环应用的，表里的字段一个宏都没有。
  */
 #define KSWORD_ARK_HVM_VMX_PROC_ALLOWED 0xF3D99E8CUL
 
@@ -526,20 +528,34 @@ KswordArkHvmIsVmxCapabilityMsr(
 /*
  * VM-exit 控制里允许宣告的位。
  *
- * 只留 bit 9（host address-space size）—— x64 上它本来就是强制位。其余全是
- * "退出时保存/装载某个 MSR"，各自要一条 MSR 区或一个专用字段：
- * 12 PERF_GLOBAL_CTRL(0x2808)、18/19 PAT(0x2804/0x2C00)、20/21 EFER(0x2806/0x2C02)、
- * 22 抢占计时器(0x482E)。bit 15（退出时应答中断）会改变退出语义，同样不留。
+ * 留的每一位都能在 hvm_nested_l2.c 的字段表里指出它依赖的那个字段：
+ *   bit 2  保存调试控制  -> guest IA32_DEBUGCTL(0x2802) 与 DR7(0x681A) 在双向表里
+ *   bit 9  host 地址空间 -> x64 上本来就是强制位
+ *   bit 18 保存 guest PAT  -> 0x2804 在双向表里，反射时写回 vmcs12
+ *   bit 19 装载 host PAT   -> 0x2C00 在 host 表里（继承自 vmcs01）
+ *   bit 20 保存 guest EFER -> 0x2806 同上
+ *   bit 21 装载 host EFER  -> 0x2C02 同上
+ * 清掉的：12 PERF_GLOBAL_CTRL（0x2808 **不在**任何表里）、22 抢占计时器
+ * （0x482E 同样不在）、15 退出时应答中断（改变退出语义，我们不模拟）。
  */
-#define KSWORD_ARK_HVM_VMX_EXIT_ALLOWED 0x00000200UL
+#define KSWORD_ARK_HVM_VMX_EXIT_ALLOWED 0x003C0204UL
 
 /*
  * VM-entry 控制里允许宣告的位。
  *
- * 只留 bit 9（IA-32e 模式来宾），否则 64 位 L2 根本进不去。其余的 load-xxx 与
- * exit 侧同理，都要各自的字段。
+ *   bit 2  装载调试控制 -> guest IA32_DEBUGCTL(0x2802)、DR7 在双向表里
+ *   bit 9  IA-32e 模式来宾 -> 不留的话 64 位 L2 根本进不去
+ *   bit 14 装载 guest PAT  -> 0x2804 在双向表里
+ *   bit 15 装载 guest EFER -> 0x2806 在双向表里
+ * 清掉 13（PERF_GLOBAL_CTRL，0x2808 不拷）与 16/17/18/20/21/22
+ * （BNDCFGS、PT、RTIT、CET、LBR、PKRS，字段一个都不拷）。
+ *
+ * 这一组曾经只留 bit 9，是我按"这些字段没拷"写的，而那个前提是错的 —— 那三张
+ * 批量表一直在拷。**过窄的宣告和过宽的宣告一样有害**：过宽是答应做不到的事，
+ * 过窄是让一个本可以跑起来的 hypervisor 干净地拒绝启动，而且两者都不报错。
+ * 所以这份表的每一位现在都写明它依赖哪个字段编码，改之前先去表里查。
  */
-#define KSWORD_ARK_HVM_VMX_ENTRY_ALLOWED 0x00000200UL
+#define KSWORD_ARK_HVM_VMX_ENTRY_ALLOWED 0x0000C204UL
 
 /*
  * EPT/VPID 能力里允许宣告的位。

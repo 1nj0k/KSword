@@ -423,7 +423,7 @@ KswordARKHvmNestedL2Enter(
         KSW_L2_IO_BITMAP_B,
         bitmaps.IoBitmapBPhysical);
     /*
-     * Hand L2 the TSC offset and MSR areas L1 asked for.
+     * Hand L2 the MSR areas L1 asked for.
      *
      * Passed through unchanged rather than translated, for the same reason the
      * shared bitmap pages are: EPT01 is an identity map, so an L1 physical
@@ -431,10 +431,11 @@ KswordARKHvmNestedL2Enter(
      * that; if it stops holding, these break together with it rather than one
      * of them going quietly wrong.
      *
-     * The TSC offset is L1's alone because we do not use TSC offsetting - if
-     * we ever do, the two compose by addition and this becomes a sum.  Without
-     * this write L2 reads the raw TSC while L1 believes it shifted time for
-     * its guest, which is invisible until something inside L2 compares clocks.
+     * Only the MSR areas.  The TSC offset is not here because
+     * g_KswordL2CopiedControlFields already carries it - a duplicate write
+     * stood here briefly, added on the belief that the field was unpropagated,
+     * and a second writer of one field is exactly the kind of thing that later
+     * makes someone ask which of the two is authoritative.
      *
      * Three of the four MSR-area fields are copied and the fourth is not:
      *
@@ -452,9 +453,6 @@ KswordARKHvmNestedL2Enter(
      *   list while reflecting the exit to L1, in the reflection path, where
      *   "L1's host state" is the thing being restored anyway.
      */
-    value = 0ULL;
-    (void)KswordARKHvmNestedVmcs12Read(vmcs12, KSW_L2_TSC_OFFSET, &value);
-    KswordARKHvmNestedL2Write(KSW_L2_TSC_OFFSET, value);
     value = 0ULL;
     (void)KswordARKHvmNestedVmcs12Read(
         vmcs12, KSW_L2_ENTRY_MSR_LOAD_ADDRESS, &value);
