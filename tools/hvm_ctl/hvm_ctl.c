@@ -84,6 +84,22 @@ static const HVM_CTL_VERB g_Verbs[] = {
       KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED |
       KSWORD_ARK_HVM_CONTROL_FLAG_ENABLE_EPTP_SWITCH,
       "同 prepare，但请求 EPTP 切换分离视图后端（需 execute-only + INVEPT_SINGLE）" },
+    /*
+     * 与 prepare 逐位相同，只多 ENABLE_LOCAL_EPT。
+     *
+     * 存在的理由不是"多一个选项"，而是 **view-probe 在多核上没有归因能力**：
+     * 私有 EPT 未武装时，多核安全门会先命中，返回的状态码与能力门**同一个**，
+     * 于是探针只能如实报"空过"。它一空过，整个无人值守套件就永远判 PARTIAL，
+     * 而"套件不绿"一旦成为常态，下次真出问题时没人会注意。
+     *
+     * 单独一个动词的理由同 prepare-eptpsw：普通 prepare 的字节序列必须一位都
+     * 不变，否则"没武装私有 EPT 时行为不变"就没法用同一条命令来验。
+     */
+    { "prepare-localept", KSWORD_ARK_HVM_CONTROL_PREPARE,
+      KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
+      KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED |
+      KSWORD_ARK_HVM_CONTROL_FLAG_ENABLE_LOCAL_EPT,
+      "同 prepare，但武装每处理器私有 EPT（view-probe 在多核上归因的前提）" },
     { "self-test",   KSWORD_ARK_HVM_CONTROL_SELF_TEST,
       KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
       KSWORD_ARK_HVM_CONTROL_FLAG_FORCE |
@@ -2845,6 +2861,13 @@ static int DoViewProbe(HANDLE h, int asJson)
     int eptpSwitch = 0;
     int installed = 0;
     int attempted = 0;
+    /*
+     * 这一次空过是"这台机器上问不出"还是"这次没准备好"。
+     *
+     * 两者都不算通过，但只有后者有东西可修。前者若也记成 BLOCKED，套件在这类
+     * 机器上就永远判 PARTIAL —— 而一份永远不绿的报告下次真出问题时没人会注意。
+     */
+    int notApplicable = 0;
     unsigned long installedId = 0UL;
     int rc = 3;
 
@@ -2889,8 +2912,32 @@ static int DoViewProbe(HANDLE h, int asJson)
     }
     if (qrsp.processorCount != 1UL &&
         (qrsp.featureFlags & KSWORD_ARK_HVM_FEATURE_LOCAL_EPT_ARMED) == 0ULL) {
-        reason = "多核且 LOCAL_EPT 未武装：第九道门会先命中，"
-                 "与能力门**同码**，无法归因。";
+        /*
+         * 两种"武装不了"，后果完全不同，必须分开。
+         *
+         * 驱动武装私有 EPT 要 INVEPT_SINGLE **与** MONITOR_TRAP_FLAG 两者齐备
+         * （hvm_runtime.c 的 LocalEptArmed 赋值）。缺 MTF 的机器上——嵌套
+         * Hyper-V 客户机全都缺——这一位**永远**武装不上，于是多核安全门永远
+         * 先命中，这条用例在这类机器上结构性地不可能有归因能力。
+         *
+         * 那不是"这次没准备好"，是"这台机器上问不出这个问题"。记成 BLOCKED
+         * 会让套件永远判 PARTIAL，而一份永远不绿的报告等于没有报告：下次真出
+         * 问题时没人会注意到多了一行。
+         *
+         * 反过来，MTF 在场却没武装，是调用方少发了一位，那确实该 BLOCKED ——
+         * 有东西可修，而且不修就测不到。
+         */
+        if ((qrsp.featureFlags &
+                KSWORD_ARK_HVM_FEATURE_MONITOR_TRAP_FLAG) == 0ULL) {
+            reason = "多核 + 本机无 Monitor Trap Flag：私有 EPT 永远武装不上，"
+                     "多核安全门必先命中且与能力门同码 —— "
+                     "**这台机器上问不出这个问题**，不是这次没准备好。";
+            notApplicable = 1;
+            goto report;
+        }
+        reason = "多核且 LOCAL_EPT 未武装（本机有 MTF，可以武装）："
+                 "第九道门会先命中，与能力门**同码**，无法归因。"
+                 "先跑 prepare-localept。";
         goto report;
     }
 
@@ -2995,12 +3042,14 @@ report:
          * 机器判据若只看 status 会把「根本没发过请求」读成「返回了 OK」。
          */
         printf("{\"kind\":\"view-probe\",\"verdict\":\"%s\",\"attempted\":%s,"
+               "\"notApplicable\":%s,"
                "\"processorCount\":%lu,\"residentProcessorCount\":%lu,"
                "\"eptReady\":%s,\"monitorTrapFlag\":%s,\"inveptSingle\":%s,"
                "\"localEptArmed\":%s,\"status\":%lu,\"statusName\":\"%s\","
                "\"lastStatus\":\"0x%08lX\",\"installed\":%s,"
                "\"expected\":\"%s\",\"reason\":\"%s\"}\n",
                NegName(verdict), attempted ? "true" : "false",
+               notApplicable ? "true" : "false",
                qrsp.processorCount, qrsp.residentProcessorCount,
                ((qrsp.stateFlags & KSWORD_ARK_HVM_STATE_EPT_READY) != 0UL)
                    ? "true" : "false",
@@ -3019,7 +3068,10 @@ report:
         printf("  处理器       : total=%lu resident=%lu\n",
                qrsp.processorCount, qrsp.residentProcessorCount);
         PrintViewPrerequisites("  ", qrsp.featureFlags);
-        if (verdict == NEG_VOID) {
+        if (verdict == NEG_VOID && notApplicable) {
+            printf("  [不适用] 这台机器上**问不出**这个问题\n");
+            printf("         %s\n", reason);
+        } else if (verdict == NEG_VOID) {
             printf("  [空过] 这一次**测不到**能力门\n");
             printf("         %s\n", reason);
         } else {
@@ -3035,6 +3087,16 @@ cleanup:
     if (page != NULL) {
         (void)VirtualUnlock((LPVOID)page, 4096);
         (void)VirtualFree((LPVOID)page, 0, MEM_RELEASE);
+    }
+    /*
+     * 退出码 4 = 这台机器上问不出这个问题，与 3（这次没准备好）分开。
+     *
+     * 分开的理由不是好看：3 是"有东西要修"，4 是"没东西可修"。两者合成一个的
+     * 后果是套件在缺 MTF 的机器上永远判 PARTIAL，而永远不绿的报告与没有报告
+     * 等价 —— 下次真出问题时多出的那一行不会有人看。
+     */
+    if (rc == 3 && notApplicable) {
+        rc = 4;
     }
     return rc;
 }

@@ -367,20 +367,30 @@ try {
         $names = $r.Json.newStateNames
     }
 
-    # 分离视图那两级要的是 EPTP 切换后端，而后端只能在 PREPARE 里选。
-    $needEptpSwitch = $Stage -in @('view-effect')
-    $prepareVerb = if ($needEptpSwitch) { 'prepare-eptpsw' } else { 'prepare' }
+    # 后端只能在 PREPARE 里选，所以"这一级要哪个后端"决定用哪个 prepare 动词。
+    #
+    # view-effect 要 EPTP 切换后端（它是唯一真正走到那条退出路径的一级）。
+    # view-probe 要**私有 EPT**，理由完全不同：它验的是"拒绝发生在该拒的那道门
+    # 上"，而多核且私有 EPT 未武装时，多核安全门会先命中并返回与能力门同一个
+    # 状态码 —— 探针只能如实报空过，整个套件因此永远判 PARTIAL。
+    $requiredArm =
+        switch ($Stage) {
+            'view-effect' { @{ Verb = 'prepare-eptpsw';   Feature = 'EPTP_SWITCH_ARMED'; Why = 'EPTP 切换后端' } }
+            'view-probe'  { @{ Verb = 'prepare-localept'; Feature = 'LOCAL_EPT_ARMED';   Why = '每处理器私有 EPT' } }
+            default       { $null }
+        }
+    $prepareVerb = if ($requiredArm) { $requiredArm.Verb } else { 'prepare' }
 
-    if ((Test-StateBit $names 'RESOURCES_READY') -and $needEptpSwitch) {
+    if ((Test-StateBit $names 'RESOURCES_READY') -and $requiredArm) {
         # 已经 prepare 过、但可能是**用另一个后端**准备的。
         # 直接跳过 prepare 会让这一级安静地在错误的后端上跑完并报通过 ——
         # 那正是这条线上最贵的一类错误。先拆再按需要的后端重来。
         $armed = Invoke-HvmCtl 'status'
-        $isArmed = ($armed.Json.featureNames -contains 'EPTP_SWITCH_ARMED')
+        $isArmed = ($armed.Json.featureNames -contains $requiredArm.Feature)
         if (-not $isArmed) {
             $r = Invoke-HvmCtl 'teardown'
             Add-Step 'teardown' $(if ($r.Exit -eq 0) { 'OK' } else { 'FAIL' }) $r.Json `
-                     '已 prepare 但没有武装 EPTP 切换后端；先拆掉，否则这一级会在错误的后端上测'
+                     "已 prepare 但没有武装$($requiredArm.Why)；先拆掉，否则这一级会在错误的后端上测"
             if ($r.Exit -ne 0) { $record.verdict = 'FAIL'; $exitCode = $r.Exit; return }
             $names = @()
         }
@@ -455,6 +465,8 @@ try {
 
     # 只增不减：任何一步空过就置真，末尾据此把这一段判成 PARTIAL 而不是 OK。
     $anyBlocked = $false
+    # 同样只增不减，但含义不同：这台机器上问不出，没东西可修。
+    $anyNotApplicable = $false
 
     foreach ($step in $plan) {
         # probe-xonly 自己会起一次常驻，所以它和 resident/soak 一样危险，
@@ -507,6 +519,27 @@ try {
 
         if ($r.Exit -eq 0) {
             Add-Step $step 'OK' $r.Json
+        } elseif ($r.Exit -eq 4) {
+            # 退出码 4 = **这台机器上问不出这个问题**，与 3 不是一回事。
+            #
+            # 3 是"这次没准备好"：有东西可修，不修就测不到，所以必须拖着整段
+            # 判 PARTIAL 直到有人去修。4 是"没东西可修"——判据依赖的能力这台
+            # 硬件根本不提供（实例：缺 Monitor Trap Flag 的嵌套客户机上，私有
+            # EPT 永远武装不了，多核安全门必先命中）。
+            #
+            # 把 4 也算成 BLOCKED 的后果，是套件在这一整类机器上永远判 PARTIAL。
+            # 而一份永远不绿的报告等于没有报告：下次真出问题时，多出来的那一行
+            # 不会有任何人多看一眼。所以它记 NOT_APPLICABLE、进 notes、**不**置
+            # anyBlocked。
+            Add-Step $step 'NOT_APPLICABLE' $r.Json `
+                '这台机器上问不出这个问题：判据依赖的硬件能力不存在，不是这次没准备好'
+            [void]$record.notes.Add("$step 在本机不适用 —— 判据依赖的能力这台硬件不提供。")
+            # 透传上去，别让这一段印成 PASS。
+            #
+            # 不置 anyBlocked（它不该把总判定拖成 PARTIAL），但也绝不能让
+            # verdict 落成 OK —— 这一项**什么都没测到**，印成通过就是本仓库
+            # 反复吃亏的那个形状：把"跑完了没崩"读成"测到了东西"。
+            $anyNotApplicable = $true
         } elseif ($r.Exit -eq 3) {
             # 退出码 3 = 探针"跑完了但没测到" —— 前置没建立、或者标定不全。
             # 它既不是通过也不是失败：记 BLOCKED 并继续，但**不许**被读成通过。
@@ -573,7 +606,17 @@ try {
 
     # 有任何一步空过，这一段就不是 OK。
     # 「跑完了没崩」与「测到了东西」是两件事，把前者印成后者正是本仓库反复吃亏的形状。
-    $record.verdict = if ($anyBlocked) { 'PARTIAL' } else { 'OK' }
+    #
+    # 三态而不是两态：PARTIAL 是"有东西要修"，NOT_APPLICABLE 是"这台机器上问
+    # 不出、没东西可修"。两者都不是 OK，但只有前者该催人动手。
+    if ($anyBlocked) {
+        $record.verdict = 'PARTIAL'
+    } elseif ($anyNotApplicable) {
+        $record.verdict = 'NOT_APPLICABLE'
+        $exitCode = 4
+    } else {
+        $record.verdict = 'OK'
+    }
 }
 catch {
     $record.verdict = 'ERROR'

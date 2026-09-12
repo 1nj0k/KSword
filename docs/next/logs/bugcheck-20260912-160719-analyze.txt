@@ -1,0 +1,378 @@
+Opened log file 'C:\Users\Felix\CLionProjects\KSword\docs\next\logs\bugcheck-20260912-160719-analyze.txt'
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.016 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.6584 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Felix\CLionProjects\KSword\docs\next\logs\bugcheck-20260912-160719-091226-3500-01.dmp]
+Mini Kernel Dump File: Only registers and stack trace are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*C:\symbols*https://msdl.microsoft.com/download/symbols
+OK                                             C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release\KswordARKDriver
+Symbol search path is: srv*C:\symbols*https://msdl.microsoft.com/download/symbols;C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release\KswordARKDriver
+Executable search path is: 
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script successfully loaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'
+Windows 10 Kernel Version 22621 MP (2 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS Personal
+Edition build lab: 22621.2506.amd64fre.ni_release_svc_prod3.231018-1809
+Kernel base = 0xfffff807`62600000 PsLoadedModuleList = 0xfffff807`632134b0
+Debug session time: Sat Sep 12 16:06:53.103 2026 (UTC - 4:00)
+System Uptime: 0 days 0:08:36.400
+Loading Kernel Symbols
+...............................................................
+................................................................
+................................
+Loading User Symbols
+
+Loading unloaded module list
+.........
+For analysis of this file, run !analyze -v
+0: kd> !analyze -v; lm m Ksword*; kb; q
+*******************************************************************************
+*                                                                             *
+*                        Bugcheck Analysis                                    *
+*                                                                             *
+*******************************************************************************
+
+CRITICAL_STRUCTURE_CORRUPTION (109)
+This BugCheck is generated when the kernel detects that critical kernel code or
+data have been corrupted. There are generally three causes for a corruption:
+1) A driver has inadvertently or deliberately modified critical kernel code
+ or data. See http://www.microsoft.com/whdc/driver/kernel/64bitPatching.mspx
+2) A developer attempted to set a normal kernel breakpoint using a kernel
+ debugger that was not attached when the system was booted. Normal breakpoints,
+ "bp", can only be set if the debugger is attached at boot time. Hardware
+ breakpoints, "ba", can be set at any time.
+3) A hardware corruption occurred, e.g. failing RAM holding kernel code or data.
+Arguments:
+Arg1: a39ffbe017e0776b, Reserved
+Arg2: b3b708666a643d54, Reserved
+Arg3: fffff8075f8c6fb0, Failure type dependent information
+Arg4: 0000000000000003, Type of corrupted region, can be
+	0   : A generic data region
+	1   : Modification of a function or .pdata
+	2   : A processor IDT
+	3   : A processor GDT
+	4   : Type 1 process list corruption
+	5   : Type 2 process list corruption
+	6   : Debug routine modification
+	7   : Critical MSR modification
+	8   : Object type
+	9   : A processor IVT
+	a   : Modification of a system service function
+	b   : A generic session data region
+	c   : Modification of a session function or .pdata
+	d   : Modification of an import table
+	e   : Modification of a session import table
+	f   : Ps Win32 callout modification
+	10  : Debug switch routine modification
+	11  : IRP allocator modification
+	12  : Driver call dispatcher modification
+	13  : IRP completion dispatcher modification
+	14  : IRP deallocator modification
+	15  : A processor control register
+	16  : Critical floating point control register modification
+	17  : Local APIC modification
+	18  : Kernel notification callout modification
+	19  : Loaded module list modification
+	1a  : Type 3 process list corruption
+	1b  : Type 4 process list corruption
+	1c  : Driver object corruption
+	1d  : Executive callback object modification
+	1e  : Modification of module padding
+	1f  : Modification of a protected process
+	20  : A generic data region
+	21  : A page hash mismatch
+	22  : A session page hash mismatch
+	23  : Load config directory modification
+	24  : Inverted function table modification
+	25  : Session configuration modification
+	26  : An extended processor control register
+	27  : Type 1 pool corruption
+	28  : Type 2 pool corruption
+	29  : Type 3 pool corruption
+	2a  : Type 4 pool corruption
+	2b  : Modification of a function or .pdata
+	2c  : Image integrity corruption
+	2d  : Processor misconfiguration
+	2e  : Type 5 process list corruption
+	2f  : Process shadow corruption
+	30  : Retpoline code page corruption
+	101 : General pool corruption
+	102 : Modification of win32k.sys
+
+Debugging Details:
+------------------
+
+
+KEY_VALUES_STRING: 1
+
+    Key  : Analysis.CPU.mSec
+    Value: 5452
+
+    Key  : Analysis.Elapsed.mSec
+    Value: 3929
+
+    Key  : Analysis.IO.Other.Mb
+    Value: 0
+
+    Key  : Analysis.IO.Read.Mb
+    Value: 0
+
+    Key  : Analysis.IO.Write.Mb
+    Value: 0
+
+    Key  : Analysis.Init.CPU.mSec
+    Value: 437
+
+    Key  : Analysis.Init.Elapsed.mSec
+    Value: 397
+
+    Key  : Analysis.Memory.CommitPeak.Mb
+    Value: 86
+
+    Key  : Bugcheck.Code.LegacyAPI
+    Value: 0x109
+
+    Key  : Failure.Bucket
+    Value: BAD_STACK_0x109
+
+    Key  : Failure.Hash
+    Value: {b4d7023a-05c3-49b2-3ea4-6240fe57d90e}
+
+    Key  : Hypervisor.Enlightenments.ValueHex
+    Value: 2010fbe4
+
+    Key  : Hypervisor.Flags.AnyHypervisorPresent
+    Value: 1
+
+    Key  : Hypervisor.Flags.ApicEnlightened
+    Value: 0
+
+    Key  : Hypervisor.Flags.ApicVirtualizationAvailable
+    Value: 0
+
+    Key  : Hypervisor.Flags.AsyncMemoryHint
+    Value: 0
+
+    Key  : Hypervisor.Flags.CoreSchedulerRequested
+    Value: 0
+
+    Key  : Hypervisor.Flags.CpuManager
+    Value: 0
+
+    Key  : Hypervisor.Flags.DeprecateAutoEoi
+    Value: 1
+
+    Key  : Hypervisor.Flags.DynamicCpuDisabled
+    Value: 1
+
+    Key  : Hypervisor.Flags.Epf
+    Value: 0
+
+    Key  : Hypervisor.Flags.ExtendedProcessorMasks
+    Value: 1
+
+    Key  : Hypervisor.Flags.HardwareMbecAvailable
+    Value: 1
+
+    Key  : Hypervisor.Flags.MaxBankNumber
+    Value: 0
+
+    Key  : Hypervisor.Flags.MemoryZeroingControl
+    Value: 0
+
+    Key  : Hypervisor.Flags.NoExtendedRangeFlush
+    Value: 0
+
+    Key  : Hypervisor.Flags.NoNonArchCoreSharing
+    Value: 0
+
+    Key  : Hypervisor.Flags.Phase0InitDone
+    Value: 1
+
+    Key  : Hypervisor.Flags.PowerSchedulerQos
+    Value: 0
+
+    Key  : Hypervisor.Flags.RootScheduler
+    Value: 0
+
+    Key  : Hypervisor.Flags.SynicAvailable
+    Value: 1
+
+    Key  : Hypervisor.Flags.UseQpcBias
+    Value: 0
+
+    Key  : Hypervisor.Flags.Value
+    Value: 659708
+
+    Key  : Hypervisor.Flags.ValueHex
+    Value: a10fc
+
+    Key  : Hypervisor.Flags.VpAssistPage
+    Value: 1
+
+    Key  : Hypervisor.Flags.VsmAvailable
+    Value: 1
+
+    Key  : Hypervisor.RootFlags.AccessStats
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.CrashdumpEnlightened
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.CreateVirtualProcessor
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.DisableHyperthreading
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.HostTimelineSync
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.HypervisorDebuggingEnabled
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.IsHyperV
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.LivedumpEnlightened
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.MapDeviceInterrupt
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.MceEnlightened
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.Nested
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.StartLogicalProcessor
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.Value
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.ValueHex
+    Value: 0
+
+    Key  : WER.OS.Branch
+    Value: ni_release_svc_prod3
+
+    Key  : WER.OS.Version
+    Value: 10.0.22621.2506
+
+
+BUGCHECK_CODE:  109
+
+BUGCHECK_P1: a39ffbe017e0776b
+
+BUGCHECK_P2: b3b708666a643d54
+
+BUGCHECK_P3: fffff8075f8c6fb0
+
+BUGCHECK_P4: 3
+
+FILE_IN_CAB:  bugcheck-20260912-160719-091226-3500-01.dmp
+
+VIRTUAL_MACHINE:  HyperV
+
+BLACKBOXBSD: 1 (!blackboxbsd)
+
+
+BLACKBOXNTFS: 1 (!blackboxntfs)
+
+
+BLACKBOXWINLOGON: 1
+
+CUSTOMER_CRASH_COUNT:  1
+
+PROCESS_NAME:  System
+
+STACK_TEXT:  
+ffff830d`97e5edb8 00000000`00000000     : 00000000`00000109 a39ffbe0`17e0776b b3b70866`6a643d54 fffff807`5f8c6fb0 : nt!KeBugCheckEx
+
+
+SYMBOL_NAME:  ANALYSIS_INCONCLUSIVE
+
+MODULE_NAME: Unknown_Module
+
+IMAGE_NAME:  Unknown_Image
+
+STACK_COMMAND:  .cxr; .ecxr ; kb
+
+FAILURE_BUCKET_ID:  BAD_STACK_0x109
+
+OS_VERSION:  10.0.22621.2506
+
+BUILDLAB_STR:  ni_release_svc_prod3
+
+OSPLATFORM_TYPE:  x64
+
+OSNAME:  Windows 10
+
+FAILURE_ID_HASH:  {b4d7023a-05c3-49b2-3ea4-6240fe57d90e}
+
+Followup:     MachineOwner
+---------
+
+Browse full module list
+start             end                 module name
+fffff807`606d0000 fffff807`61342000   KswordARK   (deferred)             
+
+Unloaded modules:
+fffff807`6b890000 fffff807`6c503000   KswordARK.sy
+ # RetAddr               : Args to Child                                                           : Call Site
+00 00000000`00000000     : 00000000`00000109 a39ffbe0`17e0776b b3b70866`6a643d54 fffff807`5f8c6fb0 : nt!KeBugCheckEx
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'

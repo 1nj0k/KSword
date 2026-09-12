@@ -166,6 +166,18 @@ function Invoke-Stage {
         Add-Stage $Stage 'PASS' $Why $data
         return $true
     }
+    if ($code -eq 4) {
+        # 本机不适用：判据依赖的硬件能力这台机器不提供，没东西可修。
+        #
+        # 与 3 分开的理由不是措辞：3 拖着总判定降级是**对的**，因为有人该去修；
+        # 4 若也降级，套件在这一整类硬件上就永远判 PARTIAL，而永远不绿的报告与
+        # 没有报告等价 —— 下次真出问题时那一行不会有人多看一眼。
+        #
+        # 它同样**不算通过**：这一项什么都没测到，只是没测到的原因不归我们管。
+        Add-Stage $Stage 'NOT_APPLICABLE' "本机问不出这个问题 —— $Why" $data
+        [void]$record.notes.Add("$Stage 在本机不适用：判据依赖的硬件能力不存在，不是这次没准备好。")
+        return $true
+    }
     if ($code -eq 3) {
         # 空过：跑完了但没有区分力。**不是通过**，但也不该中断整轮 ——
         # 后面的项和它无关。记 BLOCKED 让总判定降级，然后继续。

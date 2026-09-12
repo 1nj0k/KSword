@@ -1,0 +1,31 @@
+{
+  "schema": "ksword.hvm.autotest/1",
+  "startedUtc": "2026-09-12T20:06:56.7935315Z",
+  "vmName": "KSword-HVM-Target",
+  "stage": "view-probe",
+  "host": {
+    "computer": "DESKTOP-KJE7JPM",
+    "os": "Microsoft Windows 11 Pro for Workstations Insider Preview",
+    "build": "26300"
+  },
+  "steps": [],
+  "checkpoints": [],
+  "verdict": "ERROR",
+  "notes": [
+    "脚本异常：An error has occurred which PowerShell cannot handle. A remote session might have ended.",
+    "收尾停机检查失败（虚拟机可能已失联）",
+    "事件环查询失败"
+  ],
+  "vm": {
+    "state": "Running",
+    "vcpu": 2,
+    "nested": true
+  },
+  "checkpointsNow": [
+    "clean-install",
+    "before-nested-probe-all-0912-160116",
+    "before-nested-ad-refusal-0912-160121",
+    "before-self-test-0912-160504"
+  ],
+  "finishedUtc": "2026-09-12T20:07:00.5787357Z"
+}
