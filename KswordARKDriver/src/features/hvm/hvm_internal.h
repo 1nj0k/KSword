@@ -641,6 +641,11 @@ typedef struct _KSW_HVM_RUNTIME
      * above: the per-processor pools are released at devirtualization, and a
      * counter that dies with the thing it measures answers "is it happening
      * right now" when the question is "did it ever happen".
+     *
+     * The nested probe's depth test overflows the pool deliberately and takes
+     * its own evictions back out of this total when it finishes.  Without that
+     * this would raise its alarm on a healthy machine every time the probe
+     * ran, which is the fastest way to make a real warning unbelievable.
      */
     volatile LONG NestedVmcs12EvictionCount;
     /* Publish the current eVMCS state. */

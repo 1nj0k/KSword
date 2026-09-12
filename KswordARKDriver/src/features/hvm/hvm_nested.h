@@ -163,6 +163,18 @@ typedef struct _KSW_HVM_NESTED_VCPU
     /* Order slots by last use, so eviction drops the coldest. */
     ULONGLONG Vmcs12PoolStamp[KSW_HVM_VMCS12_POOL_SLOTS];
     ULONGLONG Vmcs12PoolClock;
+    /*
+     * Evictions on this processor alone.
+     *
+     * The runtime keeps a durable total as well, and that one answers "did an
+     * L1 ever keep more VMCSs than we hold" after the pools are long gone.
+     * This one answers a question that total cannot: the probe runs a worker
+     * on every processor at once, so a delta taken from the shared counter
+     * includes whatever the other processors did in the same window.  Each
+     * asking its own record is the only way a per-processor row means what it
+     * says.
+     */
+    ULONG Vmcs12EvictionCount;
     /* Preserve explicit partial vmcs02 merge state. */
     KSW_HVM_VMCS02_STATE Vmcs02;
     /* Preserve explicit partial shadow-EPT composition state. */

@@ -2091,6 +2091,31 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
     unsigned long long l2MergeCycles;
     unsigned long long l2EntryCycles;
     unsigned long long l2EntryCount;
+    /*
+     * 池子实际装得下几份 vmcs12，以及装不下的那些有没有真的被记一笔。
+     *
+     * 上面那组"两份交替"只证明了**不止一份**。真 hypervisor 手里往往有十几份，
+     * 而"我们能存 N 份"到此为止一直是写在头文件注释里的断言，没有任何读数支持。
+     *
+     * 做法：给比池子深度多两份的区域各写一个互不相同的值，然后**从最近用过的
+     * 那份倒着读回来**。倒着读是必须的 —— 顺着读，每读一份就把更旧的一份挤掉，
+     * 测量本身会毁掉被测量的东西，最后全读成零，看起来像池子根本不存在。
+     *
+     * mask 的第 k 位表示第 k 份读回来了。只报个数不够：LRU、FIFO、随机驱逐能
+     * 给出同样的存活**个数**，但存活的是哪几份完全不同，而这决定了一个正在被
+     * L1 频繁使用的 vmcs12 会不会被挤掉。
+     *
+     * evictionDelta 是**这一个处理器**在这段窗口里的驱逐数，取自它自己的记录而
+     * 不是运行时那个全局总数 —— 探针在每个处理器上同时跑一个工作线程，从共享
+     * 计数器取差值会把别的核干的事算进这一行，看着精确，说的是另一回事。
+     * 它存在的唯一理由是：这个计数器在别处永远读到 0，而一个从没被人见过动的
+     * 计数器等于没有验证过。
+     */
+    unsigned long long vmcs12DepthMask;
+    unsigned long vmcs12DepthRegions;
+    unsigned long vmcs12DepthSurvived;
+    unsigned long vmcs12EvictionDelta;
+    unsigned long vmcs12DepthReserved;
 } KSWORD_ARK_HVM_NESTED_PROBE_ROW;
 
 typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE

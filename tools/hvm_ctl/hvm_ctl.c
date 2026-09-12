@@ -4627,6 +4627,22 @@ static int NestedProbeRowPassed(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
              * 有人拿真 hypervisor 去试才发现。
              */
             r->vmcsSwitchMatched == 1UL &&
+            /*
+             * 池子的深度是量出来的，而且驱逐得按最近最少用来挑。
+             *
+             * 探针比池子深度多写两份，所以正好该活下来 regions-2 份，而且活的
+             * 必须是**最后写的那几份** —— 掩码低两位清、其余置。只看个数不够：
+             * FIFO 或随机驱逐能给出一样的个数，挤掉的却可能正是 L1 正在用的那份。
+             *
+             * 还要求驱逐计数真的动过。这个数在别处永远是 0，一个从没被人见过
+             * 动的计数器，跟一个坏掉的计数器在读数上分不开。
+             */
+            r->vmcs12DepthRegions > 2UL &&
+            r->vmcs12DepthSurvived == r->vmcs12DepthRegions - 2UL &&
+            r->vmcs12DepthMask ==
+                ((((1ULL << r->vmcs12DepthSurvived) - 1ULL) << 2) &
+                 ((1ULL << r->vmcs12DepthRegions) - 1ULL)) &&
+            r->vmcs12EvictionDelta >= 1UL &&
             r->l1UsesMsrBitmap == 1UL &&
             r->bitmapMergeComplete == 1UL &&
             /* 那一条 RDMSR 是投递给 L1 的，不是我们就地吃掉的。 */
@@ -4702,6 +4718,29 @@ static void PrintNestedProbeRow(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
                       ? "**两份各自的字段都还在**"
                       : "**字段丢了 —— 只建模了一份 vmcs12**"),
            r->vmcsSwitchValueA, r->vmcsSwitchValueB);
+    /*
+     * 池子实际有多深，以及溢出有没有被记下来。
+     *
+     * 上一行只回答"不止一份"。这一行回答"几份" —— 而且是量出来的，不是从头
+     * 文件里那个常量抄来的。存活掩码比个数重要：LRU / FIFO / 随机驱逐能给出
+     * 一样的存活个数，但挤掉的是哪几份完全不同。
+     */
+    if (r->vmcs12DepthRegions != 0UL) {
+        unsigned long slot = 0UL;
+
+        printf("    vmcs12 深度  测 %lu 份，活下来 %lu 份   驱逐 %lu 次%s\n",
+               r->vmcs12DepthRegions, r->vmcs12DepthSurvived,
+               r->vmcs12EvictionDelta,
+               (r->vmcs12EvictionDelta == 0UL)
+                   ? "  **一次都没驱逐 —— 计数器没动，或者池子根本没满**"
+                   : "");
+        printf("                 存活位图 ");
+        /* 最旧的在左边，最新的在右边，跟写入顺序一致。 */
+        for (slot = 0UL; slot < r->vmcs12DepthRegions; ++slot) {
+            printf("%c", ((r->vmcs12DepthMask >> slot) & 1ULL) ? '#' : '.');
+        }
+        printf("   （左=最先写，右=最后写；'.' 是被挤掉的）\n");
+    }
     printf("    MSR 路由     L1 用位图 %s   合并 %s   L2 停在 +%llu %s\n",
            r->l1UsesMsrBitmap ? "是" : "否",
            r->bitmapMergeComplete ? "完整" : "**不完整（回退成全部拦截）**",
@@ -4950,6 +4989,10 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                    "\"vmcsSwitchResult\":%lu,\"vmcsSwitchMatched\":%lu,"
                    "\"vmcsSwitchValueA\":\"0x%llX\","
                    "\"vmcsSwitchValueB\":\"0x%llX\","
+                   "\"vmcs12DepthRegions\":%lu,"
+                   "\"vmcs12DepthSurvived\":%lu,"
+                   "\"vmcs12DepthMask\":\"0x%llX\","
+                   "\"vmcs12EvictionDelta\":%lu,"
                    "\"pass\":%d}",
                    (i == 0) ? "" : ",",
                    r->processorIndex, r->status, r->vmxonResult,
@@ -4967,6 +5010,8 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                    r->l2IoExitsHandled,
                    r->vmcsSwitchResult, r->vmcsSwitchMatched,
                    r->vmcsSwitchValueA, r->vmcsSwitchValueB,
+                   r->vmcs12DepthRegions, r->vmcs12DepthSurvived,
+                   r->vmcs12DepthMask, r->vmcs12EvictionDelta,
                    NestedProbeRowPassed(r));
         }
         printf("]}\n");
@@ -4990,6 +5035,10 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                "        读 A、读 B，只建模一份的派发器会把 B 的值或零当成 A 的还回来。\n"
                "        真 hypervisor 每个 vCPU 至少一份 VMCS 且不停 VMPTRLD 切换，\n"
                "        字段活不过一次切换就托不住它们。\n"
+               "        再往下一格量的是**深度**：写比池子多两份，倒着读回来，该有\n"
+               "        regions-2 份还在，且活下来的必须是最后写的那几份（掩码低两位\n"
+               "        清）——个数一样而挤错人的驱逐策略，只有掩码能看出来。驱逐\n"
+               "        计数也必须动过，否则这个数与一个坏掉的计数器读起来一模一样。\n"
                "        多核模式下，**任何一行 FAIL 就是整体 FAIL** —— 这正是它要验的东西。\n");
     }
     for (i = 0; i < rsp.returnedRows &&

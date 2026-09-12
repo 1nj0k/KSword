@@ -42,6 +42,30 @@ Environment:
  */
 #define KSW_PROBE_PATTERN_B 0x00002A6F6E654D4BULL
 
+/*
+ * How many vmcs12 the depth test cycles through.
+ *
+ * Two more than we claim to hold, so the pool is guaranteed to overflow and
+ * the eviction path is guaranteed to run.  Derived from the pool constant
+ * rather than written out, so the test follows the thing it tests - a pool
+ * resized without touching this file still gets overflowed by exactly two.
+ *
+ * The depth it reports is measured, not assumed: every region is read back and
+ * the survivors counted.  A pool shallower than advertised shows up as fewer
+ * survivors, which is the failure this is here to catch.
+ */
+#define KSW_PROBE_DEPTH_REGIONS (KSW_HVM_VMCS12_POOL_SLOTS + 2UL)
+/* Keep the survivor mask able to name every region it reports on. */
+C_ASSERT(KSW_PROBE_DEPTH_REGIONS <= 64UL);
+/*
+ * Distinct per region, and distinct from both patterns above.
+ *
+ * The low byte carries the region index so a value read back from the wrong
+ * slot names the slot it actually came from instead of merely mismatching.
+ */
+#define KSW_PROBE_DEPTH_PATTERN(index) \
+    (0x0000335045454400ULL | (ULONGLONG)((index) + 1UL))
+
 /* Name the VMCS fields the L2 construction writes by hand. */
 #define KSW_PROBE_VMCS_LINK_POINTER 0x2800UL
 #define KSW_PROBE_GUEST_EFER 0x2806UL
@@ -142,6 +166,16 @@ typedef struct _KSW_HVM_NESTED_PROBE_CONTEXT
      */
     PVOID Vmcs12bVirtual;
     ULONGLONG Vmcs12bPhysical;
+    /*
+     * Enough vmcs12 regions to overflow the pool, in one contiguous block.
+     *
+     * One allocation rather than N, because contiguous memory gives each page
+     * a physical address the previous one plus 0x1000 - and a vmcs12's
+     * identity is precisely its physical address, so page granularity is all
+     * that distinguishes them.
+     */
+    PVOID DepthBlockVirtual;
+    ULONGLONG DepthBlockPhysical;
     /* One page of L2 code, plus the stack L2 runs on. */
     PVOID L2CodeVirtual;
     /* The stack this probe's own L1 VM-exit handler runs on. */
@@ -612,6 +646,101 @@ KswordARKHvmNestedProbeExecute(
                 }
             }
             /*
+             * How deep the pool really is, and whether overflow is recorded.
+             *
+             * The two-region test above proves only "more than one".  The
+             * number we actually hold has been an assertion in a header
+             * comment with nothing behind it, and the eviction counter has
+             * never been seen to move - a counter nobody has observed moving
+             * is not a verified readout, it is a hope.
+             *
+             * Write a distinct value into each of N regions, then read them
+             * back **most recently used first**.  The order is load-bearing:
+             * reading oldest-first makes each read evict the next region it
+             * was about to check, so everything reads back zero and a working
+             * pool is indistinguishable from no pool at all.  Reading newest
+             * first only ever re-saves a region the pool already holds, which
+             * costs no slot.
+             *
+             * Runs before the vmcs12 is built for L2, because it will very
+             * likely evict that vmcs12 - by design, since overflow is the
+             * point - and the build rewrites every field it needs afterwards.
+             */
+            if (Probe->DepthBlockPhysical != 0ULL) {
+                /*
+                 * This processor's own count, not the runtime's.
+                 *
+                 * Every processor runs a worker at the same time, so a delta
+                 * taken from the shared total would report the other cores'
+                 * evictions in this core's row - a number that looks precise
+                 * and means something else.
+                 */
+                const ULONG evictionsBefore =
+                    vcpu->Nested.Vmcs12EvictionCount;
+                ULONGLONG mask = 0ULL;
+                ULONG survived = 0UL;
+                ULONG index = 0UL;
+
+                for (index = 0UL; index < KSW_PROBE_DEPTH_REGIONS; ++index) {
+                    ULONGLONG region = Probe->DepthBlockPhysical +
+                        ((ULONGLONG)index * PAGE_SIZE);
+
+                    if (__vmx_vmptrld(&region) != 0) { break; }
+                    (void)__vmx_vmwrite(
+                        (SIZE_T)KSW_PROBE_VMCS_GUEST_RIP,
+                        (SIZE_T)KSW_PROBE_DEPTH_PATTERN(index));
+                }
+                /* Walk back down, newest first, for the reason above. */
+                for (index = KSW_PROBE_DEPTH_REGIONS; index > 0UL; --index) {
+                    const ULONG slotIndex = index - 1UL;
+                    ULONGLONG region = Probe->DepthBlockPhysical +
+                        ((ULONGLONG)slotIndex * PAGE_SIZE);
+                    ULONGLONG back = 0ULL;
+
+                    if (__vmx_vmptrld(&region) != 0) { continue; }
+                    if (__vmx_vmread(
+                            (SIZE_T)KSW_PROBE_VMCS_GUEST_RIP,
+                            (SIZE_T*)&back) != 0) {
+                        continue;
+                    }
+                    if (back == KSW_PROBE_DEPTH_PATTERN(slotIndex)) {
+                        mask |= (1ULL << slotIndex);
+                        survived += 1UL;
+                    }
+                }
+                /* Put the probe's own vmcs12 back before anything else runs. */
+                (void)__vmx_vmptrld(&Probe->Vmcs12Physical);
+                response->vmcs12DepthRegions = KSW_PROBE_DEPTH_REGIONS;
+                response->vmcs12DepthSurvived = survived;
+                response->vmcs12DepthMask = mask;
+                response->vmcs12EvictionDelta =
+                    vcpu->Nested.Vmcs12EvictionCount - evictionsBefore;
+                /*
+                 * Take this test's own evictions back out of the durable total.
+                 *
+                 * That counter exists to say "some L1 kept more VMCSs than we
+                 * hold" - it is what turns a hypervisor misbehaving under us
+                 * into something readable afterwards.  This test overflows the
+                 * pool on purpose, so leaving its evictions in would raise that
+                 * alarm on a machine where nothing is wrong, every time the
+                 * probe runs.  A warning that fires on its own test is worth
+                 * nothing the first time someone has to decide whether to
+                 * believe it.
+                 *
+                 * Subtracted rather than suppressed at the source: the exit
+                 * path stays free of any notion of who triggered it, and each
+                 * processor removes exactly what it added.  The row above
+                 * keeps the real number, because there the eviction is the
+                 * result being reported rather than an alarm.
+                 */
+                if (response->vmcs12EvictionDelta != 0UL) {
+                    (void)InterlockedExchangeAdd(
+                        (volatile LONG*)&vcpu->Runtime
+                            ->NestedVmcs12EvictionCount,
+                        -(LONG)response->vmcs12EvictionDelta);
+                }
+            }
+            /*
              * Issue INVEPT from L1 and see whether we accept it.
              *
              * Reusing the driver's own stub is deliberate: executed from guest
@@ -864,6 +993,9 @@ KswordARKHvmNestedProbeRunOne(
         PAGE_SIZE, lowest, highest, boundary, MmCached);
     probe.Vmcs12bVirtual = MmAllocateContiguousMemorySpecifyCache(
         PAGE_SIZE, lowest, highest, boundary, MmCached);
+    probe.DepthBlockVirtual = MmAllocateContiguousMemorySpecifyCache(
+        (SIZE_T)KSW_PROBE_DEPTH_REGIONS * PAGE_SIZE,
+        lowest, highest, boundary, MmCached);
     probe.L2CodeVirtual = MmAllocateContiguousMemorySpecifyCache(
         PAGE_SIZE, lowest, highest, boundary, MmCached);
     probe.Ept12Pml4Virtual = MmAllocateContiguousMemorySpecifyCache(
@@ -896,6 +1028,17 @@ KswordARKHvmNestedProbeRunOne(
         }
         if (probe.L2CodeVirtual != NULL) {
             MmFreeContiguousMemory(probe.L2CodeVirtual);
+        }
+        /*
+         * The optional regions too.  They are not in the condition above -
+         * losing them only costs a test, not the probe - but this path still
+         * owns them, and the one for the second vmcs12 was being leaked here.
+         */
+        if (probe.Vmcs12bVirtual != NULL) {
+            MmFreeContiguousMemory(probe.Vmcs12bVirtual);
+        }
+        if (probe.DepthBlockVirtual != NULL) {
+            MmFreeContiguousMemory(probe.DepthBlockVirtual);
         }
         if (probe.L1StackVirtual != NULL) {
             ExFreePool(probe.L1StackVirtual);
@@ -1014,6 +1157,22 @@ KswordARKHvmNestedProbeRunOne(
         physical = MmGetPhysicalAddress(probe.Vmcs12bVirtual);
         probe.Vmcs12bPhysical = (ULONGLONG)physical.QuadPart;
     }
+    /* Every depth region is its own VMCS, so each page gets the revision. */
+    if (probe.DepthBlockVirtual != NULL) {
+        ULONG depthIndex = 0UL;
+
+        RtlZeroMemory(
+            probe.DepthBlockVirtual,
+            (SIZE_T)KSW_PROBE_DEPTH_REGIONS * PAGE_SIZE);
+        for (depthIndex = 0UL;
+             depthIndex < KSW_PROBE_DEPTH_REGIONS;
+             ++depthIndex) {
+            *(volatile ULONG*)((PUCHAR)probe.DepthBlockVirtual +
+                ((SIZE_T)depthIndex * PAGE_SIZE)) = revision;
+        }
+        physical = MmGetPhysicalAddress(probe.DepthBlockVirtual);
+        probe.DepthBlockPhysical = (ULONGLONG)physical.QuadPart;
+    }
     physical = MmGetPhysicalAddress(probe.VmxonVirtual);
     probe.VmxonPhysical = (ULONGLONG)physical.QuadPart;
     physical = MmGetPhysicalAddress(probe.Vmcs12Virtual);
@@ -1037,6 +1196,9 @@ KswordARKHvmNestedProbeRunOne(
     MmFreeContiguousMemory(probe.Vmcs12Virtual);
     if (probe.Vmcs12bVirtual != NULL) {
         MmFreeContiguousMemory(probe.Vmcs12bVirtual);
+    }
+    if (probe.DepthBlockVirtual != NULL) {
+        MmFreeContiguousMemory(probe.DepthBlockVirtual);
     }
     MmFreeContiguousMemory(probe.L2CodeVirtual);
     MmFreeContiguousMemory(probe.Ept12Pml4Virtual);

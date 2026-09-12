@@ -409,6 +409,8 @@ KswordARKHvmNestedPoolSave(
              * only noticed afterwards, from a report.
              */
             InterlockedIncrement(&Runtime->NestedVmcs12EvictionCount);
+            /* And on this processor, where no other core's work is mixed in. */
+            Nested->Vmcs12EvictionCount += 1UL;
         }
     }
     RtlCopyMemory(slot, &Nested->Vmcs12, sizeof(*slot));
