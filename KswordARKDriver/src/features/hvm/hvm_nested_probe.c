@@ -83,8 +83,17 @@ Environment:
  */
 #define KSW_PROBE_L2_OPEN_MSR 0x00000010UL
 #define KSW_PROBE_L2_TRAPPED_MSR 0x00000174UL
-/* Where L2 stops when the merge honoured L1's bitmap exactly. */
-#define KSW_PROBE_L2_EXPECTED_RIP_OFFSET 12ULL
+/*
+ * Lay the program out at the offsets the protocol header names.
+ *
+ * Both sides have to agree: this builds the program, and the tool judges
+ * `l2RipOffset` against the same constants.  Writing the numbers twice would
+ * let a one-byte encoding change here start producing wrong verdicts there,
+ * silently, because nothing would fail to compile.
+ */
+C_ASSERT(KSWORD_ARK_HVM_NESTED_PROBE_RIP_OPEN_MSR == 5ULL);
+C_ASSERT(KSWORD_ARK_HVM_NESTED_PROBE_RIP_TRAPPED_MSR == 12ULL);
+C_ASSERT(KSWORD_ARK_HVM_NESTED_PROBE_RIP_CPUID == 14ULL);
 /* Name the secondary control that turns on EPT for L2. */
 #define KSW_PROBE_SECONDARY_ENABLE_EPT 0x00000002UL
 /* Name the four-level walk length and write-back type of an EPT pointer. */
@@ -691,6 +700,16 @@ KswordARKHvmNestedProbeExecute(
         vcpu->Nested.InstructionCount - startingCount;
     response->nestedStateAfter = vcpu->Nested.State;
     /*
+     * Name the refusal, since the error code cannot.
+     *
+     * L1 sees a generic control-field failure, which is architecturally
+     * correct and says nothing about which control. This is the only place
+     * that distinguishes "accessed/dirty is not offered here" from "the EPT
+     * pointer was malformed" - both arrive as the same number.
+     */
+    response->l1RequestedAccessedDirty =
+        vcpu->Nested.ShadowEpt.L1RequestedAccessedDirty ? 1UL : 0UL;
+    /*
      * Do not overwrite an error already captured at the failing instruction.
      *
      * The per-VCPU record holds only the *last* error, and the VMXOFF above
@@ -714,9 +733,11 @@ KswordARKHvmNestedProbeExecute(
 static NTSTATUS
 KswordARKHvmNestedProbeRunOne(
     _Out_ KSWORD_ARK_HVM_NESTED_PROBE_ROW* Response,
-    _In_ const PROCESSOR_NUMBER* TargetProcessor
+    _In_ const PROCESSOR_NUMBER* TargetProcessor,
+    _In_ BOOLEAN RequestAccessedDirty
     )
 {
+    const BOOLEAN requestAccessedDirty = RequestAccessedDirty;
     KSW_HVM_NESTED_PROBE_CONTEXT probe = { 0 };
     PHYSICAL_ADDRESS lowest = { 0 };
     PHYSICAL_ADDRESS highest = { 0 };
@@ -868,6 +889,16 @@ KswordARKHvmNestedProbeRunOne(
         /* No EPT12: the probe still runs, on the hierarchy we already own. */
         probe.Ept12Pointer = 0ULL;
     }
+    /*
+     * The negative case: L1 asks for accessed/dirty and must be refused.
+     *
+     * Set here rather than inside the builder so the positive path keeps
+     * exactly the pointer it had, and the only difference between the two runs
+     * is this one bit.
+     */
+    if (requestAccessedDirty && probe.Ept12Pointer != 0ULL) {
+        probe.Ept12Pointer |= (1ULL << 6);
+    }
     Response->ept12Armed = (probe.Ept12Pointer != 0ULL) ? 1UL : 0UL;
     /*
      * Both regions start with the revision identifier.
@@ -914,6 +945,8 @@ typedef struct _KSW_HVM_PROBE_WORKER
     PROCESSOR_NUMBER Target;
     KSWORD_ARK_HVM_NESTED_PROBE_ROW* Row;
     PVOID Thread;
+    /* Carry the negative-case selector to the worker that will use it. */
+    BOOLEAN RequestAccessedDirty;
 } KSW_HVM_PROBE_WORKER;
 
 /* Run one worker's probe and exit.  One thread per processor. */
@@ -924,7 +957,10 @@ KswordARKHvmNestedProbeWorker(
 {
     KSW_HVM_PROBE_WORKER* worker = (KSW_HVM_PROBE_WORKER*)StartContext;
 
-    (void)KswordARKHvmNestedProbeRunOne(worker->Row, &worker->Target);
+    (void)KswordARKHvmNestedProbeRunOne(
+        worker->Row,
+        &worker->Target,
+        worker->RequestAccessedDirty);
     PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
@@ -970,7 +1006,11 @@ KswordARKHvmNestedProbeRun(
         Response->returnedRows = 1UL;
         status = KswordARKHvmNestedProbeRunOne(
             &Response->rows[0],
-            &processorNumber);
+            &processorNumber,
+            ((Request->flags &
+                KSWORD_ARK_HVM_NESTED_PROBE_FLAG_REQUEST_AD) != 0UL)
+                ? TRUE
+                : FALSE);
         Response->status = Response->rows[0].status;
         /* Return the single-processor result. */
         return status;
@@ -1011,6 +1051,12 @@ KswordARKHvmNestedProbeRun(
             continue;
         }
         workers[index].Row = &Response->rows[index];
+        /* Every processor runs the same case, positive or negative. */
+        workers[index].RequestAccessedDirty =
+            ((Request->flags &
+                KSWORD_ARK_HVM_NESTED_PROBE_FLAG_REQUEST_AD) != 0UL)
+                ? TRUE
+                : FALSE;
         Response->rows[index].processorIndex = index;
         Response->rows[index].status =
             KSWORD_ARK_HVM_NESTED_PROBE_STATUS_NOT_ARMED;

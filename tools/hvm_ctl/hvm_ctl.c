@@ -4362,7 +4362,8 @@ static int NestedProbeRowPassed(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
              * 是原因与偏移一起，缺一格就退化成"反射链路通了"而已。
              */
             (r->l2ExitReason & 0xFFFFULL) == 31ULL &&
-            r->l2RipOffset == 12ULL &&
+            r->l2RipOffset ==
+                KSWORD_ARK_HVM_NESTED_PROBE_RIP_TRAPPED_MSR &&
             r->l1UsesMsrBitmap == 1UL &&
             r->bitmapMergeComplete == 1UL &&
             /* 那一条 RDMSR 是投递给 L1 的，不是我们就地吃掉的。 */
@@ -4432,11 +4433,12 @@ static void PrintNestedProbeRow(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
            r->l1UsesMsrBitmap ? "是" : "否",
            r->bitmapMergeComplete ? "完整" : "**不完整（回退成全部拦截）**",
            r->l2RipOffset,
-           (r->l2RipOffset == 12ULL)
+           (r->l2RipOffset == KSWORD_ARK_HVM_NESTED_PROBE_RIP_TRAPPED_MSR)
                ? "**第二条 RDMSR —— 查的确实是 L1 那张位图**"
-               : ((r->l2RipOffset == 5ULL)
+               : ((r->l2RipOffset == KSWORD_ARK_HVM_NESTED_PROBE_RIP_OPEN_MSR)
                       ? "**第一条 RDMSR —— 本该放行却拦了，查的不是 L1 的页**"
-                      : ((r->l2RipOffset == 14ULL)
+                      : ((r->l2RipOffset ==
+                              KSWORD_ARK_HVM_NESTED_PROBE_RIP_CPUID)
                              ? "**走到了 CPUID —— MSR 拦截根本没发生**"
                              : "（预期之外的位置）")));
     printf("    MSR/IO 归属  MSR 投递 %llu / 就地 %llu   IO 投递 %llu / 就地 %llu\n",
@@ -4505,6 +4507,104 @@ static int DoMsrPolicy(HANDLE h, unsigned long operation,
     return (rsp.status == KSWORD_ARK_HVM_MSR_POLICY_STATUS_OK) ? 0 : 2;
 }
 
+/*
+ * 负向用例：L1 在 EPT12 指针里请求 accessed/dirty，必须被拒。
+ *
+ * 判据是"拒绝发生在该拒的那道门上"，不是"没跑起来"。A/D 要在影子层次武装那一步
+ * 挡住：放行之后硬件会把位置在我们的影子叶上，L1 读回自己的 EPT12 全是零，据此
+ * 跳过它的来宾真正改过的页——那条路上没有任何读数会变。
+ *
+ * 期望：VMLAUNCH 得到 Intel 错误 7（控制字段非法），且「L2 跑过」为否。
+ * 换成别的错误号、或者 L2 居然跑起来了，都算 FAIL。
+ */
+static int DoNestedProbeAdRefusal(HANDLE h, int asJson)
+{
+    KSWORD_ARK_HVM_NESTED_PROBE_REQUEST req;
+    KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE rsp;
+    DWORD returned = 0;
+    BOOL ok;
+    const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r;
+    int passed;
+
+    memset(&req, 0, sizeof(req));
+    req.version = KSWORD_ARK_HVM_NESTED_PROBE_PROTOCOL_VERSION;
+    req.size = (unsigned long)sizeof(req);
+    req.flags = KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
+                KSWORD_ARK_HVM_NESTED_PROBE_FLAG_REQUEST_AD;
+    req.confirmationToken = KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN;
+    memset(&rsp, 0, sizeof(rsp));
+    ok = DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_NESTED_PROBE,
+                         &req, (DWORD)sizeof(req),
+                         &rsp, (DWORD)sizeof(rsp), &returned, NULL);
+    if (returned < sizeof(rsp) || rsp.returnedRows == 0UL) {
+        fprintf(stderr,
+                "NESTED_PROBE(AD) 无完整响应：ok=%d returned=%lu win32=%lu\n",
+                (int)ok, returned, GetLastError());
+        return 1;
+    }
+    r = &rsp.rows[0];
+    /*
+     * 前置没建立就不算测到。VMXON 都没成功的话，这一轮根本没走到 A/D 那道门，
+     * 报通过就是空过。
+     */
+    if (r->vmxonResult != 0UL || r->vmptrldResult != 0UL) {
+        if (!asJson) {
+            printf("=== 嵌套 A/D 拒绝（负向）===\n");
+            printf("  **空过**：VMXON/VMPTRLD 没成功，这一轮没走到 A/D 那道门。\n");
+        }
+        return 3;
+    }
+    /*
+     * 两格分开看，因为它们是两种编码。
+     *
+     * vmlaunchResult 是**步骤结果**（0 成功 / 1 VMfailValid / 2 VMfailInvalid），
+     * lastInstructionError 才是 Intel 错误号。要的是「以 VMfailValid 的方式失败」
+     * **并且**「错误号是 7（控制字段非法）」—— 只看前者的话，任何一种失败都能
+     * 蒙混过去；只看后者的话，VMfailInvalid 根本不带错误号，读到的会是上一条
+     * 指令留下的陈值。
+     */
+    passed = (r->vmlaunchResult == 1UL &&
+              r->lastInstructionError == 7UL &&
+              /*
+               * 驱动必须自己说出"我是因为 A/D 拒的"。
+               *
+               * 少了这一格，任何让 VMLAUNCH 以错误 7 失败的原因都能冒充通过 ——
+               * 包括 EPT 指针被写坏这种与 A/D 毫无关系的错法。用例问的是"拒绝
+               * 发生在该拒的那道门上"，不是"拒了就行"。
+               */
+              r->l1RequestedAccessedDirty == 1UL &&
+              r->l2Reached == 0UL) ? 1 : 0;
+    if (asJson) {
+        printf("{\"kind\":\"nested-ad-refusal\",\"vmlaunch\":%lu,"
+               "\"error\":%lu,\"l2Reached\":%lu,\"pass\":%d}\n",
+               r->vmlaunchResult, r->lastInstructionError,
+               r->l2Reached, passed);
+    } else {
+        printf("=== 嵌套 A/D 拒绝（负向）===\n");
+        printf("  L1 的 EPT12 指针带上了 accessed/dirty 位（EPTP bit 6）。\n");
+        printf("  VMLAUNCH 结果 : %lu (%s)%s\n", r->vmlaunchResult,
+               NestedProbeStepName(r->vmlaunchResult),
+               (r->vmlaunchResult == 1UL)
+                   ? "  （该以这种方式失败：带错误号的失败）"
+                   : "  **不是 VMfailValid —— L1 拿不到可判读的失败**");
+        printf("  Intel 错误号 : %lu%s\n", r->lastInstructionError,
+               (r->lastInstructionError == 7UL)
+                   ? "  （7 = 控制字段非法，正是该给的那个）"
+                   : "  **不是 7 —— 拒绝发生在别的门上**");
+        printf("  拒绝原因     : %s\n",
+               r->l1RequestedAccessedDirty
+                   ? "驱动指名是 accessed/dirty"
+                   : "**驱动没说是 A/D —— 错误 7 来自别的门**");
+        printf("  L2 跑过      : %s\n",
+               r->l2Reached ? "**是 —— 本该拒绝却放行了**" : "否");
+        printf("  => %s\n", passed ? "**PASS**" : "FAIL");
+        printf("\n  判据：A/D 必须在影子层次武装那一步被拒。放行的后果是硬件把\n"
+               "        位置在我们的影子叶上，而 L1 读回自己的 EPT12 全是零 ——\n"
+               "        它会据此跳过来宾真正写过的页，且沿途没有任何读数会变。\n");
+    }
+    return passed ? 0 : 2;
+}
+
 static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
 {
     KSWORD_ARK_HVM_NESTED_PROBE_REQUEST req;
@@ -4545,7 +4645,19 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                    "\"ept12Armed\":%lu,\"shadowFill\":%lu,\"shadowDeny\":%lu,"
                    "\"shadowExhaustion\":%lu,\"dispatched\":%llu,"
                    "\"l2ExitReason\":\"0x%llX\",\"l2GuestRip\":\"0x%llX\","
-                   "\"lastInstructionError\":%lu,\"pass\":%d}",
+                   "\"lastInstructionError\":%lu,"
+                   /*
+                    * 判据依据的那几格必须跟着进记录。
+                    *
+                    * 少了它们，归档下来的就只是一个 pass=1 —— 而这一轮判 PASS
+                    * 靠的是"L2 停在 +12"和"位图地址非零"。事后想复核一份旧记录
+                    * 时，没有这些格子就只能重跑。
+                    */
+                   "\"l2RipOffset\":%llu,\"vmcs02MsrBitmap\":\"0x%llX\","
+                   "\"vmcs02Primary\":\"0x%08lX\",\"mergeComplete\":%lu,"
+                   "\"l1UsesMsrBitmap\":%lu,\"msrReflected\":%llu,"
+                   "\"msrHandled\":%llu,\"ioReflected\":%llu,"
+                   "\"ioHandled\":%llu,\"pass\":%d}",
                    (i == 0) ? "" : ",",
                    r->processorIndex, r->status, r->vmxonResult,
                    r->vmptrldResult, r->vmwriteResult, r->vmreadResult,
@@ -4554,7 +4666,12 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                    r->ept12Armed, r->shadowFillCount, r->shadowDenyCount,
                    r->shadowExhaustionCount, r->dispatchedInstructions,
                    r->l2ExitReason, r->l2GuestRip,
-                   r->lastInstructionError, NestedProbeRowPassed(r));
+                   r->lastInstructionError,
+                   r->l2RipOffset, r->vmcs02MsrBitmap,
+                   r->vmcs02PrimaryControls, r->bitmapMergeComplete,
+                   r->l1UsesMsrBitmap, r->l2MsrExitsReflected,
+                   r->l2MsrExitsHandled, r->l2IoExitsReflected,
+                   r->l2IoExitsHandled, NestedProbeRowPassed(r));
         }
         printf("]}\n");
     } else {
@@ -4823,6 +4940,8 @@ int main(int argc, char** argv)
         rc = DoNestedProbe(h, asJson, 0);
     } else if (strcmp(cmd, "nested-probe-all") == 0) {
         rc = DoNestedProbe(h, asJson, 1);
+    } else if (strcmp(cmd, "nested-ad-refusal") == 0) {
+        rc = DoNestedProbeAdRefusal(h, asJson);
     } else if (strcmp(cmd, "msr-log") == 0) {
         /* 第二个参数是 MSR 号（十六进制，可带 0x）。 */
         unsigned long msr = (argc > 2)

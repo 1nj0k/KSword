@@ -38,6 +38,8 @@ Environment:
 #define KSW_HVM_NEPT_MEMORY_TYPE_WB 0x30ULL
 /* Name the four-level page-walk length an EPT pointer encodes. */
 #define KSW_HVM_NEPT_EPTP_WALK_4 0x18ULL
+/* Name the EPT-pointer bit that asks the processor to maintain A/D flags. */
+#define KSW_HVM_NEPT_EPTP_ENABLE_AD (1ULL << 6)
 /* Name write-back in the memory-type field of an EPT pointer. */
 #define KSW_HVM_NEPT_EPTP_MEMORY_TYPE_WB 0x6ULL
 
@@ -262,6 +264,39 @@ KswordARKHvmNestedEptSetL1Pointer(
         /* Return the exact encoding failure. */
         return STATUS_INVALID_PARAMETER;
     }
+    /*
+     * Refuse accessed/dirty rather than run L2 without it.
+     *
+     * L1 asking for A/D is L1 saying it intends to read those bits back out of
+     * its own EPT12 - that is the only thing they are for, and every use of
+     * them (live migration, snapshots, copy-on-write) decides which pages to
+     * copy from exactly that readback.
+     *
+     * L2 runs on the composed hierarchy, so the processor sets A/D in *our*
+     * shadow leaves.  L1's own tables stay untouched, and nothing anywhere
+     * reports that: L1 reads its EPT12 back, finds every bit clear, and
+     * concludes that no page was accessed or written.  It then skips exactly
+     * the pages its guest modified.
+     *
+     * That is the same shape as the #VE refusal in the resident start path,
+     * and the same reasoning applies: a caller that asked for a feature and
+     * silently got a run without it draws precisely the wrong conclusion, and
+     * this is not a feature to be wrong about in that direction.  Refusing
+     * costs L1 the ability to nest here; the alternative costs it its guest's
+     * data with no indication anything went wrong.
+     *
+     * The way out is propagation - walking the composed leaves after each exit
+     * and folding their A/D bits back into L1's EPT12 through the physical
+     * window.  Bounded work, since the shadow holds a fixed number of pages;
+     * not implemented in this version.
+     */
+    if ((L1EptPointer & KSW_HVM_NEPT_EPTP_ENABLE_AD) != 0ULL) {
+        Shadow->L1RequestedAccessedDirty = TRUE;
+        Shadow->LastStatus = STATUS_NOT_SUPPORTED;
+        /* Return the exact unsupported-control failure. */
+        return STATUS_NOT_SUPPORTED;
+    }
+    Shadow->L1RequestedAccessedDirty = FALSE;
     /* Drop every mapping composed against a different EPT12. */
     if (Shadow->L1EptPointer != L1EptPointer) {
         KswordARKHvmNestedEptInvalidate(Shadow);

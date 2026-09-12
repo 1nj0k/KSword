@@ -1884,6 +1884,31 @@ typedef struct _KSWORD_ARK_HVM_INJECT_RESPONSE
  * fail-closed 只停下一个核）。并发是唯一能把这句话变成读数的办法。
  */
 #define KSWORD_ARK_HVM_NESTED_PROBE_FLAG_ALL_PROCESSORS 0x00010000UL
+/*
+ * 让探针的 L1 在 EPT12 指针里请求 accessed/dirty 位，用来验证**拒绝**。
+ *
+ * 这是一条负向用例：A/D 必须被挡在影子层次武装的那一步，而不是放行之后由
+ * 硬件把位置在我们的影子叶上、让 L1 读回自己的 EPT12 发现全是零。后者没有
+ * 任何读数会变，而 L1 会据此跳过它的来宾真正改过的页。
+ *
+ * 期望结果是 VMLAUNCH 拿到 Intel 错误 7（控制字段非法），且「L2 跑过」为否。
+ */
+#define KSWORD_ARK_HVM_NESTED_PROBE_FLAG_REQUEST_AD 0x00020000UL
+
+/*
+ * L2 那段程序里三个有意义的停靠点，按距代码页起点的字节偏移。
+ *
+ * 放在协议头里而不是各自写死，是因为**一边造程序、另一边判结果**：驱动按这些
+ * 偏移排指令，工具按同样的偏移判读 `l2RipOffset`。分开写的话，哪天程序的编码
+ * 改一个字节，判据不会报错，只会开始判错。
+ *
+ *   TRAPPED  = 第二条 RDMSR。停这儿说明处理器查的确实是 L1 那张位图。
+ *   OPEN     = 第一条 RDMSR。本该放行却停这儿，说明查的是"全部拦截"的回退页。
+ *   FALLBACK = CPUID。走到这儿说明 MSR 拦截根本没发生。
+ */
+#define KSWORD_ARK_HVM_NESTED_PROBE_RIP_OPEN_MSR 5ULL
+#define KSWORD_ARK_HVM_NESTED_PROBE_RIP_TRAPPED_MSR 12ULL
+#define KSWORD_ARK_HVM_NESTED_PROBE_RIP_CPUID 14ULL
 
 /* 逐核结果的行数上限。 */
 #define KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS 64UL
@@ -2007,6 +2032,14 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
     unsigned long bitmapMergeComplete;
     /* L1 自己有没有要求 MSR 位图过滤（决定归属判定走哪条分支）。 */
     unsigned long l1UsesMsrBitmap;
+    /*
+     * L1 在 EPT12 指针里请求了 accessed/dirty，因而被拒。
+     *
+     * 单独报，因为拒绝到了 L1 那里只剩一个通用的"控制字段非法"——架构上是对的，
+     * 但它不说是哪一个控制。没有这一格的话，"L2 起不来"就分不清是能力不支持
+     * 还是 EPT 指针本身写坏了。
+     */
+    unsigned long l1RequestedAccessedDirty;
 } KSWORD_ARK_HVM_NESTED_PROBE_ROW;
 
 typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE

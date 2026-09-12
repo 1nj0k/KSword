@@ -38,8 +38,18 @@ typedef struct _KSW_HVM_SHADOW_EPT_STATE
     BOOLEAN Active;
     /* Record whether L1 supplied an EPT pointer at all. */
     BOOLEAN L1PointerValid;
+    /*
+     * Record that L1 asked for accessed/dirty flags and was refused.
+     *
+     * Kept as its own bit because the refusal reaches L1 only as a generic
+     * control-field error, which is architecturally right but says nothing
+     * about which control.  Without this, "L2 will not start on this
+     * hypervisor" has no readout distinguishing an unsupported feature from a
+     * malformed EPT pointer.
+     */
+    BOOLEAN L1RequestedAccessedDirty;
     /* Keep the structure explicitly initialized across architectures. */
-    USHORT Reserved0;
+    UCHAR Reserved0;
     /* Preserve the shadow-EPT generation. */
     ULONG Generation;
     /* Preserve the last invalidated generation. */
