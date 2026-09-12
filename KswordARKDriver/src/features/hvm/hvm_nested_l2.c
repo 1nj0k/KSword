@@ -636,6 +636,20 @@ KswordARKHvmNestedL2Reflect(
             return KSW_HVM_L2_ROUTE_SERVICE_LOCALLY;
         }
     }
+    /*
+     * Fold accessed/dirty back into EPT12 before L1 can look at it.
+     *
+     * Here rather than at VMXOFF because this is the moment L1 regains
+     * control: from its point of view its guest just stopped, and the first
+     * thing a hypervisor doing dirty tracking does on a nested exit is read
+     * those bits.  Propagating later would hand it a table that is correct
+     * only after some event it does not know to wait for.
+     *
+     * Does nothing unless L1 asked for A/D and we are actually maintaining it.
+     */
+    (void)KswordARKHvmNestedEptPropagateAccessedDirty(
+        &nested->ShadowEpt,
+        Context->PhysWindow);
     /* Record where L2 got to so L1 can inspect and later resume it. */
     for (index = 0UL;
          index < RTL_NUMBER_OF(g_KswordL2GuestFields);

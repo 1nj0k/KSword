@@ -4756,14 +4756,14 @@ static int DoMsrPolicy(HANDLE h, unsigned long operation,
 }
 
 /*
- * 负向用例：L1 在 EPT12 指针里请求 accessed/dirty，必须被拒。
+ * L1 在 EPT12 指针里请求 accessed/dirty：现在应当**被接受并真的传播**。
  *
- * 判据是"拒绝发生在该拒的那道门上"，不是"没跑起来"。A/D 要在影子层次武装那一步
- * 挡住：放行之后硬件会把位置在我们的影子叶上，L1 读回自己的 EPT12 全是零，据此
- * 跳过它的来宾真正改过的页——那条路上没有任何读数会变。
+ * 这条用例原先验的是"必须被拒"。拒绝是当时唯一诚实的选择——放行而不传播，
+ * 硬件会把位置在我们的影子叶上，L1 读回自己的 EPT12 全是零，据此跳过它的来宾
+ * 真正改过的页，沿途没有任何读数会变。现在传播实现了，判据跟着反过来。
  *
- * 期望：VMLAUNCH 得到 Intel 错误 7（控制字段非法），且「L2 跑过」为否。
- * 换成别的错误号、或者 L2 居然跑起来了，都算 FAIL。
+ * 期望：L2 真的跑起来（VMLAUNCH 成功、l2Reached），且驱动报 A/D 处于**在维护**
+ * 状态。只看"跑起来了"不够 —— 不维护也一样跑得起来，区别全在那一格。
  */
 static int DoNestedProbeAdRefusal(HANDLE h, int asJson)
 {
@@ -4811,44 +4811,45 @@ static int DoNestedProbeAdRefusal(HANDLE h, int asJson)
      * 蒙混过去；只看后者的话，VMfailInvalid 根本不带错误号，读到的会是上一条
      * 指令留下的陈值。
      */
-    passed = (r->vmlaunchResult == 1UL &&
-              r->lastInstructionError == 7UL &&
-              /*
-               * 驱动必须自己说出"我是因为 A/D 拒的"。
-               *
-               * 少了这一格，任何让 VMLAUNCH 以错误 7 失败的原因都能冒充通过 ——
-               * 包括 EPT 指针被写坏这种与 A/D 毫无关系的错法。用例问的是"拒绝
-               * 发生在该拒的那道门上"，不是"拒了就行"。
-               */
+    /*
+     * 三格缺一不可。
+     *
+     * l2Reached 只说明 L2 跑起来了 —— 不维护 A/D 也一样跑得起来。
+     * l1RequestedAccessedDirty 只说明请求到达了驱动。
+     * accessedDirtyActive 才是"我们真的在维护并会折回去"，也是这条用例
+     * 唯一要问的东西。
+     */
+    passed = (r->l2Reached == 1UL &&
               r->l1RequestedAccessedDirty == 1UL &&
-              r->l2Reached == 0UL) ? 1 : 0;
+              r->accessedDirtyActive == 1UL) ? 1 : 0;
     if (asJson) {
-        printf("{\"kind\":\"nested-ad-refusal\",\"vmlaunch\":%lu,"
-               "\"error\":%lu,\"l2Reached\":%lu,\"pass\":%d}\n",
-               r->vmlaunchResult, r->lastInstructionError,
-               r->l2Reached, passed);
+        printf("{\"kind\":\"nested-ad\",\"l2Reached\":%lu,"
+               "\"requested\":%lu,\"active\":%lu,\"propagated\":%lu,"
+               "\"overflow\":%lu,\"pass\":%d}\n",
+               r->l2Reached, r->l1RequestedAccessedDirty,
+               r->accessedDirtyActive, r->adPropagatedCount,
+               r->adOverflowCount, passed);
     } else {
-        printf("=== 嵌套 A/D 拒绝（负向）===\n");
+        printf("=== 嵌套 accessed/dirty ===\n");
         printf("  L1 的 EPT12 指针带上了 accessed/dirty 位（EPTP bit 6）。\n");
-        printf("  VMLAUNCH 结果 : %lu (%s)%s\n", r->vmlaunchResult,
-               NestedProbeStepName(r->vmlaunchResult),
-               (r->vmlaunchResult == 1UL)
-                   ? "  （该以这种方式失败：带错误号的失败）"
-                   : "  **不是 VMfailValid —— L1 拿不到可判读的失败**");
-        printf("  Intel 错误号 : %lu%s\n", r->lastInstructionError,
-               (r->lastInstructionError == 7UL)
-                   ? "  （7 = 控制字段非法，正是该给的那个）"
-                   : "  **不是 7 —— 拒绝发生在别的门上**");
-        printf("  拒绝原因     : %s\n",
-               r->l1RequestedAccessedDirty
-                   ? "驱动指名是 accessed/dirty"
-                   : "**驱动没说是 A/D —— 错误 7 来自别的门**");
         printf("  L2 跑过      : %s\n",
-               r->l2Reached ? "**是 —— 本该拒绝却放行了**" : "否");
+               r->l2Reached ? "是" : "**否 —— 带上 A/D 之后进不去了**");
+        printf("  请求到达     : %s\n",
+               r->l1RequestedAccessedDirty ? "是" : "**否**");
+        printf("  正在维护     : %s\n",
+               r->accessedDirtyActive
+                   ? "是（EPTP bit 6 已置，退出时折回 EPT12）"
+                   : "**否 —— 处理器不支持，或记录表溢出**");
+        printf("  已折回条数   : %lu   溢出次数 : %lu%s\n",
+               r->adPropagatedCount, r->adOverflowCount,
+               (r->adOverflowCount != 0UL)
+                   ? "  **溢出后已关闭维护：半套传播比没有更糟**"
+                   : "");
         printf("  => %s\n", passed ? "**PASS**" : "FAIL");
-        printf("\n  判据：A/D 必须在影子层次武装那一步被拒。放行的后果是硬件把\n"
-               "        位置在我们的影子叶上，而 L1 读回自己的 EPT12 全是零 ——\n"
-               "        它会据此跳过来宾真正写过的页，且沿途没有任何读数会变。\n");
+        printf("\n  判据：三格缺一不可。「L2 跑过」不够 —— 不维护 A/D 也一样跑得\n"
+               "        起来；「请求到达」也不够 —— 那只说明请求进了驱动。只有\n"
+               "        「正在维护」为是，才意味着硬件在置位而我们会把它折回 L1\n"
+               "        自己的表。折不回去时 L1 读回全零，会跳过来宾真正写过的页。\n");
     }
     return passed ? 0 : 2;
 }
@@ -5188,7 +5189,7 @@ int main(int argc, char** argv)
         rc = DoNestedProbe(h, asJson, 0);
     } else if (strcmp(cmd, "nested-probe-all") == 0) {
         rc = DoNestedProbe(h, asJson, 1);
-    } else if (strcmp(cmd, "nested-ad-refusal") == 0) {
+    } else if (strcmp(cmd, "nested-ad") == 0) {
         rc = DoNestedProbeAdRefusal(h, asJson);
     } else if (strcmp(cmd, "gdt-dump") == 0) {
         /* 第二个参数是处理器号，缺省 0。GDT 是每处理器的。 */

@@ -2041,6 +2041,17 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
      */
     unsigned long l1RequestedAccessedDirty;
     /*
+     * A/D 真的在被维护并折回 L1 的表了没有，以及折了多少条。
+     *
+     * 与上一格分开：上一格是 L1 **要了什么**，这两格是我们**做到了什么**。
+     * 两者只在处理器不支持、或记录表溢出时才不同，而那正是读者最需要分清的
+     * 情形 —— 半套传播比完全没有更糟，L1 会读到"这些页写过、那些没写过"，
+     * 而后半句是假的且它无从察觉。
+     */
+    unsigned long accessedDirtyActive;
+    unsigned long adPropagatedCount;
+    unsigned long adOverflowCount;
+    /*
      * 位图合并的周期数，与整个 L2 进入的周期数。
      *
      * 两个数一起报，因为合并的代价只有作为**份额**才有意义。"每次进入拷三页"

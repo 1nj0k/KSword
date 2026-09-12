@@ -40,6 +40,29 @@ Environment:
 #define KSW_HVM_NEPT_EPTP_WALK_4 0x18ULL
 /* Name the EPT-pointer bit that asks the processor to maintain A/D flags. */
 #define KSW_HVM_NEPT_EPTP_ENABLE_AD (1ULL << 6)
+/* Name the two leaf bits the processor maintains: accessed (8), dirty (9). */
+#define KSW_HVM_NEPT_AD_BITS ((1ULL << 8) | (1ULL << 9))
+
+/*
+ * Answer whether this processor can maintain EPT accessed/dirty flags.
+ *
+ * Asked of the capability MSR rather than assumed from the fact that L1 asked:
+ * L1 reads the same MSR, but it reads it through us, and nothing guarantees
+ * the two views agree on a machine where an outer hypervisor filters it.
+ * Setting EPTP bit 6 on a processor that cannot honour it fails VM entry with
+ * an error L1 has no way to act on.
+ */
+static BOOLEAN
+KswordARKHvmNestedEptProcessorSupportsAccessedDirty(
+    VOID
+    )
+{
+    /* IA32_VMX_EPT_VPID_CAP bit 21 reports EPT A/D support. */
+    const ULONGLONG capability = __readmsr(0x48CUL);
+
+    /* Report exactly what the processor claims. */
+    return ((capability & (1ULL << 21)) != 0ULL) ? TRUE : FALSE;
+}
 /* Name write-back in the memory-type field of an EPT pointer. */
 #define KSW_HVM_NEPT_EPTP_MEMORY_TYPE_WB 0x6ULL
 
@@ -203,6 +226,92 @@ KswordARKHvmNestedEptRelease(
     Shadow->Active = FALSE;
 }
 
+ULONG
+KswordARKHvmNestedEptPropagateAccessedDirty(
+    _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow,
+    _Inout_ KSW_HVM_PHYS_WINDOW* Window
+    )
+{
+    /* Index shifts for PML4, PDPT, PD and PT in walk order. */
+    static const ULONG shifts[4] = { 39UL, 30UL, 21UL, 12UL };
+    ULONG updated = 0UL;
+    ULONG record = 0UL;
+
+    if (Shadow == NULL || Window == NULL ||
+        !Shadow->AccessedDirtyActive || Shadow->RootVirtual == NULL) {
+        /* Report that nothing was folded. */
+        return 0UL;
+    }
+    for (record = 0UL; record < Shadow->AdRecordCount; ++record) {
+        const ULONGLONG guestPhysical = Shadow->AdLeafGuestPhysical[record];
+        const ULONGLONG l1Entry = Shadow->AdL1EntryAddress[record];
+        volatile ULONGLONG* table = (volatile ULONGLONG*)Shadow->RootVirtual;
+        ULONGLONG shadowLeaf = 0ULL;
+        ULONGLONG l1Value = 0ULL;
+        ULONG level = 0UL;
+
+        if (l1Entry == 0ULL) {
+            /* Skip a record whose EPT12 entry was never resolved. */
+            continue;
+        }
+        /* Navigate our own hierarchy to the leaf this record names. */
+        for (level = 0UL; level < 3UL; ++level) {
+            const ULONGLONG entry =
+                table[(guestPhysical >> shifts[level]) & 0x1FFULL];
+
+            if ((entry & KSW_HVM_NEPT_PERMISSIONS) == 0ULL) {
+                table = NULL;
+                break;
+            }
+            table = KswordARKHvmNestedEptPageVirtual(Shadow, entry);
+            if (table == NULL) { break; }
+        }
+        if (table == NULL) {
+            /* Skip a leaf the hierarchy no longer describes. */
+            continue;
+        }
+        shadowLeaf = table[(guestPhysical >> shifts[3]) & 0x1FFULL];
+        /*
+         * Only the two bits, and only ever setting them.
+         *
+         * L1 owns everything else in that entry, including whether the bits
+         * were already set and whether it has since cleared them to start a
+         * new round of tracking.  Writing the whole value back would undo any
+         * change L1 made while L2 was running; clearing a bit would lose a
+         * write L1 has not yet accounted for.  OR of just these two is the
+         * only operation that cannot lose information either way.
+         */
+        if ((shadowLeaf & KSW_HVM_NEPT_AD_BITS) == 0ULL) {
+            /* Skip a leaf the processor never touched. */
+            continue;
+        }
+        if (!NT_SUCCESS(KswordARKHvmPhysWindowReadQword(
+                Window,
+                l1Entry,
+                &l1Value))) {
+            /* Skip an entry that could not be read back. */
+            continue;
+        }
+        if ((l1Value & (shadowLeaf & KSW_HVM_NEPT_AD_BITS)) ==
+                (shadowLeaf & KSW_HVM_NEPT_AD_BITS)) {
+            /* Skip an entry that already carries these bits. */
+            continue;
+        }
+        l1Value |= (shadowLeaf & KSW_HVM_NEPT_AD_BITS);
+        if (!NT_SUCCESS(KswordARKHvmPhysWindowWriteQword(
+                Window,
+                l1Entry,
+                l1Value))) {
+            /* Skip an entry that could not be written. */
+            continue;
+        }
+        updated += 1UL;
+    }
+    Shadow->AdPropagatedCount += updated;
+    /* Report how many EPT12 entries actually changed. */
+    return updated;
+}
+
 VOID
 KswordARKHvmNestedEptInvalidate(
     _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow
@@ -225,6 +334,17 @@ KswordARKHvmNestedEptInvalidate(
      */
     RtlZeroMemory(Shadow->RootVirtual, PAGE_SIZE);
     Shadow->PageUsed = 1UL;
+    /*
+     * The A/D records describe leaves that no longer exist.
+     *
+     * Keeping them would have the next propagation read bits out of table
+     * pages that have since been handed to a different guest-physical address,
+     * and write them into EPT12 entries for pages L2 never touched.  The
+     * caller is expected to have propagated before invalidating; anything not
+     * folded by then is lost, which is the same thing INVEPT means for the
+     * translations themselves.
+     */
+    Shadow->AdRecordCount = 0UL;
     /*
      * Zeroing the tables is not the whole job.
      *
@@ -265,7 +385,7 @@ KswordARKHvmNestedEptSetL1Pointer(
         return STATUS_INVALID_PARAMETER;
     }
     /*
-     * Refuse accessed/dirty rather than run L2 without it.
+     * Accessed/dirty is maintained and folded back, not refused.
      *
      * L1 asking for A/D is L1 saying it intends to read those bits back out of
      * its own EPT12 - that is the only thing they are for, and every use of
@@ -273,34 +393,47 @@ KswordARKHvmNestedEptSetL1Pointer(
      * copy from exactly that readback.
      *
      * L2 runs on the composed hierarchy, so the processor sets A/D in *our*
-     * shadow leaves.  L1's own tables stay untouched, and nothing anywhere
-     * reports that: L1 reads its EPT12 back, finds every bit clear, and
-     * concludes that no page was accessed or written.  It then skips exactly
-     * the pages its guest modified.
+     * shadow leaves.  Leaving it there means L1 reads its own tables back,
+     * finds every bit clear, and skips exactly the pages its guest modified -
+     * silently, with nothing anywhere reporting it.  So the bits are folded
+     * into EPT12 when L2 stops, using the leaf addresses recorded during
+     * composition.
      *
-     * That is the same shape as the #VE refusal in the resident start path,
-     * and the same reasoning applies: a caller that asked for a feature and
-     * silently got a run without it draws precisely the wrong conclusion, and
-     * this is not a feature to be wrong about in that direction.  Refusing
-     * costs L1 the ability to nest here; the alternative costs it its guest's
-     * data with no indication anything went wrong.
-     *
-     * The way out is propagation - walking the composed leaves after each exit
-     * and folding their A/D bits back into L1's EPT12 through the physical
-     * window.  Bounded work, since the shadow holds a fixed number of pages;
-     * not implemented in this version.
+     * Two things still have to be true, and both are checked rather than
+     * assumed: the processor must be able to maintain the bits at all, and the
+     * record table must not overflow.  Either failing turns the feature off
+     * and refuses the entry, because half-propagated A/D is worse than none.
      */
     if ((L1EptPointer & KSW_HVM_NEPT_EPTP_ENABLE_AD) != 0ULL) {
         Shadow->L1RequestedAccessedDirty = TRUE;
-        Shadow->LastStatus = STATUS_NOT_SUPPORTED;
-        /* Return the exact unsupported-control failure. */
-        return STATUS_NOT_SUPPORTED;
+        if (!KswordARKHvmNestedEptProcessorSupportsAccessedDirty()) {
+            Shadow->AccessedDirtyActive = FALSE;
+            Shadow->LastStatus = STATUS_NOT_SUPPORTED;
+            /* Return the exact unsupported-control failure. */
+            return STATUS_NOT_SUPPORTED;
+        }
+        Shadow->AccessedDirtyActive = TRUE;
+    } else {
+        Shadow->L1RequestedAccessedDirty = FALSE;
+        Shadow->AccessedDirtyActive = FALSE;
     }
-    Shadow->L1RequestedAccessedDirty = FALSE;
     /* Drop every mapping composed against a different EPT12. */
     if (Shadow->L1EptPointer != L1EptPointer) {
         KswordARKHvmNestedEptInvalidate(Shadow);
         Shadow->L1EptPointer = L1EptPointer;
+    }
+    /*
+     * Put A/D into the pointer the processor actually loads.
+     *
+     * The composed pointer is built once at reservation time, before anything
+     * knows what L1 will ask for, so this bit can only be decided here.  It is
+     * assigned in both directions: a stale set bit from a previous L1 would
+     * have the processor maintaining bits nobody is folding back.
+     */
+    if (Shadow->AccessedDirtyActive) {
+        Shadow->ComposedEptPointer |= KSW_HVM_NEPT_EPTP_ENABLE_AD;
+    } else {
+        Shadow->ComposedEptPointer &= ~KSW_HVM_NEPT_EPTP_ENABLE_AD;
     }
     Shadow->L1PointerValid = TRUE;
     Shadow->Active = TRUE;
@@ -322,7 +455,8 @@ KswordARKHvmNestedEptWalkL1(
     _Inout_ KSW_HVM_PHYS_WINDOW* Window,
     _In_ ULONGLONG GuestPhysicalAddress,
     _Out_ ULONGLONG* L1Physical,
-    _Out_ ULONGLONG* Permissions
+    _Out_ ULONGLONG* Permissions,
+    _Out_opt_ ULONGLONG* L1EntryAddress
     )
 {
     /* Index shifts for PML4, PDPT, PD and PT in walk order. */
@@ -333,18 +467,28 @@ KswordARKHvmNestedEptWalkL1(
 
     *L1Physical = 0ULL;
     *Permissions = 0ULL;
+    if (L1EntryAddress != NULL) { *L1EntryAddress = 0ULL; }
     for (level = 0UL; level < 4UL; ++level) {
         const ULONGLONG index =
             (GuestPhysicalAddress >> shifts[level]) & 0x1FFULL;
+        const ULONGLONG entryAddress = table + (index << 3);
         ULONGLONG entry = 0ULL;
 
         if (!NT_SUCCESS(KswordARKHvmPhysWindowReadQword(
                 Window,
-                table + (index << 3),
+                entryAddress,
                 &entry))) {
             /* Report that EPT12 could not be walked at all. */
             return FALSE;
         }
+        /*
+         * Remember where the entry that decides this page lives.
+         *
+         * Only meaningful at the last level, and only known here - after the
+         * walk returns, `table` is gone and recovering this address would mean
+         * walking EPT12 again, from a VM exit, for every page.
+         */
+        if (L1EntryAddress != NULL) { *L1EntryAddress = entryAddress; }
         /*
          * Accumulate permissions down the walk, never widen them.
          *
@@ -393,6 +537,8 @@ KswordARKHvmNestedEptFill(
     static const ULONG shifts[4] = { 39UL, 30UL, 21UL, 12UL };
     ULONGLONG l1Physical = 0ULL;
     ULONGLONG permissions = 0ULL;
+    /* Where EPT12's own leaf for this page lives, for folding A/D back. */
+    ULONGLONG l1EntryAddress = 0ULL;
     volatile ULONGLONG* table = NULL;
     const volatile ULONGLONG* hostLeaf = NULL;
     ULONG level = 0UL;
@@ -409,7 +555,8 @@ KswordARKHvmNestedEptFill(
             Window,
             GuestPhysicalAddress,
             &l1Physical,
-            &permissions)) {
+            &permissions,
+            &l1EntryAddress)) {
         Shadow->DenyCount += 1UL;
         /* Report that EPT12 itself refuses this access. */
         return FALSE;
@@ -489,6 +636,35 @@ KswordARKHvmNestedEptFill(
         (l1Physical & KSW_HVM_NEPT_FRAME_MASK) |
         (permissions & KSW_HVM_NEPT_PERMISSIONS) |
         KSW_HVM_NEPT_MEMORY_TYPE_WB;
+    /*
+     * Pair this leaf with EPT12's, so the bits the processor is about to set
+     * here can be folded back into L1's table when L2 stops.
+     *
+     * Recorded at composition rather than looked up later: after this returns,
+     * the EPT12 leaf address is only recoverable by walking EPT12 again, from
+     * a VM exit, for every page.
+     */
+    if (Shadow->AccessedDirtyActive) {
+        if (Shadow->AdRecordCount < KSW_HVM_NEPT_AD_RECORDS) {
+            Shadow->AdLeafGuestPhysical[Shadow->AdRecordCount] =
+                GuestPhysicalAddress & KSW_HVM_NEPT_FRAME_MASK;
+            Shadow->AdL1EntryAddress[Shadow->AdRecordCount] = l1EntryAddress;
+            Shadow->AdRecordCount += 1UL;
+        } else {
+            /*
+             * Out of records.  Stop maintaining A/D rather than propagate part
+             * of it.
+             *
+             * A partial fold is worse than none: L1 reads its tables back and
+             * sees "these pages were written, those were not", and the second
+             * half is a lie it has no way to detect.  Turning the feature off
+             * at least makes every bit uniformly absent, which is the state L1
+             * would see from a processor that does not maintain them.
+             */
+            Shadow->AccessedDirtyActive = FALSE;
+            Shadow->AdOverflowCount += 1UL;
+        }
+    }
     Shadow->FillCount += 1UL;
     Shadow->LastStatus = STATUS_SUCCESS;
     /* Report that the faulting access may now be retried. */

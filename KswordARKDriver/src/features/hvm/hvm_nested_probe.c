@@ -689,6 +689,24 @@ KswordARKHvmNestedProbeExecute(
                         vcpu->Nested.L2EntryCycles;
                     response->l2EntryCount =
                         vcpu->Nested.L2EntryCount;
+                    /*
+                     * The A/D readout has to be filled on **this** path too.
+                     *
+                     * It was only in the fall-through below, which is the path
+                     * taken when L2 did not run. So every successful run -
+                     * exactly the runs the A/D case cares about - reported
+                     * zeroes, and the feature looked broken when the
+                     * instrumentation was.
+                     */
+                    response->l1RequestedAccessedDirty =
+                        vcpu->Nested.ShadowEpt.L1RequestedAccessedDirty
+                            ? 1UL : 0UL;
+                    response->accessedDirtyActive =
+                        vcpu->Nested.ShadowEpt.AccessedDirtyActive ? 1UL : 0UL;
+                    response->adPropagatedCount =
+                        vcpu->Nested.ShadowEpt.AdPropagatedCount;
+                    response->adOverflowCount =
+                        vcpu->Nested.ShadowEpt.AdOverflowCount;
                     response->status =
                         KSWORD_ARK_HVM_NESTED_PROBE_STATUS_OK;
                     /* Return without a second VMXOFF. */
@@ -715,6 +733,12 @@ KswordARKHvmNestedProbeExecute(
      */
     response->l1RequestedAccessedDirty =
         vcpu->Nested.ShadowEpt.L1RequestedAccessedDirty ? 1UL : 0UL;
+    response->accessedDirtyActive =
+        vcpu->Nested.ShadowEpt.AccessedDirtyActive ? 1UL : 0UL;
+    response->adPropagatedCount =
+        vcpu->Nested.ShadowEpt.AdPropagatedCount;
+    response->adOverflowCount =
+        vcpu->Nested.ShadowEpt.AdOverflowCount;
     /*
      * Do not overwrite an error already captured at the failing instruction.
      *

@@ -452,12 +452,12 @@ try {
         # 探针的 L2 程序是两条 RDMSR：第一条 L1 的位图里清着、必须放行，第二条
         # 置着、必须退出。判据在 hvm_ctl 里（原因 31、停在 +12、投递给 L1），
         # 这里只看它的退出码。收尾的 stop 不能省：常驻会活过发起它的进程。
-        # nested-ad-refusal 是负向的那一半：L1 在 EPT12 指针里请求 accessed/dirty
-        # 必须被拒（VMfailValid + Intel 错误 7 + L2 没进去）。放行的后果是硬件把
-        # A/D 位置在我们的影子叶上，L1 读回自己的 EPT12 全是零，据此跳过来宾真正
-        # 写过的页 —— 那条路上没有任何读数会变，只有这条用例看得见。
+        # nested-ad 验 accessed/dirty：L1 在 EPT12 指针里请求它，必须被接受、
+        # 真的维护、并在 L2 停下时折回 L1 自己的表。折不回去的后果是 L1 读回
+        # 全零，据此跳过来宾真正写过的页 —— 那条路上没有任何读数会变，
+        # 只有这条用例看得见。
         'nested'    { @('self-test', 'resident-nested', 'nested-probe-all',
-                        'nested-ad-refusal', 'stop') }
+                        'nested-ad', 'stop') }
         'soak'      { @('self-test', 'soak') }
         'full'      { @('self-test', 'soak', 'stop', 'teardown') }
         default     { @() }
@@ -481,7 +481,7 @@ try {
         # 执行 VMX 指令，随后探针真的会进出 L2 一次。
         $risky = $step -in @('self-test', 'launch-test-guest', 'resident',
                              'resident-nested', 'nested-probe-all',
-                             'nested-ad-refusal',
+                             'nested-ad',
                              'soak', 'probe-flags', 'probe-xonly', 'view-effect')
         $snap = $null
         $bootBefore = $null
