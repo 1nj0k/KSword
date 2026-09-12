@@ -2662,6 +2662,16 @@ KswordARKHvmQuery(
             (volatile LONG*)&g_KswordHvm.NestedL2LaunchRefusedCount,
             0L,
             0L);
+    /*
+     * Same shape, and durable for the same reason: the per-processor vmcs12
+     * pools are released at devirtualization, so an eviction that happened
+     * during a residency would otherwise leave no trace at all.
+     */
+    Response->nestedVmcs12EvictionCount =
+        (ULONG)InterlockedCompareExchange(
+            (volatile LONG*)&g_KswordHvm.NestedVmcs12EvictionCount,
+            0L,
+            0L);
     Response->evmcsState =
         g_KswordHvm.EvmcsState;
     Response->evmcsVersion =

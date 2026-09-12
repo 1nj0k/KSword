@@ -779,7 +779,21 @@ typedef struct _KSWORD_ARK_QUERY_HVM_RESPONSE
     unsigned long activeSecondaryControls;
     unsigned long activeExitControls;
     unsigned long activeEntryControls;
-    unsigned long activeControlsReserved;
+    /*
+     * 有多少份 vmcs12 因为每处理器的池满了而被丢掉。
+     *
+     * 一个 L1 手里的 VMCS 常常不止一份，它会不停 VMPTRLD 在其中切换。被驱逐的
+     * 那一份下次 VMPTRLD 回来时字段全是零 —— 在 L1 看来，跟"这个 hypervisor
+     * 只建模了一份 vmcs12"那个缺陷一模一样。所以真出了问题，这个数是唯一能把
+     * 两者分开的东西：非零就是池太小，零就得往别处查。
+     *
+     * 放在运行时而不是每处理器：池在退虚拟化时就释放了，一个跟着被测对象一起
+     * 消失的计数器只能回答"现在有没有在发生"，而问题是"有没有发生过"。
+     *
+     * 占用原先的 activeControlsReserved 槽位（它只是显式化的对齐填充，没有任何
+     * 读写方），结构大小不变，协议版本不动 —— 旧 GUI 读到的每一个字段都不移位。
+     */
+    unsigned long nestedVmcs12EvictionCount;
     unsigned long long pinCapability;
     unsigned long long primaryCapability;
     unsigned long long secondaryCapability;

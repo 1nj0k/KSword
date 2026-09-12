@@ -629,6 +629,20 @@ typedef struct _KSW_HVM_RUNTIME
      * see it.  Monotonic, never reset while the driver is loaded.
      */
     volatile LONG NestedL2LaunchRefusedCount;
+    /*
+     * Count vmcs12 dropped because the per-processor pool was full.
+     *
+     * The only honest readout for "this L1 keeps more VMCSs than we hold".  An
+     * evicted vmcs12 comes back zeroed at its next VMPTRLD, which looks to L1
+     * exactly like the single-vmcs12 defect the pool exists to fix - so when a
+     * hypervisor misbehaves under us this is the first number to read.
+     *
+     * Kept here rather than per processor for the same reason as the count
+     * above: the per-processor pools are released at devirtualization, and a
+     * counter that dies with the thing it measures answers "is it happening
+     * right now" when the question is "did it ever happen".
+     */
+    volatile LONG NestedVmcs12EvictionCount;
     /* Publish the current eVMCS state. */
     ULONG EvmcsState;
     /* Publish the TLFS eVMCS version discovered from CPUID. */

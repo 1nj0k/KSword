@@ -329,10 +329,146 @@ KswordARKHvmNestedDispatchVmxon(
     return KSW_HVM_VMX_RESULT_SUCCEED;
 }
 
+/*
+ * Find the pool slot holding one vmcs12, or none.
+ *
+ * A slot is in use exactly when its PhysicalAddress is non-zero; that field is
+ * the key and the occupancy bit at once, so the two cannot disagree.
+ */
+static KSW_HVM_VMCS12_STATE*
+KswordARKHvmNestedPoolFind(
+    _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _In_ ULONGLONG Pointer,
+    _Out_opt_ ULONG* SlotIndex
+    )
+{
+    ULONG index = 0UL;
+
+    if (SlotIndex != NULL) { *SlotIndex = 0UL; }
+    if (Nested->Vmcs12Pool == NULL || Pointer == 0ULL) {
+        /* Report that no slot holds it. */
+        return NULL;
+    }
+    for (index = 0UL; index < Nested->Vmcs12PoolCount; ++index) {
+        if (Nested->Vmcs12Pool[index].PhysicalAddress == Pointer) {
+            if (SlotIndex != NULL) { *SlotIndex = index; }
+            /* Return the slot that already holds this vmcs12. */
+            return &Nested->Vmcs12Pool[index];
+        }
+    }
+    /* Report that no slot holds it. */
+    return NULL;
+}
+
+/*
+ * Copy the loaded vmcs12 into the pool so another can take its place.
+ *
+ * Picks a free slot, else the coldest one.  Evicting is recorded rather than
+ * hidden: an evicted vmcs12 comes back zeroed on its next VMPTRLD, which looks
+ * to L1 exactly like the single-vmcs12 defect this pool replaces, so the count
+ * is the only thing that can tell the two apart afterwards.
+ */
+static VOID
+KswordARKHvmNestedPoolSave(
+    _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _Inout_ KSW_HVM_RUNTIME* Runtime
+    )
+{
+    KSW_HVM_VMCS12_STATE* slot = NULL;
+    ULONG index = 0UL;
+    ULONG chosen = 0UL;
+    ULONGLONG coldest = ~0ULL;
+
+    if (Nested->Vmcs12Pool == NULL ||
+        Nested->Vmcs12PoolCount == 0UL ||
+        !Nested->VmcsCurrent ||
+        Nested->CurrentVmcs == 0ULL) {
+        /* Return without saving what has no home or no identity. */
+        return;
+    }
+    slot = KswordARKHvmNestedPoolFind(Nested, Nested->CurrentVmcs, &chosen);
+    if (slot == NULL) {
+        for (index = 0UL; index < Nested->Vmcs12PoolCount; ++index) {
+            if (Nested->Vmcs12Pool[index].PhysicalAddress == 0ULL) {
+                chosen = index;
+                slot = &Nested->Vmcs12Pool[index];
+                break;
+            }
+            if (Nested->Vmcs12PoolStamp[index] < coldest) {
+                coldest = Nested->Vmcs12PoolStamp[index];
+                chosen = index;
+            }
+        }
+        if (slot == NULL) {
+            slot = &Nested->Vmcs12Pool[chosen];
+            /*
+             * Record the eviction where it outlives this processor's pool.
+             *
+             * The pool is freed at devirtualization; the fact that an L1 kept
+             * more VMCSs than we hold is exactly the kind of thing that is
+             * only noticed afterwards, from a report.
+             */
+            InterlockedIncrement(&Runtime->NestedVmcs12EvictionCount);
+        }
+    }
+    RtlCopyMemory(slot, &Nested->Vmcs12, sizeof(*slot));
+    slot->PhysicalAddress = Nested->CurrentVmcs;
+    Nested->Vmcs12PoolClock += 1ULL;
+    Nested->Vmcs12PoolStamp[chosen] = Nested->Vmcs12PoolClock;
+}
+
+/*
+ * Make one vmcs12 loaded, from the pool when it is known.
+ *
+ * Returns TRUE when its fields were restored and FALSE when this pointer has
+ * never been seen, in which case the caller starts it empty - which is what
+ * the architecture says a freshly VMCLEARed region holds anyway.
+ */
+static BOOLEAN
+KswordARKHvmNestedPoolLoad(
+    _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _In_ ULONGLONG Pointer
+    )
+{
+    ULONG chosen = 0UL;
+    KSW_HVM_VMCS12_STATE* slot =
+        KswordARKHvmNestedPoolFind(Nested, Pointer, &chosen);
+
+    if (slot == NULL) {
+        /* Report that nothing was restored. */
+        return FALSE;
+    }
+    RtlCopyMemory(&Nested->Vmcs12, slot, sizeof(Nested->Vmcs12));
+    Nested->Vmcs12PoolClock += 1ULL;
+    Nested->Vmcs12PoolStamp[chosen] = Nested->Vmcs12PoolClock;
+    /* Report that this vmcs12's fields came back. */
+    return TRUE;
+}
+
+/* Forget one vmcs12 entirely, as VMCLEAR requires. */
+static VOID
+KswordARKHvmNestedPoolDrop(
+    _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _In_ ULONGLONG Pointer
+    )
+{
+    ULONG chosen = 0UL;
+    KSW_HVM_VMCS12_STATE* slot =
+        KswordARKHvmNestedPoolFind(Nested, Pointer, &chosen);
+
+    if (slot == NULL) {
+        /* Return without dropping what was never held. */
+        return;
+    }
+    RtlZeroMemory(slot, sizeof(*slot));
+    Nested->Vmcs12PoolStamp[chosen] = 0ULL;
+}
+
 /* Dispatch VMCLEAR, VMPTRLD and VMPTRST against the current vmcs12. */
 static UCHAR
 KswordARKHvmNestedDispatchVmcsPointer(
     _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _Inout_ KSW_HVM_RUNTIME* Runtime,
     _In_ const struct _KSW_HVM_GPR_FRAME* Frame,
     _In_ ULONG ExitReason,
     _Out_ ULONG* InstructionError
@@ -395,6 +531,14 @@ KswordARKHvmNestedDispatchVmcsPointer(
         return KSW_HVM_VMX_RESULT_FAIL_VALID;
     }
     if (ExitReason == KSW_VMX_EXIT_VMCLEAR) {
+        /*
+         * VMCLEAR forgets that vmcs12 whether or not it is the loaded one.
+         *
+         * Dropping only the loaded one would leave a stale copy in the pool
+         * that a later VMPTRLD would restore - handing L1 the fields of a VMCS
+         * it explicitly cleared, which is worse than the zeroes it expects.
+         */
+        KswordARKHvmNestedPoolDrop(Nested, pointer);
         /* Clear the current pointer only when VMCLEAR names it. */
         if (Nested->VmcsCurrent && Nested->CurrentVmcs == pointer) {
             Nested->VmcsCurrent = FALSE;
@@ -410,18 +554,26 @@ KswordARKHvmNestedDispatchVmcsPointer(
         return KSW_HVM_VMX_RESULT_SUCCEED;
     }
     /*
-     * VMPTRLD makes one vmcs12 current.
+     * VMPTRLD makes one vmcs12 current, and the previous one keeps its fields.
      *
-     * Switching pointers must drop the field cache.  We model exactly one
-     * vmcs12, so keeping the previous VMCS's fields across a VMPTRLD would let
-     * them answer VMREADs issued against a different VMCS entirely - and L1
-     * would get plausible values for fields it never wrote, which is the
-     * failure mode that produces a working-looking L2 on stale control state.
+     * This used to reinitialize on every pointer change, because exactly one
+     * vmcs12 was modelled.  That was correct given the model - keeping the
+     * previous VMCS's fields would have let them answer VMREADs issued against
+     * a different VMCS - and wrong as a model: a hypervisor keeps several and
+     * switches between them constantly, so it would read back zeroes for
+     * fields it had written moments earlier.
+     *
+     * Now the outgoing one is spilled to the pool and the incoming one
+     * restored from it.  A pointer never seen before starts empty, which is
+     * what the architecture says a freshly VMCLEARed region holds.
      */
     if (!Nested->VmcsCurrent || Nested->CurrentVmcs != pointer) {
-        KswordARKHvmNestedVmcsInitialize(
-            &Nested->Vmcs12,
-            &Nested->Vmcs02);
+        KswordARKHvmNestedPoolSave(Nested, Runtime);
+        if (!KswordARKHvmNestedPoolLoad(Nested, pointer)) {
+            KswordARKHvmNestedVmcsInitialize(
+                &Nested->Vmcs12,
+                &Nested->Vmcs02);
+        }
     }
     Nested->CurrentVmcs = pointer;
     Nested->VmcsCurrent = TRUE;
@@ -725,6 +877,7 @@ KswordARKHvmNestedHandleExit(
                ExitReason == KSW_VMX_EXIT_VMPTRST) {
         instructionResult = KswordARKHvmNestedDispatchVmcsPointer(
             Nested,
+            Runtime,
             Frame,
             ExitReason,
             &instructionError);

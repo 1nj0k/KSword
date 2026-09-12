@@ -970,7 +970,9 @@ static int DoQuery(HANDLE h, int asJson)
                "\"eventCount\":%lu,"
                "\"droppedEventCount\":%lu,"
                "\"overwrittenEventCount\":%lu,"
-               "\"publishedEventCount\":%llu",
+               "\"publishedEventCount\":%llu,"
+               "\"nestedL2LaunchRefusedCount\":%lu,"
+               "\"nestedVmcs12EvictionCount\":%lu",
                rsp.generation, rsp.processorCount,
                rsp.preparedProcessorCount, rsp.selfTestPassedProcessorCount,
                rsp.residentProcessorCount,
@@ -993,7 +995,9 @@ static int DoQuery(HANDLE h, int asJson)
                rsp.cr4Fixed0, rsp.cr4Fixed1,
                rsp.lastVmInstructionError,
                rsp.eventCount, rsp.droppedEventCount,
-               rsp.overwrittenEventCount, rsp.publishedEventCount);
+               rsp.overwrittenEventCount, rsp.publishedEventCount,
+               rsp.nestedL2LaunchRefusedCount,
+               rsp.nestedVmcs12EvictionCount);
         /*
          * 只发非零项，键是退出原因编号。
          *
@@ -1036,6 +1040,23 @@ static int DoQuery(HANDLE h, int asJson)
            ImplementationName(rsp.eptImplementation),
            ImplementationName(rsp.nestedImplementation),
            ImplementationName(rsp.evmcsImplementation));
+    /*
+     * 两个耐久的嵌套计数器：拒绝过多少次 L2 启动，丢过多少份 vmcs12。
+     *
+     * 无条件打印，不做"非零才显示"。零本身就是要读的那个值，而缺这一行分不清
+     * 是"没发生过"还是"这个工具还不认识这个字段"——后者恰恰在换协议的时候出现，
+     * 也正是最需要相信读数的时候。
+     *
+     * 驱逐非零的含义很具体：某个 L1 手里的 VMCS 比池子能装的多。被驱逐那份下次
+     * VMPTRLD 回来字段全零，在 L1 看来就跟"只建模一份 vmcs12"那个缺陷一样，
+     * 所以这个数是事后唯一能把两者分开的东西。
+     */
+    printf("  嵌套计数     : 拒绝 L2 启动 %lu 次   vmcs12 驱逐 %lu 份%s\n",
+           rsp.nestedL2LaunchRefusedCount,
+           rsp.nestedVmcs12EvictionCount,
+           (rsp.nestedVmcs12EvictionCount != 0UL)
+               ? "  **池子装不下这个 L1 的 VMCS**"
+               : "");
     /*
      * 退出安全物理窗口的就绪数。
      *
@@ -4598,6 +4619,14 @@ static int NestedProbeRowPassed(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
             (r->l2ExitReason & 0xFFFFULL) == 31ULL &&
             r->l2RipOffset ==
                 KSWORD_ARK_HVM_NESTED_PROBE_RIP_TRAPPED_MSR &&
+            /*
+             * 两份 vmcs12 各自的字段都得活过切换。
+             *
+             * 这一格此前不在判据里，因为当时它必然失败。现在它是门：任何把
+             * vmcs12 退回"只建模一份"的改动，都会在这里立刻变红，而不是等到
+             * 有人拿真 hypervisor 去试才发现。
+             */
+            r->vmcsSwitchMatched == 1UL &&
             r->l1UsesMsrBitmap == 1UL &&
             r->bitmapMergeComplete == 1UL &&
             /* 那一条 RDMSR 是投递给 L1 的，不是我们就地吃掉的。 */
@@ -4916,7 +4945,12 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                    "\"vmcs02Primary\":\"0x%08lX\",\"mergeComplete\":%lu,"
                    "\"l1UsesMsrBitmap\":%lu,\"msrReflected\":%llu,"
                    "\"msrHandled\":%llu,\"ioReflected\":%llu,"
-                   "\"ioHandled\":%llu,\"pass\":%d}",
+                   "\"ioHandled\":%llu,"
+                   /* 同理：两份 vmcs12 的切换现在也是判据的一格。 */
+                   "\"vmcsSwitchResult\":%lu,\"vmcsSwitchMatched\":%lu,"
+                   "\"vmcsSwitchValueA\":\"0x%llX\","
+                   "\"vmcsSwitchValueB\":\"0x%llX\","
+                   "\"pass\":%d}",
                    (i == 0) ? "" : ",",
                    r->processorIndex, r->status, r->vmxonResult,
                    r->vmptrldResult, r->vmwriteResult, r->vmreadResult,
@@ -4930,7 +4964,10 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                    r->vmcs02PrimaryControls, r->bitmapMergeComplete,
                    r->l1UsesMsrBitmap, r->l2MsrExitsReflected,
                    r->l2MsrExitsHandled, r->l2IoExitsReflected,
-                   r->l2IoExitsHandled, NestedProbeRowPassed(r));
+                   r->l2IoExitsHandled,
+                   r->vmcsSwitchResult, r->vmcsSwitchMatched,
+                   r->vmcsSwitchValueA, r->vmcsSwitchValueB,
+                   NestedProbeRowPassed(r));
         }
         printf("]}\n");
     } else {
@@ -4949,6 +4986,10 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                "        （必须退出）；两种结局都产生退出，只有停在哪里能区分处理器\n"
                "        查的是 L1 那张位图还是\"全部拦截\"的回退页。停在 +5 就是回退，\n"
                "        走到 +14 就是 MSR 拦截根本没发生。\n"
+               "        还要求**两份 vmcs12 交替之后各自的字段都还在**：写 A、写 B、\n"
+               "        读 A、读 B，只建模一份的派发器会把 B 的值或零当成 A 的还回来。\n"
+               "        真 hypervisor 每个 vCPU 至少一份 VMCS 且不停 VMPTRLD 切换，\n"
+               "        字段活不过一次切换就托不住它们。\n"
                "        多核模式下，**任何一行 FAIL 就是整体 FAIL** —— 这正是它要验的东西。\n");
     }
     for (i = 0; i < rsp.returnedRows &&

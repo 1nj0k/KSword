@@ -20,6 +20,17 @@ Environment:
 #include "hvm_nested_ept.h"
 #include "hvm_nested_vmcs.h"
 
+/*
+ * How many vmcs12 one processor can hold besides the loaded one.
+ *
+ * A slot is the full field array, about 16 KiB, so this is roughly 128 KiB per
+ * processor that actually runs an L2.  Eight covers a hypervisor with a
+ * handful of vCPUs plus its own housekeeping VMCSs; beyond that the eviction
+ * counter says so rather than the behaviour quietly degrading back to the
+ * single-vmcs12 failure this replaces.
+ */
+#define KSW_HVM_VMCS12_POOL_SLOTS 8UL
+
 /* Preserve one processor's bounded L1 nested-VMX state. */
 typedef struct _KSW_HVM_NESTED_VCPU
 {
@@ -130,6 +141,28 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONGLONG CurrentVmcs;
     /* Preserve bounded vmcs12 identity and fields. */
     KSW_HVM_VMCS12_STATE Vmcs12;
+    /*
+     * Hold every vmcs12 that is not currently loaded.
+     *
+     * `Vmcs12` above is the one L1 has current; a hypervisor keeps several and
+     * VMPTRLDs between them constantly, so the others have to live somewhere.
+     * Without this, switching away and back returned zeroes - measured, and
+     * enough on its own to stop any real hypervisor from running underneath.
+     *
+     * A spill area rather than a replacement, deliberately: every existing
+     * reader of `Vmcs12` keeps working unchanged, and all of the new logic
+     * sits in the one place that switches pointers.
+     *
+     * Allocated at residency prepare because a slot is 16 KiB and the
+     * per-processor contexts are a static array - embedding these would put
+     * megabytes in BSS for processors that never run an L2.
+     */
+    PVOID Vmcs12PoolBlock;
+    KSW_HVM_VMCS12_STATE* Vmcs12Pool;
+    ULONG Vmcs12PoolCount;
+    /* Order slots by last use, so eviction drops the coldest. */
+    ULONGLONG Vmcs12PoolStamp[KSW_HVM_VMCS12_POOL_SLOTS];
+    ULONGLONG Vmcs12PoolClock;
     /* Preserve explicit partial vmcs02 merge state. */
     KSW_HVM_VMCS02_STATE Vmcs02;
     /* Preserve explicit partial shadow-EPT composition state. */

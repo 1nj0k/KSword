@@ -613,6 +613,17 @@ KswordARKHvmResidentReleaseContexts(
          */
         KswordARKHvmNestedEptRelease(
             &g_KswordHvmResident.Processors[index].Nested.ShadowEpt);
+        /* The vmcs12 spill pool has that same lifetime, and the same origin. */
+        if (g_KswordHvmResident.Processors[index].Nested.Vmcs12PoolBlock !=
+                NULL) {
+            ExFreePool(
+                g_KswordHvmResident.Processors[index]
+                    .Nested.Vmcs12PoolBlock);
+            g_KswordHvmResident.Processors[index]
+                .Nested.Vmcs12PoolBlock = NULL;
+            g_KswordHvmResident.Processors[index].Nested.Vmcs12Pool = NULL;
+            g_KswordHvmResident.Processors[index].Nested.Vmcs12PoolCount = 0UL;
+        }
     }
     /*
      * Release every private EPT hierarchy alongside the host stacks.  Their
@@ -795,6 +806,35 @@ KswordARKHvmResidentPrepareContexts(
          * than residency itself.
          */
         (void)KswordARKHvmNestedEptPrepare(&context->Nested.ShadowEpt);
+        /*
+         * Reserve the vmcs12 spill pool here for the same reason as the shadow
+         * tables: it is needed from a VM exit, where allocation is not
+         * available, and it must not be embedded in the per-processor array
+         * because a slot is 16 KiB and that array is static and sized for the
+         * architectural maximum.
+         *
+         * Not fatal when it fails.  Without a pool the dispatcher falls back to
+         * modelling one vmcs12, which is exactly the behaviour that shipped
+         * before - worse for an L1 that keeps several, and still correct for
+         * one that keeps a single VMCS.
+         */
+        if (context->Nested.Vmcs12PoolBlock == NULL) {
+            context->Nested.Vmcs12PoolBlock =
+                KswordARKAllocateNonPagedPool(
+                    (SIZE_T)KSW_HVM_VMCS12_POOL_SLOTS *
+                        sizeof(KSW_HVM_VMCS12_STATE),
+                    'PvHK');
+            if (context->Nested.Vmcs12PoolBlock != NULL) {
+                RtlZeroMemory(
+                    context->Nested.Vmcs12PoolBlock,
+                    (SIZE_T)KSW_HVM_VMCS12_POOL_SLOTS *
+                        sizeof(KSW_HVM_VMCS12_STATE));
+                context->Nested.Vmcs12Pool =
+                    (KSW_HVM_VMCS12_STATE*)context->Nested.Vmcs12PoolBlock;
+                context->Nested.Vmcs12PoolCount =
+                    KSW_HVM_VMCS12_POOL_SLOTS;
+            }
+        }
     }
     /* Publish that every processor has a complete host-stack context. */
     g_KswordHvmResident.Prepared = TRUE;
