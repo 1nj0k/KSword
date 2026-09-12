@@ -342,6 +342,13 @@ KswordARKHvmNestedDecodeOperand(
             /* Return the complete register-form operand. */
             return STATUS_SUCCESS;
         }
+    } else if (Layout == KSW_HVM_VMX_OPERAND_LAYOUT_INVALIDATION) {
+        /*
+         * The invalidation pair has a register operand but never a register
+         * *form*: the descriptor is always in memory, so bit 10 is not
+         * consulted and the decode falls through to the memory path below.
+         */
+        Operand->SecondaryRegister = (UCHAR)((information >> 28) & 0xFUL);
     }
     /* Decode the memory form shared by both layouts. */
     scaling = information & 0x3UL;

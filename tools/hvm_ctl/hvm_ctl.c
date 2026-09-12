@@ -4246,17 +4246,72 @@ static const char* NestedProbeStatusName(unsigned long s)
     }
 }
 
-static int DoNestedProbe(HANDLE h, int asJson)
+/* 判定一行是否达到正向判据。 */
+static int NestedProbeRowPassed(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
+{
+    return (r->status == KSWORD_ARK_HVM_NESTED_PROBE_STATUS_OK &&
+            r->vmxonResult == 0UL && r->vmptrldResult == 0UL &&
+            r->vmwriteResult == 0UL && r->vmreadResult == 0UL &&
+            r->vmreadMatched == 1UL && r->vmptrstMatched == 1UL &&
+            r->l2Reached == 1UL &&
+            (r->l2ExitReason & 0xFFFFULL) == 10ULL &&
+            r->inveptResult == 0UL &&
+            r->shadowGenerationAdvanced == 1UL) ? 1 : 0;
+}
+
+static void PrintNestedProbeRow(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
+{
+    printf("  --- CPU %lu ---   status %lu (%s)\n",
+           r->processorIndex, r->status,
+           NestedProbeStatusName(r->status));
+    printf("    VMXON %s  VMPTRLD %s  VMWRITE %s  VMREAD %s  VMPTRST %s  VMXOFF %s\n",
+           NestedProbeStepName(r->vmxonResult),
+           NestedProbeStepName(r->vmptrldResult),
+           NestedProbeStepName(r->vmwriteResult),
+           NestedProbeStepName(r->vmreadResult),
+           NestedProbeStepName(r->vmptrstResult),
+           NestedProbeStepName(r->vmxoffResult));
+    printf("    读回 0x%016llX %s   指针 %s\n",
+           r->vmreadValue,
+           r->vmreadMatched ? "**逐位相同**" : "不相同",
+           r->vmptrstMatched ? "**相符**" : "不符");
+    printf("    EPT12 %s   影子叶 %lu 张  拒绝 %lu  耗尽 %lu\n",
+           r->ept12Armed ? "**已装**" : "未装",
+           r->shadowFillCount, r->shadowDenyCount,
+           r->shadowExhaustionCount);
+    printf("    VMLAUNCH %s   L2 跑过 %s   退出原因 0x%llX%s   停在 0x%llX\n",
+           NestedProbeStepName(r->vmlaunchResult),
+           r->l2Reached ? "**是**" : "否",
+           r->l2ExitReason,
+           ((r->l2ExitReason & 0x80000000ULL) != 0ULL)
+               ? "(entry 失败)"
+               : (((r->l2ExitReason & 0xFFFFULL) == 10ULL) ? "(CPUID)" : ""),
+           r->l2GuestRip);
+    printf("    INVEPT %s   影子代次 %s\n",
+           NestedProbeStepName(r->inveptResult),
+           r->shadowGenerationAdvanced ? "**真的前进了**" : "没变");
+    printf("    派发 %llu 条   嵌套状态 %lu   末次错误号 %lu   => %s\n",
+           r->dispatchedInstructions, r->nestedStateAfter,
+           r->lastInstructionError,
+           NestedProbeRowPassed(r) ? "**PASS**" : "FAIL");
+}
+
+static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
 {
     KSWORD_ARK_HVM_NESTED_PROBE_REQUEST req;
     KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE rsp;
     DWORD returned = 0;
     BOOL ok;
+    unsigned long i;
+    int failed = 0;
 
     memset(&req, 0, sizeof(req));
     req.version = KSWORD_ARK_HVM_NESTED_PROBE_PROTOCOL_VERSION;
     req.size = (unsigned long)sizeof(req);
     req.flags = KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED;
+    if (allProcessors) {
+        req.flags |= KSWORD_ARK_HVM_NESTED_PROBE_FLAG_ALL_PROCESSORS;
+    }
     req.confirmationToken = KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN;
     memset(&rsp, 0, sizeof(rsp));
     ok = DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_NESTED_PROBE,
@@ -4269,77 +4324,48 @@ static int DoNestedProbe(HANDLE h, int asJson)
         return 1;
     }
     if (asJson) {
-        printf("{\"kind\":\"nested-probe\",\"status\":%lu,"
-               "\"processorIndex\":%lu,\"vmxon\":%lu,\"vmptrld\":%lu,"
-               "\"vmwrite\":%lu,\"vmread\":%lu,\"vmptrst\":%lu,"
-               "\"vmxoff\":%lu,\"vmreadMatched\":%lu,\"vmptrstMatched\":%lu,"
-               "\"vmreadValue\":\"0x%016llX\",\"vmwriteValue\":\"0x%016llX\","
-               "\"dispatched\":%llu,\"nestedStateAfter\":%lu,"
-               "\"lastInstructionError\":%lu,\"vmlaunch\":%lu,"
-               "\"l2Reached\":%lu,\"l2ExitReason\":\"0x%016llX\","
-               "\"l2Qualification\":\"0x%016llX\","
-               "\"l2GuestRip\":\"0x%016llX\"}\n",
-               rsp.status, rsp.processorIndex, rsp.vmxonResult,
-               rsp.vmptrldResult, rsp.vmwriteResult, rsp.vmreadResult,
-               rsp.vmptrstResult, rsp.vmxoffResult, rsp.vmreadMatched,
-               rsp.vmptrstMatched, rsp.vmreadValue, rsp.vmwriteValue,
-               rsp.dispatchedInstructions, rsp.nestedStateAfter,
-               rsp.lastInstructionError, rsp.vmlaunchResult,
-               rsp.l2Reached, rsp.l2ExitReason, rsp.l2Qualification,
-               rsp.l2GuestRip);
+        printf("{\"kind\":\"nested-probe\",\"status\":%lu,\"rows\":%lu,\"row\":[",
+               rsp.status, rsp.returnedRows);
+        for (i = 0; i < rsp.returnedRows &&
+                    i < KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS; ++i) {
+            const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r = &rsp.rows[i];
+            printf("%s{\"cpu\":%lu,\"status\":%lu,\"vmxon\":%lu,"
+                   "\"vmptrld\":%lu,\"vmwrite\":%lu,\"vmread\":%lu,"
+                   "\"vmptrst\":%lu,\"vmxoff\":%lu,\"vmreadMatched\":%lu,"
+                   "\"vmptrstMatched\":%lu,\"vmlaunch\":%lu,\"l2Reached\":%lu,"
+                   "\"ept12Armed\":%lu,\"shadowFill\":%lu,\"shadowDeny\":%lu,"
+                   "\"shadowExhaustion\":%lu,\"dispatched\":%llu,"
+                   "\"l2ExitReason\":\"0x%llX\",\"l2GuestRip\":\"0x%llX\","
+                   "\"lastInstructionError\":%lu,\"pass\":%d}",
+                   (i == 0) ? "" : ",",
+                   r->processorIndex, r->status, r->vmxonResult,
+                   r->vmptrldResult, r->vmwriteResult, r->vmreadResult,
+                   r->vmptrstResult, r->vmxoffResult, r->vmreadMatched,
+                   r->vmptrstMatched, r->vmlaunchResult, r->l2Reached,
+                   r->ept12Armed, r->shadowFillCount, r->shadowDenyCount,
+                   r->shadowExhaustionCount, r->dispatchedInstructions,
+                   r->l2ExitReason, r->l2GuestRip,
+                   r->lastInstructionError, NestedProbeRowPassed(r));
+        }
+        printf("]}\n");
     } else {
         printf("\n=== 嵌套 VMX 自检（客户机上下文里真的执行 VMX 指令）===\n");
-        printf("  status       : %lu (%s)\n",
-               rsp.status, NestedProbeStatusName(rsp.status));
-        printf("  处理器       : %lu\n", rsp.processorIndex);
-        printf("  VMXON        : %s\n",
-               NestedProbeStepName(rsp.vmxonResult));
-        printf("  VMPTRLD      : %s\n",
-               NestedProbeStepName(rsp.vmptrldResult));
-        printf("  VMWRITE      : %s   写入 0x%016llX\n",
-               NestedProbeStepName(rsp.vmwriteResult), rsp.vmwriteValue);
-        printf("  VMREAD       : %s   读回 0x%016llX  %s\n",
-               NestedProbeStepName(rsp.vmreadResult), rsp.vmreadValue,
-               rsp.vmreadMatched ? "**逐位相同**" : "不相同");
-        printf("  VMPTRST      : %s   %s\n",
-               NestedProbeStepName(rsp.vmptrstResult),
-               rsp.vmptrstMatched ? "**取回的就是刚装的那个**" : "指针不符");
-        printf("  VMXOFF       : %s\n",
-               NestedProbeStepName(rsp.vmxoffResult));
-        printf("  --- L2 ---\n");
-        printf("  L1 自带 EPT12: %s\n",
-               rsp.ept12Armed
-                   ? "**是** —— 走影子层次合成"
-                   : "否（用我们自己的层次，合成路径没参与）");
-        printf("  影子叶合成   : %lu 张   L1 拒绝 %lu   表页耗尽 %lu\n",
-               rsp.shadowFillCount, rsp.shadowDenyCount,
-               rsp.shadowExhaustionCount);
-        printf("  VMLAUNCH     : %s\n",
-               NestedProbeStepName(rsp.vmlaunchResult));
-        printf("  L2 真的跑过  : %s\n",
-               rsp.l2Reached ? "**是** —— 退出被反射回了 L1" : "否");
-        printf("  L2 退出原因  : 0x%016llX%s\n", rsp.l2ExitReason,
-               ((rsp.l2ExitReason & 0x80000000ULL) != 0ULL)
-                   ? "   （bit31 置位 = VM entry 失败，不是 L2 执行产生的退出）"
-                   : ((rsp.l2ExitReason & 0xFFFFULL) == 10ULL
-                          ? "   （10 = CPUID，正是 L2 唯一那条指令）"
-                          : ""));
-        printf("  L2 qualif.   : 0x%016llX\n", rsp.l2Qualification);
-        printf("  L2 停在      : 0x%016llX\n", rsp.l2GuestRip);
-        printf("  本核派发指令 : %llu 条\n", rsp.dispatchedInstructions);
-        printf("  嵌套状态     : %lu\n", rsp.nestedStateAfter);
-        printf("  末次错误号   : %lu\n", rsp.lastInstructionError);
-        printf("\n  判据：指令段要求 VMXON/VMPTRLD/VMWRITE/VMREAD/VMPTRST 全成功，\n"
-               "        且 VMREAD 逐位读回所写、VMPTRST 取回所装。\n"
-               "        L2 段的唯一正向判据是「L2 真的跑过」为是 **且** 退出原因\n"
-               "        低 16 位为 10（CPUID）—— 那说明 vmcs02 被硬件接受、L2 执行了\n"
-               "        指令、退出落到我们手上、并且被投递给了 L1。\n");
+        printf("  整体 status : %lu (%s)   跑了 %lu 个处理器\n",
+               rsp.status, NestedProbeStatusName(rsp.status),
+               rsp.returnedRows);
+        for (i = 0; i < rsp.returnedRows &&
+                    i < KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS; ++i) {
+            PrintNestedProbeRow(&rsp.rows[i]);
+        }
+        printf("\n  判据：每一行都要 VMXON/VMPTRLD/VMWRITE/VMREAD/VMPTRST 全成功、\n"
+               "        读回逐位相同、指针相符，且「L2 跑过」为是、退出原因低 16 位为 10（CPUID）。\n"
+               "        多核模式下，**任何一行 FAIL 就是整体 FAIL** —— 这正是它要验的东西。\n");
     }
-    return (rsp.status == KSWORD_ARK_HVM_NESTED_PROBE_STATUS_OK &&
-            rsp.vmxonResult == 0UL && rsp.vmptrldResult == 0UL &&
-            rsp.vmwriteResult == 0UL && rsp.vmreadResult == 0UL &&
-            rsp.vmreadMatched == 1UL && rsp.vmptrstMatched == 1UL)
-        ? 0 : 2;
+    for (i = 0; i < rsp.returnedRows &&
+                i < KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS; ++i) {
+        if (!NestedProbeRowPassed(&rsp.rows[i])) { failed = 1; }
+    }
+    return (rsp.returnedRows > 0 && !failed) ? 0 : 2;
 }
 
 static const char* ProcessStatusName(unsigned long s)
@@ -4489,6 +4515,11 @@ static void PrintUsage(void)
            "VMXON/VMPTRLD/VMWRITE/VMREAD/VMPTRST/VMXOFF，逐条看架构结果。\n"
            "                   前提：常驻在跑**且**起常驻时给了 ENABLE_NESTED_VMX；"
            "不满足会被拒绝而不是去试（试就是自己吃 #UD）。\n");
+    printf("  nested-probe-all 同上，但**每个处理器各起一个线程并发跑**。\n"
+           "                   单核跑通推不出多核跑通：每核有自己的 vmcs02、影子层次与"
+           "映射窗口，\n"
+           "                   它们结构上互不干涉——而本仓库里这句话已经栽过不止一次。"
+           "任一行 FAIL 即整体 FAIL。\n");
     printf("  probe-xonly      execute-only 探针（要求常驻**没在跑**；自己走完 "
            "装规则→起常驻→读→停→清）\n");
     printf("  rule-allowonce   ALLOW_ONCE 规则**安装期**的门（要求常驻没在跑；"
@@ -4569,7 +4600,9 @@ int main(int argc, char** argv)
     if (strcmp(cmd, "status") == 0) {
         rc = DoQuery(h, asJson);
     } else if (strcmp(cmd, "nested-probe") == 0) {
-        rc = DoNestedProbe(h, asJson);
+        rc = DoNestedProbe(h, asJson, 0);
+    } else if (strcmp(cmd, "nested-probe-all") == 0) {
+        rc = DoNestedProbe(h, asJson, 1);
     } else if (strcmp(cmd, "probe-xonly") == 0) {
         rc = DoProbeExecuteOnly(h, asJson);
     } else if (strcmp(cmd, "rule-allowonce") == 0) {

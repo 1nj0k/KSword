@@ -1860,6 +1860,18 @@ typedef struct _KSWORD_ARK_HVM_INJECT_RESPONSE
 /* 这一步根本没有执行到。 */
 #define KSWORD_ARK_HVM_NESTED_PROBE_STEP_SKIPPED 3UL
 
+/*
+ * 在**每个**处理器上并发跑一遍，而不是只在当前这个上跑一遍。
+ *
+ * 单核跑通不能推出多核跑通：每核有自己的 vmcs02、影子层次与映射窗口，它们**结构上**
+ * 互不干涉 —— 而这个仓库里"结构上互不干涉"已经栽过不止一次（共享 EPT 根的陈旧标签、
+ * fail-closed 只停下一个核）。并发是唯一能把这句话变成读数的办法。
+ */
+#define KSWORD_ARK_HVM_NESTED_PROBE_FLAG_ALL_PROCESSORS 0x00010000UL
+
+/* 逐核结果的行数上限。 */
+#define KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS 64UL
+
 typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_REQUEST
 {
     unsigned long version;
@@ -1868,13 +1880,11 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_REQUEST
     unsigned long confirmationToken;
 } KSWORD_ARK_HVM_NESTED_PROBE_REQUEST;
 
-typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE
+/* 一个处理器上一次完整自检的全部读数。 */
+typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
 {
-    unsigned long version;
-    unsigned long size;
     unsigned long status;
     unsigned long processorIndex;
-    unsigned long long stateFlags;
     /*
      * 每一步的架构结果：0=成功，1=VMfailValid，2=VMfailInvalid，3=没执行到。
      *
@@ -1932,4 +1942,27 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE
     unsigned long shadowDenyCount;
     /* 因表页用尽而没能合成的次数。 */
     unsigned long shadowExhaustionCount;
+    /*
+     * L1 发一次 INVEPT 的架构结果。
+     *
+     * 单独记，是因为它验的东西与别处都不同：L1 发 INVEPT 是在通知"我装的某个映射
+     * 已经作废"，而那是它唯一的通知渠道 —— 我们的影子只在 EPT 指针本身变化时才丢。
+     * 这一格报失败，等于告诉 L1 通知没送到。
+     */
+    unsigned long inveptResult;
+    /* INVEPT 之后影子的代次有没有真的往前走。 */
+    unsigned long shadowGenerationAdvanced;
+} KSWORD_ARK_HVM_NESTED_PROBE_ROW;
+
+typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE
+{
+    unsigned long version;
+    unsigned long size;
+    /* 整体结果：任何一行不达标就不是 OK。 */
+    unsigned long status;
+    /* 本次实际跑了几个处理器。 */
+    unsigned long returnedRows;
+    unsigned long long stateFlags;
+    KSWORD_ARK_HVM_NESTED_PROBE_ROW rows[
+        KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS];
 } KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE;

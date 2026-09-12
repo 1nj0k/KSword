@@ -35,6 +35,16 @@ struct _KSW_HVM_GPR_FRAME;
  */
 #define KSW_HVM_VMX_OPERAND_LAYOUT_MEMORY_ONLY 0UL
 #define KSW_HVM_VMX_OPERAND_LAYOUT_VMREAD_WRITE 1UL
+/*
+ * INVEPT and INVVPID: memory operand plus a register holding the type.
+ *
+ * Their memory operand decodes exactly like the memory-only group, but bits
+ * 31:28 - undefined for that group - carry the second register operand.  A
+ * separate layout rather than always reading those bits, because reading
+ * undefined bits for VMXON or VMCLEAR would produce a register number out of
+ * nothing.
+ */
+#define KSW_HVM_VMX_OPERAND_LAYOUT_INVALIDATION 2UL
 
 /* Preserve one decoded VMX instruction operand. */
 typedef struct _KSW_HVM_VMX_OPERAND

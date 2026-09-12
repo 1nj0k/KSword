@@ -223,6 +223,18 @@ KswordARKHvmNestedEptInvalidate(
      */
     RtlZeroMemory(Shadow->RootVirtual, PAGE_SIZE);
     Shadow->PageUsed = 1UL;
+    /*
+     * Zeroing the tables is not the whole job.
+     *
+     * The processor caches translations derived from them, and those survive
+     * an edit to the memory they came from - that is what INVEPT exists for.
+     * Dropping the tables without invalidating leaves L2 running on exactly
+     * the mappings this call was made to retire, and the tables now say
+     * nothing, so nothing later will contradict the stale entry either.
+     */
+    if (Shadow->ComposedEptPointer != 0ULL) {
+        (void)KswordARKHvmAsmInveptSingle(Shadow->ComposedEptPointer);
+    }
     Shadow->InvalidationGeneration = Shadow->Generation;
     Shadow->Generation += 1UL;
 }

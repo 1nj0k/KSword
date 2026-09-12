@@ -19,6 +19,7 @@ Environment:
 #include "hvm_resident.h"
 #include "hvm_runtime.h"
 #include "hvm_vmcs.h"
+#include "hvm_ept.h"
 #include "driver/KswordArkHvmIoctl.h"
 
 #if defined(_M_AMD64)
@@ -95,7 +96,7 @@ NTSYSAPI VOID NTAPI RtlRestoreContext(
 /* Carry one probe's working state across the pinned execution. */
 typedef struct _KSW_HVM_NESTED_PROBE_CONTEXT
 {
-    KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE* Response;
+    KSWORD_ARK_HVM_NESTED_PROBE_ROW* Response;
     PVOID VmxonVirtual;
     ULONGLONG VmxonPhysical;
     PVOID Vmcs12Virtual;
@@ -118,15 +119,41 @@ typedef struct _KSW_HVM_NESTED_PROBE_CONTEXT
  *
  * Module scope rather than on the stack because the L1 exit handler below runs
  * on its own stack with no argument: the only channel between it and the code
- * that launched L2 is memory that both can name.  Safe here because the probe
- * is pinned, single-shot, and serialized by the IOCTL path - none of which
- * would hold for a production path, and none of which is assumed elsewhere.
+ * that launched L2 is memory that both can name.
+ *
+ * Indexed per processor, not shared.  A single set was defensible while the
+ * probe ran on one processor at a time, but the whole point of the
+ * all-processors mode is that several run at once - and two processors sharing
+ * one resume context would each restore the other's stack pointer.
  */
-static volatile LONG g_KswordProbeL2Exited;
-static volatile ULONGLONG g_KswordProbeL2ExitReason;
-static volatile ULONGLONG g_KswordProbeL2Qualification;
-static volatile ULONGLONG g_KswordProbeL2GuestRip;
-static CONTEXT g_KswordProbeResumeContext;
+typedef struct _KSW_HVM_PROBE_SLOT
+{
+    volatile LONG L2Exited;
+    volatile ULONGLONG L2ExitReason;
+    volatile ULONGLONG L2Qualification;
+    volatile ULONGLONG L2GuestRip;
+    DECLSPEC_ALIGN(16) CONTEXT ResumeContext;
+} KSW_HVM_PROBE_SLOT;
+
+static KSW_HVM_PROBE_SLOT g_KswordProbeSlots[
+    KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS];
+
+/* Return this processor's slot, or NULL when its index is out of range. */
+static KSW_HVM_PROBE_SLOT*
+KswordARKHvmNestedProbeSlot(
+    VOID
+    )
+{
+    const ULONG index = (ULONG)KeGetCurrentProcessorNumberEx(NULL);
+
+    /* Report no slot rather than index past the table. */
+    if (index >= KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS) {
+        /* Return the explicit absence. */
+        return NULL;
+    }
+    /* Return the slot this processor owns alone. */
+    return &g_KswordProbeSlots[index];
+}
 
 /*
  * The probe's own L1 VM-exit handler - where vmcs12's host RIP points.
@@ -146,18 +173,30 @@ KswordARKHvmNestedProbeL1Host(
     VOID
     )
 {
+    KSW_HVM_PROBE_SLOT* slot = KswordARKHvmNestedProbeSlot();
     SIZE_T value = 0U;
 
+    /*
+     * Without a slot there is nowhere to report and no context to return to.
+     * Leaving VMX operation and spinning is the only bounded thing left: the
+     * launcher's timeout is what will notice.
+     */
+    if (slot == NULL) {
+        __vmx_off();
+        for (;;) {
+            KeStallExecutionProcessor(1000UL);
+        }
+    }
     if (__vmx_vmread((SIZE_T)KSW_PROBE_EXIT_REASON, &value) == 0) {
-        g_KswordProbeL2ExitReason = (ULONGLONG)value;
+        slot->L2ExitReason = (ULONGLONG)value;
     }
     if (__vmx_vmread((SIZE_T)KSW_PROBE_EXIT_QUALIFICATION, &value) == 0) {
-        g_KswordProbeL2Qualification = (ULONGLONG)value;
+        slot->L2Qualification = (ULONGLONG)value;
     }
     if (__vmx_vmread((SIZE_T)KSW_PROBE_VMCS_GUEST_RIP, &value) == 0) {
-        g_KswordProbeL2GuestRip = (ULONGLONG)value;
+        slot->L2GuestRip = (ULONGLONG)value;
     }
-    InterlockedExchange(&g_KswordProbeL2Exited, 1L);
+    InterlockedExchange(&slot->L2Exited, 1L);
     /* Leave emulated VMX operation before abandoning this stack. */
     __vmx_off();
     /*
@@ -168,7 +207,7 @@ KswordARKHvmNestedProbeL1Host(
      * context is the only way back, and it is exactly a longjmp: the launcher
      * resumes just after its capture, with the flag above already set.
      */
-    RtlRestoreContext(&g_KswordProbeResumeContext, NULL);
+    RtlRestoreContext(&slot->ResumeContext, NULL);
 }
 
 /*
@@ -378,7 +417,13 @@ KswordARKHvmNestedProbeExecute(
     _Inout_ KSW_HVM_NESTED_PROBE_CONTEXT* Probe
     )
 {
-    KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE* response = Probe->Response;
+    KSWORD_ARK_HVM_NESTED_PROBE_ROW* response = Probe->Response;
+    /*
+     * Taken after the affinity is already set, so it is this processor's own.
+     * NULL means an index past the slot table, in which case the L2 section is
+     * skipped rather than run without a way to come back.
+     */
+    KSW_HVM_PROBE_SLOT* slot = KswordARKHvmNestedProbeSlot();
     KSW_HVM_RESIDENT_VCPU* vcpu = KswordARKHvmResidentFindCurrent();
     ULONGLONG originalCr4 = __readcr4();
     ULONGLONG vmxonPhysical = Probe->VmxonPhysical;
@@ -451,19 +496,46 @@ KswordARKHvmNestedProbeExecute(
             response->vmptrstMatched =
                 (storedPointer == Probe->Vmcs12Physical) ? 1UL : 0UL;
             /*
+             * Issue INVEPT from L1 and see whether we accept it.
+             *
+             * Reusing the driver's own stub is deliberate: executed from guest
+             * context it exits to our nested dispatch rather than running
+             * natively, so what it returns is our answer to L1 - the exact
+             * thing under test.
+             *
+             * Placed here, while VMX operation is still held.  After the L2
+             * section is too late: the L1 exit handler executes VMXOFF before
+             * returning control, so an INVEPT issued there is outside VMX
+             * operation and gets refused for a reason that has nothing to do
+             * with what this step is checking.
+             */
+            {
+                const ULONG generationBefore =
+                    vcpu->Nested.ShadowEpt.Generation;
+
+                response->inveptResult =
+                    (ULONG)KswordARKHvmAsmInveptSingle(
+                        (Probe->Ept12Pointer != 0ULL)
+                            ? Probe->Ept12Pointer
+                            : Probe->Vmcs12Physical);
+                response->shadowGenerationAdvanced =
+                    (vcpu->Nested.ShadowEpt.Generation !=
+                        generationBefore) ? 1UL : 0UL;
+            }
+            /*
              * Only attempt L2 once the field plumbing demonstrably works.
              *
              * A VMLAUNCH built on a vmcs12 whose writes are not landing would
              * fail on guest state and report a field problem, which is a true
              * statement about the wrong layer.
              */
-            if (response->vmreadMatched == 1UL) {
+            if (response->vmreadMatched == 1UL && slot != NULL) {
                 KswordARKHvmNestedProbeBuildVmcs12(Probe);
-                g_KswordProbeL2ExitReason = 0ULL;
-                g_KswordProbeL2Qualification = 0ULL;
-                g_KswordProbeL2GuestRip = 0ULL;
-                InterlockedExchange(&g_KswordProbeL2Exited, 0L);
-                RtlCaptureContext(&g_KswordProbeResumeContext);
+                slot->L2ExitReason = 0ULL;
+                slot->L2Qualification = 0ULL;
+                slot->L2GuestRip = 0ULL;
+                InterlockedExchange(&slot->L2Exited, 0L);
+                RtlCaptureContext(&slot->ResumeContext);
                 /*
                  * Two paths arrive here.
                  *
@@ -475,7 +547,7 @@ KswordARKHvmNestedProbeExecute(
                  * memory rather than a register the restore just rewrote.
                  */
                 if (InterlockedCompareExchange(
-                        &g_KswordProbeL2Exited, 0L, 0L) == 0L) {
+                        &slot->L2Exited, 0L, 0L) == 0L) {
                     response->vmlaunchResult =
                         (ULONG)__vmx_vmlaunch();
                     /*
@@ -499,9 +571,9 @@ KswordARKHvmNestedProbeExecute(
                     response->vmlaunchResult = 0UL;
                     response->l2Reached = 1UL;
                 }
-                response->l2ExitReason = g_KswordProbeL2ExitReason;
-                response->l2Qualification = g_KswordProbeL2Qualification;
-                response->l2GuestRip = g_KswordProbeL2GuestRip;
+                response->l2ExitReason = slot->L2ExitReason;
+                response->l2Qualification = slot->L2Qualification;
+                response->l2GuestRip = slot->L2GuestRip;
                 /*
                  * The handler already executed VMXOFF on its own stack, so
                  * the sequence below must not do it twice.
@@ -550,10 +622,17 @@ KswordARKHvmNestedProbeExecute(
     response->status = KSWORD_ARK_HVM_NESTED_PROBE_STATUS_OK;
 }
 
-NTSTATUS
-KswordARKHvmNestedProbeRun(
-    _In_ const KSWORD_ARK_HVM_NESTED_PROBE_REQUEST* Request,
-    _Out_ KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE* Response
+/*
+ * Run one complete probe on one processor and fill one row.
+ *
+ * Every resource is allocated here rather than shared, because in the
+ * all-processors mode several of these run at once and a shared VMXON region
+ * or vmcs12 would be two processors writing one VMX structure.
+ */
+static NTSTATUS
+KswordARKHvmNestedProbeRunOne(
+    _Out_ KSWORD_ARK_HVM_NESTED_PROBE_ROW* Response,
+    _In_ const PROCESSOR_NUMBER* TargetProcessor
     )
 {
     KSW_HVM_NESTED_PROBE_CONTEXT probe = { 0 };
@@ -565,11 +644,9 @@ KswordARKHvmNestedProbeRun(
     KAFFINITY affinity = 0;
     GROUP_AFFINITY target = { 0 };
     GROUP_AFFINITY previous = { 0 };
-    PROCESSOR_NUMBER processorNumber = { 0 };
+    PROCESSOR_NUMBER processorNumber = *TargetProcessor;
 
     RtlZeroMemory(Response, sizeof(*Response));
-    Response->version = KSWORD_ARK_HVM_NESTED_PROBE_PROTOCOL_VERSION;
-    Response->size = sizeof(*Response);
     /* Start every step at "did not execute" so silence is never success. */
     Response->vmxonResult = KSWORD_ARK_HVM_NESTED_PROBE_STEP_SKIPPED;
     Response->vmptrldResult = KSWORD_ARK_HVM_NESTED_PROBE_STEP_SKIPPED;
@@ -578,25 +655,7 @@ KswordARKHvmNestedProbeRun(
     Response->vmptrstResult = KSWORD_ARK_HVM_NESTED_PROBE_STEP_SKIPPED;
     Response->vmxoffResult = KSWORD_ARK_HVM_NESTED_PROBE_STEP_SKIPPED;
     Response->vmlaunchResult = KSWORD_ARK_HVM_NESTED_PROBE_STEP_SKIPPED;
-    /* Reject a request that does not match the compiled contract. */
-    if (Request->version !=
-            KSWORD_ARK_HVM_NESTED_PROBE_PROTOCOL_VERSION ||
-        Request->size != sizeof(*Request)) {
-        Response->status =
-            KSWORD_ARK_HVM_NESTED_PROBE_STATUS_INVALID_REQUEST;
-        /* Return the exact contract failure. */
-        return STATUS_INVALID_PARAMETER;
-    }
-    /* Require the explicit confirmation this control class shares. */
-    if ((Request->flags &
-            KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED) == 0UL ||
-        Request->confirmationToken !=
-            KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN) {
-        Response->status =
-            KSWORD_ARK_HVM_NESTED_PROBE_STATUS_CONFIRMATION_REQUIRED;
-        /* Return the exact confirmation failure. */
-        return STATUS_SUCCESS;
-    }
+    Response->inveptResult = KSWORD_ARK_HVM_NESTED_PROBE_STEP_SKIPPED;
     revision = (ULONG)(__readmsr(KSW_PROBE_IA32_VMX_BASIC) & 0x7FFFFFFFULL);
     highest.QuadPart = MAXLONGLONG;
     probe.VmxonVirtual = MmAllocateContiguousMemorySpecifyCache(
@@ -693,7 +752,6 @@ KswordARKHvmNestedProbeRun(
      * nothing to take it out, and execute the rest against a nested record
      * that never saw the VMXON.
      */
-    KeGetCurrentProcessorNumberEx(&processorNumber);
     affinity = (KAFFINITY)1 << processorNumber.Number;
     target.Group = processorNumber.Group;
     target.Mask = affinity;
@@ -707,6 +765,179 @@ KswordARKHvmNestedProbeRun(
     MmFreeContiguousMemory(probe.Ept12PdptVirtual);
     ExFreePool(probe.L1StackVirtual);
     /* Return a completed probe whatever the individual steps reported. */
+    return STATUS_SUCCESS;
+}
+
+/* Carry one worker's target and result across thread creation. */
+typedef struct _KSW_HVM_PROBE_WORKER
+{
+    PROCESSOR_NUMBER Target;
+    KSWORD_ARK_HVM_NESTED_PROBE_ROW* Row;
+    PVOID Thread;
+} KSW_HVM_PROBE_WORKER;
+
+/* Run one worker's probe and exit.  One thread per processor. */
+static VOID
+KswordARKHvmNestedProbeWorker(
+    _In_ PVOID StartContext
+    )
+{
+    KSW_HVM_PROBE_WORKER* worker = (KSW_HVM_PROBE_WORKER*)StartContext;
+
+    (void)KswordARKHvmNestedProbeRunOne(worker->Row, &worker->Target);
+    PsTerminateSystemThread(STATUS_SUCCESS);
+}
+
+NTSTATUS
+KswordARKHvmNestedProbeRun(
+    _In_ const KSWORD_ARK_HVM_NESTED_PROBE_REQUEST* Request,
+    _Out_ KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE* Response
+    )
+{
+    KSW_HVM_PROBE_WORKER* workers = NULL;
+    PROCESSOR_NUMBER processorNumber = { 0 };
+    ULONG processorCount = 0UL;
+    ULONG index = 0UL;
+    ULONG started = 0UL;
+    NTSTATUS status = STATUS_SUCCESS;
+
+    RtlZeroMemory(Response, sizeof(*Response));
+    Response->version = KSWORD_ARK_HVM_NESTED_PROBE_PROTOCOL_VERSION;
+    Response->size = sizeof(*Response);
+    /* Reject a request that does not match the compiled contract. */
+    if (Request->version !=
+            KSWORD_ARK_HVM_NESTED_PROBE_PROTOCOL_VERSION ||
+        Request->size != sizeof(*Request)) {
+        Response->status =
+            KSWORD_ARK_HVM_NESTED_PROBE_STATUS_INVALID_REQUEST;
+        /* Return the exact contract failure. */
+        return STATUS_INVALID_PARAMETER;
+    }
+    /* Require the explicit confirmation this control class shares. */
+    if ((Request->flags &
+            KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED) == 0UL ||
+        Request->confirmationToken !=
+            KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN) {
+        Response->status =
+            KSWORD_ARK_HVM_NESTED_PROBE_STATUS_CONFIRMATION_REQUIRED;
+        /* Return the exact confirmation failure. */
+        return STATUS_SUCCESS;
+    }
+    /* One processor unless the caller asked for all of them. */
+    if ((Request->flags &
+            KSWORD_ARK_HVM_NESTED_PROBE_FLAG_ALL_PROCESSORS) == 0UL) {
+        KeGetCurrentProcessorNumberEx(&processorNumber);
+        Response->returnedRows = 1UL;
+        status = KswordARKHvmNestedProbeRunOne(
+            &Response->rows[0],
+            &processorNumber);
+        Response->status = Response->rows[0].status;
+        /* Return the single-processor result. */
+        return status;
+    }
+    processorCount =
+        (ULONG)KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+    /* Bound the run to the rows the response can carry. */
+    if (processorCount > KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS) {
+        processorCount = KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS;
+    }
+    workers = (KSW_HVM_PROBE_WORKER*)KswordARKAllocateNonPagedPool(
+        (SIZE_T)processorCount * sizeof(KSW_HVM_PROBE_WORKER),
+        'wnHK');
+    if (workers == NULL) {
+        Response->status =
+            KSWORD_ARK_HVM_NESTED_PROBE_STATUS_NO_RESOURCES;
+        /* Return the exact allocation failure. */
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+    RtlZeroMemory(
+        workers,
+        (SIZE_T)processorCount * sizeof(KSW_HVM_PROBE_WORKER));
+    /*
+     * One thread per processor, all started before any is waited on.
+     *
+     * Starting and joining one at a time would run them in sequence, which is
+     * the thing this mode exists to not do: the question is whether several
+     * processors can hold L2 *at the same time*, and a sequential run cannot
+     * distinguish that from them taking turns.
+     */
+    for (index = 0UL; index < processorCount; ++index) {
+        HANDLE threadHandle = NULL;
+        OBJECT_ATTRIBUTES attributes;
+
+        if (!NT_SUCCESS(KeGetProcessorNumberFromIndex(
+                index,
+                &workers[index].Target))) {
+            continue;
+        }
+        workers[index].Row = &Response->rows[index];
+        Response->rows[index].processorIndex = index;
+        Response->rows[index].status =
+            KSWORD_ARK_HVM_NESTED_PROBE_STATUS_NOT_ARMED;
+        InitializeObjectAttributes(
+            &attributes,
+            NULL,
+            OBJ_KERNEL_HANDLE,
+            NULL,
+            NULL);
+        if (!NT_SUCCESS(PsCreateSystemThread(
+                &threadHandle,
+                THREAD_ALL_ACCESS,
+                &attributes,
+                NULL,
+                NULL,
+                KswordARKHvmNestedProbeWorker,
+                &workers[index]))) {
+            continue;
+        }
+        if (NT_SUCCESS(ObReferenceObjectByHandle(
+                threadHandle,
+                THREAD_ALL_ACCESS,
+                *PsThreadType,
+                KernelMode,
+                &workers[index].Thread,
+                NULL))) {
+            started += 1UL;
+        }
+        ZwClose(threadHandle);
+    }
+    /* Join every worker that actually started before reading its row. */
+    for (index = 0UL; index < processorCount; ++index) {
+        if (workers[index].Thread == NULL) {
+            continue;
+        }
+        (void)KeWaitForSingleObject(
+            workers[index].Thread,
+            Executive,
+            KernelMode,
+            FALSE,
+            NULL);
+        ObDereferenceObject(workers[index].Thread);
+        workers[index].Thread = NULL;
+    }
+    ExFreePool(workers);
+    Response->returnedRows = processorCount;
+    /*
+     * The overall status is the worst row, not the first.
+     *
+     * A run where one processor worked and another did not is a failure of the
+     * thing this mode tests, and reporting the first row would hide exactly
+     * that case.
+     */
+    Response->status = KSWORD_ARK_HVM_NESTED_PROBE_STATUS_OK;
+    for (index = 0UL; index < processorCount; ++index) {
+        if (Response->rows[index].status !=
+                KSWORD_ARK_HVM_NESTED_PROBE_STATUS_OK) {
+            Response->status = Response->rows[index].status;
+            break;
+        }
+    }
+    /* Report no run at all rather than an empty success. */
+    if (started == 0UL) {
+        Response->status =
+            KSWORD_ARK_HVM_NESTED_PROBE_STATUS_NO_RESOURCES;
+    }
+    /* Return a completed run whatever the individual rows reported. */
     return STATUS_SUCCESS;
 }
 

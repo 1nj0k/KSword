@@ -220,6 +220,7 @@ KswordARKHvmNestedValidate(
 #define KSW_VMX_ERROR_UNSUPPORTED_COMPONENT 12UL
 #define KSW_VMX_ERROR_VMWRITE_READ_ONLY 13UL
 #define KSW_VMX_ERROR_VMXON_IN_ROOT 15UL
+#define KSW_VMX_ERROR_INVALID_INVALIDATION_OPERAND 28UL
 
 /* Name the VMCS field-encoding type that marks a read-only component. */
 #define KSW_VMCS_ENCODING_TYPE_READ_ONLY 1UL
@@ -432,6 +433,103 @@ KswordARKHvmNestedDispatchVmcsPointer(
     return KSW_HVM_VMX_RESULT_SUCCEED;
 }
 
+/*
+ * Dispatch INVEPT and INVVPID.
+ *
+ * These used to be refused, and the stated reason was that precise
+ * invalidation needs a reverse map from L1 physical back to every L2 page
+ * composed through it.  That reason stopped applying once the shadow chose to
+ * drop its whole hierarchy instead of individual entries - there is no reverse
+ * map to build, and the work is already done by the time we answer.
+ *
+ * Refusing while having done the work was the worst of both: L1 issues INVEPT
+ * precisely to announce that a mapping it installed is now stale, and that
+ * announcement is the *only* channel it has, because our shadow is otherwise
+ * dropped only when the EPT pointer itself changes.  Telling L1 the flush
+ * failed leaves it believing the stale mapping is still live, or treating the
+ * failure as fatal - neither of which reflects what happened.
+ */
+static UCHAR
+KswordARKHvmNestedDispatchInvalidate(
+    _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _In_ const struct _KSW_HVM_GPR_FRAME* Frame,
+    _In_ ULONG ExitReason,
+    _Out_ ULONG* InstructionError
+    )
+{
+    KSW_HVM_VMX_OPERAND operand = { 0 };
+    ULONGLONG type = 0ULL;
+    ULONGLONG descriptor = 0ULL;
+
+    *InstructionError = 0UL;
+    /* Refuse invalidation outside L1 VMX operation. */
+    if (!Nested->Vmxon) {
+        /* Return the invalid failure that carries no error number. */
+        return KSW_HVM_VMX_RESULT_FAIL_INVALID;
+    }
+    /* Decode under the layout that adds a type register to a memory operand. */
+    if (!NT_SUCCESS(KswordARKHvmNestedDecodeOperand(
+            Frame,
+            KSW_HVM_VMX_OPERAND_LAYOUT_INVALIDATION,
+            &operand))) {
+        /* Return the invalid failure that carries no error number. */
+        return KSW_HVM_VMX_RESULT_FAIL_INVALID;
+    }
+    if (KswordARKHvmNestedReadGpr(
+            Frame,
+            operand.SecondaryRegister,
+            &type) != 0U) {
+        /* Return the invalid failure that carries no error number. */
+        return KSW_HVM_VMX_RESULT_FAIL_INVALID;
+    }
+    /*
+     * Read the first eight bytes of the descriptor.
+     *
+     * That is the EPT pointer for INVEPT and the VPID plus reserved bits for
+     * INVVPID.  The remaining eight are a linear address INVVPID uses only for
+     * its individual-address type, which is refused below - so reading them
+     * would be reading something nothing acts on.
+     */
+    if (!NT_SUCCESS(KswordARKHvmNestedReadGuestQword(
+            operand.LinearAddress,
+            &descriptor))) {
+        /* Return the invalid failure that carries no error number. */
+        return KSW_HVM_VMX_RESULT_FAIL_INVALID;
+    }
+    /*
+     * Accept only the two context-wide types.
+     *
+     * Individual-address INVVPID names one linear address, and answering it
+     * with a whole-hierarchy drop would be correct but would also let L1
+     * believe we support a granularity we do not - which matters the moment it
+     * relies on the cheaper call in a loop.  Reporting the operand as invalid
+     * is what the architecture provides for a type we do not implement.
+     */
+    if (type != 1ULL && type != 2ULL) {
+        *InstructionError = KSW_VMX_ERROR_INVALID_INVALIDATION_OPERAND;
+        /* Return the valid failure L1 can read an error number from. */
+        return KSW_HVM_VMX_RESULT_FAIL_VALID;
+    }
+    /* INVEPT's single-context type must name an EPT pointer we could use. */
+    if (ExitReason == KSW_VMX_EXIT_INVEPT &&
+        type == 1ULL &&
+        (descriptor & 0x000FFFFFFFFFF000ULL) == 0ULL) {
+        *InstructionError = KSW_VMX_ERROR_INVALID_INVALIDATION_OPERAND;
+        /* Return the valid failure L1 can read an error number from. */
+        return KSW_HVM_VMX_RESULT_FAIL_VALID;
+    }
+    /*
+     * Drop everything regardless of which context was named.
+     *
+     * Coarser than asked for, and deliberately so: over-invalidating costs
+     * refills, under-invalidating leaves L2 running on a translation L1 has
+     * retired - with no symptom until the memory underneath is reused.
+     */
+    KswordARKHvmNestedEptInvalidate(&Nested->ShadowEpt);
+    /* Return the complete success. */
+    return KSW_HVM_VMX_RESULT_SUCCEED;
+}
+
 /* Dispatch VMREAD and VMWRITE against the bounded vmcs12 field cache. */
 static UCHAR
 KswordARKHvmNestedDispatchVmcsField(
@@ -638,22 +736,14 @@ KswordARKHvmNestedHandleExit(
             Frame,
             ExitReason,
             &instructionError);
-    /* Invalidation instructions remain explicit partial dispatch. */
+    /* Invalidation drops every composed mapping and reports success. */
     } else if (ExitReason == KSW_VMX_EXIT_INVEPT ||
                ExitReason == KSW_VMX_EXIT_INVVPID) {
-        /*
-         * Invalidation is refused until shadow-EPT composition exists.
-         *
-         * Succeeding here would be worse than refusing.  L1 issues INVEPT
-         * precisely because it believes a mapping it installed is now stale;
-         * reporting success while no composed hierarchy exists tells it the
-         * flush happened, and the only visible consequence arrives later, as
-         * L2 running on a mapping L1 already retired.
-         */
-        instructionResult = 2U;
-        /* Advance shadow-EPT invalidation state without claiming active. */
-        KswordARKHvmNestedEptInvalidate(
-            &Nested->ShadowEpt);
+        instructionResult = KswordARKHvmNestedDispatchInvalidate(
+            Nested,
+            Frame,
+            ExitReason,
+            &instructionError);
     } else {
         /* Report that this exit reason does not belong to nested dispatch. */
         return FALSE;
