@@ -740,10 +740,23 @@ KswordARKHvmResidentVmExitDispatch(
      */
     nestedBasicReason =
         telemetry.Reason & KSW_HVM_VMEXIT_REASON_BASIC_MASK;
-    if (Context->Nested.InL2 &&
-        KswordARKHvmNestedL2Reflect(Context, nestedBasicReason)) {
-        /* Resume L1 at the VM-exit handler it configured in vmcs12. */
-        return KSW_HVM_EXIT_ACTION_RESUME;
+    if (Context->Nested.InL2) {
+        const ULONG route = KswordARKHvmNestedL2Reflect(
+            Context,
+            nestedBasicReason);
+
+        /*
+         * Both routed outcomes end the exit here.
+         *
+         * REFLECTED resumes L1 at its own handler; HANDLED resumes L2 on
+         * vmcs02.  Neither may fall through: the handling below reads fields
+         * describing whichever guest is loaded and acts on our own hierarchy,
+         * which is not the one L2's addresses belong to.
+         */
+        if (route != KSW_HVM_L2_ROUTE_NOT_L2) {
+            /* Resume whichever guest routing left loaded. */
+            return KSW_HVM_EXIT_ACTION_RESUME;
+        }
     }
     /* Decode the Intel basic VM-exit reason. */
     basicReason =

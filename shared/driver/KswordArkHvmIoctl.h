@@ -1918,4 +1918,18 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE
     unsigned long long l2Qualification;
     /* L2 停在哪条指令上。 */
     unsigned long long l2GuestRip;
+    /*
+     * 这次 L2 是跑在 L1 自带的 EPT12 上（1）还是我们自己的层次上（0）。
+     *
+     * 分开报，是因为两条分支验的是不同的东西：为 1 时 L2 的每一次访问都要过
+     * EPT12 再过 EPT01，走的是影子层次的合成路径；为 0 时那条路径根本没参与。
+     * 不报这一位的话，一次"L2 跑通了"读数说不清到底验没验到合成。
+     */
+    unsigned long ept12Armed;
+    /* 影子层次为这次运行合成了多少张叶。 */
+    unsigned long shadowFillCount;
+    /* 因 EPT12 自己拒绝而交给 L1 的违规数。 */
+    unsigned long shadowDenyCount;
+    /* 因表页用尽而没能合成的次数。 */
+    unsigned long shadowExhaustionCount;
 } KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE;

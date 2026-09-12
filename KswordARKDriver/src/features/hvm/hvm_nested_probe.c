@@ -64,6 +64,17 @@ Environment:
 /* Name the unusable marker for a segment with no descriptor. */
 #define KSW_PROBE_SEGMENT_UNUSABLE 0x10000UL
 
+/* Name the vmcs12 fields that hand L2 its own EPT. */
+#define KSW_PROBE_SECONDARY_CONTROLS 0x401EUL
+#define KSW_PROBE_EPT_POINTER 0x201AUL
+/* Name the primary control that makes the secondary controls take effect. */
+#define KSW_PROBE_PRIMARY_ACTIVATE_SECONDARY 0x80000000UL
+/* Name the secondary control that turns on EPT for L2. */
+#define KSW_PROBE_SECONDARY_ENABLE_EPT 0x00000002UL
+/* Name the four-level walk length and write-back type of an EPT pointer. */
+#define KSW_HVM_NEPT_EPTP_WALK 0x18ULL
+#define KSW_HVM_NEPT_EPTP_WB 0x6ULL
+
 /* Bound the stack the probe's own L1 exit handler runs on. */
 #define KSW_PROBE_L1_STACK_BYTES 8192UL
 
@@ -93,6 +104,13 @@ typedef struct _KSW_HVM_NESTED_PROBE_CONTEXT
     PVOID L2CodeVirtual;
     /* The stack this probe's own L1 VM-exit handler runs on. */
     PVOID L1StackVirtual;
+    /* The two pages of EPT12 this probe hands L1's guest. */
+    PVOID Ept12Pml4Virtual;
+    ULONGLONG Ept12Pml4Physical;
+    PVOID Ept12PdptVirtual;
+    ULONGLONG Ept12PdptPhysical;
+    /* The EPT pointer written into vmcs12, or zero when EPT is not asked for. */
+    ULONGLONG Ept12Pointer;
 } KSW_HVM_NESTED_PROBE_CONTEXT;
 
 /*
@@ -153,6 +171,60 @@ KswordARKHvmNestedProbeL1Host(
     RtlRestoreContext(&g_KswordProbeResumeContext, NULL);
 }
 
+/*
+ * Build the EPT12 this probe hands L1's guest: an identity map of the low
+ * physical address space using one-GiB leaves.
+ *
+ * Identity because the point is not to relocate anything - it is to make the
+ * composition path run.  With EPT12 present, every L2 access has to go through
+ * EPT12 and then through our EPT01, which is exactly the two-level walk the
+ * shadow hierarchy exists to collapse.  An identity EPT12 means a composition
+ * bug shows up as a fault or a wrong page rather than as plausible-looking
+ * relocated memory, which is easier to attribute.
+ *
+ * One-GiB leaves keep the whole thing to two pages.  Returns FALSE when the
+ * processor does not support them, in which case the probe runs the no-EPT
+ * path instead of quietly testing something else.
+ */
+static BOOLEAN
+KswordARKHvmNestedProbeBuildEpt12(
+    _Inout_ KSW_HVM_NESTED_PROBE_CONTEXT* Probe,
+    _In_ ULONG GigabytesToMap
+    )
+{
+    volatile ULONGLONG* pml4 = (volatile ULONGLONG*)Probe->Ept12Pml4Virtual;
+    volatile ULONGLONG* pdpt = (volatile ULONGLONG*)Probe->Ept12PdptVirtual;
+    ULONG index = 0UL;
+
+    /* Require one-GiB EPT leaves before claiming this hierarchy is usable. */
+    if ((__readmsr(0x48CUL) & (1ULL << 17)) == 0ULL) {
+        /* Report that the identity hierarchy cannot be built this way. */
+        return FALSE;
+    }
+    /* Bound the map to the PDPT a single page holds. */
+    if (GigabytesToMap > 512UL) {
+        GigabytesToMap = 512UL;
+    }
+    /* One PML4 entry covers the whole 512-GiB region the PDPT describes. */
+    pml4[0] = (Probe->Ept12PdptPhysical & 0x000FFFFFFFFFF000ULL) | 0x7ULL;
+    for (index = 0UL; index < GigabytesToMap; ++index) {
+        /*
+         * Read, write, execute, write-back, and the large-page bit.
+         *
+         * Full permissions because any narrowing here would be testing L1's
+         * policy rather than our composition, and a denial would be
+         * indistinguishable from a composition failure.
+         */
+        pdpt[index] =
+            ((ULONGLONG)index << 30) | 0x7ULL | 0x30ULL | 0x80ULL;
+    }
+    Probe->Ept12Pointer =
+        (Probe->Ept12Pml4Physical & 0x000FFFFFFFFFF000ULL) |
+        KSW_HVM_NEPT_EPTP_WALK | KSW_HVM_NEPT_EPTP_WB;
+    /* Report a complete identity hierarchy. */
+    return TRUE;
+}
+
 /* Write one field into vmcs12 through nested dispatch, ignoring refusal. */
 static VOID
 KswordARKHvmNestedProbeVmcs12Write(
@@ -205,9 +277,21 @@ KswordARKHvmNestedProbeBuildVmcs12(
     ULONGLONG efer = __readmsr(KSW_PROBE_IA32_EFER);
 
     KswordARKHvmCaptureSegments(&snapshot);
-    /* Controls: ask for nothing beyond 64-bit entry and exit. */
+    /* Controls: 64-bit entry and exit, plus EPT when one was built. */
     KswordARKHvmNestedProbeVmcs12Write(KSW_PROBE_PIN_CONTROLS, 0ULL);
-    KswordARKHvmNestedProbeVmcs12Write(KSW_PROBE_PRIMARY_CONTROLS, 0ULL);
+    if (Probe->Ept12Pointer != 0ULL) {
+        KswordARKHvmNestedProbeVmcs12Write(
+            KSW_PROBE_PRIMARY_CONTROLS,
+            KSW_PROBE_PRIMARY_ACTIVATE_SECONDARY);
+        KswordARKHvmNestedProbeVmcs12Write(
+            KSW_PROBE_SECONDARY_CONTROLS,
+            KSW_PROBE_SECONDARY_ENABLE_EPT);
+        KswordARKHvmNestedProbeVmcs12Write(
+            KSW_PROBE_EPT_POINTER,
+            Probe->Ept12Pointer);
+    } else {
+        KswordARKHvmNestedProbeVmcs12Write(KSW_PROBE_PRIMARY_CONTROLS, 0ULL);
+    }
     KswordARKHvmNestedProbeVmcs12Write(KSW_PROBE_EXCEPTION_BITMAP, 0ULL);
     KswordARKHvmNestedProbeVmcs12Write(
         KSW_PROBE_EXIT_CONTROLS,
@@ -394,6 +478,22 @@ KswordARKHvmNestedProbeExecute(
                         &g_KswordProbeL2Exited, 0L, 0L) == 0L) {
                     response->vmlaunchResult =
                         (ULONG)__vmx_vmlaunch();
+                    /*
+                     * A failed VMLAUNCH leaves its reason in vmcs12's
+                     * VM-instruction-error field, and reading it back through
+                     * VMREAD is both the architectural way to ask and a second
+                     * check that our dispatch delivered the number.  Read it
+                     * here rather than from the driver's own record, which the
+                     * VMXOFF below would overwrite before anyone looks.
+                     */
+                    if (response->vmlaunchResult != 0UL) {
+                        SIZE_T launchError = 0U;
+
+                        if (__vmx_vmread(0x4400U, &launchError) == 0) {
+                            response->lastInstructionError =
+                                (ULONG)launchError;
+                        }
+                    }
                 } else {
                     /* Reached only by the restore: L2 ran and came back. */
                     response->vmlaunchResult = 0UL;
@@ -414,6 +514,12 @@ KswordARKHvmNestedProbeExecute(
                     response->nestedStateAfter = vcpu->Nested.State;
                     response->lastInstructionError =
                         vcpu->Nested.LastInstructionError;
+                    response->shadowFillCount =
+                        vcpu->Nested.ShadowEpt.FillCount;
+                    response->shadowDenyCount =
+                        vcpu->Nested.ShadowEpt.DenyCount;
+                    response->shadowExhaustionCount =
+                        vcpu->Nested.ShadowEpt.ExhaustionCount;
                     response->status =
                         KSWORD_ARK_HVM_NESTED_PROBE_STATUS_OK;
                     /* Return without a second VMXOFF. */
@@ -430,7 +536,17 @@ KswordARKHvmNestedProbeExecute(
     response->dispatchedInstructions =
         vcpu->Nested.InstructionCount - startingCount;
     response->nestedStateAfter = vcpu->Nested.State;
-    response->lastInstructionError = vcpu->Nested.LastInstructionError;
+    /*
+     * Do not overwrite an error already captured at the failing instruction.
+     *
+     * The per-VCPU record holds only the *last* error, and the VMXOFF above
+     * succeeds - so by the time this runs the record says zero, which would
+     * turn a reported failure into "failed, no reason given".
+     */
+    if (response->lastInstructionError == 0UL) {
+        response->lastInstructionError =
+            vcpu->Nested.LastInstructionError;
+    }
     response->status = KSWORD_ARK_HVM_NESTED_PROBE_STATUS_OK;
 }
 
@@ -489,11 +605,22 @@ KswordARKHvmNestedProbeRun(
         PAGE_SIZE, lowest, highest, boundary, MmCached);
     probe.L2CodeVirtual = MmAllocateContiguousMemorySpecifyCache(
         PAGE_SIZE, lowest, highest, boundary, MmCached);
+    probe.Ept12Pml4Virtual = MmAllocateContiguousMemorySpecifyCache(
+        PAGE_SIZE, lowest, highest, boundary, MmCached);
+    probe.Ept12PdptVirtual = MmAllocateContiguousMemorySpecifyCache(
+        PAGE_SIZE, lowest, highest, boundary, MmCached);
     probe.L1StackVirtual = KswordARKAllocateNonPagedPool(
         KSW_PROBE_L1_STACK_BYTES,
         'pnHK');
     if (probe.VmxonVirtual == NULL || probe.Vmcs12Virtual == NULL ||
-        probe.L2CodeVirtual == NULL || probe.L1StackVirtual == NULL) {
+        probe.L2CodeVirtual == NULL || probe.L1StackVirtual == NULL ||
+        probe.Ept12Pml4Virtual == NULL || probe.Ept12PdptVirtual == NULL) {
+        if (probe.Ept12Pml4Virtual != NULL) {
+            MmFreeContiguousMemory(probe.Ept12Pml4Virtual);
+        }
+        if (probe.Ept12PdptVirtual != NULL) {
+            MmFreeContiguousMemory(probe.Ept12PdptVirtual);
+        }
         if (probe.VmxonVirtual != NULL) {
             MmFreeContiguousMemory(probe.VmxonVirtual);
         }
@@ -527,6 +654,23 @@ KswordARKHvmNestedProbeRun(
     ((volatile UCHAR*)probe.L2CodeVirtual)[1] = 0xA2U;
     ((volatile UCHAR*)probe.L2CodeVirtual)[2] = 0xEBU;
     ((volatile UCHAR*)probe.L2CodeVirtual)[3] = 0xFEU;
+    RtlZeroMemory(probe.Ept12Pml4Virtual, PAGE_SIZE);
+    RtlZeroMemory(probe.Ept12PdptVirtual, PAGE_SIZE);
+    physical = MmGetPhysicalAddress(probe.Ept12Pml4Virtual);
+    probe.Ept12Pml4Physical = (ULONGLONG)physical.QuadPart;
+    physical = MmGetPhysicalAddress(probe.Ept12PdptVirtual);
+    probe.Ept12PdptPhysical = (ULONGLONG)physical.QuadPart;
+    /*
+     * Map enough physical memory for L2 to run: its code page, and every page
+     * of the page-table hierarchy the processor walks to reach it.  Those live
+     * wherever Windows put them, so the map covers the machine's whole range
+     * rather than trying to enumerate them.
+     */
+    if (!KswordARKHvmNestedProbeBuildEpt12(&probe, 512UL)) {
+        /* No EPT12: the probe still runs, on the hierarchy we already own. */
+        probe.Ept12Pointer = 0ULL;
+    }
+    Response->ept12Armed = (probe.Ept12Pointer != 0ULL) ? 1UL : 0UL;
     /*
      * Both regions start with the revision identifier.
      *
@@ -559,6 +703,8 @@ KswordARKHvmNestedProbeRun(
     MmFreeContiguousMemory(probe.VmxonVirtual);
     MmFreeContiguousMemory(probe.Vmcs12Virtual);
     MmFreeContiguousMemory(probe.L2CodeVirtual);
+    MmFreeContiguousMemory(probe.Ept12Pml4Virtual);
+    MmFreeContiguousMemory(probe.Ept12PdptVirtual);
     ExFreePool(probe.L1StackVirtual);
     /* Return a completed probe whatever the individual steps reported. */
     return STATUS_SUCCESS;

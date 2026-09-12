@@ -447,7 +447,7 @@ KswordARKHvmNestedL2ExitBelongsToL1(
     return TRUE;
 }
 
-BOOLEAN
+ULONG
 KswordARKHvmNestedL2Reflect(
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context,
     _In_ ULONG ExitReason
@@ -461,12 +461,19 @@ KswordARKHvmNestedL2Reflect(
     /* Not an L2 exit at all, so there is nothing to route. */
     if (!nested->InL2) {
         /* Report that the caller owns this exit. */
-        return FALSE;
+        return KSW_HVM_L2_ROUTE_NOT_L2;
     }
-    /* Handle it ourselves on vmcs02 when it was never L1's. */
+    /*
+     * An exit that was never L1's is finished here.
+     *
+     * The ownership test already did the work - a shadow-EPT violation is
+     * "ours" precisely because composing the leaf resolved it - so there is
+     * nothing left for the ordinary handling to do, and letting it run would
+     * re-evaluate an L2 address against a hierarchy that does not describe it.
+     */
     if (!KswordARKHvmNestedL2ExitBelongsToL1(Context, ExitReason)) {
-        /* Report that the caller owns this exit. */
-        return FALSE;
+        /* Report that the exit needs nothing further before resuming. */
+        return KSW_HVM_L2_ROUTE_HANDLED;
     }
     /* Record where L2 got to so L1 can inspect and later resume it. */
     for (index = 0UL;
@@ -528,8 +535,8 @@ KswordARKHvmNestedL2Reflect(
          * rather than resume something undefined.
          */
         nested->InL2 = FALSE;
-        /* Report the exit as consumed so the caller does not resume. */
-        return FALSE;
+        /* Report it consumed: there is nothing left that could help. */
+        return KSW_HVM_L2_ROUTE_HANDLED;
     }
     /*
      * Put L1 at its own VM-exit handler.
@@ -566,7 +573,7 @@ KswordARKHvmNestedL2Reflect(
     nested->State = KSWORD_ARK_HVM_NESTED_STATE_VMCS12_CURRENT;
     nested->L2ExitReflectedCount += 1ULL;
     /* Report that the exit was delivered and the caller must resume L1. */
-    return TRUE;
+    return KSW_HVM_L2_ROUTE_REFLECTED;
 }
 
 #else
@@ -583,7 +590,7 @@ KswordARKHvmNestedL2Enter(
     return 7UL;
 }
 
-BOOLEAN
+ULONG
 KswordARKHvmNestedL2Reflect(
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context,
     _In_ ULONG ExitReason
@@ -592,7 +599,7 @@ KswordARKHvmNestedL2Reflect(
     UNREFERENCED_PARAMETER(Context);
     UNREFERENCED_PARAMETER(ExitReason);
     /* Report that the caller owns this exit. */
-    return FALSE;
+    return KSW_HVM_L2_ROUTE_NOT_L2;
 }
 
 #endif

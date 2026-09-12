@@ -605,6 +605,14 @@ KswordARKHvmResidentReleaseContexts(
                 g_KswordHvmResident.Processors[index].
                     HostStack);
         }
+        /*
+         * The shadow-EPT block shares the host stack's lifetime exactly, and
+         * for the same reason: both are live for precisely as long as this
+         * processor is resident, and both come from the pool so this teardown
+         * path does not need PASSIVE_LEVEL.
+         */
+        KswordARKHvmNestedEptRelease(
+            &g_KswordHvmResident.Processors[index].Nested.ShadowEpt);
     }
     /*
      * Release every private EPT hierarchy alongside the host stacks.  Their
@@ -778,6 +786,15 @@ KswordARKHvmResidentPrepareContexts(
          */
         context->PhysWindow =
             KswordARKHvmPhysWindowForProcessor(index);
+        /*
+         * Reserve this processor's shadow-EPT tables now, because filling one
+         * happens inside a VM exit where allocation is not available.
+         *
+         * Not fatal when it fails: L2 entry checks for an armed hierarchy and
+         * refuses cleanly, which costs nested EPT on this processor rather
+         * than residency itself.
+         */
+        (void)KswordARKHvmNestedEptPrepare(&context->Nested.ShadowEpt);
     }
     /* Publish that every processor has a complete host-stack context. */
     g_KswordHvmResident.Prepared = TRUE;

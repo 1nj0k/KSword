@@ -4307,6 +4307,13 @@ static int DoNestedProbe(HANDLE h, int asJson)
         printf("  VMXOFF       : %s\n",
                NestedProbeStepName(rsp.vmxoffResult));
         printf("  --- L2 ---\n");
+        printf("  L1 自带 EPT12: %s\n",
+               rsp.ept12Armed
+                   ? "**是** —— 走影子层次合成"
+                   : "否（用我们自己的层次，合成路径没参与）");
+        printf("  影子叶合成   : %lu 张   L1 拒绝 %lu   表页耗尽 %lu\n",
+               rsp.shadowFillCount, rsp.shadowDenyCount,
+               rsp.shadowExhaustionCount);
         printf("  VMLAUNCH     : %s\n",
                NestedProbeStepName(rsp.vmlaunchResult));
         printf("  L2 真的跑过  : %s\n",

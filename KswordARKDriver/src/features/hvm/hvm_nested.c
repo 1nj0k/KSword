@@ -660,6 +660,22 @@ KswordARKHvmNestedHandleExit(
     }
     /* Preserve the last architectural VM-instruction error. */
     Nested->LastInstructionError = instructionError;
+    /*
+     * VMfailValid also stores the error number where L1 can VMREAD it.
+     *
+     * Setting ZF and keeping the number only in our own records satisfies half
+     * the contract: L1 sees that something failed and has no way to learn
+     * what.  Every hypervisor reads this field after a failed VMLAUNCH, so
+     * without it the failure is reported as error zero - which reads as "no
+     * error" and sends the reader looking in the wrong place.
+     */
+    if (instructionResult == KSW_HVM_VMX_RESULT_FAIL_VALID &&
+        Nested->VmcsCurrent) {
+        (void)KswordARKHvmNestedVmcs12Write(
+            &Nested->Vmcs12,
+            0x4400UL,
+            (ULONGLONG)instructionError);
+    }
     /* Publish the current nested state to the runtime snapshot. */
     InterlockedExchange(
         (volatile LONG*)&Runtime->NestedState,

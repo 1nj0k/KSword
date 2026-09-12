@@ -44,13 +44,28 @@ KswordARKHvmNestedL2Enter(
     );
 
 /*
- * Decide whether one L2 exit belongs to L1 and, when it does, deliver it.
+ * Name what routing did with one exit.
  *
- * Returns TRUE when the exit was reflected: vmcs01 is loaded, L1's guest state
- * has been set to its own VM-exit handler, and the caller must resume.
- * Returns FALSE when the exit is ours to handle on vmcs02 as usual.
+ * Three outcomes, not two.  Collapsing "we already dealt with it" into "not
+ * ours" sends a resolved exit back through the ordinary handling, where an EPT
+ * violation the shadow hierarchy just satisfied gets evaluated a second time
+ * against our own hierarchy - which does not describe L2's addresses at all,
+ * and whose refusal path tears residency down while L2 is running.
  */
-BOOLEAN
+#define KSW_HVM_L2_ROUTE_NOT_L2 0UL
+#define KSW_HVM_L2_ROUTE_REFLECTED 1UL
+#define KSW_HVM_L2_ROUTE_HANDLED 2UL
+
+/*
+ * Route one L2 exit.
+ *
+ * REFLECTED: delivered to L1 - vmcs01 is loaded, L1's guest state is set to
+ * its own VM-exit handler, and the caller must resume.
+ * HANDLED: satisfied here on vmcs02 - the caller must resume without further
+ * handling.
+ * NOT_L2: this processor is not running L2, so the caller owns the exit.
+ */
+ULONG
 KswordARKHvmNestedL2Reflect(
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context,
     _In_ ULONG ExitReason
