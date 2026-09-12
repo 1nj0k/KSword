@@ -4338,6 +4338,178 @@ static const char* NestedProbeStatusName(unsigned long s)
  * 只读句柄必须被拒（win32=5），读写句柄必须能走到驱动（拿到的是驱动的语义结果，
  * 不是 5）。只有两面都成立，才说明是闸门在起作用而不是控制码错位。
  */
+/*
+ * 把这个核的 GDT 整表读出来，一行十六进制。
+ *
+ * 为什么需要它：靶机上出过一次 0x109 CRITICAL_STRUCTURE_CORRUPTION，
+ * P4=3（处理器 GDT）。GDTR 的 **limit** 已经量过、常驻前后恒为 0x007F，所以
+ * 变的只能是表里某一项的**内容**，而 PatchGuard 不会说是哪一项。
+ *
+ * 拿这个动词在常驻前后各跑一次、逐字节 diff，就能把"某个描述符被改了"从推测
+ * 变成读数 —— 或者反过来，证明 GDT 根本没变，把嫌疑从我们身上摘掉。
+ *
+ * sgdt 在 CPL 3 合法（未开 UMIP 时），所以基址由本进程自己取；表内容在内核
+ * 半区，要经驱动读回来。
+ *
+ * **现状：两条读路径都拒绝这一段，这个动词还跑不通。** 实测（2026-09-12）：
+ *   READ_VIRTUAL_MEMORY + KERNEL_ADDRESS -> readStatus=4 COPY_FAILED /
+ *                                           copyStatus=0xC00000A0
+ *   HVM_MEMORY OP_TRANSLATE              -> status=5 TRANSLATION_FAILED
+ *                                           （prepare 之后依然）
+ *
+ * 两条都记在这里，是因为它们各自看起来都像"我请求写错了"，而实际是这一段
+ * 内存这两条路都不覆盖。下一个来查 0x109 的人不必把这两个死胡同再走一遍。
+ * 要让它跑通得动驱动的翻译/读取路径，那是崩溃排查那条线的工作。
+ */
+static int DoGdtDump(HANDLE h, int asJson, int cpu)
+{
+    unsigned char gdtr[10];
+    unsigned char buf[4096];
+    KSWORD_ARK_READ_VIRTUAL_MEMORY_REQUEST req;
+    KSWORD_ARK_READ_VIRTUAL_MEMORY_RESPONSE* rsp =
+        (KSWORD_ARK_READ_VIRTUAL_MEMORY_RESPONSE*)buf;
+    DWORD returned = 0;
+    unsigned short limit;
+    unsigned long long base;
+    unsigned long want;
+    unsigned long i;
+
+    /* 把自己钉在指定核上：GDT 是每处理器的，不钉就不知道读的是谁的。 */
+    if (!SetThreadAffinityMask(GetCurrentThread(), (DWORD_PTR)1 << cpu)) {
+        fprintf(stderr, "绑核失败：win32=%lu\n", GetLastError());
+        return 1;
+    }
+    Sleep(30);
+    /*
+     * sgdt 用一小段可执行字节跑，不用内建。
+     *
+     * MSVC 在 x64 用户态既没有内联汇编，也没有稳定的 sgdt 内建（__sidt 有，
+     * sgdt 没有）。指令本身在 CPL 3 合法（未开 UMIP 时），所以这里唯一要做的
+     * 就是把这 4 个字节放到一页可执行内存里调一次。
+     */
+    {
+        /* sgdt [rcx] ; ret */
+        static const unsigned char kSgdt[] = { 0x0F, 0x01, 0x01, 0xC3 };
+        typedef void (*KswSgdtFn)(void*);
+        void* page = VirtualAlloc(NULL, 64,
+                                  MEM_COMMIT | MEM_RESERVE,
+                                  PAGE_EXECUTE_READWRITE);
+        KswSgdtFn fn;
+
+        if (page == NULL) {
+            fprintf(stderr, "VirtualAlloc 失败：win32=%lu\n", GetLastError());
+            return 1;
+        }
+        memcpy(page, kSgdt, sizeof(kSgdt));
+        fn = (KswSgdtFn)page;
+        fn(gdtr);
+        VirtualFree(page, 0, MEM_RELEASE);
+    }
+    limit = *(unsigned short*)&gdtr[0];
+    base = *(unsigned long long*)&gdtr[2];
+    want = (unsigned long)limit + 1UL;
+    if (want > sizeof(buf) - sizeof(*rsp)) {
+        want = (unsigned long)(sizeof(buf) - sizeof(*rsp));
+    }
+    memset(&req, 0, sizeof(req));
+    /*
+     * GDT 在内核半区，必须显式声明是内核地址。
+     *
+     * 不带这一位时驱动会先去按 processId 找进程并在那个地址空间里解地址，
+     * 对一个内核 VA 只会得到 STATUS_INVALID_PARAMETER —— 而 win32=87 这个回答
+     * 指向"请求写错了"，不指哪一格写错了。
+     */
+    req.flags = KSWORD_ARK_MEMORY_READ_FLAG_KERNEL_ADDRESS;
+    req.processId = GetCurrentProcessId();
+    req.baseAddress = base;
+    req.bytesToRead = want;
+    memset(buf, 0, sizeof(buf));
+    if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_READ_VIRTUAL_MEMORY,
+                         &req, (DWORD)sizeof(req),
+                         buf, (DWORD)sizeof(buf), &returned, NULL)) {
+        fprintf(stderr, "READ_VIRTUAL_MEMORY 失败：win32=%lu\n",
+                GetLastError());
+        return 1;
+    }
+    if (rsp->bytesRead == 0UL) {
+        /*
+         * 虚拟读拒绝这一段时改走物理路径。
+         *
+         * GDT 所在的那页在某些配置下拿不到虚拟读（实测 readStatus=4
+         * COPY_FAILED / 0xC00000A0），但同一页经 TRANSLATE 拿到物理地址后用
+         * OP_READ_PHYSICAL 读得到 —— 走的是 EPT 侧的窗口，不受那条路径的限制。
+         */
+        KSWORD_ARK_HVM_MEMORY_REQUEST mreq;
+        KSWORD_ARK_HVM_MEMORY_RESPONSE mrsp;
+        unsigned long long physical = 0ULL;
+
+        memset(&mreq, 0, sizeof(mreq));
+        memset(&mrsp, 0, sizeof(mrsp));
+        mreq.version = KSWORD_ARK_HVM_MEMORY_PROTOCOL_VERSION;
+        mreq.size = (unsigned long)sizeof(mreq);
+        mreq.operation = KSWORD_ARK_HVM_MEMORY_OP_TRANSLATE;
+        mreq.flags = KSWORD_ARK_HVM_MEMORY_FLAG_UI_CONFIRMED;
+        mreq.confirmationToken = KSWORD_ARK_HVM_MEMORY_CONFIRMATION_TOKEN;
+        mreq.address = base;
+        mreq.length = 1UL;
+        if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_MEMORY,
+                             &mreq, (DWORD)sizeof(mreq),
+                             &mrsp, (DWORD)sizeof(mrsp), &returned, NULL) ||
+            mrsp.status != KSWORD_ARK_HVM_MEMORY_STATUS_OK) {
+            fprintf(stderr,
+                    "虚拟读失败(readStatus=%lu copyStatus=0x%08lX)，"
+                    "TRANSLATE 也失败：status=%lu win32=%lu\n",
+                    rsp->readStatus, (unsigned long)rsp->copyStatus,
+                    mrsp.status, GetLastError());
+            return 1;
+        }
+        physical = mrsp.physicalAddress;
+        memset(&mreq, 0, sizeof(mreq));
+        memset(&mrsp, 0, sizeof(mrsp));
+        mreq.version = KSWORD_ARK_HVM_MEMORY_PROTOCOL_VERSION;
+        mreq.size = (unsigned long)sizeof(mreq);
+        mreq.operation = KSWORD_ARK_HVM_MEMORY_OP_READ_PHYSICAL;
+        mreq.flags = KSWORD_ARK_HVM_MEMORY_FLAG_UI_CONFIRMED;
+        mreq.confirmationToken = KSWORD_ARK_HVM_MEMORY_CONFIRMATION_TOKEN;
+        mreq.address = physical;
+        mreq.length = want;
+        if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_MEMORY,
+                             &mreq, (DWORD)sizeof(mreq),
+                             &mrsp, (DWORD)sizeof(mrsp), &returned, NULL) ||
+            mrsp.status != KSWORD_ARK_HVM_MEMORY_STATUS_OK) {
+            fprintf(stderr, "OP_READ_PHYSICAL 失败：status=%lu win32=%lu\n",
+                    mrsp.status, GetLastError());
+            return 1;
+        }
+        if (mrsp.bytesTransferred < want) { want = mrsp.bytesTransferred; }
+        memcpy(rsp->data, mrsp.data, want);
+        rsp->bytesRead = want;
+    }
+    if (asJson) {
+        printf("{\"kind\":\"gdt-dump\",\"cpu\":%d,\"base\":\"0x%016llX\","
+               "\"limit\":\"0x%04X\",\"bytes\":%lu,\"data\":\"",
+               cpu, base, limit, rsp->bytesRead);
+        for (i = 0UL; i < rsp->bytesRead; ++i) {
+            printf("%02X", rsp->data[i]);
+        }
+        printf("\"}\n");
+    } else {
+        printf("=== GDT（CPU %d）===\n", cpu);
+        printf("  base=0x%016llX  limit=0x%04X  读回 %lu 字节\n",
+               base, limit, rsp->bytesRead);
+        /* 一个描述符 8 字节，按项打印才看得出是哪一项变了。 */
+        for (i = 0UL; i + 8UL <= rsp->bytesRead; i += 8UL) {
+            printf("  [%02lX] %02X %02X %02X %02X %02X %02X %02X %02X\n",
+                   i,
+                   rsp->data[i + 0], rsp->data[i + 1],
+                   rsp->data[i + 2], rsp->data[i + 3],
+                   rsp->data[i + 4], rsp->data[i + 5],
+                   rsp->data[i + 6], rsp->data[i + 7]);
+        }
+    }
+    return 0;
+}
+
 static int DoAclProbe(HANDLE rw, int asJson)
 {
     static const struct { const char* name; DWORD code; } probes[] = {
@@ -5018,6 +5190,10 @@ int main(int argc, char** argv)
         rc = DoNestedProbe(h, asJson, 1);
     } else if (strcmp(cmd, "nested-ad-refusal") == 0) {
         rc = DoNestedProbeAdRefusal(h, asJson);
+    } else if (strcmp(cmd, "gdt-dump") == 0) {
+        /* 第二个参数是处理器号，缺省 0。GDT 是每处理器的。 */
+        int cpu = (argc > 2) ? atoi(argv[2]) : 0;
+        rc = DoGdtDump(h, asJson, cpu);
     } else if (strcmp(cmd, "msr-log") == 0) {
         /* 第二个参数是 MSR 号（十六进制，可带 0x）。 */
         unsigned long msr = (argc > 2)
