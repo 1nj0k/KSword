@@ -98,6 +98,19 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONGLONG L2IoExitsReflected;
     /* Count port exits from L2 serviced here. */
     ULONGLONG L2IoExitsHandled;
+    /*
+     * Cycles spent merging bitmaps, and cycles spent entering L2 overall.
+     *
+     * Two numbers rather than one, because the merge's cost only means
+     * something as a share.  "Three page copies per entry" is a shape, not a
+     * measurement, and deciding whether to cache from a shape is guessing.
+     *
+     * Read with RDTSC, which under an outer hypervisor is whatever it chose to
+     * expose - fine for a ratio taken within one entry, not for absolute time.
+     * Both accumulate, so the caller divides by L2EntryCount for the average.
+     */
+    ULONGLONG L2MergeCycles;
+    ULONGLONG L2EntryCycles;
     /* Preserve the L1 VMXON-region physical address. */
     ULONGLONG VmxonRegion;
     /* Preserve the current L1 vmcs12 physical address. */

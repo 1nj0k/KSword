@@ -683,6 +683,12 @@ KswordARKHvmNestedProbeExecute(
                         vcpu->Nested.L2BitmapMergeComplete ? 1UL : 0UL;
                     response->l1UsesMsrBitmap =
                         vcpu->Nested.L2MsrFilterFromL1 ? 1UL : 0UL;
+                    response->l2MergeCycles =
+                        vcpu->Nested.L2MergeCycles;
+                    response->l2EntryCycles =
+                        vcpu->Nested.L2EntryCycles;
+                    response->l2EntryCount =
+                        vcpu->Nested.L2EntryCount;
                     response->status =
                         KSWORD_ARK_HVM_NESTED_PROBE_STATUS_OK;
                     /* Return without a second VMXOFF. */

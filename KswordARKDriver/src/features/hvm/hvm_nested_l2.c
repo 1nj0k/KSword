@@ -190,6 +190,14 @@ KswordARKHvmNestedL2Enter(
     KSW_HVM_NESTED_VCPU* nested = &Context->Nested;
     KSW_HVM_VMCS12_STATE* vmcs12 = &nested->Vmcs12;
     KSW_HVM_NESTED_BITMAP_MERGE bitmaps = { 0 };
+    /*
+     * Stamped first and consumed immediately before the launch.
+     *
+     * It bounds everything this function does to get L2 running, which is what
+     * the merge's cost has to be compared against.  Taking it later would
+     * flatter the merge by excluding work that is equally on the entry path.
+     */
+    const ULONGLONG entryStart = __rdtsc();
     ULONGLONG hostFields[RTL_NUMBER_OF(g_KswordL2HostFields)] = { 0 };
     ULONGLONG vmcs01Physical = 0ULL;
     ULONGLONG vmcs02Physical = 0ULL;
@@ -266,7 +274,12 @@ KswordARKHvmNestedL2Enter(
      * runs while vmcs01 is still current - a refusal can then return with
      * nothing disturbed instead of leaving vmcs02 half-written.
      */
-    KswordARKHvmNestedBitmapMerge(Context, primary, &bitmaps);
+    {
+        const ULONGLONG mergeStart = __rdtsc();
+
+        KswordARKHvmNestedBitmapMerge(Context, primary, &bitmaps);
+        nested->L2MergeCycles += (__rdtsc() - mergeStart);
+    }
     if (bitmaps.MsrBitmapPhysical == 0ULL ||
         bitmaps.IoBitmapAPhysical == 0ULL ||
         bitmaps.IoBitmapBPhysical == 0ULL) {
@@ -417,6 +430,8 @@ KswordARKHvmNestedL2Enter(
         KswordARKHvmNestedL2Read(KSW_L2_IO_BITMAP_A);
     nested->LastEntryIoBitmapB =
         KswordARKHvmNestedL2Read(KSW_L2_IO_BITMAP_B);
+    /* Close the entry measurement before the instruction that does not return. */
+    nested->L2EntryCycles += (__rdtsc() - entryStart);
     /* Publish that this processor is about to be running L2. */
     nested->InL2 = TRUE;
     nested->State = KSWORD_ARK_HVM_NESTED_STATE_L2_ACTIVE;

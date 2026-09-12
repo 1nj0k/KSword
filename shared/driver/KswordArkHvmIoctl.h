@@ -2040,6 +2040,18 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
      * 还是 EPT 指针本身写坏了。
      */
     unsigned long l1RequestedAccessedDirty;
+    /*
+     * 位图合并的周期数，与整个 L2 进入的周期数。
+     *
+     * 两个数一起报，因为合并的代价只有作为**份额**才有意义。"每次进入拷三页"
+     * 是个形状不是测量值，照着形状决定要不要加缓存就是在赌。
+     *
+     * 都是累计值，除以 l2EntryCount 得均值。RDTSC 在外层 hypervisor 下是它愿意
+     * 暴露的那个值 —— 同一次进入内取比例够用，当绝对时间不行。
+     */
+    unsigned long long l2MergeCycles;
+    unsigned long long l2EntryCycles;
+    unsigned long long l2EntryCount;
 } KSWORD_ARK_HVM_NESTED_PROBE_ROW;
 
 typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE

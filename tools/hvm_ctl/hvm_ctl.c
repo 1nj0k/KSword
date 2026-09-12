@@ -4506,6 +4506,20 @@ static void PrintNestedProbeRow(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
     printf("    MSR/IO 归属  MSR 投递 %llu / 就地 %llu   IO 投递 %llu / 就地 %llu\n",
            r->l2MsrExitsReflected, r->l2MsrExitsHandled,
            r->l2IoExitsReflected, r->l2IoExitsHandled);
+    /*
+     * 合并代价只以份额报，不报孤立的周期数。
+     *
+     * 单看"合并花了 N 个周期"决定不了要不要加缓存 —— 那要看它在一次 L2 进入里
+     * 占多大。份额很小就说明缓存省不下什么，再快也是白做。
+     */
+    if (r->l2EntryCount != 0ULL && r->l2EntryCycles != 0ULL) {
+        printf("    合并代价     %llu / %llu 周期 = **%.1f%%** 的 L2 进入成本"
+               "（%llu 次进入，均摊 %llu 周期/次）\n",
+               r->l2MergeCycles, r->l2EntryCycles,
+               (double)r->l2MergeCycles * 100.0 / (double)r->l2EntryCycles,
+               r->l2EntryCount,
+               r->l2MergeCycles / r->l2EntryCount);
+    }
     printf("    派发 %llu 条   嵌套状态 %lu   末次错误号 %lu   => %s\n",
            r->dispatchedInstructions, r->nestedStateAfter,
            r->lastInstructionError,
