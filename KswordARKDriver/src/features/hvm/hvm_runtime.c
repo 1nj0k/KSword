@@ -2533,6 +2533,16 @@ KswordARKHvmQuery(
         g_KswordHvm.NestedImplementation;
     Response->evmcsImplementation =
         g_KswordHvm.EvmcsImplementation;
+    /*
+     * Ask the window module rather than keep a cached count.
+     *
+     * The windows are reserved at driver initialization and released at
+     * unload, so a cached copy could only ever be wrong in one direction -
+     * stale-high after a release - and that is precisely the direction that
+     * makes a missing window look present.
+     */
+    Response->physWindowReadyCount =
+        KswordARKHvmPhysWindowReadyCount();
     Response->eptRuleCount =
         g_KswordHvm.EptRuleCount;
     KswordARKHvmEventGetCounts(

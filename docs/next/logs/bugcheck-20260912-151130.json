@@ -1,0 +1,156 @@
+{
+  "vm": "KSword-HVM-Target",
+  "stampUtc": "2026-09-12T19:11:30.8268663Z",
+  "crashCfg": {
+    "CrashDumpEnabled": 2,
+    "AutoReboot": 1,
+    "DumpFile": "C:\\Windows\\MEMORY.DMP",
+    "MinidumpDir": "C:\\Windows\\Minidump",
+    "PagefileMB": 8192,
+    "PSComputerName": "KSword-HVM-Target",
+    "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+    "PSShowComputerName": true
+  },
+  "bugchecks": [
+    {
+      "time": "2026-09-12T15:10:10.1258853-04:00",
+      "id": 1001,
+      "text": "The computer has rebooted from a bugcheck.  The bugcheck was: 0x0000000a (0x00007fffffff0000, 0x0000000000000002, 0x0000000000000000, 0xfffff8066b2308a9). A dump was saved in: C:\\Windows\\MEMORY.DMP. Report Id: 226ea6e5-4011-45c3-9a71-08a1c4542411.",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "time": "2026-09-12T13:48:12.7515574-04:00",
+      "id": 1001,
+      "text": "The computer has rebooted from a bugcheck.  The bugcheck was: 0x0000000a (0x00007fffffff0000, 0x0000000000000002, 0x0000000000000000, 0xfffff8062ea308a9). A dump was saved in: C:\\Windows\\MEMORY.DMP. Report Id: baefc496-1ee8-44ef-b6ca-629505ca9c39.",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "time": "2026-09-12T13:43:47.5357426-04:00",
+      "id": 1001,
+      "text": "The computer has rebooted from a bugcheck.  The bugcheck was: 0x0000000a (0x00007fffffff0000, 0x0000000000000002, 0x0000000000000000, 0xfffff8020ae308a9). A dump was saved in: C:\\Windows\\MEMORY.DMP. Report Id: 5a8d0262-7be4-4f55-a3b9-ba42be91eabb.",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "time": "2026-09-09T17:16:25.3150416-04:00",
+      "id": 1001,
+      "text": "The computer has rebooted from a bugcheck.  The bugcheck was: 0x00000050 (0xfffff7ab00332229, 0x0000000000000000, 0xfffff8035ad2b6bf, 0x0000000000000002). A dump was saved in: C:\\Windows\\MEMORY.DMP. Report Id: b6d459e9-48ca-443f-ae7a-e02bdfa9e488.",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "time": "2026-09-08T17:10:12.7231975-04:00",
+      "id": 1001,
+      "text": "The computer has rebooted from a bugcheck.  The bugcheck was: 0x000000ef (0xffffdc8b872bc080, 0x0000000000000000, 0xffffdc8b85c10080, 0x0000000000000000). A dump was saved in: C:\\Windows\\MEMORY.DMP. Report Id: 4ff3838a-cca4-4871-8ff4-aa48cab65a88.",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "time": "2026-09-12T15:09:59.8307469-04:00",
+      "id": 41,
+      "text": "BugcheckCode=10 (0xA)  P1=0x7fffffff0000 P2=0x2 P3=0x0 P4=0xfffff8066b2308a9",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "time": "2026-09-12T14:05:00.7299723-04:00",
+      "id": 41,
+      "text": "BugcheckCode=0 (0x0)  P1=0x0 P2=0x0 P3=0x0 P4=0x0",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "time": "2026-09-12T13:48:03.3147157-04:00",
+      "id": 41,
+      "text": "BugcheckCode=10 (0xA)  P1=0x7fffffff0000 P2=0x2 P3=0x0 P4=0xfffff8062ea308a9",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "time": "2026-09-12T13:43:39.5173401-04:00",
+      "id": 41,
+      "text": "BugcheckCode=10 (0xA)  P1=0x7fffffff0000 P2=0x2 P3=0x0 P4=0xfffff8020ae308a9",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "time": "2026-09-12T13:39:14.4773236-04:00",
+      "id": 41,
+      "text": "BugcheckCode=0 (0x0)  P1=0x0 P2=0x0 P3=0x0 P4=0x0",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    }
+  ],
+  "dumps": [
+    {
+      "path": "C:\\Windows\\Minidump\\090826-6218-01.dmp",
+      "mb": 0.84,
+      "utc": "2026-09-08T21:10:12.7120155Z",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "path": "C:\\Windows\\Minidump\\090926-5546-01.dmp",
+      "mb": 0.41,
+      "utc": "2026-09-09T21:16:25.3027955Z",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "path": "C:\\Windows\\Minidump\\091226-3625-01.dmp",
+      "mb": 0.57,
+      "utc": "2026-09-12T17:48:12.7466516Z",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "path": "C:\\Windows\\Minidump\\091226-3937-01.dmp",
+      "mb": 0.42,
+      "utc": "2026-09-12T17:43:47.5252151Z",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "path": "C:\\Windows\\Minidump\\091226-4921-01.dmp",
+      "mb": 0.69,
+      "utc": "2026-09-12T19:10:10.1227509Z",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "path": "C:\\Windows\\MEMORY.DMP",
+      "mb": 602.28,
+      "utc": "2026-09-12T19:10:03.1727808Z",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    },
+    {
+      "path": "C:\\Windows\\MEMORY.prev.DMP",
+      "mb": 342.62,
+      "utc": "2026-09-07T09:01:47.8564316Z",
+      "PSComputerName": "KSword-HVM-Target",
+      "RunspaceId": "7d9e44c2-39f1-4659-b8d8-724034c7759e",
+      "PSShowComputerName": true
+    }
+  ],
+  "copied": "C:\\Users\\Felix\\CLionProjects\\KSword\\docs\\next\\logs\\bugcheck-20260912-151130-091226-4921-01.dmp",
+  "analyzed": "C:\\Users\\Felix\\CLionProjects\\KSword\\docs\\next\\logs\\bugcheck-20260912-151130-analyze.txt"
+}

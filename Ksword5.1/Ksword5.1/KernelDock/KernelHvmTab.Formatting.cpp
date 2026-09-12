@@ -96,10 +96,7 @@ QString KernelHvmTab::buildDetail(
             "\nNested 实现：%7；状态 %8"
             "\neVMCS 实现：%9；状态 %10；版本 %11；标志 0x%12"
             "\nVP-assist MSR：0x%13"
-            "\n\n实验边界：Nested 的 VMXON/VMCS 操作数解码、完整 vmcs02、"
-            "L2 exit reflection 与 shadow EPT 尚未完成；当前仅提供失败语义的"
-            " partial 指令分派。eVMCS 仅按 TLFS 探测来宾分区能力与所有权，"
-            "未接管 VP-assist 页面或 clean fields，因此二者均不得解释为 active。Resident 的 capability-only 表示生命周期保护已就绪；只有全 CPU rendezvous 成功后才报告 active。"))
+            "\n\n实验边界：Nested 的 VMXON/VMCS 操作数解码、vmcs02 合并、L2 exit reflection 与 shadow EPT 都已实现并在硬件上验证过；尚未实现的是 L2 的 I/O 与 MSR 位图路由（全部退出后投递给 L1）和 EPT 的 accessed/dirty 位传播。eVMCS 仍只按 TLFS 探测来宾分区能力与所有权，未接管 VP-assist 页面或 clean fields，因此不得解释为 active。Resident 的 capability-only 表示生命周期保护已就绪；只有全 CPU rendezvous 成功后才报告 active。"))
         .arg(implementationText(
             response.residentImplementation))
         .arg(response.residentProcessorCount)
@@ -266,6 +263,56 @@ QString KernelHvmTab::implementationText(
         return kernelText(
             "kernel.hvm.implementation.unknown",
             QStringLiteral("unknown"));
+    }
+}
+
+/*
+ * 把嵌套阶梯的当前档位翻成人话。
+ *
+ * 这个字段一直在查询响应里，界面上却一个字都没有——嵌套跑到哪一步，只有
+ * 命令行工具看得见。于是"我按了启动常驻，嵌套到底开没开"这个问题，在图形
+ * 界面里**无法回答**，而它恰恰是这个功能唯一需要天天看的读数。
+ *
+ * 阶梯是单调的，但**不是持久的**：L2_ACTIVE 只在 L2 真正在跑的那一瞬成立，
+ * 下一次 VMXOFF 就退回 DISPATCH_READY。所以一次轮询读到 DISPATCH_READY，
+ * 说明的是"这一刻没在跑 L2"，不是"从来没跑起来过"——后者要看那个单调计数。
+ */
+QString KernelHvmTab::nestedStateText(const std::uint32_t state)
+{
+    switch (state)
+    {
+    case KSWORD_ARK_HVM_NESTED_STATE_DISABLED:
+        return kernelText(
+            "kernel.hvm.nested.state.disabled",
+            QStringLiteral("未启用（VMX 指令注 #UD）"));
+    case KSWORD_ARK_HVM_NESTED_STATE_CAPABILITY_ONLY:
+        return kernelText(
+            "kernel.hvm.nested.state.capability_only",
+            QStringLiteral("仅能力位"));
+    case KSWORD_ARK_HVM_NESTED_STATE_DISPATCH_READY:
+        return kernelText(
+            "kernel.hvm.nested.state.dispatch_ready",
+            QStringLiteral("已就绪，等待来宾 VMXON"));
+    case KSWORD_ARK_HVM_NESTED_STATE_L1_VMXON:
+        return kernelText(
+            "kernel.hvm.nested.state.l1_vmxon",
+            QStringLiteral("来宾已 VMXON"));
+    case KSWORD_ARK_HVM_NESTED_STATE_VMCS12_CURRENT:
+        return kernelText(
+            "kernel.hvm.nested.state.vmcs12_current",
+            QStringLiteral("来宾已载入 vmcs12"));
+    case KSWORD_ARK_HVM_NESTED_STATE_L2_PARTIAL:
+        return kernelText(
+            "kernel.hvm.nested.state.l2_partial",
+            QStringLiteral("L2 进入被拒"));
+    case KSWORD_ARK_HVM_NESTED_STATE_L2_ACTIVE:
+        return kernelText(
+            "kernel.hvm.nested.state.l2_active",
+            QStringLiteral("L2 正在运行"));
+    default:
+        return kernelText(
+            "kernel.hvm.nested.state.unknown",
+            QStringLiteral("未知"));
     }
 }
 

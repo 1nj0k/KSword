@@ -642,6 +642,22 @@ typedef struct _KSWORD_ARK_QUERY_HVM_RESPONSE
     unsigned long eptImplementation;
     unsigned long nestedImplementation;
     unsigned long evmcsImplementation;
+    /*
+     * 有多少个处理器备好了退出安全的物理映射窗口。
+     *
+     * 单独报，因为窗口的准备期自检**在外面完全看不见**：过不了只会让需要它的
+     * 路径（嵌套 L2 进入、影子 EPT 合成）安静地拒绝，而状态位、实现成熟度、
+     * 处理器计数没有一个会变。一个验不出结果的自检和没有自检，从读数上分不开。
+     *
+     * 比对的分母**不是 processorCount**。那是"已准备的处理器数"，准备资源之前
+     * 是 0；而窗口在**驱动初始化**时就建好了。拿它当分母，刚加载完驱动去读会得
+     * 到「N / 0」，把一台好机器报成坏的。
+     *
+     * 正确的分母是调用方自己查到的逻辑处理器数（GetActiveProcessorCount /
+     * KeQueryActiveProcessorCountEx，ALL_PROCESSOR_GROUPS）：相等才说明每个核
+     * 都有。驱动初始化之前本字段为零。
+     */
+    unsigned long physWindowReadyCount;
     unsigned long eptRuleCount;
     unsigned long eventCount;
     /*

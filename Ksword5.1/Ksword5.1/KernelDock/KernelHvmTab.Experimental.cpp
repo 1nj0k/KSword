@@ -2,6 +2,8 @@
 
 #include "KernelDock.h"
 #include "../ArkDriverClient/ArkDriverClient.h"
+// isNestedDispatchEnabled：嵌套派发开关的权威来源，与虚拟化菜单同一处。
+#include "../UI/KvmControl.h"
 
 #include <QInputDialog>
 #include <QLabel>
@@ -63,20 +65,70 @@ namespace
 
 void KernelHvmTab::startResident()
 {
-    const bool nestedPartial =
+    /*
+     * 嵌套派发这一位取自开关，不再由"当前在哪个功能页"决定。
+     *
+     * 原先它是 `m_featureArea == FeatureArea::NestedVmx`，于是这一位既没有开
+     * 关也关不掉：站在嵌套页上按启动，必然暴露嵌套派发；站在别的页上按，必然
+     * 不暴露——哪怕用户明确想要。而 ALLOW_NESTED 在同一条请求上已经改成读
+     * ksword::kvm::isNestedAllowed() 了，两位取自两个来源，正是上一轮修掉的
+     * 那类分歧的剩下一半。
+     *
+     * 开关关着时**不静默**：确认框里说清这次不会暴露嵌套，以及开关在哪。反过
+     * 来更重要——在非嵌套页上开着开关按启动，确认框同样会说它会暴露。哪边都
+     * 不靠"你在哪一页"来猜。
+     */
+    const bool nestedDispatch = ksword::kvm::isNestedDispatchEnabled();
+    const bool onNestedPage =
         m_featureArea == FeatureArea::NestedVmx;
+    /*
+     * 互斥要在这里也拦一次。
+     *
+     * 这条路径现在会同时发出私有 EPT 和嵌套派发两位（前者刚补上，见
+     * runControlAsync），于是驱动的 STATUS_INVALID_PARAMETER 变得够得着了。
+     * 而那条回答只说"请求不合法"，不指是哪一位——菜单那侧已经按方向各拦了
+     * 一次，这一侧不拦的话就留下一个绕过去的入口。
+     */
+    if (nestedDispatch && ksword::kvm::isLocalEptEnabled())
+    {
+        QMessageBox::warning(
+            this,
+            kernelText(
+                "kernel.hvm.resident.start.nested_local_ept_title",
+                QStringLiteral("嵌套派发与私有 EPT 互斥")),
+            kernelText(
+                "kernel.hvm.resident.start.nested_local_ept_body",
+                QStringLiteral("嵌套要把来宾的 EPT 层次和我们的合成成一个 EPT 指针，而私有 EPT 要给每个处理器各自一份层次，那会让这个合成变成处理器相关的。驱动会拒绝同时请求。请在虚拟化菜单里关掉其中一个。")));
+        return;
+    }
     QString warning = kernelText(
         "kernel.hvm.resident.start.warning",
         QStringLiteral(
-            "常驻 VMM 会让所有已准备 CPU 进入 VMX non-root，并持续拦截受支持的退出。驱动仅在 GenuineIntel、VT-x/EPT/INVEPT 完整、无现有 Hypervisor、全 CPU 自检通过且电源/处理器拓扑/驱动卸载保护均已就绪时允许启动；AMD 及其它非 Intel 设备会被驱动端拒绝。驻留期间驱动不可卸载；S3/S4/Modern Standby 等离开 S0 的转换会先同步停止所有 VCPU。VMX/EPT 或回滚异常仍可能导致蓝屏或必须重启。"));
-    if (nestedPartial)
+            "常驻 VMM 会让所有已准备 CPU 进入 VMX non-root，并持续拦截受支持的退出。驱动仅在 GenuineIntel、VT-x/EPT/INVEPT 完整、全 CPU 自检通过且电源/处理器拓扑/驱动卸载保护均已就绪时允许启动；AMD 及其它非 Intel 设备会被驱动端拒绝。外层已有 Hypervisor（嵌套或开着 VBS）不再是阻碍，但请求必须带上嵌套允许位——虚拟化菜单里的那个开关就是它。驻留期间驱动不可卸载；S3/S4/Modern Standby 等离开 S0 的转换会先同步停止所有 VCPU。VMX/EPT 或回滚异常仍可能导致蓝屏或必须重启。"));
+    if (nestedDispatch)
     {
+        /*
+         * 这段文案原先写着"仅实现 VMfail 失败语义；不会成功 VMXON、不会进入
+         * L2，也没有完整 vmcs02/exit reflection/shadow EPT" —— 四条现在全是假的。
+         *
+         * 在一个危险操作的确认框里说错，比不说更糟：它让人以为勾上这一项只是
+         * 打开一个恒定失败的桩，于是不会去想"底下真的会跑起一个我看不见的
+         * 客户机"。
+         */
         warning += kernelText(
-            "kernel.hvm.resident.start.nested_partial",
-            QStringLiteral(
-                "\n本次还会暴露实验性 Nested VMX 指令分派，但仅实现 VMfail "
-                "失败语义；不会成功 VMXON、不会进入 L2，也没有完整 vmcs02/"
-                "exit reflection/shadow EPT。"));
+            "kernel.hvm.resident.start.nested_enabled",
+            QStringLiteral("\n\n本次还会打开 Nested VMX 指令分派。它不再是失败桩：来宾里的驱动可以真的 VMXON、维护自己的 vmcs12、并把 L2 跑起来——退出会先落到我们手上，按所有权决定自己处理还是投递给它；L1 要 EPT 时由影子层次（EPT01 ∘ EPT12）按需合成。也就是说，勾上它之后，这台机器上任何 ring 0 代码都能在你底下起一台虚拟机。关掉它时 VMX 指令会被注 #UD——在 CPUID 不报 VMX 的前提下那是架构正确的行为。尚未实现：L2 的 I/O 与 MSR 位图路由（全部退出并投递给 L1，正确但慢）、EPT 的 accessed/dirty 位传播（如实报不支持）。"));
+    }
+    else if (onNestedPage)
+    {
+        /*
+         * 站在嵌套页上而开关关着，是这里唯一会让人误判的组合：页面名字说的
+         * 是嵌套，按下去却不暴露嵌套。所以这一句必须出现——不出现的话，用户
+         * 事后只会看到状态面板报"未启用"，而没有任何东西说明那是他自己没开。
+         */
+        warning += kernelText(
+            "kernel.hvm.resident.start.nested_disabled",
+            QStringLiteral("\n\n注意：本次不会暴露 Nested VMX 指令分派，来宾执行 VMX 指令仍会被注 #UD。这一页的名字是嵌套，但开关不在这里——在虚拟化菜单的「允许来宾嵌套（我们作为宿主）」。"));
     }
     if (confirmTyped(
             warning,
@@ -86,7 +138,7 @@ void KernelHvmTab::startResident()
             KSWORD_ARK_HVM_CONTROL_START_RESIDENT,
             true,
             true,
-            nestedPartial,
+            nestedDispatch,
             false);
     }
 }
@@ -109,14 +161,21 @@ void KernelHvmTab::stopResident()
 
 void KernelHvmTab::validateNested()
 {
+    /*
+     * 和 startResident 里那段一样的过期文案，同一种错法。
+     *
+     * 原文写着"VMXON、VMPTRLD、VMREAD/VMWRITE 等需要操作数解码的指令当前返回
+     * VMfailInvalid；VMLAUNCH/VMRESUME 不会运行 L2"，三条现在都不成立——这三
+     * 类指令都能成功，L2 也真的会跑。按原文的说法，用户会以为自己点的只是一次
+     * 能力探测，结果点出来的是一条真能跑起客户机的路径。
+     *
+     * 这条命令本身的定位没变：它只探测并报告，不会让常驻带上嵌套派发。那一位
+     * 由虚拟化菜单里的开关决定，与这里无关。
+     */
     const QString warning = kernelText(
         "kernel.hvm.nested.validate.warning",
-        QStringLiteral(
-            "该检查只启用并报告实验性 Nested VMX partial 分派。VMXON、"
-            "VMPTRLD、VMREAD/VMWRITE 等需要操作数解码的指令当前返回 "
-            "VMfailInvalid；VMLAUNCH/VMRESUME 不会运行 L2。继续仅表示接受"
-            "能力探测和失败语义验证，不代表存在可用嵌套虚拟机。"));
-    if (confirmTyped(warning, kernelText("kernel.hvm.nested.validate", QStringLiteral("验证 Nested VMX（partial）"))))
+        QStringLiteral("该检查探测并报告 Nested VMX 分派能力。分派本身已经不是失败桩：VMXON、VMPTRLD、VMREAD/VMWRITE 都能成功，VMLAUNCH 会真的把 L2 跑起来，退出反射与影子 EPT（EPT01 ∘ EPT12）都已实现。但这条命令只做探测，不会让常驻带上嵌套派发——那一位由虚拟化菜单的「允许来宾嵌套（我们作为宿主）」决定。尚未实现的部分：L2 的 I/O 与 MSR 位图路由、EPT 的 accessed/dirty 位传播。"));
+    if (confirmTyped(warning, kernelText("kernel.hvm.nested.validate", QStringLiteral("验证 Nested VMX 分派能力"))))
     {
         runControlAsync(
             KSWORD_ARK_HVM_CONTROL_VALIDATE_NESTED,

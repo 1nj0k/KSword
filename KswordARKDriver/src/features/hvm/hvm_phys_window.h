@@ -91,6 +91,19 @@ KswordARKHvmPhysWindowShutdownAll(
     );
 
 /*
+ * Return how many processors have a verified window.
+ *
+ * Exists so the preparation self-test has a readout.  Without one, a window
+ * that failed to demonstrate itself is indistinguishable from a working one
+ * until something that needs it refuses - and that refusal names the feature,
+ * not the window.
+ */
+ULONG
+KswordARKHvmPhysWindowReadyCount(
+    VOID
+    );
+
+/*
  * Return one processor's window, or NULL when that processor has none.
  *
  * The returned pointer is stable for the driver's lifetime, so a caller may

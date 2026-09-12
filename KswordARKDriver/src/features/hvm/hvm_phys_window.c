@@ -308,6 +308,23 @@ KswordARKHvmPhysWindowShutdownAll(
     g_KswordHvmPhysWindowCount = 0UL;
 }
 
+ULONG
+KswordARKHvmPhysWindowReadyCount(
+    VOID
+    )
+{
+    ULONG ready = 0UL;
+    ULONG index = 0UL;
+
+    for (index = 0UL; index < g_KswordHvmPhysWindowCount; ++index) {
+        if (g_KswordHvmPhysWindows[index].Prepared) {
+            ready += 1UL;
+        }
+    }
+    /* Report how many windows passed preparation and its self-test. */
+    return ready;
+}
+
 KSW_HVM_PHYS_WINDOW*
 KswordARKHvmPhysWindowForProcessor(
     _In_ ULONG ProcessorIndex
@@ -518,6 +535,15 @@ KswordARKHvmPhysWindowShutdownAll(
     VOID
     )
 {
+}
+
+ULONG
+KswordARKHvmPhysWindowReadyCount(
+    VOID
+    )
+{
+    /* Report that no window exists on every non-x64 build. */
+    return 0UL;
 }
 
 KSW_HVM_PHYS_WINDOW*

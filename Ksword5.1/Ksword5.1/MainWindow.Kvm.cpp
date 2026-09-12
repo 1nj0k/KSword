@@ -657,6 +657,69 @@ void MainWindow::showKvmMenu(const QPoint& globalPosition)
         refreshKvmStatusAsync();
     });
 
+    /*
+     * 嵌套派发：与上面那一项**方向相反**，所以紧挨着放。
+     *
+     * 上面说的是「允许我们跑在别人底下」，我们是来宾；这一项说的是「允许别人
+     * 跑在我们底下」，我们是宿主。两句话都叫"嵌套"，但打开的是完全不同的东西。
+     *
+     * 在这一项存在之前，整个嵌套派发只有 KernelDock 的嵌套页能打开，而那一页
+     * 把它绑死在"当前在哪个功能页"上——也就是说没有开关，去到那一页就必然开，
+     * 不去那一页就必然不开。一项已经端到端验证过的能力，在主界面上不存在。
+     */
+    QAction* const nestedDispatchAction = menu.addAction(
+        ks::i18n::sourceText(QStringLiteral("允许来宾嵌套（我们作为宿主）")));
+    nestedDispatchAction->setCheckable(true);
+    nestedDispatchAction->setChecked(ksword::kvm::isNestedDispatchEnabled());
+    nestedDispatchAction->setToolTip(ks::i18n::sourceText(QStringLiteral("与上一项方向相反：上一项是让我们跑在别人底下，这一项是让别人跑在我们底下。打开后，来宾里的 ring 0 代码可以真的 VMXON、维护自己的 vmcs12、把 L2 跑起来；退出先落到我们手上，L1 要 EPT 时由影子层次按需合成。关着时 VMX 指令被注 #UD——对已经在跑的 VMware / VirtualBox / WSL2 来说就是「虚拟机打不开了」。与每处理器私有 EPT 互斥。本开关不持久化。")));
+    connect(nestedDispatchAction, &QAction::triggered, this,
+            [this, nestedDispatchAction](const bool checked) {
+        if (!checked)
+        {
+            ksword::kvm::setNestedDispatchEnabled(false);
+            applyKvmButtonState();
+            refreshKvmStatusAsync();
+            return;
+        }
+        // 互斥是驱动的硬拒绝：嵌套要把来宾的 EPT 层次和我们的合成成一个指针，
+        // 而私有根会让这个合成变成处理器相关的。同时请求会被判
+        // STATUS_INVALID_PARAMETER，而那条回答只说"请求不合法"，不指哪一位。
+        if (ksword::kvm::isLocalEptEnabled())
+        {
+            nestedDispatchAction->setChecked(false);
+            QMessageBox::warning(
+                this,
+                ks::i18n::sourceText(QStringLiteral("嵌套派发与私有 EPT 互斥")),
+                ks::i18n::sourceText(QStringLiteral("嵌套要把来宾的 EPT 层次和我们的合成成一个 EPT 指针，而私有 EPT 要给每个处理器各自一份层次，那会让这个合成变成处理器相关的。驱动会拒绝同时请求。请先关掉「每处理器私有 EPT」。")));
+            return;
+        }
+        // 写权限前置：放开一个来宾可见的、能改变它自己执行环境的能力，
+        // 与 VMFUNC 同类。
+        if (!ksword::kvm::isWriteAccessEnabled())
+        {
+            nestedDispatchAction->setChecked(false);
+            QMessageBox::warning(
+                this,
+                ks::i18n::sourceText(QStringLiteral("嵌套派发需要先开启写权限")),
+                ks::i18n::sourceText(QStringLiteral("打开嵌套派发会让来宾获得一整套它原本拿不到的 VMX 能力，属于写权限门管辖的范围。请先打开「允许 R-1 写操作」。")));
+            return;
+        }
+        const bool confirmed = ks::ui::confirmDestructiveAction(
+            this,
+            QStringLiteral("KvmEnableNestedDispatch"),
+            ks::i18n::sourceText(QStringLiteral("允许来宾嵌套")),
+            ks::i18n::sourceText(QStringLiteral("本机全部 ring 0 代码")),
+            ks::i18n::sourceText(QStringLiteral("打开后，这台机器上任何 ring 0 代码都能在我们底下起一台虚拟机，而我们只看得到它产生的退出，看不到它在里面跑什么。影子 EPT 层次按需合成，每核要额外占用若干页。尚未实现 L2 的 I/O 与 MSR 位图路由，因此来宾的每一次 I/O 和 MSR 访问都会退出一次再投递给它——正确，但慢。")));
+        if (!confirmed)
+        {
+            nestedDispatchAction->setChecked(false);
+            return;
+        }
+        ksword::kvm::setNestedDispatchEnabled(true);
+        applyKvmButtonState();
+        refreshKvmStatusAsync();
+    });
+
     menu.addSeparator();
 
     // 私有 EPT：不放开能力，只是让已有的视图/授权在多核上安全，所以不走
@@ -695,6 +758,23 @@ void MainWindow::showKvmMenu(const QPoint& globalPosition)
                 this,
                 ks::i18n::sourceText(QStringLiteral("私有 EPT 与 VMFUNC 互斥")),
                 ks::i18n::sourceText(QStringLiteral("VMFUNC 要求所有处理器共享同一份 EPTP list，而私有 EPT 要给每个处理器各自一份层次，驱动会拒绝同时请求。请先关掉「武装 VMFUNC / EPTP 切换」。")));
+            return;
+        }
+        /*
+         * 与嵌套派发也互斥，方向必须补齐。
+         *
+         * 这一项自己的说明文字里早就写着"与 VMFUNC、嵌套 VMX 互斥"，但嵌套那
+         * 一半从来没有对应的代码——因为在嵌套派发有开关之前，这个组合攒不出来。
+         * 现在攒得出来了，缺的这一半就得补上，否则从这一侧进来的人照样会撞上
+         * 那句不指出哪一位的"请求不合法"。
+         */
+        if (checked && ksword::kvm::isNestedDispatchEnabled())
+        {
+            localEptAction->setChecked(false);
+            QMessageBox::warning(
+                this,
+                ks::i18n::sourceText(QStringLiteral("私有 EPT 与嵌套派发互斥")),
+                ks::i18n::sourceText(QStringLiteral("嵌套要把来宾的 EPT 层次和我们的合成成一个 EPT 指针，而私有 EPT 要给每个处理器各自一份层次，那会让这个合成变成处理器相关的。驱动会拒绝同时请求。请先关掉「允许来宾嵌套（我们作为宿主）」。")));
             return;
         }
         ksword::kvm::setLocalEptEnabled(checked);

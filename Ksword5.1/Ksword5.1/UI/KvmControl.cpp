@@ -31,6 +31,9 @@ namespace ksword::kvm
         std::atomic<bool> g_veEnabled{ false };
         // VMFUNC 同样不落设置键：武装一个 guest 可见的接口不该跨会话残留。
         std::atomic<bool> g_vmFuncEnabled{ false };
+        // 嵌套派发也不落设置键。它打开的是「任何 ring 0 代码都能在我们底下开
+        // 一台虚拟机」，跨会话残留下来的话，下一次开机没人记得它开着。
+        std::atomic<bool> g_nestedDispatchEnabled{ false };
 
         // 进程内缓存：按钮刷新是高频路径，不能每次都读注册表。
         // -1 表示尚未从 QSettings 读入。
@@ -518,6 +521,27 @@ namespace ksword::kvm
 
     KvmCommandResult startResident(const unsigned long expectedGeneration)
     {
+        /*
+         * 互斥组合在发出去之前就挡住，而不是让驱动去拒。
+         *
+         * 驱动那边确实会拒（KswordARKHvmResidentStart 对
+         * ENABLE_LOCAL_EPT + ENABLE_NESTED_VMX 返回 STATUS_INVALID_PARAMETER），
+         * 但那条路径的回答是"请求不合法"，**不说是哪一位**。两个开关都在菜单
+         * 里、都勾得上、勾完按启动就报一句看不出所以然的错——这正是之前
+         * force=true 把「释放资源」搞成恒定失败时那一模一样的错法，靠症状查不
+         * 出真因，只能拿白名单逐条对。
+         *
+         * 真因是结构性的：嵌套要从来宾的层次和我们的层次合成出一个 EPT 指针，
+         * 而每处理器私有根会让这个合成变成处理器相关的。所以这里说清楚是哪两
+         * 个开关冲突、为什么冲突。
+         */
+        if (isLocalEptEnabled() && isNestedDispatchEnabled())
+        {
+            KvmCommandResult conflict;
+            conflict.ok = false;
+            conflict.message = ks::i18n::sourceText(QStringLiteral("「每处理器私有 EPT」与「嵌套派发」不能同时开启。嵌套要把来宾的 EPT 层次和我们的合成成一个指针，而私有根会让这个合成变成处理器相关的。请先关掉其中一个。"));
+            return conflict;
+        }
         // 常驻启动前必须先准备并自检，否则驱动会直接拒绝。
         const auto prepared = ensurePrepared();
         if (!prepared.ok)
@@ -537,7 +561,13 @@ namespace ksword::kvm
             isNestedAllowed(),
             true,
             true,
-            false,
+            /*
+             * enableNestedVmx 原先硬写成 false，于是**这条路径永远拿不到嵌套
+             * 派发**。整个嵌套功能只有 KernelDock 的那一页能打开，而那一页又
+             * 把它绑死在"当前在哪个功能页"上，没有开关可言。一项已经端到端
+             * 验证过的能力，在主界面上不存在。
+             */
+            isNestedDispatchEnabled(),
             false,
             isVeEnabled(),
             isVmFuncEnabled(),
@@ -679,6 +709,20 @@ namespace ksword::kvm
         QSettings settings;
         settings.setValue(kNestedAllowedSettingKey, allowed);
         g_nestedAllowedCache.store(allowed ? 1 : 0, std::memory_order_relaxed);
+    }
+
+    bool isNestedDispatchEnabled()
+    {
+        // 进程内状态，刻意不落 QSettings：重启客户端即回到关闭。
+        // 它武装的是一项能力（别人能在我们底下开虚拟机），不是一条描述环境的
+        // 事实（我们跑在别人底下），所以跟 #VE / VMFUNC 同类而不是跟
+        // isNestedAllowed 同类。
+        return g_nestedDispatchEnabled.load(std::memory_order_relaxed);
+    }
+
+    void setNestedDispatchEnabled(const bool enabled)
+    {
+        g_nestedDispatchEnabled.store(enabled, std::memory_order_relaxed);
     }
 
     bool isVeEnabled()

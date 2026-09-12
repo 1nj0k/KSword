@@ -1,0 +1,38 @@
+{
+  "schema": "ksword-unattended-suite/1",
+  "startedUtc": "2026-09-12T19:13:36.9549869Z",
+  "vmName": "KSword-HVM-Target",
+  "soakMs": 30000,
+  "driverSha256": "ADF21682C29B992EFE76516562A1A24568BBE5AB4A37AC1B69FF62B9A8E8B505",
+  "stages": [
+    {
+      "name": "前置:驱动哈希",
+      "utc": "2026-09-12T19:13:36.9760400Z",
+      "outcome": "PASS",
+      "note": "ADF21682C29B992EFE76516562A1A24568BBE5AB4A37AC1B69FF62B9A8E8B505"
+    },
+    {
+      "name": "前置:驱动已签名",
+      "utc": "2026-09-12T19:13:37.0770469Z",
+      "outcome": "PASS",
+      "note": "UnknownError"
+    },
+    {
+      "name": "前置:清理检查点",
+      "utc": "2026-09-12T19:13:39.8764533Z",
+      "outcome": "PASS",
+      "note": "清理后剩余 59.8 GB（clean-install 保留）"
+    },
+    {
+      "name": "离线断言+工具",
+      "utc": "2026-09-12T19:14:51.9010422Z",
+      "outcome": "PASS",
+      "note": "4000 条断言 + 两个 /MT 工具"
+    }
+  ],
+  "verdict": "ERROR",
+  "notes": [
+    "套件异常：旧驱动仍在运行，无法覆盖 .sys。可能有句柄未释放；重启 guest 后再试。"
+  ],
+  "finishedUtc": "2026-09-12T19:15:10.4221927Z"
+}

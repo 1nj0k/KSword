@@ -164,6 +164,25 @@ namespace ksword::kvm
     bool isNestedAllowed();
     void setNestedAllowed(bool allowed);
 
+    // 嵌套派发开关（ENABLE_NESTED_VMX）：
+    // - 【和上面那个是反方向的两件事，别混】isNestedAllowed 说的是「允许我们
+    //   跑在别人底下」，我们是来宾；这一个说的是「允许别人跑在我们底下」，我们
+    //   是宿主。共用一个开关会让打开前者的人在毫不知情的情况下打开后者；
+    // - 打开后，来宾里的 ring 0 代码可以真的 VMXON、维护自己的 vmcs12、把 L2
+    //   跑起来。退出先落到我们手上，按所有权决定自己处理还是投递给 L1；L1 要
+    //   EPT 时由影子层次（EPT01 ∘ EPT12）按需合成。这**不是**失败桩；
+    // - 关闭时 VMX 指令被注 #UD。在 CPUID 不报 VMX 的前提下那是架构正确的行为，
+    //   但对已经在跑的 VMware / VirtualBox / WSL2 来说就是"虚拟机打不开了"，
+    //   而且没有任何提示指向我们——所以状态面板要报那个单调的拒绝计数；
+    // - 与 ENABLE_LOCAL_EPT 互斥：嵌套要从来宾的层次和我们的层次合成出一个 EPT
+    //   指针，每处理器私有根会让这个合成变成处理器相关的，驱动直接判
+    //   STATUS_INVALID_PARAMETER。两个都开的请求会整条被拒，而理由只说"请求
+    //   不合法"，不指是哪一位——所以要在发出去之前就挡住；
+    // - 【不持久化】：与 #VE / VMFUNC 同类，武装的是一项能力而不是描述环境的
+    //   事实，每次启动客户端都必须重新打开。
+    bool isNestedDispatchEnabled();
+    void setNestedDispatchEnabled(bool enabled);
+
     // #VE 开关（把 EPT violation 反射成 guest 的 #VE，向量 20）：
     // - 这里的 guest 就是正在跑的这台 Windows。它的 IDT[20] 没有 #VE 处理程序，
     //   真投递一次就是 #GP -> #DF -> triple fault，机器当场断电式重启；

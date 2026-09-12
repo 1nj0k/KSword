@@ -1020,6 +1020,24 @@ static int DoQuery(HANDLE h, int asJson)
            ImplementationName(rsp.eptImplementation),
            ImplementationName(rsp.nestedImplementation),
            ImplementationName(rsp.evmcsImplementation));
+    /*
+     * 退出安全物理窗口的就绪数。
+     *
+     * 它的准备期自检在别处一个字都看不见：过不了只会让嵌套 L2 进入和影子 EPT
+     * 合成安静地拒绝，而状态位、成熟度、处理器计数没有一个会变——一个验不出
+     * 结果的自检和根本没有自检，从读数上分不开。
+     *
+     * 拿 processorCount 比对不对：窗口是在**驱动初始化**时建的，不是准备资源
+     * 时建的，所以什么都还没准备的时候它也应该是满的。这里改用逻辑处理器数做
+     * 分母，否则刚加载完驱动去看，会看到 "N / 0" 这种读不出意思的东西。
+     */
+    printf("  退出安全窗口 : %lu / %lu 个处理器已就绪%s\n",
+           rsp.physWindowReadyCount,
+           (unsigned long)GetActiveProcessorCount(ALL_PROCESSOR_GROUPS),
+           rsp.physWindowReadyCount >=
+                   (unsigned long)GetActiveProcessorCount(ALL_PROCESSOR_GROUPS)
+               ? ""
+               : "  **不足：缺窗口的核上嵌套 L2 与影子 EPT 会被拒**");
     PrintFeatureBits("  ", rsp.featureFlags);
     PrintEptVpidCapability("  ", rsp.vmxEptVpidCapabilities);
     printf("  EPT          : pointer=0x%016llX pages=%lu mappedRam=%llu MiB\n",

@@ -82,6 +82,7 @@ private:
     static QString featureText(std::uint64_t flags);
     static QString stateText(std::uint32_t flags);
     static QString implementationText(std::uint32_t implementation);
+    static QString nestedStateText(std::uint32_t state);
     static QString ntStatusText(long status);
     static QString fixedAscii(const char* text, int capacity);
 

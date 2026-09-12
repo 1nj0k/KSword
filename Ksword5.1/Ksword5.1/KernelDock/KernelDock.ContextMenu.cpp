@@ -82,7 +82,7 @@ namespace
             dialog->setWindowTitle(
                 kernelText(
                     "kernel.hvm.dialog.nested",
-                    QStringLiteral("内核虚拟化 - Nested VMX（partial）")));
+                    QStringLiteral("内核虚拟化 - Nested VMX")));
             break;
         case KernelHvmTab::FeatureArea::Evmcs:
             dialog->setWindowTitle(
@@ -231,8 +231,10 @@ void KernelDock::showObjectNamespaceContextMenu(const QPoint& localPosition)
             QStringLiteral("虚拟化")));
     QAction* eptAction = virtualizationMenu->addAction(
         QStringLiteral("EPT"));
+    // "(partial)" 拿掉：vmcs02 合并、退出反射与影子 EPT 都已实现并验证过，
+    // 留着这个后缀会让人以为点进去的是个探测桩。eVMCS 那一项保留，它确实还是。
     QAction* nestedVmxAction = virtualizationMenu->addAction(
-        QStringLiteral("Nested VMX (partial)"));
+        QStringLiteral("Nested VMX"));
     QAction* evmcsAction = virtualizationMenu->addAction(
         QStringLiteral("Hyper-V eVMCS (partial)"));
 

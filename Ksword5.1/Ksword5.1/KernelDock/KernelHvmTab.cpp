@@ -248,14 +248,19 @@ void KernelHvmTab::initializeUi()
     }
     else if (m_featureArea == FeatureArea::NestedVmx)
     {
+        /*
+         * 标签用的键与 validateNested() 里确认框标题的是同一个，两处的兜底
+         * 文案必须逐字一致——不一致的话，同一个键会因为哪一处先取而显示出两
+         * 种名字，而这种差异只在没有词条时才暴露。
+         */
         m_featureActionButton->setText(
             kernelText(
                 "kernel.hvm.nested.validate",
-                QStringLiteral("验证 Nested VMX（partial）")));
+                QStringLiteral("验证 Nested VMX 分派能力")));
         m_featureActionButton->setToolTip(
             kernelText(
                 "kernel.hvm.nested.validate.tooltip",
-                QStringLiteral("仅为实验性 partial 指令分派：vmcs12/vmcs02、L2 退出反射与 shadow EPT 尚未完整，不会声称也不允许成功运行 L2。")));
+                QStringLiteral("探测并报告嵌套 VMX 分派能力。分派本身已完整：vmcs12/vmcs02 合并、L2 退出反射与影子 EPT 都已实现并在硬件上验证过。这个按钮只做探测，不会让常驻带上嵌套派发——那一位在虚拟化菜单的「允许来宾嵌套（我们作为宿主）」。")));
         connect(
             m_featureActionButton,
             &QPushButton::clicked,
@@ -489,6 +494,55 @@ void KernelHvmTab::applyStatus(ksword::ark::HvmStatusResult result)
             .arg(m_snapshot.droppedEventCount)
             .arg(m_snapshot.overwrittenEventCount)
             .arg(m_snapshot.publishedEventCount));
+    /*
+     * 物理映射窗口单独占一行，并且和处理器数摆在一起。
+     *
+     * 它的准备期自检在别处**完全看不见**：过不了只会让嵌套 L2 进入和影子 EPT
+     * 合成安静地拒绝，而状态位、成熟度、处理器计数没有一个会变。所以这里要的
+     * 不是"有没有"，而是"够不够"——少于处理器数就意味着某些核上那些功能会拒绝，
+     * 而拒绝的理由会指向功能本身，不会指向窗口。
+     *
+     * 分母**不能用 m_snapshot.processorCount**。那是驱动的"已准备处理器数"，
+     * 在准备资源之前是 0，而窗口是在**驱动初始化**时就建好的。拿它当分母，
+     * 刚加载完驱动去看这一行会显示「2 / 0 —— 不足」：分子对、分母错、结论
+     * 正好反了，而且反的方向是把一台好机器报成坏的。
+     */
+    const unsigned long logicalProcessorCount =
+        static_cast<unsigned long>(
+            ::GetActiveProcessorCount(ALL_PROCESSOR_GROUPS));
+    m_summaryLabel->setText(
+        m_summaryLabel->text() +
+        ((logicalProcessorCount != 0UL &&
+          m_snapshot.physWindowReadyCount >= logicalProcessorCount)
+            ? kernelText(
+                  "kernel.hvm.summary.phys_window_ok",
+                  QStringLiteral("\n退出安全物理窗口：%1 / %2 个处理器已就绪"))
+                  .arg(m_snapshot.physWindowReadyCount)
+                  .arg(logicalProcessorCount)
+            : kernelText(
+                  "kernel.hvm.summary.phys_window_short",
+                  QStringLiteral("\n退出安全物理窗口：%1 / %2 个处理器已就绪 —— **不足**。缺窗口的处理器上，嵌套 L2 进入与影子 EPT 合成会被拒绝，而报出来的理由会指向那些功能，不会指向窗口。"))
+                  .arg(m_snapshot.physWindowReadyCount)
+                  .arg(logicalProcessorCount)));
+    /*
+     * 嵌套单独占一行，而且**必须两个数一起报**。
+     *
+     * nestedState 是瞬时的：L2_ACTIVE 只在 L2 真正在跑的那一瞬成立，来宾一
+     * VMXOFF 就退回 DISPATCH_READY。两秒一次的轮询几乎永远抓不到那一瞬，所以
+     * 单看它会得出"L2 从来没跑起来过"的结论——而这个结论是错的。
+     *
+     * 拒绝计数是单调的，补的正是这个缺口：它非零，就说明这台机器上确实有别的
+     * hypervisor（VMware / VirtualBox / WSL2 / Docker）想在我们底下开虚拟机
+     * 并且被我们挡了。用户那边的症状是"我的虚拟机打不开了"，而在此之前没有
+     * 任何读数指向我们。
+     */
+    m_summaryLabel->setText(
+        m_summaryLabel->text() +
+        kernelText(
+            "kernel.hvm.summary.nested",
+            QStringLiteral("\n嵌套：%1（瞬时读数）　L2 进入被拒累计：%2"))
+            .arg(nestedStateText(m_snapshot.nestedState))
+            .arg(m_snapshot.nestedL2LaunchRefusedCount));
 
     const int rowCount = static_cast<int>(std::min<unsigned long>(
         m_snapshot.processorCount,
@@ -625,6 +679,46 @@ void KernelHvmTab::runControlAsync(
         (ksword::kvm::isNestedAllowed() ||
          (command == KSWORD_ARK_HVM_CONTROL_VALIDATE_NESTED &&
           (enableNestedVmx || enableEvmcs)));
+    /*
+     * 后端选择必须跟着同一个权威来源，而且只能在 PREPARE 上给。
+     *
+     * 这两位**只有 PREPARE 会读** —— 驱动在准备资源时就把后端定下来，之后
+     * START_RESIDENT 查的是那个已经定好的值。而这里原先一位都不给（controlHvm
+     * 后面几个参数有默认值 false），于是从这个页面准备出来的资源永远是默认的
+     * MTF 后端。
+     *
+     * 后果只在缺 MTF 的机器上显形 —— 也就是**每一台嵌套或开着 VBS 的机器**：
+     * 分离视图只有 EPTP 切换后端装得上，从这里准备就永远装不上，而界面上没有
+     * 任何东西说明这件事。同一个开关在虚拟化菜单那条路上是生效的，两条路对同一
+     * 设置给出不同结果。
+     *
+     * 白名单是硬的：多给一位，整条请求会被判 INVALID_REQUEST 而不是忽略那一位。
+     */
+    const bool prepareBackendFlags =
+        (command == KSWORD_ARK_HVM_CONTROL_PREPARE);
+    /*
+     * 私有 EPT 这一位要发两次：PREPARE 一次，START_RESIDENT 再一次。
+     *
+     * 这不是冗余。PREPARE 置的是 LocalEptArmed（层次备好了没有），而驱动真正
+     * 决定这次常驻用不用私有层次的判据是
+     * `(Flags & ENABLE_LOCAL_EPT) && Runtime->LocalEptArmed` —— 两个都要。
+     * 只在 PREPARE 发的话，前半永远为假，于是常驻永远跑在共享层次上。
+     *
+     * 症状与上面 PREPARE 那段同形：多核机器上 EPT 视图装不上，而界面上没有
+     * 任何东西说明原因——开关是勾着的，准备也成功了。白名单确认过
+     * START_RESIDENT 收这一位（hvm_runtime.c 的 allowedFlags）。
+     *
+     * EPTP 切换后端刻意不跟：START_RESIDENT 的白名单里**没有**
+     * ENABLE_EPTP_SWITCH，多发一位整条请求会被判 INVALID_REQUEST。后端在
+     * 准备时就选定，常驻启动查的是那个已经定好的值。
+     */
+    const bool residentFeatureFlags =
+        (command == KSWORD_ARK_HVM_CONTROL_START_RESIDENT);
+    const bool enableLocalEpt =
+        (prepareBackendFlags || residentFeatureFlags) &&
+        ksword::kvm::isLocalEptEnabled();
+    const bool enableEptpSwitch =
+        prepareBackendFlags && ksword::kvm::isEptpSwitchEnabled();
     QPointer<KernelHvmTab> safeThis(this);
     std::thread([
         safeThis,
@@ -634,7 +728,9 @@ void KernelHvmTab::runControlAsync(
         allowNested,
         enableEptEvents,
         enableNestedVmx,
-        enableEvmcs]() {
+        enableEvmcs,
+        enableLocalEpt,
+        enableEptpSwitch]() {
         ksword::ark::DriverClient client;
         auto control = client.controlHvm(
             command,
@@ -644,7 +740,11 @@ void KernelHvmTab::runControlAsync(
             true,
             enableEptEvents,
             enableNestedVmx,
-            enableEvmcs);
+            enableEvmcs,
+            false,
+            false,
+            enableLocalEpt,
+            enableEptpSwitch);
         auto status = client.queryHvmStatus();
         if (safeThis == nullptr)
         {
@@ -807,8 +907,7 @@ void KernelHvmTab::launchControlledGuest()
             "这是实际的高风险 VM-entry：驱动会在一个已自检 CPU 上进入 VMX root，装载完整 VMCS，真实执行 VMLAUNCH。"
             "一次性来宾只执行 VMCALL；VM-exit 入口会采集退出原因、qualification、RIP/RSP 和 VM-instruction error，随后 VMCLEAR、VMXOFF 并恢复 CR4。"
             "任何 VMCS、EPT、固件、Hyper-V/VBS、嵌套虚拟化或处理器实现异常都可能导致系统不稳定、蓝屏或必须重启。"
-            "请先保存全部工作；若检测到上层 Hypervisor，只能从 Nested VMX（partial）入口"
-            "并在硬件确实暴露 VMX 时尝试，但这不代表能够运行 L2。"));
+            "请先保存全部工作；外层已有 Hypervisor 时，请求必须带上嵌套允许位，也就是虚拟化菜单里的「允许嵌套运行（作为 L1）」，并且外层确实把 VMX 暴露进来。"));
     if (confirmTyped(warning, kernelText("kernel.hvm.launch", QStringLiteral("启动一次性来宾"))))
     {
         runControlAsync(
@@ -1020,9 +1119,65 @@ void KernelHvmTab::updateButtons()
         }
         if (!residentAvailable)
         {
+            /*
+             * 逐位说出**实际**挡住它的那一条，而不是背一串可能的原因。
+             *
+             * 原先这里是一句静态文案，列的原因与上面 residentAvailable 的计算
+             * 早已对不上：它说"外层已有 Hypervisor"会挡，而代码根本没查那一位
+             * ——而且那句话本身也过时了，常驻在外层 hypervisor 底下现在是能跑的
+             * （请求带 ALLOW_NESTED）；反过来它漏掉了代码确实在查的
+             * UNLOAD_GUARD_ARMED。
+             *
+             * 从同一组标志位推导，两边就不可能再各说各话。
+             */
+            const auto blockedBy = [&](const unsigned long long flag) {
+                return (m_snapshot.stateFlags & flag) != 0ULL;
+            };
+            if (m_snapshot.residentImplementation ==
+                    KSWORD_ARK_HVM_IMPLEMENTATION_UNSUPPORTED ||
+                (m_snapshot.featureFlags &
+                    (KSWORD_ARK_HVM_FEATURE_RESIDENT_VMM |
+                     KSWORD_ARK_HVM_FEATURE_RESIDENT_LIFECYCLE_GUARDED)) !=
+                    (KSWORD_ARK_HVM_FEATURE_RESIDENT_VMM |
+                     KSWORD_ARK_HVM_FEATURE_RESIDENT_LIFECYCLE_GUARDED))
+            {
+                return kernelText(
+                    "kernel.hvm.gate.resident_unsupported",
+                    QStringLiteral("灰掉的原因：驱动没有报告可用的常驻 VMM 后端（能力位或实现成熟度不足）。"));
+            }
+            if (blockedBy(KSWORD_ARK_HVM_STATE_EPT_TRUNCATED))
+            {
+                return kernelText(
+                    "kernel.hvm.gate.resident_ept_truncated",
+                    QStringLiteral("灰掉的原因：EPT 恒等映射被截断，常驻启动会看不到部分物理内存。"));
+            }
+            if (blockedBy(KSWORD_ARK_HVM_STATE_POWER_TRANSITION_PENDING))
+            {
+                return kernelText(
+                    "kernel.hvm.gate.resident_power_pending",
+                    QStringLiteral("灰掉的原因：有一次电源状态转换正在进行，此时启动常驻会在挂起路径上失去处理器。"));
+            }
+            if (blockedBy(KSWORD_ARK_HVM_STATE_FAULTED))
+            {
+                return kernelText(
+                    "kernel.hvm.gate.resident_faulted",
+                    QStringLiteral("灰掉的原因：运行时处于 FAULTED。先“清除故障”，而它要求常驻已经停下。"));
+            }
+            if (blockedBy(KSWORD_ARK_HVM_STATE_ROLLBACK_REQUIRED))
+            {
+                return kernelText(
+                    "kernel.hvm.gate.resident_rollback",
+                    QStringLiteral("灰掉的原因：上一次操作留下了待回滚的状态，必须先“释放后端”。"));
+            }
+            if (blockedBy(KSWORD_ARK_HVM_STATE_UNLOAD_GUARD_ARMED))
+            {
+                return kernelText(
+                    "kernel.hvm.gate.resident_unload_guard",
+                    QStringLiteral("灰掉的原因：驱动卸载保护已武装 —— 有一次卸载正在等待常驻退出。"));
+            }
             return kernelText(
                 "kernel.hvm.gate.resident_unavailable",
-                QStringLiteral("灰掉的原因：驱动侧常驻硬件门未通过。非 Intel、外层已有 Hypervisor、EPT 截断、电源转换挂起、故障或待回滚，任何一条都会让这一项一直灰着。"));
+                QStringLiteral("灰掉的原因：驱动侧常驻硬件门未通过，但没有单独一条状态位能解释它。请把“刷新”后的状态位报出来。"));
         }
         if (!selfTestPassed)
         {
