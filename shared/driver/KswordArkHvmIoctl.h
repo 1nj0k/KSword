@@ -722,7 +722,17 @@ typedef struct _KSWORD_ARK_QUERY_HVM_RESPONSE
     unsigned long nestedState;
     unsigned long evmcsState;
     unsigned short evmcsVersion;
-    unsigned short reservedVersion;
+    /*
+     * 最后一次 L2 进入被哪一处拒绝，1..7；0 表示没有拒绝过。
+     *
+     * 占用原先的 reservedVersion 槽位（没有任何读写方），结构大小不变。
+     *
+     * 存在的理由：七处不同的条件返回**同一个**架构错误码 7（invalid control
+     * field），因为架构只有这一个号码、没有第二个字段说明是哪一处。L1 拿到 7、
+     * 报出 7，从外面看七种情况一模一样 —— 而唯一真正需要知道的就是哪一处。
+     * 编号的含义见 hvm_nested_l2.c 里各个赋值点。
+     */
+    unsigned short nestedLastRefusalSite;
     unsigned long evmcsFlags;
     /*
      * 无进展熔断跳闸的次数，整机累计。

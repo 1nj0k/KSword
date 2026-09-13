@@ -268,6 +268,7 @@ KswordARKHvmNestedL2Enter(
      */
     if (nested->L2FuseTripped) {
         /* Return the refusal L1 can read a number from. */
+        nested->L2LastRefusalSite = 1UL;
         return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
     }
     /* Refuse an entry whose launch state does not match the instruction. */
@@ -284,6 +285,7 @@ KswordARKHvmNestedL2Enter(
         Context->Resource->Vmcs02Virtual == NULL ||
         Context->PhysWindow == NULL) {
         /* Return the exact unavailable-resource error. */
+        nested->L2LastRefusalSite = 2UL;
         return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
     }
     vmcs01Physical = (ULONGLONG)Context->Resource->VmcsPhysical.QuadPart;
@@ -316,6 +318,7 @@ KswordARKHvmNestedL2Enter(
                 &nested->ShadowEpt,
                 value))) {
             /* Return the exact unusable-EPT-pointer error. */
+            nested->L2LastRefusalSite = 3UL;
             return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
         }
         eptPointer = nested->ShadowEpt.ComposedEptPointer;
@@ -328,6 +331,7 @@ KswordARKHvmNestedL2Enter(
     /* Refuse rather than enter L2 without a hierarchy to run it under. */
     if (eptPointer == 0ULL) {
         /* Return the exact unusable-EPT-pointer error. */
+        nested->L2LastRefusalSite = 4UL;
         return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
     }
     /*
@@ -352,6 +356,7 @@ KswordARKHvmNestedL2Enter(
          * everything - but a missing *page* is not, because there is nothing
          * to point the control at.
          */
+        nested->L2LastRefusalSite = 5UL;
         return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
     }
     /*
@@ -371,8 +376,25 @@ KswordARKHvmNestedL2Enter(
             vmcs12,
             KSW_L2_VIRTUAL_APIC_ADDRESS,
             &virtualApic);
-        if (virtualApic == 0ULL || (virtualApic & 0xFFFULL) != 0ULL) {
-            /* Return the exact unusable-virtual-APIC-page error. */
+        /*
+         * Zero and misaligned are split into two sites on purpose.
+         *
+         * They mean opposite things about where the fault is.  Zero is what a
+         * field reads when L1 never wrote it - the cache cannot distinguish
+         * "never written" from "written as zero", and a hypervisor writing zero
+         * here would be pointing its own TPR shadow at physical page zero, so
+         * zero in practice means the write did not reach us.  Misaligned means
+         * the write did reach us and we are reading something wrong.  One
+         * number for both would have left exactly that question open.
+         */
+        if (virtualApic == 0ULL) {
+            /* Return the exact missing-virtual-APIC-page error. */
+            nested->L2LastRefusalSite = 6UL;
+            return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
+        }
+        if ((virtualApic & 0xFFFULL) != 0ULL) {
+            /* Return the exact misaligned-virtual-APIC-page error. */
+            nested->L2LastRefusalSite = 8UL;
             return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
         }
     }
@@ -393,6 +415,7 @@ KswordARKHvmNestedL2Enter(
     /* Load vmcs02 and make every subsequent access address it. */
     if (__vmx_vmptrld(&vmcs02Physical) != 0) {
         /* Return the exact control-field error for an unusable vmcs02. */
+        nested->L2LastRefusalSite = 7UL;
         return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
     }
     /* Host state is always ours, never L1's. */
@@ -694,6 +717,26 @@ KswordARKHvmNestedL2ExitOwner(
         /* Report the refused violation as L1's. */
         return KSW_L2_OWNER_L1;
     }
+    case 1UL:
+        /*
+         * An external interrupt during L2 is L1's, and this one is not allowed
+         * to fall through to the default.
+         *
+         * Every other reason reaches the default and is reflected because
+         * reflecting is the conservative direction - the cost of guessing wrong
+         * is a spurious exit L1 resumes from.  Here the cost is different in
+         * kind.  L1 may set "acknowledge interrupt on exit", and then the
+         * processor has already taken the vector off the interrupt controller
+         * by the time we look at it: nothing will ever re-deliver it.  Handling
+         * such an exit ourselves does not cost L1 an exit, it destroys an
+         * interrupt, and the symptom is a hang with nothing written down.
+         *
+         * We never request external-interrupt exiting for ourselves, so a
+         * reason of one can only exist because L1 asked for it.  Stating that
+         * here rather than leaning on the default is the point: someone adding
+         * a case for their own reasons should have to read this first.
+         */
+        return KSW_L2_OWNER_L1;
     case 18UL:
         /*
          * VMCALL from L2 is L1's.

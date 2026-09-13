@@ -2674,6 +2674,12 @@ KswordARKHvmQuery(
             (volatile LONG*)&g_KswordHvm.NestedL2LaunchRefusedCount,
             0L,
             0L);
+    /* Report which refusal produced the most recent one of those. */
+    Response->nestedLastRefusalSite = (unsigned short)
+        InterlockedCompareExchange(
+            &g_KswordHvm.NestedLastRefusalSite,
+            0L,
+            0L);
     /*
      * Same shape, and durable for the same reason: the per-processor vmcs12
      * pools are released at devirtualization, so an eviction that happened

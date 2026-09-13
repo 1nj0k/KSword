@@ -980,6 +980,31 @@ static HANDLE OpenDevice(void)
  *
  * 不需要驱动句柄：常驻在跑的时候，这条 CPUID 本身就会退出到我们手里。
  */
+/*
+ * Name which of the entry path's refusals stopped the last L2 launch.
+ *
+ * The numbers are assigned in hvm_nested_l2.c at the refusal sites themselves.
+ * They exist because all seven report the same architectural error to L1 —
+ * Intel has one number for "invalid control field" and no field to say which —
+ * so from outside, seven different problems produce one indistinguishable
+ * symptom.
+ */
+static const char* RefusalSiteName(unsigned short site)
+{
+    switch (site) {
+    case 0U: return "没有拒绝过";
+    case 1U: return "熔断已跳闸，拒绝再次进入同一个 L2";
+    case 2U: return "缺资源（vmcs02 页 / 物理窗口）";
+    case 3U: return "L1 的 EPT12 指针不可用（影子层次装不起来）";
+    case 4U: return "没有可用的 EPT 指针";
+    case 5U: return "位图页缺失（MSR / IO 位图合并没产出页）";
+    case 6U: return "TPR shadow 开着但 virtual-APIC 页地址读回来是零（L1 的写没到我们这里）";
+    case 7U: return "vmcs02 的 VMPTRLD 失败";
+    case 8U: return "virtual-APIC 页地址非零但未页对齐（写到了，我们读错了）";
+    default: return "未知编号";
+    }
+}
+
 static int DoCpuidView(int asJson)
 {
     int leaf1[4] = { 0, 0, 0, 0 };
@@ -1092,7 +1117,9 @@ static int DoQuery(HANDLE h, int asJson)
                "\"publishedEventCount\":%llu,"
                "\"nestedL2LaunchRefusedCount\":%lu,"
                "\"nestedVmcs12EvictionCount\":%lu,"
-               "\"nestedFuseTripCount\":%lu",
+               "\"nestedFuseTripCount\":%lu,"
+               "\"nestedLastRefusalSite\":%u,"
+               "\"nestedLastRefusalSiteText\":\"%s\"",
                rsp.generation, rsp.processorCount,
                rsp.preparedProcessorCount, rsp.selfTestPassedProcessorCount,
                rsp.residentProcessorCount,
@@ -1118,7 +1145,9 @@ static int DoQuery(HANDLE h, int asJson)
                rsp.overwrittenEventCount, rsp.publishedEventCount,
                rsp.nestedL2LaunchRefusedCount,
                rsp.nestedVmcs12EvictionCount,
-               rsp.nestedFuseTripCount);
+               rsp.nestedFuseTripCount,
+               (unsigned)rsp.nestedLastRefusalSite,
+               RefusalSiteName(rsp.nestedLastRefusalSite));
         /*
          * 只发非零项，键是退出原因编号。
          *
@@ -1183,6 +1212,9 @@ static int DoQuery(HANDLE h, int asJson)
            (rsp.nestedFuseTripCount != 0UL)
                ? "  **我们停掉过某个 L1 的来宾：它在原地打转**"
                : "");
+    printf("                 末次拒绝原因 : %u = %s\n",
+           (unsigned)rsp.nestedLastRefusalSite,
+           RefusalSiteName(rsp.nestedLastRefusalSite));
     /*
      * 退出安全物理窗口的就绪数。
      *

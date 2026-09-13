@@ -27,6 +27,8 @@ Environment:
 #include "hvm_exit.h"
 /* VMCS access goes through the seam in hvm_vmcs.h, never the raw intrinsic. */
 #include "hvm_vmcs.h"
+/* The evidence ring already retains nested-VMX events; this module writes them. */
+#include "hvm_event.h"
 
 #if defined(_M_AMD64)
 #include <intrin.h>
@@ -893,6 +895,42 @@ KswordARKHvmNestedDispatchVmcsField(
         /* Return the valid failure L1 can read an error number from. */
         return KSW_HVM_VMX_RESULT_FAIL_VALID;
     }
+    /*
+     * Record what L1 configured, when someone asked for the trace.
+     *
+     * The question this answers cannot be answered any other way: a field that
+     * reads back as zero at entry is indistinguishable from a field L1 never
+     * wrote, because the cache has no "never written" state - and the two lead
+     * to opposite conclusions about whose defect it is.  The encoding and the
+     * value go into the evidence ring, which already retains nested-VMX events
+     * as one of its four classes and which hvm_ctl already reads.
+     *
+     * Published unconditionally, and deliberately **not** behind the routine-exit
+     * trace switch.  That was the first attempt and it defeated itself: turning
+     * that switch on writes every ordinary exit to the ring, and one idle guest
+     * produced 309,391 HLT rows that evicted the entire nested trace within the
+     * same run.  Nested VMX is already one of the four classes the ring exists
+     * to retain; a hypervisor's VMWRITEs number in the hundreds while it starts,
+     * against tens of thousands of routine exits per second.
+     */
+    {
+        KSWORD_ARK_HVM_EVENT_ROW row;
+
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_NESTED_VMX;
+        row.exitReason = ExitReason;
+        /* The field L1 named, and the value it put there. */
+        row.qualification = encoding;
+        row.guestPhysicalAddress = value;
+        {
+            SIZE_T rip = 0U;
+
+            if (KswordARKHvmVmcsFieldLoad(KSW_VMCS_GUEST_RIP, &rip) == 0) {
+                row.guestRip = (ULONGLONG)rip;
+            }
+        }
+        KswordARKHvmEventPublish(&row);
+    }
     /* Return the complete success. */
     return KSW_HVM_VMX_RESULT_SUCCEED;
 }
@@ -976,6 +1014,20 @@ KswordARKHvmNestedHandleExit(
             /* Reaching here at all means the entry did not happen. */
             InterlockedIncrement(
                 &Runtime->NestedL2LaunchRefusedCount);
+            /*
+             * Publish which refusal it was, beside the count that says how many.
+             *
+             * Seven conditions inside the entry path return the same
+             * architectural error, because the architecture has exactly one
+             * number for "invalid control field".  The count alone therefore
+             * says a launch was refused and nothing about why - and the site is
+             * the only part anyone can act on.  Published from here rather than
+             * scanned from the per-processor state later, because this is the
+             * one place that already knows an entry was refused.
+             */
+            InterlockedExchange(
+                &Runtime->NestedLastRefusalSite,
+                (LONG)Nested->L2LastRefusalSite);
             Nested->L2LaunchAttempted = TRUE;
             Nested->State =
                 KSWORD_ARK_HVM_NESTED_STATE_L2_PARTIAL;

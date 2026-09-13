@@ -630,6 +630,14 @@ typedef struct _KSW_HVM_RUNTIME
      */
     volatile LONG NestedL2LaunchRefusedCount;
     /*
+     * Which of the entry path's refusals produced the most recent one, 1..7.
+     *
+     * The count beside it says a launch was refused; every one of those seven
+     * conditions reports the same architectural error to L1, so without this
+     * the count is the whole story and it does not name anything actionable.
+     */
+    volatile LONG NestedLastRefusalSite;
+    /*
      * Count vmcs12 dropped because the per-processor pool was full.
      *
      * The only honest readout for "this L1 keeps more VMCSs than we hold".  An

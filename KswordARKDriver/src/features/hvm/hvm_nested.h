@@ -57,6 +57,16 @@ typedef struct _KSW_HVM_NESTED_VCPU
      * dispatch never saw one" produce identical evidence.
      */
     ULONGLONG InvvpidServedCount;
+    /*
+     * Which refusal stopped the last L2 entry, one to seven.
+     *
+     * Seven different conditions return the same architectural error, because
+     * the architecture has one number for "invalid control field" and no way to
+     * say which.  L1 gets that number and reports it; from outside, all seven
+     * look identical, and the only thing anyone actually needs to know is which
+     * one fired.  Zero means no entry has been refused on this processor.
+     */
+    ULONG L2LastRefusalSite;
     /* Publish whether nested instruction dispatch is enabled. */
     BOOLEAN Enabled;
     /* Publish whether L1 executed a valid VMXON transition. */

@@ -555,9 +555,23 @@ KswordArkHvmIsVmxCapabilityMsr(
  *   bit 20 保存 guest EFER -> 0x2806 同上
  *   bit 21 装载 host EFER  -> 0x2C02 同上
  * 清掉的：12 PERF_GLOBAL_CTRL（0x2808 **不在**任何表里）、22 抢占计时器
- * （0x482E 同样不在）、15 退出时应答中断（改变退出语义，我们不模拟）。
+ * （0x482E 同样不在）。
+ *
+ * bit 15（退出时应答中断）曾以"改变退出语义，我们不模拟"为由清掉。实际不需要模拟：
+ * 置位时处理器**自己**去应答中断控制器并把向量写进 0x4404，而 0x4404 与 0x4406 在
+ * 反射时本来就逐字段写进 vmcs12 —— 向量一直是带给 L1 的，缺的只是这个宣告。
+ * VMware Workstation 17.6 点名要它（`True VM-Exit Controls: Acknowledge interrupt
+ * on exit`），是它四项缺件里的最后一项。
+ *
+ * 这一位的危险不在语义而在**路由**：被应答的中断已经从控制器上取走了，谁都不再会
+ * 重新投递它，所以这个退出**必须**到达 L1。保证它的是三件事，缺一不可：
+ *   1. 我们自己从不请求外部中断退出，所以 reason 1 只可能因为 L1 要了才发生；
+ *   2. 我们自己的退出控制里没有 bit 15，vmcs02 里的这一位只会来自 vmcs12；
+ *   3. 退出归属里 reason 1 被**显式**判给 L1（不是靠 default 兜底）——
+ *      见 hvm_nested_l2.c，那里写明了为什么这一条不能跟着默认走。
+ * 三条里任何一条被后来的改动破坏，症状都是丢中断导致的静默挂死。
  */
-#define KSWORD_ARK_HVM_VMX_EXIT_ALLOWED 0x003C0204UL
+#define KSWORD_ARK_HVM_VMX_EXIT_ALLOWED 0x003C8204UL
 
 /*
  * VM-entry 控制里允许宣告的位。
