@@ -22,6 +22,7 @@
     { "name": "T timeline",          "minAssertions": 381 },
     { "name": "I image integrity",   "minAssertions": 395 },
     { "name": "M memory evidence",   "minAssertions": 199 },
+    { "name": "J injection survey",  "minAssertions": 450 },
     { "name": "HVM ept switch",      "minAssertions": 467 },
     { "name": "HOOK patch compose",  "minAssertions": 182 }
   ]

@@ -510,6 +510,7 @@ int wmain() {
     failures += RunTimelineTests();
     failures += RunImageIntegrityTests();
     failures += RunMemoryEvidenceTests();
+    failures += RunInjectionSurveyTests();
     failures += RunHvmEptSwitchTests();
     failures += RunHookPatchComposeTests();
 

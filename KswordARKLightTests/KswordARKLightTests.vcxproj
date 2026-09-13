@@ -70,6 +70,8 @@
     <ClCompile Include="..\shared\evidence\PeImageMap.cpp" />
     <ClCompile Include="..\shared\evidence\ImageDiff.cpp" />
     <ClCompile Include="MemoryEvidenceTests.cpp" />
+    <ClCompile Include="InjectionSurveyTests.cpp" />
+    <ClCompile Include="..\shared\evidence\InjectionSurvey.cpp" />
     <ClCompile Include="HvmEptSwitchTests.cpp" />
     <ClCompile Include="HookPatchComposeTests.cpp" />
     <ClCompile Include="..\shared\evidence\HookPatchCompose.cpp" />
@@ -109,6 +111,7 @@
     <ClInclude Include="..\shared\evidence\HookPatchCompose.h" />
     <ClInclude Include="..\shared\evidence\PageTableWalk.h" />
     <ClInclude Include="..\shared\evidence\MemoryRegionEvidence.h" />
+    <ClInclude Include="..\shared\evidence\InjectionSurvey.h" />
     <ClInclude Include="..\shared\evidence\EvidenceEnvelope.h" />
     <ClInclude Include="..\shared\evidence\EvidenceJson.h" />
     <ClInclude Include="..\shared\evidence\LiveNavigation.h" />

@@ -25,11 +25,13 @@
     <ClCompile Include="..\shared\evidence\PeImageMap.cpp"><Filter>Production\Evidence</Filter></ClCompile>
     <ClCompile Include="..\shared\evidence\ImageDiff.cpp"><Filter>Production\Evidence</Filter></ClCompile>
     <ClCompile Include="MemoryEvidenceTests.cpp"><Filter>Tests</Filter></ClCompile>
+    <ClCompile Include="InjectionSurveyTests.cpp"><Filter>Tests</Filter></ClCompile>
     <ClCompile Include="HvmEptSwitchTests.cpp"><Filter>Tests</Filter></ClCompile>
     <ClCompile Include="HookPatchComposeTests.cpp"><Filter>Tests</Filter></ClCompile>
     <ClCompile Include="..\shared\evidence\HookPatchCompose.cpp"><Filter>Production\Evidence</Filter></ClCompile>
     <ClCompile Include="..\shared\evidence\PageTableWalk.cpp"><Filter>Production\Evidence</Filter></ClCompile>
     <ClCompile Include="..\shared\evidence\MemoryRegionEvidence.cpp"><Filter>Production\Evidence</Filter></ClCompile>
+    <ClCompile Include="..\shared\evidence\InjectionSurvey.cpp"><Filter>Production\Evidence</Filter></ClCompile>
     <ClCompile Include="..\shared\evidence\CrossViewDiff.cpp"><Filter>Production\Evidence</Filter></ClCompile>
     <ClCompile Include="..\shared\evidence\EvidenceEnvelope.cpp"><Filter>Production\Evidence</Filter></ClCompile>
     <ClCompile Include="..\shared\evidence\EvidenceJson.cpp"><Filter>Production\Evidence</Filter></ClCompile>
@@ -64,6 +66,7 @@
     <ClInclude Include="..\shared\evidence\HookPatchCompose.h"><Filter>Production\Evidence</Filter></ClInclude>
     <ClInclude Include="..\shared\evidence\PageTableWalk.h"><Filter>Production\Evidence</Filter></ClInclude>
     <ClInclude Include="..\shared\evidence\MemoryRegionEvidence.h"><Filter>Production\Evidence</Filter></ClInclude>
+    <ClInclude Include="..\shared\evidence\InjectionSurvey.h"><Filter>Production\Evidence</Filter></ClInclude>
     <ClInclude Include="..\shared\evidence\EvidenceEnvelope.h"><Filter>Production\Evidence</Filter></ClInclude>
     <ClInclude Include="..\shared\evidence\EvidenceJson.h"><Filter>Production\Evidence</Filter></ClInclude>
     <ClInclude Include="..\shared\evidence\LiveNavigation.h"><Filter>Production\Evidence</Filter></ClInclude>

@@ -59,4 +59,5 @@ int RunWfpTests();
 int RunTimelineTests();          
 int RunImageIntegrityTests();    
 int RunMemoryEvidenceTests();    
+int RunInjectionSurveyTests();    // J：进程内存植入与完整性检查
 int RunHvmEptSwitchTests();       // EPTP 切换后端（shared/driver，纯算术 + 状态机）
