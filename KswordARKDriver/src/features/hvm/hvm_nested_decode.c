@@ -19,6 +19,12 @@ Environment:
 #include "hvm_exit.h"
 /* VMCS access goes through the seam in hvm_vmcs.h, never the raw intrinsic. */
 #include "hvm_vmcs.h"
+/*
+ * The guest accessors below walk the guest's own page tables and read the
+ * entries as physical memory.  That is what this window is for, and it is the
+ * only mapping primitive in the tree documented as VM-exit safe.
+ */
+#include "hvm_phys_window.h"
 
 #if defined(_M_AMD64)
 
@@ -159,49 +165,152 @@ KswordARKHvmNestedWriteGpr(
     return 0U;
 }
 
+/* Guest paging-mode inputs the walk needs, all read from the VMCS. */
+#define KSW_VMCS_GUEST_CR0 0x6800UL
+#define KSW_VMCS_GUEST_CR3 0x6802UL
+#define KSW_VMCS_GUEST_CR4 0x6804UL
+#define KSW_VMCS_GUEST_IA32_EFER 0x2806UL
+
+/* CR0.PG, CR4.PAE, CR4.LA57 and EFER.LMA select the paging mode. */
+#define KSW_HVM_CR0_PG (1ULL << 31)
+#define KSW_HVM_CR4_PAE (1ULL << 5)
+#define KSW_HVM_CR4_LA57 (1ULL << 12)
+#define KSW_HVM_EFER_LMA (1ULL << 10)
+
+/* Paging-structure entry bits the walk reads. */
+#define KSW_HVM_PTE_PRESENT (1ULL << 0)
+#define KSW_HVM_PTE_LARGE (1ULL << 7)
+/* Bits 51:12 of an entry hold the next table or the page frame. */
+#define KSW_HVM_PTE_FRAME_MASK 0x000FFFFFFFFFF000ULL
+/* A 1 GiB leaf keeps bits 51:30; a 2 MiB leaf keeps bits 51:21. */
+#define KSW_HVM_PTE_FRAME_1G_MASK 0x000FFFFFC0000000ULL
+#define KSW_HVM_PTE_FRAME_2M_MASK 0x000FFFFFFFE00000ULL
+
 /*
- * Name the lowest canonical kernel-half linear address.
+ * Translate one guest linear address to a guest physical address.
  *
- * Only kernel addresses are accepted by the guest accessors below, and the
- * reason is not hygiene - it is correctness.  See the comment on the accessor.
+ * This function exists because of a machine check, not a code review.  The
+ * accessors below used to dereference the guest linear address directly, on
+ * the argument that HOST_CR3 and GUEST_CR3 name the same kernel half because
+ * Windows maps it identically into every process.  That argument is true of
+ * every Windows *process* and false of the thing this whole nested path exists
+ * to host: another hypervisor runs its own page tables.  The first real one to
+ * reach here handed us 0xFFFFFFFFFC407E98 - an address in its own monitor
+ * world, mapped in its CR3 and in no Windows address space at all - and the
+ * direct dereference took a page fault in root mode.  Bugcheck 0xD1, IRQL 0xFF,
+ * inside the INVEPT handler.
+ *
+ * The old comment also said there was no VM-exit-safe way to ask whether a page
+ * is present.  There is: walk the guest's own tables through the per-processor
+ * physical window, which allocates nothing, takes no lock and calls no memory
+ * manager routine.  A walk that ends on a clear present bit is a refusal, which
+ * the callers already know how to turn into VMfailInvalid.
+ *
+ * The returned address is a guest physical address, and the caller reads it
+ * back through the same window - which treats it as a host physical address.
+ * That is sound only because our EPT identity-maps RAM, the same assumption
+ * hvm_nested_bitmap.c and hvm_nested_ept.c already read guest pages under.
+ *
+ * Refused rather than implemented: five-level paging, and anything that is not
+ * 4-level IA-32e paging.  A guest using either gets a clean refusal rather than
+ * a walk under the wrong structure format.
  */
-#define KSW_HVM_KERNEL_ADDRESS_FLOOR 0xFFFF800000000000ULL
+static NTSTATUS
+KswordARKHvmNestedTranslateGuestLinear(
+    _Inout_ KSW_HVM_PHYS_WINDOW* Window,
+    _In_ ULONGLONG LinearAddress,
+    _Out_ ULONGLONG* GuestPhysical
+    )
+{
+    SIZE_T cr0 = 0U;
+    SIZE_T cr3 = 0U;
+    SIZE_T cr4 = 0U;
+    SIZE_T efer = 0U;
+    ULONGLONG table = 0ULL;
+    ULONG level = 0UL;
+
+    *GuestPhysical = 0ULL;
+    if (Window == NULL) {
+        /* Return the explicit missing-window failure. */
+        return STATUS_DEVICE_NOT_READY;
+    }
+    if (KswordARKHvmVmcsFieldLoad(KSW_VMCS_GUEST_CR0, &cr0) != 0 ||
+        KswordARKHvmVmcsFieldLoad(KSW_VMCS_GUEST_CR3, &cr3) != 0 ||
+        KswordARKHvmVmcsFieldLoad(KSW_VMCS_GUEST_CR4, &cr4) != 0 ||
+        KswordARKHvmVmcsFieldLoad(KSW_VMCS_GUEST_IA32_EFER, &efer) != 0) {
+        /* Return the explicit unreadable-guest-state failure. */
+        return STATUS_UNSUCCESSFUL;
+    }
+    /* Refuse every paging mode other than 4-level IA-32e paging. */
+    if (((ULONGLONG)cr0 & KSW_HVM_CR0_PG) == 0ULL ||
+        ((ULONGLONG)cr4 & KSW_HVM_CR4_PAE) == 0ULL ||
+        ((ULONGLONG)efer & KSW_HVM_EFER_LMA) == 0ULL ||
+        ((ULONGLONG)cr4 & KSW_HVM_CR4_LA57) != 0ULL) {
+        /* Return the explicit unsupported-paging-mode refusal. */
+        return STATUS_NOT_SUPPORTED;
+    }
+    table = (ULONGLONG)cr3 & KSW_HVM_PTE_FRAME_MASK;
+    /* Walk PML4 -> PDPT -> PD -> PT, stopping at the first leaf. */
+    for (level = 4UL; level >= 1UL; --level) {
+        const ULONG shift = 12UL + (9UL * (level - 1UL));
+        const ULONGLONG index = (LinearAddress >> shift) & 0x1FFULL;
+        ULONGLONG entry = 0ULL;
+
+        if (!NT_SUCCESS(KswordARKHvmPhysWindowReadQword(
+                Window,
+                table + (index * 8ULL),
+                &entry))) {
+            /* Return the explicit unreadable-structure failure. */
+            return STATUS_UNSUCCESSFUL;
+        }
+        if ((entry & KSW_HVM_PTE_PRESENT) == 0ULL) {
+            /* Return the explicit not-present refusal. */
+            return STATUS_NOT_FOUND;
+        }
+        /* A leaf at level 3 covers 1 GiB and at level 2 covers 2 MiB. */
+        if (level == 3UL && (entry & KSW_HVM_PTE_LARGE) != 0ULL) {
+            *GuestPhysical = (entry & KSW_HVM_PTE_FRAME_1G_MASK) |
+                (LinearAddress & 0x3FFFFFFFULL);
+            /* Return the complete one-gibibyte translation. */
+            return STATUS_SUCCESS;
+        }
+        if (level == 2UL && (entry & KSW_HVM_PTE_LARGE) != 0ULL) {
+            *GuestPhysical = (entry & KSW_HVM_PTE_FRAME_2M_MASK) |
+                (LinearAddress & 0x1FFFFFULL);
+            /* Return the complete two-mebibyte translation. */
+            return STATUS_SUCCESS;
+        }
+        if (level == 1UL) {
+            *GuestPhysical = (entry & KSW_HVM_PTE_FRAME_MASK) |
+                (LinearAddress & 0xFFFULL);
+            /* Return the complete four-kibibyte translation. */
+            return STATUS_SUCCESS;
+        }
+        table = entry & KSW_HVM_PTE_FRAME_MASK;
+    }
+    /* Return the unreachable-walk failure. */
+    return STATUS_UNSUCCESSFUL;
+}
 
 /*
  * Check that one guest linear address may be accessed from the exit handler.
  *
- * Two conditions, both load-bearing:
+ * Only alignment is left here.  An eight-byte access that straddles a page
+ * boundary needs two translations, and the second page can be absent while the
+ * first is present - one refusal turning into a half-completed read.  Refusing
+ * the straddle keeps every access to exactly one walk.
  *
- * Kernel half.  HOST_CR3 names the System address space, while GUEST_CR3 names
- * whatever process was current when the instruction executed.  Windows maps the
- * kernel half identically in every address space, so a kernel address resolves
- * to the same physical page under either - but a *user* address resolves to a
- * different process's page, or to nothing.  Dereferencing one here would read
- * some unrelated process's memory and report it as the operand.  VMX
- * instructions require CPL 0, so a user-range operand is already malformed;
- * refusing it costs nothing and closes the hole.
- *
- * Eight-byte alignment.  A split access across a page boundary can have the
- * first page present and the second not, which turns one refusal into a fault
- * in root mode.
- *
- * What this does NOT establish is that the page is present.  There is no
- * VM-exit-safe way to ask.  The exposure is bounded: the guest that supplies
- * this address is already running in ring 0 underneath us, so it can halt the
- * machine by a hundred cheaper routes than aiming a VMPTRLD at a paged-out
- * address.  This is the same position HyperPlatform and kHypervisor take; the
- * difference is that it is written down here.
+ * The kernel-half rule that used to live here is gone, and deliberately.  It
+ * existed only to keep the direct dereference inside the half Windows maps the
+ * same way in every address space; now that the walk uses GUEST_CR3, the
+ * guest's own tables decide, and a user-half operand from a ring-0 guest is
+ * simply an address the walk can resolve like any other.
  */
 static BOOLEAN
 KswordARKHvmNestedIsGuestAccessAllowed(
     _In_ ULONGLONG LinearAddress
     )
 {
-    /* Reject the user half, which HOST_CR3 does not name. */
-    if (LinearAddress < KSW_HVM_KERNEL_ADDRESS_FLOOR) {
-        /* Report the address as not accessible from here. */
-        return FALSE;
-    }
     /* Reject an unaligned eight-byte access. */
     if ((LinearAddress & 0x7ULL) != 0ULL) {
         /* Report the address as not accessible from here. */
@@ -213,40 +322,75 @@ KswordARKHvmNestedIsGuestAccessAllowed(
 
 NTSTATUS
 KswordARKHvmNestedReadGuestQword(
+    _Inout_opt_ struct _KSW_HVM_PHYS_WINDOW* Window,
     _In_ ULONGLONG LinearAddress,
     _Out_ ULONGLONG* Value
     )
 {
-    /* Reject an incomplete caller contract before any dereference. */
+    ULONGLONG guestPhysical = 0ULL;
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+
+    /* Reject an incomplete caller contract before any translation. */
     if (Value == NULL) {
         /* Return the exact caller-contract failure. */
         return STATUS_INVALID_PARAMETER;
     }
     *Value = 0ULL;
-    /* Refuse an address this context cannot resolve correctly. */
+    /* Refuse an access this context cannot complete in one walk. */
     if (!KswordARKHvmNestedIsGuestAccessAllowed(LinearAddress)) {
         /* Return the explicit access refusal. */
         return STATUS_ACCESS_VIOLATION;
     }
-    *Value = *(volatile ULONGLONG*)(ULONG_PTR)LinearAddress;
-    /* Return the complete guest read. */
-    return STATUS_SUCCESS;
+    status = KswordARKHvmNestedTranslateGuestLinear(
+        (KSW_HVM_PHYS_WINDOW*)Window,
+        LinearAddress,
+        &guestPhysical);
+    if (!NT_SUCCESS(status)) {
+        /* Return the exact translation failure. */
+        return status;
+    }
+    /* Return the guest read performed through the physical window. */
+    return KswordARKHvmPhysWindowReadQword(
+        (KSW_HVM_PHYS_WINDOW*)Window,
+        guestPhysical,
+        Value);
 }
 
 NTSTATUS
 KswordARKHvmNestedWriteGuestQword(
+    _Inout_opt_ struct _KSW_HVM_PHYS_WINDOW* Window,
     _In_ ULONGLONG LinearAddress,
     _In_ ULONGLONG Value
     )
 {
-    /* Refuse an address this context cannot resolve correctly. */
+    ULONGLONG guestPhysical = 0ULL;
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+
+    /* Refuse an access this context cannot complete in one walk. */
     if (!KswordARKHvmNestedIsGuestAccessAllowed(LinearAddress)) {
         /* Return the explicit access refusal. */
         return STATUS_ACCESS_VIOLATION;
     }
-    *(volatile ULONGLONG*)(ULONG_PTR)LinearAddress = Value;
-    /* Return the complete guest write. */
-    return STATUS_SUCCESS;
+    status = KswordARKHvmNestedTranslateGuestLinear(
+        (KSW_HVM_PHYS_WINDOW*)Window,
+        LinearAddress,
+        &guestPhysical);
+    if (!NT_SUCCESS(status)) {
+        /* Return the exact translation failure. */
+        return status;
+    }
+    /*
+     * A write walks read-only structures and then writes the target page.
+     *
+     * The dirty and accessed bits the processor would have set are not set
+     * here.  Nothing in this driver reads them for these pages, and setting
+     * them would mean writing the guest's paging structures from root mode -
+     * a larger promise than any caller needs.
+     */
+    return KswordARKHvmPhysWindowWriteQword(
+        (KSW_HVM_PHYS_WINDOW*)Window,
+        guestPhysical,
+        Value);
 }
 
 /* Translate the encoded address-size field into a width in bytes. */

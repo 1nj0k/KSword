@@ -809,6 +809,16 @@ KswordARKHvmResidentPrepareContexts(
         context->PhysWindow =
             KswordARKHvmPhysWindowForProcessor(index);
         /*
+         * Cache the same window on the nested state.
+         *
+         * Nested VMX-instruction dispatch receives only KSW_HVM_NESTED_VCPU,
+         * and every memory operand it reads has to be resolved through the
+         * guest's page tables - which needs a window.  Assigned after the
+         * lookup above so both names always refer to the same object.
+         */
+        context->Nested.PhysWindow =
+            (struct _KSW_HVM_PHYS_WINDOW*)context->PhysWindow;
+        /*
          * Reserve this processor's shadow-EPT tables now, because filling one
          * happens inside a VM exit where allocation is not available.
          *

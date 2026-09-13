@@ -263,6 +263,7 @@ KswordARKHvmNestedIsRegionPointerValid(
 /* Read the region pointer one memory-operand VMX instruction named. */
 static BOOLEAN
 KswordARKHvmNestedLoadRegionPointer(
+    _Inout_opt_ struct _KSW_HVM_PHYS_WINDOW* Window,
     _In_ const struct _KSW_HVM_GPR_FRAME* Frame,
     _Out_ ULONGLONG* Pointer
     )
@@ -280,6 +281,7 @@ KswordARKHvmNestedLoadRegionPointer(
     }
     /* Read the eight-byte pointer the operand addresses. */
     if (!NT_SUCCESS(KswordARKHvmNestedReadGuestQword(
+            Window,
             operand.LinearAddress,
             Pointer))) {
         /* Report that no pointer could be produced. */
@@ -307,7 +309,8 @@ KswordARKHvmNestedDispatchVmxon(
         return KSW_HVM_VMX_RESULT_FAIL_VALID;
     }
     /* Refuse when the operand could not be produced at all. */
-    if (!KswordARKHvmNestedLoadRegionPointer(Frame, &region)) {
+    if (!KswordARKHvmNestedLoadRegionPointer(
+            Nested->PhysWindow, Frame, &region)) {
         /* Return the invalid failure that carries no error number. */
         return KSW_HVM_VMX_RESULT_FAIL_INVALID;
     }
@@ -501,6 +504,7 @@ KswordARKHvmNestedDispatchVmcsPointer(
             : 0xFFFFFFFFFFFFFFFFULL;
 
         if (!NT_SUCCESS(KswordARKHvmNestedWriteGuestQword(
+                Nested->PhysWindow,
                 operand.LinearAddress,
                 stored))) {
             /* Return the invalid failure that carries no error number. */
@@ -511,6 +515,7 @@ KswordARKHvmNestedDispatchVmcsPointer(
     }
     /* Read the vmcs12 pointer the operand addresses. */
     if (!NT_SUCCESS(KswordARKHvmNestedReadGuestQword(
+            Nested->PhysWindow,
             operand.LinearAddress,
             &pointer))) {
         /* Return the invalid failure that carries no error number. */
@@ -645,6 +650,7 @@ KswordARKHvmNestedDispatchInvalidate(
      * would be reading something nothing acts on.
      */
     if (!NT_SUCCESS(KswordARKHvmNestedReadGuestQword(
+            Nested->PhysWindow,
             operand.LinearAddress,
             &descriptor))) {
         /* Return the invalid failure that carries no error number. */
@@ -746,6 +752,7 @@ KswordARKHvmNestedDispatchVmcsField(
                 return KSW_HVM_VMX_RESULT_FAIL_INVALID;
             }
         } else if (!NT_SUCCESS(KswordARKHvmNestedWriteGuestQword(
+                Nested->PhysWindow,
                 operand.LinearAddress,
                 value))) {
             /* Return the invalid failure that carries no error number. */
@@ -770,6 +777,7 @@ KswordARKHvmNestedDispatchVmcsField(
             return KSW_HVM_VMX_RESULT_FAIL_INVALID;
         }
     } else if (!NT_SUCCESS(KswordARKHvmNestedReadGuestQword(
+            Nested->PhysWindow,
             operand.LinearAddress,
             &value))) {
         /* Return the invalid failure that carries no error number. */

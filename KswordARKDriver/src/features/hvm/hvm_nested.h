@@ -31,9 +31,23 @@ Environment:
  */
 #define KSW_HVM_VMCS12_POOL_SLOTS 8UL
 
+/* Forward declaration; the definition lives in hvm_phys_window.h. */
+struct _KSW_HVM_PHYS_WINDOW;
+
 /* Preserve one processor's bounded L1 nested-VMX state. */
 typedef struct _KSW_HVM_NESTED_VCPU
 {
+    /*
+     * This processor's physical window, cached from the resident context.
+     *
+     * Every VMX-instruction operand that lives in memory is read through it,
+     * because the operand address belongs to the guest's address space and not
+     * to ours.  Kept here rather than reached through the resident context so
+     * the dispatch functions, which only ever receive this structure, do not
+     * each need a second back-pointer.  NULL is legal and means every memory
+     * operand is refused; it is not fatal to residency.
+     */
+    struct _KSW_HVM_PHYS_WINDOW* PhysWindow;
     /* Publish whether nested instruction dispatch is enabled. */
     BOOLEAN Enabled;
     /* Publish whether L1 executed a valid VMXON transition. */

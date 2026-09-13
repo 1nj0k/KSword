@@ -462,6 +462,19 @@ try {
             if ($r.Exit -ne 0) { $record.verdict = 'FAIL'; $exitCode = $r.Exit; return }
             $names = $r.Json.newStateNames
         }
+        # 常驻要求 SELF_TEST_PASSED，缺了会被判 NOT_PREPARED（0xC00000A3）并顺手
+        # 把状态打成 FAULTED —— 那个状态名读起来像"没 prepare"，而 prepare 明明
+        # 刚返回 0，两个读数对不上会把人带到完全错的方向。补这一级不是保险起见。
+        if (-not (Test-StateBit $names 'SELF_TEST_PASSED')) {
+            $r = Invoke-HvmCtl 'self-test'
+            Add-Step 'self-test' $(if ($r.Exit -eq 0) { 'OK' } else { 'FAIL' }) $r.Json `
+                     '逐处理器 VMXON/VMXOFF；常驻的前置条件'
+            if ($r.Exit -ne 0) { $record.verdict = 'FAIL'; $exitCode = $r.Exit; return }
+            $names = $r.Json.newStateNames
+        } else {
+            Add-Step 'self-test' 'SKIP' $null 'SELF_TEST_PASSED 已置位'
+        }
+
         # RESIDENT_ACTIVE 置位**不等于**它是我们要的那个模式：普通 resident 起的
         # 常驻里 VMX 指令被注 #UD，而 nested 与 hidehv 两种常驻在状态位上完全
         # 一样。沿用一个来历不明的常驻，等于让整轮测量在未知模式下跑完。
