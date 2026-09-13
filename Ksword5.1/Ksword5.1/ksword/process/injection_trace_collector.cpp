@@ -854,6 +854,184 @@ namespace
     }
 
     // --- 载荷结构（浅层）------------------------------------------------------
+    // 一页是不是"没有重定位 fixup"。有 fixup 的页加载器本来就会改写，
+    // 拿它和节对象里的未重定位内容比只会得到噪声，所以整页排除。
+    // 判据用 PeImageMap 已经算好的 touchedRanges 与 DVRT 影响范围，不另起一套解析。
+    bool PageHasNoRelocationFixup(const ev::PeImageMap& map,
+                                  const std::uint32_t pageRva)
+    {
+        ev::RvaRange page;
+        page.rva = pageRva;
+        page.length = 0x1000U;
+        const std::vector<ev::RvaRange> one{ page };
+        if (!ev::IntersectRvaRanges(map.relocation.touchedRanges, one).empty())
+        {
+            return false;
+        }
+        if (!ev::IntersectRvaRanges(map.dynamicRelocation.affectedRanges(), one).empty())
+        {
+            return false;
+        }
+        // 不可比较范围（畸形节、无支撑的重定位目标等）同样排除。
+        return ev::IntersectRvaRanges(map.notComparableRanges, one).empty();
+    }
+
+    // 第二参考源：把实时字节和**内存管理器持有的节对象**比。
+    //
+    // 与"和磁盘文件比"不是重复。一个页与磁盘一致、却与节对象不同，说明**磁盘文件
+    // 在映射建立之后被改过** —— 那是"改完内存再把磁盘文件也改成一样"这种手法
+    // 唯一会露出的破绽。
+    //
+    // 覆盖率是打折的，而且折扣如实记账：有 fixup 的页不比，原型 PTE 不是 valid
+    // 形态的页拿不到参考。两者都计进 sectionPagesRequested/Available，
+    // 判据层据此决定"没发现差异"成不成立。
+    void CollectSectionObjectComparisons(
+        const HANDLE process,
+        const std::uint32_t pid,
+        const std::map<std::string, ReferenceImage>& references,
+        const ev::ComparisonPlan& plan,
+        Budget& budget,
+        const InjectionTraceOptions& options,
+        ev::SurveyInput& input,
+        InjectionTraceResult& result)
+    {
+        static_cast<void>(options);
+        const ksword::ark::DriverClient driverClient;
+
+        // 每个模块最多核对这么多页。上限按协议里带字节的一次调用上限给，
+        // 一个模块一次调用，不做续扫 —— 这一维是**抽样核对**，不是全量比较。
+        constexpr unsigned long kPagesPerModule = KSWORD_ARK_INJECTION_SECTION_BYTES_PAGES_MAX;
+        constexpr std::uint64_t kPageBytes = 0x1000ULL;
+
+        std::map<std::string, ev::ImageComparisonOutcome> sectionOutcomes;
+        for (const ev::ComparisonTarget& target : plan.targets)
+        {
+            if (budget.exhausted())
+            {
+                break;
+            }
+            const auto reference = references.find(target.module.imagePath);
+            if (reference == references.end() || !reference->second.map.valid() ||
+                target.range.empty())
+            {
+                continue;
+            }
+            if (sectionOutcomes.find(target.module.imagePath) != sectionOutcomes.end())
+            {
+                continue;   // 一个模块只抽一次
+            }
+
+            // 挑出这段范围里没有 fixup 的页。
+            std::vector<std::uint32_t> pageRvas;
+            for (std::uint64_t offset = 0; offset < target.range.length &&
+                                           pageRvas.size() < kPagesPerModule;
+                 offset += kPageBytes)
+            {
+                const auto pageRva =
+                    static_cast<std::uint32_t>((target.range.rva + offset) & ~(kPageBytes - 1ULL));
+                if (PageHasNoRelocationFixup(reference->second.map, pageRva))
+                {
+                    pageRvas.push_back(pageRva);
+                }
+            }
+            if (pageRvas.empty())
+            {
+                continue;   // 整段都带 fixup：这一维对它无话可说，不产生条目
+            }
+
+            const std::uint64_t firstVa = reference->second.base + pageRvas.front();
+            const std::uint64_t lastVa = reference->second.base + pageRvas.back();
+            const ksword::ark::ImageSectionPagesResult pages =
+                driverClient.readImageSectionPages(
+                    pid, firstVa, lastVa + kPageBytes, 0ULL, kPagesPerModule,
+                    KSWORD_ARK_INJECTION_SECTION_FLAG_INCLUDE_BYTES);
+
+            ev::ImageComparisonOutcome outcome;
+            outcome.module = target.module;
+            outcome.referenceSource = ev::ImageReferenceSource::SectionObject;
+            // 节对象参考的身份不需要额外核对：它**就是**这次映射用的那个节，
+            // 不存在"这份文件是不是这次加载的那一份"的问题。
+            outcome.referenceConfidence = ev::ReferenceConfidence::ReferenceVerified;
+            outcome.sectionPagesRequested = pageRvas.size();
+            outcome.report.outcome = ev::CollectionOutcome::success();
+            outcome.report.conclusion = ev::AnalysisConclusion::NoDifferenceObserved;
+
+            if (!pages.io.ok || pages.pageBytes.empty())
+            {
+                // 一页参考都没拿到：整条记成"请求了、一个都没成"，由判据层压制干净结论。
+                outcome.sectionPagesAvailable = 0U;
+                outcome.report.outcome = PartialOutcome();
+                sectionOutcomes.emplace(target.module.imagePath, std::move(outcome));
+                continue;
+            }
+
+            // 字节区按 valid 页的顺序排列，所以要同序遍历条目。
+            std::size_t validIndex = 0U;
+            for (const ksword::ark::ImageSectionPageEntry& entry : pages.entries)
+            {
+                if (!entry.bytesPresent())
+                {
+                    continue;   // 不是 valid 形态：这一页没有参考，不计入已覆盖
+                }
+                const std::size_t byteOffset = validIndex * kPageBytes;
+                ++validIndex;
+                if (byteOffset + kPageBytes > pages.pageBytes.size())
+                {
+                    break;
+                }
+                if (entry.va < reference->second.base)
+                {
+                    continue;
+                }
+                const auto pageRva = static_cast<std::uint32_t>(entry.va - reference->second.base);
+                if (std::find(pageRvas.begin(), pageRvas.end(), pageRva) == pageRvas.end())
+                {
+                    continue;   // 这一页带 fixup，不在抽样集合里
+                }
+
+                std::vector<std::uint8_t> liveBytes(static_cast<std::size_t>(kPageBytes));
+                std::size_t copied = 0U;
+                ReadTargetMemory(process, entry.va, liveBytes.data(), liveBytes.size(),
+                                 budget, &copied);
+                if (copied != liveBytes.size())
+                {
+                    continue;   // 实时页读不全：不比，也不算已覆盖
+                }
+                ++outcome.sectionPagesAvailable;
+                ++result.sectionPagesCompared;
+
+                if (std::memcmp(liveBytes.data(), pages.pageBytes.data() + byteOffset,
+                                liveBytes.size()) == 0)
+                {
+                    outcome.report.comparedBytes += kPageBytes;
+                    continue;
+                }
+
+                // 差异。**这一页本该一个字节都不变** —— 它没有 fixup，节对象里的
+                // 内容就是映射建立时的内容。
+                ev::ImageDiffEntry diff;
+                diff.rva = pageRva;
+                diff.va = entry.va;
+                diff.length = static_cast<std::uint32_t>(kPageBytes);
+                diff.kind = ev::DiffKind::ByteDifference;
+                diff.explanation = ev::DiffExplanation::Unexplained;
+                diff.sectionName = ev::SectionNameForRva(reference->second.map, pageRva);
+                outcome.report.entries.push_back(std::move(diff));
+                outcome.report.comparedBytes += kPageBytes;
+                outcome.report.differingBytes += kPageBytes;
+                outcome.report.conclusion = ev::AnalysisConclusion::DifferenceObserved;
+                ++result.sectionPagesDiffering;
+            }
+            sectionOutcomes.emplace(target.module.imagePath, std::move(outcome));
+        }
+
+        for (auto& item : sectionOutcomes)
+        {
+            input.imageComparisons.push_back(std::move(item.second));
+        }
+        result.sectionModulesChecked = static_cast<std::uint32_t>(sectionOutcomes.size());
+    }
+
     ev::PayloadStructure ClassifyPayloadStructure(const HANDLE process,
                                                   const std::uint64_t base,
                                                   const std::uint64_t size,
@@ -1644,6 +1822,22 @@ InjectionTraceResult ScanProcessInjectionTrace(const std::uint32_t pid,
             input.imageComparisons.push_back(std::move(item.second));
         }
         result.comparedModuleCount = static_cast<std::uint32_t>(input.imageComparisons.size());
+
+        // --- 第二参考源：映像节对象 -------------------------------------------
+        // 上面那一轮比的是"实时字节 vs 磁盘文件"。这一轮比的是"实时字节 vs
+        // 内存管理器自己持有的节对象"。两者不是重复：
+        // **一个页与磁盘一致、却与节对象不同，说明磁盘文件在映射建立之后被改过。**
+        // 那正是"把内存改了、再把磁盘文件也改成一样"这种手法唯一露出的破绽。
+        //
+        // 只比**没有重定位 fixup 的页**。有 fixup 的页，加载器本来就会改写它，
+        // 实时字节与节对象里的未重定位内容天然不同，比了只会得到一堆噪声。
+        // 判据是 PeImageMap 已经算好的 relocation.touchedRanges —— 不另起一套解析。
+        // 被排除的页如实记进覆盖账，"没比到"不会被读成"比过了没差异"。
+        if (options.deepMode && options.useKernelBackend)
+        {
+            CollectSectionObjectComparisons(
+                process.get(), pid, references, plan, budget, options, input, result);
+        }
     }
 
     for (const std::string& gap : plan.coverageGapKeys)

@@ -94,6 +94,11 @@ namespace ks::process
         // 深度模式里为"休眠载荷"检查过首页的非可执行区域数。0 表示这一档没做。
         std::uint32_t dormantRegionsScanned = 0;
 
+        // 节对象第二参考源的账（只在深度模式 + 有驱动时非零）。
+        std::uint32_t sectionModulesChecked = 0;
+        std::uint32_t sectionPagesCompared = 0;
+        std::uint32_t sectionPagesDiffering = 0;
+
         // R0 后端的现场读数。state 为 NotRequested 表示没打算用；
         // DriverUnavailable 表示想用但驱动不在（能力降级，不是缺陷）。
         Ksword::Evidence::KernelBackendState kernelVadState =
