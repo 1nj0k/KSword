@@ -934,6 +934,10 @@ bool StackEvidenceCountsAsExecution(const StackEvidenceKind kind) noexcept {
     return kind == StackEvidenceKind::ReliableUnwoundFrame;
 }
 
+bool PayloadCandidateCanRaiseConclusion(const PayloadCandidateEntry& candidate) noexcept {
+    return candidate.executableAtScanTime;
+}
+
 std::size_t AdmitStackFrames(const ThreadStackInput& stack) noexcept {
     if (!ContextUsableAsExecutionEvidence(stack.trust)) {
         // 上下文本身不可信，从它展开出来的一切都不算数。不是"降级成启发式"，
@@ -2216,6 +2220,9 @@ SurveyReport RunInjectionSurvey(const SurveyInput& input) {
             finding.inputOutcome = payload.outcome;
             finding.confidence = EvidenceConfidence::SingleObservation;
             AddFact(finding.facts, "payload.structure", PayloadStructureName(payload.structure));
+            // 这一位决定这条能不能参与升结论，必须能在证据里回源。
+            AddFact(finding.facts, "payload.executable-at-scan",
+                    payload.executableAtScanTime ? "true" : "false");
             for (const std::string& fact : payload.structureFacts) {
                 finding.facts.push_back(fact);
             }
@@ -2242,6 +2249,7 @@ SurveyReport RunInjectionSurvey(const SurveyInput& input) {
         // 栈回溯能力可用、这块内存**确实**被可靠帧进入、结构不是"数据里的一个 PE 文件"
         // （缓冲区里躺着一个 PE，与这个 PE 已经被加载执行，是两件事）。
         if (stackWalkAvailable && frameEnters &&
+            PayloadCandidateCanRaiseConclusion(payload) &&
             payload.structure != PayloadStructure::DataOnlyPeFile) {
             AddObservation(report, ObservationClass::PayloadStructureWithReliableFrame);
             ++report.payloadWithExecutionCount;

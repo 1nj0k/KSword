@@ -325,7 +325,19 @@ struct PayloadCandidateEntry final {
     // "栈里扫到一个像这块内存的地址" —— 只有 StackEvidenceKind::ReliableUnwoundFrame
     // 才能置位。这一位是把"内存里有载荷结构"抬成"载荷与执行相关联"的唯一依据。
     bool reliableFrameEntersRegion = false;
+
+    // 采集时这块内存**带不带执行权限**。深度模式会把不可执行的私有/映射内存也纳入
+    // 结构检查（休眠载荷可以先存成 RW、执行前才翻成 RX），但那一档的噪声完全不同：
+    // 本机实测 330 个可打开进程、129937 块非可执行已提交区域里，首页能通过 PE
+    // 合理性检查的有 99 块 —— 每进程约 0.3 个。所以不可执行的候选**只列不升结论**，
+    // 判定见 PayloadCandidateCanRaiseConclusion。
+    bool executableAtScanTime = true;
 };
+
+// 一个载荷候选够不够格参与升结论。不可执行的候选一律不够：
+// 每进程 0.3 个的底噪意味着放它进来会让"观测到差异"在干净机器上常态出现，
+// 而那等于把这个功能变成又一个全亮的告警灯。它们仍然会作为条目列出来。
+bool PayloadCandidateCanRaiseConclusion(const PayloadCandidateEntry& candidate) noexcept;
 
 enum class ModuleCrossIssue {
     ImageMappingWithoutLoaderEntry,  // 有映像映射，加载器列表没有对应项

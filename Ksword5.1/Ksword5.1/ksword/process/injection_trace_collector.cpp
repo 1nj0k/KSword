@@ -1233,6 +1233,81 @@ InjectionTraceResult ScanProcessInjectionTrace(const std::uint32_t pid,
         crossInput.payloadView.push_back(candidate);
         input.payloadCandidates.push_back(std::move(candidate));
     }
+
+    // --- 休眠载荷：不可执行的私有/映射内存 -------------------------------------
+    // 载荷可以先存成 RW、要执行前才翻成 RX（睡眠掩码就是这么干的），所以"只看当前
+    // 带执行权限的页"是一个真缺口。深度模式补这一档。
+    //
+    // **只读每块的首页，不读整块**：实测本机 330 个可打开进程一共有 129937 块
+    // 非可执行已提交私有/映射区域、合计 40.9 GB，整块读完全不可行；只读首页的话
+    // 全机 9.3 秒、单进程约 28 ms。
+    //
+    // 这一档的候选**不参与升结论**（executableAtScanTime=false）：同一次实测里
+    // 首页能通过 PE 合理性检查的有 99 块，每进程约 0.3 个。放它进升结论的路径，
+    // 干净机器上就会常态给出"观测到差异"。
+    if (options.deepMode)
+    {
+        std::size_t dormantScanned = 0;
+        for (std::size_t i = 0; i < input.addressSpace.entries.size() &&
+                                i < input.addressSpace.codeClasses.size();
+             ++i)
+        {
+            if (ev::IsDynamicCodeCandidate(input.addressSpace.codeClasses[i]))
+            {
+                continue;  // 可执行的那一档上面已经收过了
+            }
+            const ev::RegionRecord& record = input.addressSpace.entries[i];
+            if (record.type != ev::RegionType::Private && record.type != ev::RegionType::Mapped)
+            {
+                continue;  // 映像有自己的归一化比较那一维，不在这里重复
+            }
+            if (record.state != ev::RegionState::Commit || record.size.valueOr(0U) == 0U)
+            {
+                continue;  // 保留/空闲的区域没有内容可读
+            }
+            const ev::ProtectionFacts facts = ev::ClassifyWin32Protection(record.protection.rawValue);
+            if (facts.noAccess || facts.guard || !facts.readable ||
+                ev::ExecuteProtectionIsExecutable(facts.execute))
+            {
+                continue;
+            }
+            if (budget.exhausted())
+            {
+                break;
+            }
+
+            ev::PayloadCandidateEntry candidate;
+            candidate.base = record.base;
+            candidate.size = record.size;
+            candidate.type = record.type;
+            candidate.executableAtScanTime = false;
+            // 只给首页的长度，让结构判定不会顺着读下去。
+            candidate.structure = ClassifyPayloadStructure(
+                process.get(), record.base.valueOr(0U),
+                std::min<std::uint64_t>(record.size.valueOr(0U), 0x1000ULL), options, budget,
+                &candidate.structureFacts);
+            candidate.outcome = candidate.structure == ev::PayloadStructure::Unreadable
+                ? PartialOutcome()
+                : ev::CollectionOutcome::success();
+            ++dormantScanned;
+            // 这一档**只留 PE 形状的**。ClassifyPayloadStructure 对任何没有 MZ 的
+            // 可读内存都返回 BareCode —— 那对可执行内存是"未知可执行代码"，
+            // 对数据区则是"这是数据"，每进程几百块全都会命中。留下来只会把真正
+            // 值得看的条目淹掉。NoStructure / Unreadable 同理。
+            const bool peShaped = candidate.structure == ev::PayloadStructure::MappedPeImage ||
+                                  candidate.structure == ev::PayloadStructure::HeaderErasedPe ||
+                                  candidate.structure == ev::PayloadStructure::DataOnlyPeFile;
+            if (!peShaped)
+            {
+                continue;
+            }
+            input.payloadCandidates.push_back(std::move(candidate));
+        }
+        // 扫过了才算数：一块都没扫成的话这一位不能置真。
+        input.nonExecutableMemoryScanned = dormantScanned != 0;
+        result.dormantRegionsScanned = static_cast<std::uint32_t>(dormantScanned);
+    }
+
     // 两条本版本没有的能力，显式列出来 —— 它们缩小结论的适用范围，但不压制结论。
     input.extraCapabilityLimitKeys.push_back(ev::kLimitPayloadHeaderErased);
     input.extraCapabilityLimitKeys.push_back(ev::kLimitRuntimeAttribution);

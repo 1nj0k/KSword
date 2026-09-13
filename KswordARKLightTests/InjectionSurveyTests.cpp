@@ -2254,6 +2254,55 @@ void TestSurveyPipeline(KswordTests::Suite& suite) {
         }
     }
 
+    // 休眠载荷：采集时不可执行的候选**只列不升结论**。
+    // 实测底噪是每进程约 0.3 个"首页像个正经 PE"的非可执行区域，放进升结论路径
+    // 会让干净机器常态给出"观测到差异"。
+    suite.expect(PayloadCandidateCanRaiseConclusion(beaconPayload),
+                 L"栈 可执行候选可参与升结论");
+    {
+        PayloadCandidateEntry dormant = beaconPayload;
+        dormant.executableAtScanTime = false;
+        suite.expect(!PayloadCandidateCanRaiseConclusion(dormant),
+                     L"休眠 不可执行候选不参与升结论");
+
+        SurveyInput dormantSurvey = MakeCleanInput();
+        dormantSurvey.payloadCandidates = { dormant };
+        // 给一个真的落进这块内存的可靠帧 —— 连这个都不该把它抬上去。
+        dormantSurvey.threadStacks = {
+            MakeTrustedStack(320U, { 0x7FF800001000ULL, 0x600100ULL },
+                             /*lastFrameHasUnwindData=*/false)
+        };
+        const SurveyReport dormantReport = RunInjectionSurvey(dormantSurvey);
+        suite.expect(dormantReport.payloadWithExecutionCount == 0U,
+                     L"休眠 不可执行候选即便有帧进入也不升格");
+        suite.expect(dormantReport.conclusion != AnalysisConclusion::DifferenceObserved,
+                     L"休眠 不可执行候选不升到观测到差异");
+        // 但它必须**仍然出现在条目里** —— 不升结论不等于不给人看。
+        suite.expect(HasRule(dormantReport.findings, kRuleIdPayloadStructure),
+                     L"休眠 不可执行候选仍然列出条目");
+        const InjectionFinding* const dormantHit =
+            FindRule(dormantReport.findings, kRuleIdPayloadStructure);
+        suite.expect(dormantHit != nullptr &&
+                         std::any_of(dormantHit->facts.begin(), dormantHit->facts.end(),
+                                     [](const std::string& fact) {
+                                         return fact == "payload.executable-at-scan=false";
+                                     }),
+                     L"休眠 条目记录采集时不可执行");
+    }
+
+    // 扫过非可执行内存就不该再记那条能力限制。
+    {
+        SurveyInput scanned = MakeCleanInput();
+        scanned.mode = SurveyMode::Deep;
+        scanned.nonExecutableMemoryScanned = true;
+        scanned.threadStacks = { MakeTrustedStack(321U, { 0x7FF800001000ULL }) };
+        const SurveyReport scannedReport = RunInjectionSurvey(scanned);
+        suite.expect(!scannedReport.hasLimit(kLimitNonExecutableNotScanned),
+                     L"休眠 扫过即无该能力限制");
+        suite.expect(scannedReport.conclusion == AnalysisConclusion::NoDifferenceObserved,
+                     L"休眠 扫过后仍可给出干净结论");
+    }
+
     // 落点在载荷范围外一个字节：不算进入。
     SurveyInput justOutside = beaconSurvey;
     justOutside.threadStacks = {

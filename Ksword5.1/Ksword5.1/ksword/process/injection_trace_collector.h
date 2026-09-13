@@ -91,6 +91,9 @@ namespace ks::process
         std::uint32_t stackThreadsWaiting = 0;
         std::uint32_t stackThreadsWalked = 0;
 
+        // 深度模式里为"休眠载荷"检查过首页的非可执行区域数。0 表示这一档没做。
+        std::uint32_t dormantRegionsScanned = 0;
+
         // R0 后端的现场读数。state 为 NotRequested 表示没打算用；
         // DriverUnavailable 表示想用但驱动不在（能力降级，不是缺陷）。
         Ksword::Evidence::KernelBackendState kernelVadState =
