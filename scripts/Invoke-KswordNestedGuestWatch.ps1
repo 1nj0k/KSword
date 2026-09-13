@@ -44,6 +44,19 @@
     所以来宾中途蓝屏/挂死时，**最后一次成功的采样就是飞行记录**。
     在有交互的控制台里按任意键可以提前结束窗口。
 
+.PARAMETER Mode
+    nested  = 起 resident-nested（默认）
+    hidehv  = 起 resident-nested-hidehv：另对来宾**用户态**的 CPUID 隐藏
+              hypervisor 身份。
+
+    实机量到的第一个拦路读数不是能力而是身份：VMware Workstation 17.6 用 CPUID
+    认出外层是 Hyper-V 就去要 WHP，要不到就在装载任何虚拟机之前拒绝启动
+    （`[msg.vmx.nestedHyperV]`）。hidehv 解决的正是这一件事。
+
+    模式不同的两次常驻，从状态位上**分不出来**。所以这里的规矩是：常驻已经在跑
+    而你又指定了模式，就先 stop 再按你要的模式重起 —— 宁可多停一次，也不要一次
+    测量在与你以为的不同模式下跑完并报通过。用 -SkipBringUp 可以关掉这个行为。
+
 .PARAMETER SkipBringUp
     不碰生命周期，只取基线 + 观察 + 差值。常驻已经在跑时用这个。
 
@@ -64,6 +77,8 @@ param(
     [string] $VMName        = 'KSword-HVM-Target',
     [string] $GuestUser     = 'felix',
     [string] $GuestPassword = 'password',
+    [ValidateSet('nested','hidehv')]
+    [string] $Mode          = 'nested',
     [int]    $WaitSeconds   = 300,
     [int]    $PollSeconds   = 10,
     [string] $ResultPath,
@@ -447,24 +462,44 @@ try {
             if ($r.Exit -ne 0) { $record.verdict = 'FAIL'; $exitCode = $r.Exit; return }
             $names = $r.Json.newStateNames
         }
+        # RESIDENT_ACTIVE 置位**不等于**它是我们要的那个模式：普通 resident 起的
+        # 常驻里 VMX 指令被注 #UD，而 nested 与 hidehv 两种常驻在状态位上完全
+        # 一样。沿用一个来历不明的常驻，等于让整轮测量在未知模式下跑完。
         if (Test-StateBit $names 'RESIDENT_ACTIVE') {
-            # RESIDENT_ACTIVE 置位**不等于**它是带嵌套派发起来的：普通 resident
-            # 起的常驻里 VMX 指令被注 #UD，来宾里的 hypervisor 会直接死。
-            # 这里只报告，不代替判断 —— 换常驻要先 stop，那是破坏性动作。
-            Add-Step 'resident-nested' 'SKIP' $null `
-                     '常驻已在跑。若它不是 resident-nested 起的，VMX 指令会被注 #UD；要换请先手动 stop'
-            [void]$record.notes.Add('常驻是之前起的，本脚本没有确认它带嵌套派发。')
-        } else {
-            $r = Invoke-HvmCtl 'resident-nested'
-            Add-Step 'resident-nested' $(if ($r.Exit -eq 0) { 'OK' } else { 'FAIL' }) $r.Json `
-                     '全处理器进 VMX 常驻，并允许来宾执行 VMX 指令'
-            if ($r.Exit -ne 0) {
-                $record.verdict = 'FAIL'
-                [void]$record.notes.Add("resident-nested 返回 $($r.Json.statusName)")
-                $exitCode = $r.Exit
-                return
-            }
+            $r = Invoke-HvmCtl 'stop'
+            Add-Step 'stop' $(if ($r.Exit -eq 0) { 'OK' } else { 'FAIL' }) $r.Json `
+                     '常驻已在跑但模式不可知（状态位分不出 nested / hidehv）；先停掉再按本轮要的模式重起'
+            if ($r.Exit -ne 0) { $record.verdict = 'FAIL'; $exitCode = $r.Exit; return }
         }
+        $residentVerb = if ($Mode -eq 'hidehv') { 'resident-nested-hidehv' } else { 'resident-nested' }
+        $r = Invoke-HvmCtl $residentVerb
+        Add-Step $residentVerb $(if ($r.Exit -eq 0) { 'OK' } else { 'FAIL' }) $r.Json `
+                 '全处理器进 VMX 常驻，并允许来宾执行 VMX 指令'
+        if ($r.Exit -ne 0) {
+            $record.verdict = 'FAIL'
+            [void]$record.notes.Add("$residentVerb 返回 $($r.Json.statusName)")
+            $exitCode = $r.Exit
+            return
+        }
+    }
+
+    # 常驻起来之后立刻读一次来宾用户态的 CPUID。这是 hidehv 唯一的直接判据 ——
+    # 状态位上看不出模式，而这两个值就是 VMware 用来判断外层身份的那两个。
+    $cv = Invoke-HvmCtl 'cpuid-view'
+    if ($null -ne $cv.Json) {
+        $record.cpuidView = $cv.Json
+        $hidden = [bool]$cv.Json.hidden
+        $note = "hypervisor 位={0}  厂商=`"{1}`"" -f $cv.Json.hypervisorPresent, $cv.Json.hvVendor
+        if ($Mode -eq 'hidehv' -and -not $hidden) {
+            Add-Step 'cpuid-view' 'FAIL' $cv.Json ("要求隐藏但用户态仍看得见：" + $note)
+            [void]$record.notes.Add('hidehv 没有生效 —— 后面就算 VMware 起不来，也不是嵌套能力的问题。')
+        } elseif ($Mode -eq 'hidehv') {
+            Add-Step 'cpuid-view' 'OK' $cv.Json ("隐藏生效：" + $note)
+        } else {
+            Add-Step 'cpuid-view' 'OK' $cv.Json $note
+        }
+    } else {
+        Add-Step 'cpuid-view' 'BLOCKED' $null '读不到；本轮无法确认来宾看到的身份'
     }
 
     # ---- 基线 --------------------------------------------------------------

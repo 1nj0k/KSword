@@ -768,6 +768,14 @@ typedef struct _KSW_HVM_RUNTIME
      * 而这一个必须在**每次**退出的发布点被读到。
      */
     volatile LONG TraceRoutineExits;
+    /*
+     * 非零时对来宾**用户态**的 CPUID 隐藏 hypervisor 身份；默认零。
+     *
+     * 与上面几个同样挂在 runtime 上，理由也一样：退出派发器读得到它，而这一位
+     * 必须在**每一次** CPUID 退出上被读到。每次起常驻重设，不粘连 —— 没要求隐藏
+     * 的那一轮绝不能继承上一轮的隐藏，否则"没开时行为不变"这句话就不成立了。
+     */
+    volatile LONG HideHypervisorCpuid;
     /* Preserve IA32_VMX_VMFUNC evidence; bit 0 is EPTP switching. */
     ULONGLONG VmFunctionCapabilities;
     /* Retain the 512-entry EPTP list published to VMFUNC. */

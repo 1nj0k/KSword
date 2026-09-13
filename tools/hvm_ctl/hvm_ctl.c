@@ -124,6 +124,20 @@ static const HVM_CTL_VERB g_Verbs[] = {
       KSWORD_ARK_HVM_CONTROL_FLAG_ENABLE_NESTED_VMX,
       "同 resident，但开启嵌套 VMX 指令派发（nested-probe 的前提）" },
     /*
+     * 与 resident-nested 逐位相同，只多一个身份位 —— 又是一个单独的动词而不是
+     * 参数，理由和上面那条一样：不加这一位时发出去的字节序列必须一个位都不变。
+     *
+     * 这一级存在是因为真机上量到：第三方 hypervisor 卡住的地方不是能力而是身份，
+     * 它用 CPUID 认出外层是别人家的 hypervisor 就拒绝启动。隐藏只作用于来宾用户态。
+     */
+    { "resident-nested-hidehv", KSWORD_ARK_HVM_CONTROL_START_RESIDENT,
+      KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
+      KSWORD_ARK_HVM_CONTROL_FLAG_FORCE |
+      KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED |
+      KSWORD_ARK_HVM_CONTROL_FLAG_ENABLE_NESTED_VMX |
+      KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR,
+      "同 resident-nested，另对来宾用户态的 CPUID 隐藏 hypervisor 身份" },
+    /*
      * 与 resident 逐位相同，只多一个测量位 —— 单独一个动词而不是给 resident 加
      * 参数，理由和 prepare-eptpsw 一样：正常那条命令的字节序列必须一个位都不变，
      * 否则"没测量时行为不变"就没法用同一条命令验。
@@ -955,6 +969,75 @@ static HANDLE OpenDevice(void)
 /* ------------------------------------------------------------------------ */
 /* 只读查询                                                                  */
 /* ------------------------------------------------------------------------ */
+
+/*
+ * 从**用户态**执行 CPUID，报告来宾看到的 hypervisor 身份。
+ *
+ * 这是 resident-nested-hidehv 的判据，而且是比任何状态字段都近的一个：它走的就是
+ * VMware 判断"下面有没有 hypervisor"时走的那条路 —— 同一个特权级、同一个叶。
+ * 状态里多一个"隐藏=开"的标志只能证明请求被接受了，证明不了退出派发器真的改了
+ * 返回值；而这里读到的四个寄存器就是改没改本身。
+ *
+ * 不需要驱动句柄：常驻在跑的时候，这条 CPUID 本身就会退出到我们手里。
+ */
+static int DoCpuidView(int asJson)
+{
+    int leaf1[4] = { 0, 0, 0, 0 };
+    int hv[4] = { 0, 0, 0, 0 };
+    int hvVendor[4] = { 0, 0, 0, 0 };
+    char vendor[13];
+    int present = 0;
+
+    __cpuidex(leaf1, 1, 0);
+    __cpuidex(hv, 0x40000000, 0);
+    /* 保留一份未改写的副本用于拼厂商串。 */
+    hvVendor[0] = hv[0];
+    hvVendor[1] = hv[1];
+    hvVendor[2] = hv[2];
+    hvVendor[3] = hv[3];
+    /* CPUID.1:ECX bit 31 —— 架构上专留给"有 hypervisor"的那一位。 */
+    present = ((unsigned int)leaf1[2] & 0x80000000U) != 0U ? 1 : 0;
+    /* 厂商串按 EBX、ECX、EDX 的顺序，12 个字节。 */
+    memcpy(vendor + 0, &hvVendor[1], 4);
+    memcpy(vendor + 4, &hvVendor[2], 4);
+    memcpy(vendor + 8, &hvVendor[3], 4);
+    vendor[12] = '\0';
+    {
+        size_t i = 0;
+        /* 非可打印字节一律换成点，免得控制字符把输出弄乱。 */
+        for (i = 0; i < 12; ++i) {
+            if (vendor[i] < 0x20 || vendor[i] > 0x7E) {
+                vendor[i] = (vendor[i] == '\0') ? '\0' : '.';
+            }
+        }
+    }
+
+    if (asJson) {
+        printf("{\"kind\":\"cpuidView\",\"hypervisorPresent\":%s,"
+               "\"leaf1Ecx\":\"0x%08X\","
+               "\"hvLeafEax\":\"0x%08X\",\"hvVendor\":\"%s\","
+               "\"hidden\":%s}\n",
+               present ? "true" : "false",
+               (unsigned int)leaf1[2],
+               (unsigned int)hvVendor[0],
+               vendor,
+               (!present && hvVendor[0] == 0) ? "true" : "false");
+        return 0;
+    }
+
+    printf("\n=== 来宾用户态看到的 CPUID ===\n");
+    printf("  CPUID.1:ECX          : 0x%08X\n", (unsigned int)leaf1[2]);
+    printf("  bit31 hypervisor 位  : %s\n", present ? "**有**" : "无");
+    printf("  CPUID.40000000:EAX   : 0x%08X\n", (unsigned int)hvVendor[0]);
+    printf("  hypervisor 厂商      : \"%s\"\n", vendor);
+    printf("  结论                 : %s\n",
+           (!present && hvVendor[0] == 0)
+               ? "用户态问不出下面有 hypervisor（隐藏生效）"
+               : "用户态能看出下面有 hypervisor");
+    printf("\n  这两个值就是 VMware 的 IOPL_Init 用来判断的那两个。它认出外层是\n"
+           "  别人家的 hypervisor 就会去要 WHP，要不到就在装载任何虚拟机之前拒绝。\n");
+    return 0;
+}
 
 static int DoQuery(HANDLE h, int asJson)
 {
@@ -5571,6 +5654,11 @@ static void PrintUsage(void)
     size_t i;
     printf("用法: hvm_ctl.exe [--json] <命令> [参数]\n\n");
     printf("  status           只读查询，不改状态\n");
+    printf("  cpuid-view       从用户态执行 CPUID，报告来宾看得出下面有没有 "
+           "hypervisor。\n"
+           "                   不碰驱动，也不需要常驻在跑。这是 "
+           "resident-nested-hidehv 的判据 ——\n"
+           "                   它走的就是 VMware 判断外层身份时走的那条路。\n");
     printf("  probe-platform   平台探针（只读，不进 VMX：CET / KVA shadow / "
            "GS base）\n");
     printf("  probe-flags      负向探针（ENFORCE、能力 flag、互斥组合是否被"
@@ -5664,6 +5752,16 @@ int main(int argc, char** argv)
     if (strcmp(cmd, "help") == 0 || strcmp(cmd, "--help") == 0) {
         PrintUsage();
         return 0;
+    }
+    /*
+     * 排在打开设备之前，而不是和别的命令一起排在后面。
+     *
+     * 这条命令不碰驱动，而它最有用的一次读数恰恰是**驱动还没加载**的时候 ——
+     * 那是对照组。放在 OpenDevice 之后，没有驱动就只会得到一句
+     * device-open-failed，基线永远取不到。
+     */
+    if (strcmp(cmd, "cpuid-view") == 0) {
+        return DoCpuidView(asJson);
     }
 
     h = OpenDevice();

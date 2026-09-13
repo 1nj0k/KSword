@@ -736,6 +736,17 @@ KswordARKHvmResidentPrepareContexts(
         ((Flags & KSWORD_ARK_HVM_CONTROL_FLAG_TRACE_ROUTINE_EXITS) != 0UL)
             ? 1L
             : 0L);
+    /*
+     * Publish whether user-mode CPUID hides the hypervisor, before the first
+     * exit.  Set per resident start rather than sticky, for the same reason as
+     * the trace bit above: a run that did not ask to hide must not inherit a
+     * lie from an earlier one.
+     */
+    InterlockedExchange(
+        &Runtime->HideHypervisorCpuid,
+        ((Flags & KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR) != 0UL)
+            ? 1L
+            : 0L);
     /* Allocate and initialize one host stack per prepared processor. */
     for (index = 0UL;
          index < Runtime->ProcessorCount;

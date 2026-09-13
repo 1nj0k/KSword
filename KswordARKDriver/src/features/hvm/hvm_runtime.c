@@ -3001,7 +3001,13 @@ KswordARKHvmControl(
              * exit's semantics; it only decides whether routine exits occupy
              * ring slots that the four evidence classes would otherwise hold.
              */
-            KSWORD_ARK_HVM_CONTROL_FLAG_TRACE_ROUTINE_EXITS;
+            KSWORD_ARK_HVM_CONTROL_FLAG_TRACE_ROUTINE_EXITS |
+            /*
+             * Identity choice, not a capability.  Narrows what guest user mode
+             * learns from CPUID about the hypervisor underneath; every other
+             * exit keeps its exact semantics.
+             */
+            KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR;
         /* Stop after selecting the resident-start flag set. */
         break;
     case KSWORD_ARK_HVM_CONTROL_SOAK:

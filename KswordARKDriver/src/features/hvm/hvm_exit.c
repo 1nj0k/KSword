@@ -72,6 +72,8 @@ Environment:
 #define KSW_VMX_ACCESS_RIGHTS_DPL_MASK 3ULL
 /* The only privilege level allowed to reach a lifecycle or forwarded VMCALL. */
 #define KSW_HVM_SUPERVISOR_CPL 0UL
+/* Guest user mode; also what an unreadable SS access right reports. */
+#define KSW_HVM_USER_CPL 3UL
 /*
  * Synthetic guest-idle MSR.  Named here only so the comment in the dispatcher
  * that explains why it is deliberately NOT intercepted has something to point
@@ -649,6 +651,49 @@ KswordARKHvmExitHandleCpuid(
         !Context->Nested.Enabled) {
         /* Clear the VMX capability bit in guest CPUID.1:ECX. */
         registers[2] &= ~(1L << 5);
+    }
+    /*
+     * Hide the outer hypervisor's identity from guest user mode when asked.
+     *
+     * The identity being hidden is not ours: it is the L0 hypervisor's, passed
+     * through to our own guest because this handler executes the host leaf
+     * verbatim.  A guest of ours has no business being told who is underneath
+     * us, and one real consumer refuses to start on the strength of exactly
+     * that answer - see KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR.
+     *
+     * Only CPL 3 is altered.  The guest kernel bound itself to the outer
+     * hypervisor at boot; telling it midway that no hypervisor exists has
+     * consequences nobody can enumerate, and nothing that needs this lie runs
+     * in kernel mode.  Note that an unreadable guest SS access right also
+     * reports CPL 3 - that conflation is accepted because a guest-state field
+     * that cannot be read means this exit path is already broken, and the
+     * outcome here is a narrower CPUID answer rather than a wider one.
+     */
+    if (Context->Runtime != NULL &&
+        InterlockedCompareExchange(
+            &Context->Runtime->HideHypervisorCpuid, 0L, 0L) != 0L &&
+        KswordARKHvmExitGuestCpl() == KSW_HVM_USER_CPL) {
+        /* Clear the hypervisor-present bit in CPUID.1:ECX. */
+        if (leaf == 1UL) {
+            registers[2] &= ~(1L << 31);
+        }
+        /*
+         * Report no hypervisor vendor leaves at all.
+         *
+         * Zeroing the whole 0x40000000..0x400000FF window rather than only the
+         * vendor leaf: a caller that finds an empty signature at 0x40000000 but
+         * a populated 0x40000001 learns more than one that finds nothing, and
+         * the range is architecturally reserved for exactly this purpose.  This
+         * is not an attempt to look like bare metal, which would also require
+         * matching the highest-basic-leaf aliasing real processors perform.
+         */
+        if (leaf >= 0x40000000UL &&
+            leaf <= 0x400000FFUL) {
+            registers[0] = 0L;
+            registers[1] = 0L;
+            registers[2] = 0L;
+            registers[3] = 0L;
+        }
     }
     /* Publish zero-extended guest RAX. */
     Frame->Rax = (ULONG)registers[0];
