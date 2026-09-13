@@ -274,7 +274,9 @@ namespace
             });
         };
         monitor.start();
-        window.show();
+        // The companion is intentionally hidden until a positive UAC window
+        // match is produced.  Winlogon is also used by the lock screen, so
+        // showing the window at startup would leak the panel onto the lock UI.
         QTimer::singleShot(0, &window, [&window] { window.refreshNow(); });
         stageTrace(QStringLiteral("system: UIAccess window started and monitor attached"));
         const QString handoff = valueAfter(args, QStringLiteral("--ksword-uac-handoff="));

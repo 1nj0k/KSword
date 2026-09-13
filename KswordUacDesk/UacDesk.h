@@ -258,7 +258,6 @@ private:
     bool m_dragging = false;
     QPoint m_dragOffset;
     HWND m_positionedUacWindow = nullptr;
-    int m_uacMissCount = 0;
     std::atomic_bool m_scanRunning{false};
     std::atomic_bool m_scanStop{false};
     std::atomic<quint64> m_scanGeneration{0};

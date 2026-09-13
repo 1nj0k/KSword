@@ -2801,6 +2801,10 @@ UacDeskWindow::UacDeskWindow(QWidget* parent)
         move(x, y);
     }
     updateButtons();
+    // The companion is event-driven UI for an actual UAC prompt.  It must not
+    // leave a visible window on the shared Winlogon desktop while the machine
+    // is merely locked (or while no prompt is present).
+    hide();
 }
 
 UacDeskWindow::~UacDeskWindow()
@@ -2930,10 +2934,24 @@ void UacDeskWindow::refreshUacState()
 
 void UacDeskWindow::applyScanResult(const UacApplicationIdentity& identity, const ProcessActionState& actionState)
 {
-    if (!identity.isUac)
+    // AppInfo evidence may arrive before the native window scan.  It is useful
+    // for correlating the request, but it is not enough to make a visible panel
+    // with no anchor rectangle: otherwise a lock-screen/transition state could
+    // expose a stale panel at its previous position.
+    const bool hasVisibleUac = identity.isUac && identity.consentWindow != nullptr &&
+                               !identity.windowRect.isEmpty();
+    if (!hasVisibleUac)
     {
-        ++m_uacMissCount;
-        if (m_uacMissCount < 4) return;
+        // Winlogon is shared by UAC and the lock screen.  Visibility is gated
+        // by positive UAC detection, not by the fact that this process can
+        // access the Winlogon desktop.  Hide immediately on a negative scan so
+        // a stale panel cannot remain visible on the lock screen.
+        if (isVisible())
+        {
+            hide();
+            PrivilegeStage::writeDiagnosticLog(QStringLiteral(
+                "uac-visibility: hidden because no valid UAC window was detected"));
+        }
         m_positionedUacWindow = nullptr;
         m_identity = {};
         m_actionState = {};
@@ -2944,7 +2962,6 @@ void UacDeskWindow::applyScanResult(const UacApplicationIdentity& identity, cons
         updateButtons();
         return;
     }
-    m_uacMissCount = 0;
     const bool shouldPosition = m_positionedUacWindow == nullptr || m_positionedUacWindow != identity.consentWindow;
     m_identity = identity;
     m_actionState = actionState;
@@ -2995,12 +3012,22 @@ void UacDeskWindow::applyScanResult(const UacApplicationIdentity& identity, cons
                                                    .arg(uacHeight)
                                                    .arg(dpi));
         }
+        show();
         repositionBesideUac(identity);
         m_positionedUacWindow = identity.consentWindow;
         PrivilegeStage::writeDiagnosticLog(QStringLiteral("uac-layout: positioned once hwnd=0x%1 rect=%2,%3,%4,%5")
                                                .arg(reinterpret_cast<quintptr>(identity.consentWindow), 0, 16)
                                                .arg(identity.windowRect.left()).arg(identity.windowRect.top())
                                                .arg(identity.windowRect.width()).arg(identity.windowRect.height()));
+    }
+    else if (!isVisible())
+    {
+        // A prompt can briefly disappear during its native transition.  If it
+        // is still positively identified when the next result arrives, make
+        // the companion visible again without activating it.
+        show();
+        SetWindowPos(reinterpret_cast<HWND>(winId()), HWND_TOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 }
 
