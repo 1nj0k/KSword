@@ -5788,13 +5788,15 @@ namespace
                 (static_cast<std::size_t>(KSW_DYN_V4_MAX_ITEMS_PER_MODULE) * sizeof(KSW_DYN_V4_ITEM_PACKET));
             std::vector<std::uint8_t> blob = readRequiredBlobOption(args, L"--blob", maxBytes);
             KSW_APPLY_DYN_PROFILE_V4_RESPONSE response{};
+            // 这条 IOCTL 是 FILE_WRITE_ACCESS：只用 GENERIC_READ 打开设备的话，
+            // I/O 管理器在 handler 之前就返回 ACCESS_DENIED，这个子命令永远失败。
+            // 用默认的 READ|WRITE，与紧邻的 apply-profile / apply-profile-ex 一致。
             if (!sendBlobFixedResponse(
                     IOCTL_KSWORD_ARK_APPLY_DYN_PROFILE_V4,
                     L"IOCTL_KSWORD_ARK_APPLY_DYN_PROFILE_V4",
                     blob,
                     response,
-                    io,
-                    GENERIC_READ))
+                    io))
             {
                 if (isUnsupportedTransportError(io.win32Error))
                 {

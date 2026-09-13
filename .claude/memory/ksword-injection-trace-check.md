@@ -82,12 +82,46 @@
   （`PteInVqNonExec=0`、`PteOutsideCommitted=0`）。页表口径 89 MB ≤ VQ 保护属性口径 231 MB，
   差额是"尚未换入、没有 PTE 的页"，符合预期。**干净机器上 `ExecutableBeyondR3View` 为 0**，
   不会误报刷屏。
-- **VAD 枚举在这台机器上问不出真数据**：DynData 偏移表不覆盖 22621.4317，
-  返回 `status=4`(DYNDATA_MISSING) + `profileVerified=0`，即设计中的"明确降级"。
-  树遍历本身仍未在真数据上验证过 —— 要验得先有覆盖该 build 的 profile。
+- ~~**VAD 枚举在这台机器上问不出真数据**：DynData 偏移表不覆盖 22621.4317~~
+  **这条是错的，2026-09-13 已推翻。** 22621.4317 **在 `ark_dyndata_pack_v4.json` 里，
+  100% 覆盖，`EpVadRoot=0x7D8`**。当时看到 `DYNDATA_MISSING` 就断言"没有偏移表"，
+  没去查包 —— 正是"一次不完整的观察不构成缺陷"。真因见下面「profile 要 apply 才算数」。
+- **VAD 遍历已在真数据上验证**（2026-09-13）：explorer 586 条、`visited=586 unreadable=0`、
+  范围严格升序。独立实现（guest 内另写的 VirtualQueryEx P/Invoke 枚举）给出 2299 个子区域、
+  归并为 **586 个 allocation base**，且 **586 个 VAD 起始地址全部命中 allocation base，零不符**。
 - 段合并键是**完整的生效标志位**（含 Accessed/Dirty），所以 A/D 不同的相邻页不会合并，
   explorer 因此是 7502 段而不是更少。这是精确换碎片的取舍，目前 16384 的默认够用，
   没有读数要求改它。
+
+### profile 在包里 ≠ 驱动拿到了（2026-09-13 定案）
+
+`DYNDATA_MISSING` 有两个完全不同的成因，读数长得一样，别混：
+
+1. **包里就没有这个 build** —— 本机 26100.9022 属于这类（2070 个 profile 里没有）。
+2. **包里有，但没人 apply** —— 靶机 22621.4317 属于这类。apply 是**主程序启动时**做的，
+   只有驱动 + CLI 的机器上没有任何东西会去 apply，于是 `_EPROCESS.VadRoot` 恒为
+   `Unavailable`，看着就像第 1 类。
+
+判据是 `dyn fields | Select-String VadRoot` 看 `source=`：`0/Unavailable` 是没 apply，
+`4/PDB profile` 才是拿到了。`dyn status` 说 "DynData profile matched exactly" **不算数** ——
+那说的是 System Informer 的内嵌数据匹配上了，和 PDB profile 是两套。
+
+**v4 apply 不填 `State->Kernel.*`。** `apply-profile-v4` 会报 113/113 全成功、消息
+"accepted for safe storage"，但条目进的是独立的 v4 存储；`injection_vad.c` 读的
+`DynState->Kernel.EpVadRoot` 只有 **legacy(v1) `apply-profile`** 会填。两个都要发。
+
+工具链（本次新增，都在 `tools/pdb_offset_generator/`）：
+- `ksword_kernel_struct_offsets.cpp` —— 用 DbgHelp 从本地符号库离线读内核结构偏移。
+  `llvm-pdbutil` 不在本机，Python 生成器跑不了；这个只读本地库、不联网。
+- `ksword_dyndata_pack_to_manifest.py` —— pack JSON → 纯文本清单。**`fields` 里的
+  第一个数是 fieldDictionary 的下标，不是驱动认的字段 id**，要拿名字去 v4 items 里查回
+  `itemId`；直接当 id 发会把偏移写到别的字段上。
+- `ksword_dyndata_v4_blob.cpp` —— 清单 → v1/v4 原始包。二进制布局只在这里出现一次，
+  直接用产品头文件的结构体填，不在 Python 里手抄。
+
+**`KswordCLI dyn apply-profile-v4` 一直是坏的**：它用 `GENERIC_READ` 开设备，
+而这条 IOCTL 是 `FILE_WRITE_ACCESS` ⇒ I/O 管理器在 handler 之前就 ACCESS_DENIED。
+已修。同族只此一处，紧邻的 v1/EX 两个都传的 READ|WRITE。
 
 ### 驱动侧的两个坑
 
