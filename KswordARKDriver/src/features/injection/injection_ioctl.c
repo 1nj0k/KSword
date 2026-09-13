@@ -215,3 +215,88 @@ Return Value:
         (unsigned long long)*BytesReturned);
     return STATUS_SUCCESS;
 }
+
+NTSTATUS
+KswordARKInjectionIoctlReadImageSectionPages(
+    _In_ WDFDEVICE Device,
+    _In_ WDFREQUEST Request,
+    _In_ size_t InputBufferLength,
+    _In_ size_t OutputBufferLength,
+    _Out_ size_t* BytesReturned
+    )
+/*++
+
+Routine Description:
+
+    处理 IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES。
+
+    METHOD_BUFFERED 的输入输出共用同一个 SystemBuffer，所以**必须先把请求快照下来**
+    再去取输出缓冲 —— 取输出的那一刻输入就可能被覆盖。这条规则在本仓库是用一次
+    0x50 蓝屏换来的。
+
+Return Value:
+
+    NTSTATUS 表示缓冲校验或读取执行结果。
+
+--*/
+{
+    KSWORD_ARK_READ_IMAGE_SECTION_PAGES_REQUEST requestSnapshot;
+    PVOID inputBuffer = NULL;
+    PVOID outputBuffer = NULL;
+    size_t actualInputLength = 0;
+    size_t actualOutputLength = 0;
+    NTSTATUS status = STATUS_SUCCESS;
+
+    UNREFERENCED_PARAMETER(InputBufferLength);
+    UNREFERENCED_PARAMETER(OutputBufferLength);
+
+    if (BytesReturned == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    *BytesReturned = 0;
+
+    status = KswordARKRetrieveRequiredInputBuffer(
+        Request,
+        sizeof(KSWORD_ARK_READ_IMAGE_SECTION_PAGES_REQUEST),
+        &inputBuffer,
+        &actualInputLength);
+    if (!NT_SUCCESS(status)) {
+        KswordARKInjectionIoctlLog(Device, "Error", "R0 read-section-pages ioctl: input invalid, status=0x%08X.", (unsigned int)status);
+        return status;
+    }
+
+    RtlCopyMemory(&requestSnapshot, inputBuffer, sizeof(requestSnapshot));
+
+    status = KswordARKRetrieveRequiredOutputBuffer(
+        Request,
+        KSWORD_ARK_INJECTION_SECTION_RESPONSE_HEADER_SIZE,
+        &outputBuffer,
+        &actualOutputLength);
+    if (!NT_SUCCESS(status)) {
+        KswordARKInjectionIoctlLog(Device, "Error", "R0 read-section-pages ioctl: output invalid, status=0x%08X.", (unsigned int)status);
+        return status;
+    }
+
+    status = KswordARKDriverReadImageSectionPages(
+        outputBuffer,
+        actualOutputLength,
+        &requestSnapshot,
+        BytesReturned);
+    if (!NT_SUCCESS(status)) {
+        KswordARKInjectionIoctlLog(
+            Device,
+            "Error",
+            "R0 read-section-pages failed: pid=%lu, status=0x%08X.",
+            (unsigned long)requestSnapshot.processId,
+            (unsigned int)status);
+        return status;
+    }
+
+    KswordARKInjectionIoctlLog(
+        Device,
+        "Info",
+        "R0 read-section-pages completed: pid=%lu, bytes=%llu.",
+        (unsigned long)requestSnapshot.processId,
+        (unsigned long long)*BytesReturned);
+    return STATUS_SUCCESS;
+}

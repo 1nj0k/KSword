@@ -2449,6 +2449,64 @@ void TestSurveyPipeline(KswordTests::Suite& suite) {
                      L"断链 缺口压制干净结论");
     }
 
+    // --- 映像节对象参考页 ---
+    // 节对象是"这个映像本来该是什么样"的第二个来源（磁盘文件是第一个）。
+    // 它的覆盖账必须单独把门：原型 PTE 不是 valid 形态的页拿不到参考，
+    // 那是**没比到**，不是"比过了没差异"。
+    {
+        ImageComparisonOutcome diskRef;
+        diskRef.referenceSource = ImageReferenceSource::DiskFile;
+        suite.expect(SectionReferenceCoverageComplete(diskRef),
+                     L"节参考 磁盘来源不受节覆盖账约束");
+
+        ImageComparisonOutcome full;
+        full.referenceSource = ImageReferenceSource::SectionObject;
+        full.sectionPagesRequested = 16U;
+        full.sectionPagesAvailable = 16U;
+        suite.expect(SectionReferenceCoverageComplete(full), L"节参考 全覆盖");
+
+        ImageComparisonOutcome partial = full;
+        partial.sectionPagesAvailable = 15U;
+        suite.expect(!SectionReferenceCoverageComplete(partial), L"节参考 少一页即不完整");
+
+        // 一页都没请求过不能算"覆盖完整" —— 那是没比，不是比全了。
+        ImageComparisonOutcome none;
+        none.referenceSource = ImageReferenceSource::SectionObject;
+        suite.expect(!SectionReferenceCoverageComplete(none), L"节参考 零请求不算完整");
+
+        suite.expect(std::string(ImageReferenceSourceName(ImageReferenceSource::SectionObject)) ==
+                         "SectionObject",
+                     L"节参考 来源名可回源");
+    }
+
+    // 接进总入口：节参考没覆盖全时压制干净结论。
+    {
+        SurveyInput sectionPartial = MakeCleanInput();
+        ImageComparisonOutcome outcome;
+        outcome.referenceConfidence = ReferenceConfidence::ReferenceVerified;
+        outcome.referenceSource = ImageReferenceSource::SectionObject;
+        outcome.sectionPagesRequested = 32U;
+        outcome.sectionPagesAvailable = 20U;
+        outcome.report.outcome = CollectionOutcome::success();
+        sectionPartial.imageComparisons = { outcome };
+        const SurveyReport partialReport = RunInjectionSurvey(sectionPartial);
+        suite.expect(partialReport.sectionReferenceComparisons == 1U, L"节参考 计数");
+        suite.expect(partialReport.hasGap(kGapSectionReferenceIncomplete),
+                     L"节参考 覆盖不全记成缺口");
+        suite.expect(partialReport.conclusion != AnalysisConclusion::NoDifferenceObserved,
+                     L"节参考 缺口压制干净结论");
+
+        SurveyInput sectionFull = MakeCleanInput();
+        ImageComparisonOutcome complete = outcome;
+        complete.sectionPagesAvailable = 32U;
+        sectionFull.imageComparisons = { complete };
+        const SurveyReport fullReport = RunInjectionSurvey(sectionFull);
+        suite.expect(!fullReport.hasGap(kGapSectionReferenceIncomplete),
+                     L"节参考 全覆盖不留缺口");
+        suite.expect(fullReport.conclusion == AnalysisConclusion::NoDifferenceObserved,
+                     L"节参考 全覆盖可给出干净结论");
+    }
+
     // --- WOW64 采集器缺口透传 ---
     SurveyInput wow = MakeCleanInput();
     wow.collectorArchitecture = CollectorArchitecture::Wow64;

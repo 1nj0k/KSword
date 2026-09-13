@@ -5932,6 +5932,8 @@
     "settings.background.translucency_material.acrylic": "磨砂玻璃"
   },
   "source_translations": {
+    "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=": "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=",
+    "read-image-section-pages byte area truncated": "read-image-section-pages byte area truncated",
     "内存区域清单被人动过手脚": "内存区域清单被人动过手脚",
     "核对内存区域清单有没有被动过": "核对内存区域清单有没有被动过",
     "内存区域清单没能一次读完（条目太多被截断，或有节点读不到），所以“清单有没有被动过”这一项没查成": "内存区域清单没能一次读完（条目太多被截断，或有节点读不到），所以“清单有没有被动过”这一项没查成",

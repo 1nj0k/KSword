@@ -1729,7 +1729,7 @@ InjectionTraceResult ScanProcessInjectionTrace(const std::uint32_t pid,
                     region.vadNodeAddress = ev::OptionalU64::of(entry.vadNodeAddress);
                     region.privateMemory =
                         (entry.entryFlags & KSWORD_ARK_INJECTION_VAD_FLAG_PRIVATE_MEMORY) != 0U;
-                    region.hasSection = entry.controlArea != 0ULL;
+                    region.hasSection = entry.subsection != 0ULL;
                     region.flagsLayoutAssumed =
                         (entry.entryFlags & KSWORD_ARK_INJECTION_VAD_FLAG_FLAGS_LAYOUT_ASSUMED) != 0U;
                     region.protectionRaw = ev::OptionalU64::of(entry.protection);

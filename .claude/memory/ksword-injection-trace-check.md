@@ -141,6 +141,32 @@
 **实机底噪为零**：90 进程 / 10199 节点，`visited == vadCount` 精确相等、`parentMismatch`
 全 0、非空 hint 全可达。**结论仍只到 Indeterminate** —— 样本只有一台机器。
 
+### 映像节对象参考页（2026-09-13 实机验过）
+
+拿"这个映像本来该是什么样"的**第二个来源**（第一个是磁盘文件）。
+链路 `VAD → Subsection → ControlArea → Segment → PrototypePte[]`。
+
+**版本风险靠三条压住，改之前先看：**
+
+- **不走 Subsection 链**。`MMVAD.FirstPrototypePte` 到 `LastContiguousPte`
+  之间原型 PTE 连续，索引 = `(va - vadStart) / PAGE_SIZE`。超出这段报"解析不到"。
+  这两个字段驱动早就在读，**不需要新的 DynData 偏移**。
+- **不解码软件 PTE**。只有 valid 的位布局是架构定义的（bit 0 = Present、
+  bits 12..51 = PFN）；transition / 页面文件的编码随版本变。其余报 NOT_RESIDENT。
+- **绝不把页面调进来**。那会改变目标状态，且在这个调用路径上会死锁。
+
+**实机验证**：82 个采样页的原型 PTE 物理地址与进程页表解析出的**完全相同**
+（5 进程 9 模块，零不符）；ntdll 基址页字节 `4d5a9000...` = MZ 头。
+
+### 两个坑（都是实测才暴露的）
+
+- **字节区偏移必须由响应给出**（`byteAreaOffset`）。它取决于驱动侧的条目
+  容量，而那个值同时受缓冲大小与 `maxPages` 约束，调用方只知道前者。
+  第一版让两边各自推导，结果字节一个都读不到。
+- **VAD 条目里原先叫 `controlArea` 的字段装的是 Subsection 指针**，已改名。
+  实测 ntdll 的 VAD 报 `0xFFFF…090`，真 ControlArea 是 `0xFFFF…010`，
+  差 `0x80 = sizeof(_CONTROL_AREA)`。
+
 ### 驱动侧的两个坑
 
 - `PsLookupProcessByProcessId` / `KeStackAttachProcess` / `KeUnstackDetachProcess` / `KAPC_STATE`

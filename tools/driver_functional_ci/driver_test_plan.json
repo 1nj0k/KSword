@@ -809,6 +809,35 @@
       ]
     },
     {
+      "id": "memory.read-section-pages",
+      "tier": "probe",
+      "ioctls": [
+        "READ_IMAGE_SECTION_PAGES"
+      ],
+      "steps": [
+        [
+          "memory",
+          "read-section-pages",
+          "--pid",
+          "{target.pid}",
+          "--start",
+          "{target.imageBase}",
+          "--end",
+          "{target.imageBase}",
+          "--max-pages",
+          "16",
+          "--limit",
+          "4"
+        ]
+      ],
+      "expect": "graceful",
+      "timeoutSeconds": 120,
+      "requires": [
+        "target.pid",
+        "target.imageBase"
+      ]
+    },
+    {
       "id": "memory.scan-exec-pte",
       "tier": "probe",
       "ioctls": [

@@ -998,6 +998,9 @@
     <ClCompile Include="src\features\injection\injection_pte_scan.c">
       <Filter>Source Files\Features\Injection</Filter>
     </ClCompile>
+    <ClCompile Include="src\features\injection\injection_section.c">
+      <Filter>Source Files\Features\Injection</Filter>
+    </ClCompile>
     <ClCompile Include="src\features\injection\injection_ioctl.c">
       <Filter>Source Files\Features\Injection</Filter>
     </ClCompile>

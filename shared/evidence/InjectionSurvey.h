@@ -677,11 +677,35 @@ const char* ReferenceConfidenceName(ReferenceConfidence confidence) noexcept;
 // 只有 ReferenceVerified 才允许把差异表述成"映像代码修改已证实"。
 bool ReferenceSupportsDifferenceClaim(ReferenceConfidence confidence) noexcept;
 
+// 参考字节是从哪儿来的。两个来源互相独立，**同时命中才最强**：
+//   DiskFile      —— 磁盘上的那个文件。最常用，但文件可能被锁住、读不到，
+//                     或者已经被攻击者连同内存一起改掉。
+//   SectionObject —— 内存管理器自己持有的节对象（原型 PTE 指向的干净页）。
+//                     它是映射建立时的内容，改磁盘文件不会改它。
+enum class ImageReferenceSource {
+    None,
+    DiskFile,
+    SectionObject,
+};
+
+const char* ImageReferenceSourceName(ImageReferenceSource source) noexcept;
+
 struct ImageComparisonOutcome final {
     DriverInstanceId module;
     ReferenceConfidence referenceConfidence = ReferenceConfidence::NoReference;
+    ImageReferenceSource referenceSource = ImageReferenceSource::DiskFile;
     ImageDiffReport report;
+
+    // 节对象参考的覆盖账。**只在 referenceSource == SectionObject 时有意义。**
+    // 原型 PTE 不是 valid 形态的页拿不到参考（本版本按设计不把页面调进来），
+    // 那些页是**覆盖缺口**，不是"比过了没差异"。
+    std::size_t sectionPagesRequested = 0;
+    std::size_t sectionPagesAvailable = 0;
 };
+
+// 节对象参考是不是覆盖了请求的全部页。没覆盖全时差异仍然算数（发现的就是发现的），
+// 但"没发现差异"不能成立 —— 没比到的页不能算比过了。
+bool SectionReferenceCoverageComplete(const ImageComparisonOutcome& outcome) noexcept;
 
 // ---------------------------------------------------------------------------
 // J-06：R0 扫描后端的交叉视图（issue #196 §五 第一、二层）
@@ -1069,6 +1093,9 @@ extern const char* const kGapKernelBackendUnavailable; // inject.gap.kernel-back
 extern const char* const kGapKernelProfileUnverified;  // inject.gap.kernel-profile
 // VAD 后端跑成了，但树没走完（截断 / 续扫 / 有节点读不到），断链判据因此不成立。
 extern const char* const kGapVadLinkUncheckable;       // inject.gap.vad-link-uncheckable
+// 用节对象当参考，但有页拿不到（原型 PTE 不是 valid 形态）。差异仍算数，
+// 但"没发现差异"不能成立 —— 没比到的页不是比过了。
+extern const char* const kGapSectionReferenceIncomplete; // inject.gap.section-reference
 // 做了栈回溯，但一个线程的上下文都不够可信（全都在跑）。这是"打算查没查成"，
 // 不是"本版本不做"—— 后者是 kLimitStackUnwindUnavailable，两者不能混。
 extern const char* const kGapStackWalkUntrusted;       // inject.gap.stack-untrusted
@@ -1225,6 +1252,8 @@ struct SurveyReport final {
     // "walked 大而 trusted 为 0"是缺口，不是"线程都正常"。
     // VAD 树链接不自洽的条目数。单独计，不并进 kernelCrossIssueCount ——
     // 那一个问的是"两个视图说的一不一样"，这一个问"这棵树自己站不站得住"。
+    // 用节对象（而不是磁盘文件）当参考跑过的比较次数。
+    std::size_t sectionReferenceComparisons = 0;
     std::size_t vadLinkIssueCount = 0;
     VadLinkIntegrity vadLinkIntegrity = VadLinkIntegrity::NotChecked;
 

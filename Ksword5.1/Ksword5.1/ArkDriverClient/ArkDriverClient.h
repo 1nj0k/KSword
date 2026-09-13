@@ -190,6 +190,14 @@ namespace ksword::ark
             unsigned long maxEntries = KSWORD_ARK_INJECTION_PTE_LIMIT_DEFAULT,
             unsigned long maxTableReads = KSWORD_ARK_INJECTION_PTE_TABLE_READS_DEFAULT,
             unsigned long flags = 0) const;
+        // 映像节对象参考页：拿“这个映像本来该是什么样”的第二个来源（不是磁盘文件）。
+        ImageSectionPagesResult readImageSectionPages(
+            std::uint32_t processId,
+            std::uint64_t rangeStart,
+            std::uint64_t rangeEnd,
+            std::uint64_t cursorVa = 0,
+            unsigned long maxPages = KSWORD_ARK_INJECTION_SECTION_PAGES_DEFAULT,
+            unsigned long flags = 0) const;
         FileSectionMappingsQueryResult queryFileSectionMappings(const std::wstring& ntPath, unsigned long flags = KSWORD_ARK_FILE_SECTION_QUERY_FLAG_INCLUDE_ALL, unsigned long maxMappings = KSWORD_ARK_SECTION_MAPPING_LIMIT_DEFAULT) const;
         VirtualMemoryQueryResult queryVirtualMemory(
             std::uint32_t processId,

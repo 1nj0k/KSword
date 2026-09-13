@@ -5932,6 +5932,8 @@
     "settings.background.translucency_material.acrylic": "Frosted glass"
   },
   "source_translations": {
+    "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=": "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=",
+    "read-image-section-pages byte area truncated": "read-image-section-pages byte area truncated",
     "内存区域清单被人动过手脚": "The memory region list has been tampered with",
     "核对内存区域清单有没有被动过": "Check whether the memory region list has been tampered with",
     "内存区域清单没能一次读完（条目太多被截断，或有节点读不到），所以“清单有没有被动过”这一项没查成": "The memory region list could not be read in one pass (too many entries to fit, or some nodes were unreadable), so the tamper check did not complete",

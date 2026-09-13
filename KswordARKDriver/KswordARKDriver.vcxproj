@@ -254,6 +254,7 @@
     <ClCompile Include="src\features\section\section_ioctl.c" />
     <ClCompile Include="src\features\injection\injection_vad.c" />
     <ClCompile Include="src\features\injection\injection_pte_scan.c" />
+    <ClCompile Include="src\features\injection\injection_section.c" />
     <ClCompile Include="src\features\injection\injection_ioctl.c" />
     <ClCompile Include="src\features\wsl\wsl_silo_query.c" />
     <ClCompile Include="src\features\wsl\wsl_silo_ioctl.c" />

@@ -1257,6 +1257,24 @@ const char* ReferenceConfidenceName(const ReferenceConfidence confidence) noexce
     return "NoReference";
 }
 
+const char* ImageReferenceSourceName(const ImageReferenceSource source) noexcept {
+    switch (source) {
+    case ImageReferenceSource::None: return "None";
+    case ImageReferenceSource::DiskFile: return "DiskFile";
+    case ImageReferenceSource::SectionObject: return "SectionObject";
+    }
+    return "None";
+}
+
+bool SectionReferenceCoverageComplete(const ImageComparisonOutcome& outcome) noexcept {
+    if (outcome.referenceSource != ImageReferenceSource::SectionObject) {
+        return true;  // 别的来源不受这个账目约束
+    }
+    // 一页都没请求过时不能算"覆盖完整" —— 那是没比，不是比全了。
+    return outcome.sectionPagesRequested != 0U &&
+           outcome.sectionPagesAvailable == outcome.sectionPagesRequested;
+}
+
 bool ReferenceSupportsDifferenceClaim(const ReferenceConfidence confidence) noexcept {
     return confidence == ReferenceConfidence::ReferenceVerified;
 }
@@ -1757,6 +1775,7 @@ const char* const kGapMainImageSourceMissing = "inject.gap.main-image-source";
 const char* const kGapKernelBackendUnavailable = "inject.gap.kernel-backend";
 const char* const kGapKernelProfileUnverified = "inject.gap.kernel-profile";
 const char* const kGapVadLinkUncheckable = "inject.gap.vad-link-uncheckable";
+const char* const kGapSectionReferenceIncomplete = "inject.gap.section-reference";
 const char* const kGapStackWalkUntrusted = "inject.gap.stack-untrusted";
 const char* const kLimitNonExecutableNotScanned = "inject.limit.non-executable";
 const char* const kLimitStackUnwindUnavailable = "inject.limit.stack-unwind";
@@ -2137,6 +2156,15 @@ SurveyReport RunInjectionSurvey(const SurveyInput& input) {
             comparison.referenceConfidence);
         if (!referenceUsable) {
             AddUnique(report.coverageGapKeys, kGapReferenceUncertain);
+        }
+        if (comparison.referenceSource == ImageReferenceSource::SectionObject) {
+            ++report.sectionReferenceComparisons;
+            if (!SectionReferenceCoverageComplete(comparison)) {
+                // 节对象参考里有页拿不到（原型 PTE 不是 valid 形态，本版本按设计
+                // 不把页面调进来）。差异仍然算数，但"没发现差异"不能成立 ——
+                // 没比到的页不是比过了。
+                AddUnique(report.coverageGapKeys, kGapSectionReferenceIncomplete);
+            }
         }
         for (const std::string& limitation : comparison.report.limitationKeys) {
             if (ImageLimitationIsScopeDefining(limitation)) {

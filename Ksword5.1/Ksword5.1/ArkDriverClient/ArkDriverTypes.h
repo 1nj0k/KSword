@@ -511,7 +511,9 @@ namespace ksword::ark
         std::uint64_t startVa = 0;
         std::uint64_t endVaExclusive = 0;
         std::uint64_t vadNodeAddress = 0;
-        std::uint64_t controlArea = 0;
+        // Subsection 指针，**不是** ControlArea（两者差一次解引用）。
+        // 真正的 ControlArea 由 readImageSectionPages 给出。
+        std::uint64_t subsection = 0;
         std::uint64_t firstPrototypePte = 0;
         std::uint32_t vadFlagsRaw = 0;
         std::uint32_t protection = 0;
@@ -546,6 +548,47 @@ namespace ksword::ark
         bool vadHintVisited = false;
         std::uint64_t vadHintAddress = 0;
         std::vector<ProcessVadEntry> entries;
+    };
+
+    // 映像节对象参考页：一页的原型 PTE 状态。
+    struct ImageSectionPageEntry
+    {
+        std::uint64_t va = 0;
+        std::uint64_t prototypePteAddress = 0;
+        std::uint64_t prototypePteValue = 0;
+        std::uint64_t physicalAddress = 0;   // 仅 valid 时有效
+        std::uint32_t entryFlags = 0;
+
+        bool valid() const noexcept
+        {
+            return (entryFlags & KSWORD_ARK_INJECTION_SECTION_ENTRY_FLAG_VALID) != 0U;
+        }
+        bool bytesPresent() const noexcept
+        {
+            return (entryFlags & KSWORD_ARK_INJECTION_SECTION_ENTRY_FLAG_BYTES_PRESENT) != 0U;
+        }
+    };
+
+    struct ImageSectionPagesResult
+    {
+        IoResult io;
+        std::uint32_t version = 0;
+        std::uint32_t processId = 0;
+        std::uint32_t fieldFlags = 0;
+        std::uint32_t status = KSWORD_ARK_INJECTION_SCAN_STATUS_UNAVAILABLE;
+        long lastStatus = 0;
+        std::uint32_t returnedCount = 0;
+        std::uint32_t validPageCount = 0;
+        std::uint32_t notResidentPageCount = 0;
+        std::uint32_t unreadablePteCount = 0;
+        std::uint32_t bytesPerPage = 0;
+        std::uint64_t controlArea = 0;
+        std::uint64_t segment = 0;
+        std::uint64_t prototypePteArray = 0;
+        std::uint64_t nextCursorVa = 0;
+        std::vector<ImageSectionPageEntry> entries;
+        // 带字节时：按 valid 页的顺序排列，每页 bytesPerPage 字节。
+        std::vector<std::uint8_t> pageBytes;
     };
 
     // 一段属性相同、地址连续的可执行叶子页。

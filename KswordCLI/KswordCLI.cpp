@@ -1163,6 +1163,7 @@ namespace
         { L"memory", L"scan-kexec", L"KswordCLI.exe memory scan-kexec [--flags 0xN] [--max-entries N] [--start VA] [--end VA] [--limit N]", L"Scan executable kernel memory evidence.", L"Optional: --flags, --max-entries, --start, --end, --limit.", L"" },
         { L"memory", L"enum-vad", L"KswordCLI.exe memory enum-vad --pid PID [--start VA] [--end VA] [--cursor-vpn VPN] [--max-entries N] [--flags 0xN] [--limit N]", L"Enumerate the target process VAD tree as an independent region view.", L"Required: --pid. Optional: --start, --end, --cursor-vpn, --max-entries, --flags, --limit.", L"Backed by IOCTL_KSWORD_ARK_ENUMERATE_PROCESS_VAD; profileVerified=0 means the DynData VadRoot offset is not validated for this build and the result cannot support absence inference." },
         { L"memory", L"scan-exec-pte", L"KswordCLI.exe memory scan-exec-pte --pid PID [--start VA] [--end VA] [--cursor VA] [--max-entries N] [--max-table-reads N] [--flags 0xN] [--limit N]", L"Scan the target process page tables for user-space executable leaves.", L"Required: --pid. Optional: --start, --end, --cursor, --max-entries, --max-table-reads, --flags, --limit.", L"Backed by IOCTL_KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE; reports what the processor treats as executable, independent of VAD protection." },
+        { L"memory", L"read-section-pages", L"KswordCLI.exe memory read-section-pages --pid PID --start VA --end VA [--cursor VA] [--max-pages N] [--flags 0xN] [--limit N]", L"Read the image section object's clean reference pages for a mapped range.", L"Required: --pid, --start, --end. Optional: --cursor, --max-pages, --flags, --limit.", L"Backed by IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES; a second reference source independent of the file on disk. Only prototype PTEs in the architectural valid form are resolved - transition and pagefile encodings are version specific and are reported as not resident rather than decoded, and pages are never faulted in. Set --flags 0x1 to also return the page bytes." },
         { L"memory", L"scan-evidence", L"KswordCLI.exe memory scan-evidence [--flags 0xN] [--max-rows N] [--start VA] [--end VA] [--max-bytes N] [--max-bigpool-rows N] [--sample-bytes N] [--limit N]", L"Scan kernel memory evidence rows.", L"Optional: --flags, --max-rows, --start, --end, --max-bytes, --max-bigpool-rows, --sample-bytes, --limit.", L"" },
         { L"file", L"delete-path", L"KswordCLI.exe file delete-path --path PATH [--flags 0xN]", L"Delete one path through the driver.", L"Required: --path. Optional: --flags.", L"" },
         { L"file", L"query-info", L"KswordCLI.exe file query-info --path PATH [--flags 0xN]", L"Query file object and basic file metadata.", L"Required: --path. Optional: --flags.", L"" },
@@ -2972,7 +2973,7 @@ namespace
                 std::wcout << L"  [" << i << L"] " << hex64(entry->startVa)
                            << L"-" << hex64(entry->endVaExclusive)
                            << L" node=" << hex64(entry->vadNodeAddress)
-                           << L" controlArea=" << hex64(entry->controlArea)
+                           << L" subsection=" << hex64(entry->subsection)
                            << L" flagsRaw=0x" << std::hex << entry->vadFlagsRaw
                            << L" entryFlags=0x" << entry->entryFlags << std::dec
                            << L" protection=" << entry->protection
@@ -3023,6 +3024,79 @@ namespace
                            << L" effective=0x" << std::hex << entry->effectiveFlags
                            << L" entryFlags=0x" << entry->entryFlags
                            << L" firstPte=" << hex64(entry->firstEntryValue) << std::dec << L"\n";
+            }
+            return 0;
+        }
+        if (sub == L"read-section-pages")
+        {
+            // 映像节对象参考页：内存管理器自己持有的那份"本来该是什么样"。
+            // 它和"读磁盘文件"是两个独立来源 —— 磁盘文件被锁住、读不到、或者被
+            // 一并改掉时，这一份仍然是映射建立时的内容。
+            KSWORD_ARK_READ_IMAGE_SECTION_PAGES_REQUEST request{};
+            request.size = sizeof(request);
+            request.version = KSWORD_ARK_INJECTION_SCAN_PROTOCOL_VERSION;
+            request.processId = requireOptionU32(args, L"--pid");
+            request.flags = getOptionU32(args, L"--flags", 0U);
+            request.rangeStart = getOptionU64(args, L"--start", 0ULL);
+            request.rangeEnd = getOptionU64(args, L"--end", 0ULL);
+            request.cursorVa = getOptionU64(args, L"--cursor", 0ULL);
+            request.maxPages = getOptionU32(args, L"--max-pages",
+                                            KSWORD_ARK_INJECTION_SECTION_PAGES_DEFAULT);
+            const std::uint32_t limit = getOptionU32(args, L"--limit", 16U);
+            std::vector<std::uint8_t> buffer(kHugeResponseBytes, 0U);
+            const int rc = sendRawIoctl(L"IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES",
+                                        IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES,
+                                        &request, sizeof(request), buffer, io);
+            if (rc != 0) return normalizeIoctlRc(L"memory read-section-pages", io, rc);
+            constexpr std::size_t headerSize = KSWORD_ARK_INJECTION_SECTION_RESPONSE_HEADER_SIZE;
+            if (io.bytesReturned < headerSize) { std::wcerr << L"error: read-section-pages response too small\n"; return 4; }
+            const auto* response = reinterpret_cast<const KSWORD_ARK_READ_IMAGE_SECTION_PAGES_RESPONSE*>(buffer.data());
+            std::size_t available = 0U;
+            try { available = validateVariable(io.bytesReturned, headerSize, response->entrySize, sizeof(KSWORD_ARK_IMAGE_SECTION_PAGE_ENTRY), L"read-section-pages"); }
+            catch (...) { return 4; }
+            printResponseBanner(response->version, response->status, response->lastStatus, io.bytesReturned);
+            std::wcout << L"pid=" << response->processId
+                       << L" fields=0x" << std::hex << response->fieldFlags << std::dec
+                       << L" returned=" << response->returnedCount
+                       << L" valid=" << response->validPageCount
+                       << L" notResident=" << response->notResidentPageCount
+                       << L" unreadablePte=" << response->unreadablePteCount
+                       << L" bytesPerPage=" << response->bytesPerPage
+                       << L" controlArea=" << hex64(response->controlArea)
+                       << L" segment=" << hex64(response->segment)
+                       << L" protoArray=" << hex64(response->prototypePteArray)
+                       << L" nextCursor=" << hex64(response->nextCursorVa) << L"\n";
+            // 字节区的位置用**响应给的** byteAreaOffset。自己算算不对：
+            // 它取决于驱动侧的条目容量，而那个值同时受缓冲大小与 maxPages 约束。
+            const std::size_t bytesBase = static_cast<std::size_t>(response->byteAreaOffset);
+            std::size_t validSeen = 0U;
+            const std::size_t parsed = responseCountLimit(response->returnedCount, available, limit);
+            for (std::size_t i = 0; i < parsed; ++i)
+            {
+                const auto* entry = reinterpret_cast<const KSWORD_ARK_IMAGE_SECTION_PAGE_ENTRY*>(buffer.data() + headerSize + (i * response->entrySize));
+                std::wcout << L"  [" << i << L"] va=" << hex64(entry->va)
+                           << L" pte=" << hex64(entry->prototypePteAddress)
+                           << L" value=" << hex64(entry->prototypePteValue)
+                           << L" phys=" << hex64(entry->physicalAddress)
+                           << L" flags=0x" << std::hex << entry->entryFlags << std::dec;
+                // 带字节时把开头 8 个字节打出来。"有字节返回"和"字节是对的"是两件事，
+                // 只报前者等于没验证过内容 —— 映像首页应当以 MZ(4D5A) 开头。
+                if ((entry->entryFlags & KSWORD_ARK_INJECTION_SECTION_ENTRY_FLAG_BYTES_PRESENT) != 0UL &&
+                    response->bytesPerPage != 0UL)
+                {
+                    const std::size_t offset = bytesBase + (validSeen * response->bytesPerPage);
+                    if (offset + 8U <= io.bytesReturned)
+                    {
+                        std::wcout << L" first8=" << std::hex << std::setfill(L'0');
+                        for (std::size_t b = 0; b < 8U; ++b)
+                        {
+                            std::wcout << std::setw(2) << static_cast<unsigned>(buffer[offset + b]);
+                        }
+                        std::wcout << std::dec << std::setfill(L' ');
+                    }
+                    ++validSeen;
+                }
+                std::wcout << L"\n";
             }
             return 0;
         }

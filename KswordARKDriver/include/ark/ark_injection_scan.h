@@ -22,4 +22,12 @@ KswordARKDriverScanProcessExecutablePte(
     _Out_ size_t* BytesWrittenOut
     );
 
+NTSTATUS
+KswordARKDriverReadImageSectionPages(
+    _Out_writes_bytes_to_(OutputBufferLength, *BytesWrittenOut) PVOID OutputBuffer,
+    _In_ size_t OutputBufferLength,
+    _In_ const KSWORD_ARK_READ_IMAGE_SECTION_PAGES_REQUEST* Request,
+    _Out_ size_t* BytesWrittenOut
+    );
+
 EXTERN_C_END

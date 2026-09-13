@@ -145,7 +145,7 @@ namespace ksword::ark
             entry.startVa = raw->startVa;
             entry.endVaExclusive = raw->endVaExclusive;
             entry.vadNodeAddress = raw->vadNodeAddress;
-            entry.controlArea = raw->controlArea;
+            entry.subsection = raw->subsection;
             entry.firstPrototypePte = raw->firstPrototypePte;
             entry.vadFlagsRaw = static_cast<std::uint32_t>(raw->vadFlagsRaw);
             entry.protection = static_cast<std::uint32_t>(raw->protection);
@@ -252,6 +252,136 @@ namespace ksword::ark
             entry.effectiveFlags = static_cast<std::uint32_t>(raw->effectiveFlags);
             entry.entryFlags = static_cast<std::uint32_t>(raw->entryFlags);
             result.entries.push_back(entry);
+        }
+        return result;
+    }
+
+    ImageSectionPagesResult DriverClient::readImageSectionPages(
+        const std::uint32_t processId,
+        const std::uint64_t rangeStart,
+        const std::uint64_t rangeEnd,
+        const std::uint64_t cursorVa,
+        const unsigned long maxPages,
+        const unsigned long flags) const
+    {
+        ImageSectionPagesResult result{};
+
+        const bool includeBytes =
+            (flags & KSWORD_ARK_INJECTION_SECTION_FLAG_INCLUDE_BYTES) != 0UL;
+        unsigned long pages = maxPages != 0UL
+            ? maxPages
+            : KSWORD_ARK_INJECTION_SECTION_PAGES_DEFAULT;
+        if (includeBytes && pages > KSWORD_ARK_INJECTION_SECTION_BYTES_PAGES_MAX)
+        {
+            pages = KSWORD_ARK_INJECTION_SECTION_BYTES_PAGES_MAX;
+        }
+        if (pages > KSWORD_ARK_INJECTION_SECTION_PAGES_MAX)
+        {
+            pages = KSWORD_ARK_INJECTION_SECTION_PAGES_MAX;
+        }
+
+        KSWORD_ARK_READ_IMAGE_SECTION_PAGES_REQUEST request{};
+        request.size = static_cast<unsigned long>(sizeof(request));
+        request.version = KSWORD_ARK_INJECTION_SCAN_PROTOCOL_VERSION;
+        request.processId = processId;
+        request.flags = flags;
+        request.rangeStart = rangeStart;
+        request.rangeEnd = rangeEnd;
+        request.maxPages = pages;
+        request.cursorVa = cursorVa;
+
+        // 缓冲要一次性够放全部条目 + 可选的页字节，否则驱动会按缓冲容量截断，
+        // 调用方看到的"少了几页"就变成缓冲太小而不是参考拿不到。
+        const std::size_t perPage =
+            sizeof(KSWORD_ARK_IMAGE_SECTION_PAGE_ENTRY) + (includeBytes ? 4096U : 0U);
+        std::size_t responseBytes =
+            KSWORD_ARK_INJECTION_SECTION_RESPONSE_HEADER_SIZE +
+            (static_cast<std::size_t>(pages) * perPage);
+        if (responseBytes > kMaxInjectionResponseBytes)
+        {
+            responseBytes = kMaxInjectionResponseBytes;
+        }
+        std::vector<std::uint8_t> responseBuffer(responseBytes, 0U);
+
+        result.io = deviceIoControl(
+            IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES,
+            &request,
+            static_cast<unsigned long>(sizeof(request)),
+            responseBuffer.data(),
+            static_cast<unsigned long>(responseBuffer.size()));
+        if (!result.io.ok)
+        {
+            result.io.message =
+                "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=" +
+                std::to_string(result.io.win32Error);
+            return result;
+        }
+
+        const KSWORD_ARK_READ_IMAGE_SECTION_PAGES_RESPONSE* header = nullptr;
+        std::size_t available = 0U;
+        if (!validateVariableResponse<
+                KSWORD_ARK_READ_IMAGE_SECTION_PAGES_RESPONSE,
+                KSWORD_ARK_IMAGE_SECTION_PAGE_ENTRY>(
+                responseBuffer,
+                result.io.bytesReturned,
+                KSWORD_ARK_INJECTION_SECTION_RESPONSE_HEADER_SIZE,
+                result.io,
+                "read-image-section-pages",
+                header,
+                available))
+        {
+            return result;
+        }
+
+        result.version = static_cast<std::uint32_t>(header->version);
+        result.processId = static_cast<std::uint32_t>(header->processId);
+        result.fieldFlags = static_cast<std::uint32_t>(header->fieldFlags);
+        result.status = static_cast<std::uint32_t>(header->status);
+        result.lastStatus = header->lastStatus;
+        result.returnedCount = static_cast<std::uint32_t>(header->returnedCount);
+        result.validPageCount = static_cast<std::uint32_t>(header->validPageCount);
+        result.notResidentPageCount = static_cast<std::uint32_t>(header->notResidentPageCount);
+        result.unreadablePteCount = static_cast<std::uint32_t>(header->unreadablePteCount);
+        result.bytesPerPage = static_cast<std::uint32_t>(header->bytesPerPage);
+        result.controlArea = header->controlArea;
+        result.segment = header->segment;
+        result.prototypePteArray = header->prototypePteArray;
+        result.nextCursorVa = header->nextCursorVa;
+
+        const std::size_t parsed =
+            std::min<std::size_t>(available, static_cast<std::size_t>(header->returnedCount));
+        result.entries.reserve(parsed);
+        for (std::size_t i = 0; i < parsed; ++i)
+        {
+            const auto* entry = reinterpret_cast<const KSWORD_ARK_IMAGE_SECTION_PAGE_ENTRY*>(
+                responseBuffer.data() + KSWORD_ARK_INJECTION_SECTION_RESPONSE_HEADER_SIZE +
+                (i * header->entrySize));
+            ImageSectionPageEntry row;
+            row.va = entry->va;
+            row.prototypePteAddress = entry->prototypePteAddress;
+            row.prototypePteValue = entry->prototypePteValue;
+            row.physicalAddress = entry->physicalAddress;
+            row.entryFlags = static_cast<std::uint32_t>(entry->entryFlags);
+            result.entries.push_back(row);
+        }
+
+        if (includeBytes && header->bytesPerPage != 0UL && header->validPageCount != 0UL)
+        {
+            // 字节区用**响应给的** byteAreaOffset。自己算算不对 ——
+            // 它取决于驱动侧的条目容量，而那个值同时受缓冲大小与
+            // maxPages 两个值约束，调用方只知道前者。
+            const std::size_t byteOffset = static_cast<std::size_t>(header->byteAreaOffset);
+            const std::size_t byteCount =
+                static_cast<std::size_t>(header->validPageCount) * header->bytesPerPage;
+            if (byteOffset + byteCount <= result.io.bytesReturned)
+            {
+                result.pageBytes.assign(responseBuffer.begin() + byteOffset,
+                                        responseBuffer.begin() + byteOffset + byteCount);
+            }
+            else
+            {
+                result.io.message = "read-image-section-pages byte area truncated";
+            }
         }
         return result;
     }

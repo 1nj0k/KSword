@@ -585,7 +585,7 @@ Return Value:
                     subsection != NULL) {
                     entry->entryFlags |= KSWORD_ARK_INJECTION_VAD_FLAG_HAS_SUBSECTION;
                     entry->entryFlags |= KSWORD_ARK_INJECTION_VAD_FLAG_LONG_VAD;
-                    entry->controlArea = (ULONG64)(ULONG_PTR)subsection;
+                    entry->subsection = (ULONG64)(ULONG_PTR)subsection;
                 }
                 if (KswordARKInjectionReadKernel(
                         (const UCHAR*)current + FIELD_OFFSET(KSW_INJ_MMVAD, FirstPrototypePte),
