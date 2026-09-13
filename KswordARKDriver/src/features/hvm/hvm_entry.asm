@@ -50,6 +50,8 @@ PUBLIC KswordARKHvmResidentVmExitEntry
 PUBLIC KswordARKHvmAsmInveptSingle
 PUBLIC KswordARKHvmAsmHostNmiStub
 PUBLIC KswordARKHvmAsmNestedL2Enter
+PUBLIC KswordARKHvmAsmProbeLaunchL2
+PUBLIC KswordARKHvmAsmProbeL2ResumePoint
 EXTERN g_KswordHvmOriginalNmiHandler:QWORD
 EXTERN g_KswordHvmPendingTlbNmi:DWORD
 
@@ -388,6 +390,71 @@ KswordARKHvmAsmNestedL2Failed:
     mov eax, 1
     ret
 KswordARKHvmAsmNestedL2Enter ENDP
+
+;------------------------------------------------------------------------------
+; ULONG KswordARKHvmAsmProbeLaunchL2(VOID)
+;
+; Launch L2 so that it resumes where L1's registers already belong.
+;
+; The probe's earlier attempt pointed vmcs12's guest RIP at an RtlCaptureContext
+; site and then ran C there.  L2 does resume at that address, but with L1's
+; registers as of L1's VMLAUNCH - a different point in the same function - so
+; every pointer the compiler happened to be holding was wrong, and any branch
+; L2 took on shared state was decided by garbage.  Measured: a store and the
+; adjacent load of the same volatile global disagreed, which only happens when
+; the store is not the instruction that ran.
+;
+; A hypervisor does not have this problem because its guest resumes at its own
+; launch site.  This reproduces that exactly: guest RIP is a stub whose only
+; job is to return, and guest RSP is the RSP at the VMLAUNCH - which still
+; points at the return address the C caller pushed.  L2 therefore begins by
+; returning from this function, into C, with the caller's non-volatile
+; registers and stack intact, because they were never disturbed.
+;
+; Returns 0 when the caller is now executing as L2, non-zero when the entry
+; did not happen.  Both answers arrive as an ordinary function return, so the
+; C side never has to ask memory where it is.
+;------------------------------------------------------------------------------
+KswordARKHvmAsmProbeLaunchL2 PROC
+    ; Aim vmcs12's guest RIP at the resume stub.  RIP-relative, so it is the
+    ; runtime address rather than a link-time one.
+    lea rdx, KswordARKHvmProbeL2Resume
+    mov rcx, 681Eh
+    vmwrite rcx, rdx
+    jbe KswordARKHvmAsmProbeLaunchFailed
+    ; Aim guest RSP at this frame, so the stub's RET lands in the C caller.
+    mov rdx, rsp
+    mov rcx, 681Ch
+    vmwrite rcx, rdx
+    jbe KswordARKHvmAsmProbeLaunchFailed
+    ; Enter.  On success this does not return here - it returns through the
+    ; stub below, as L2.
+    vmlaunch
+KswordARKHvmAsmProbeLaunchFailed:
+    ; Reached only when the entry did not happen.
+    mov eax, 1
+    ret
+KswordARKHvmAsmProbeLaunchL2 ENDP
+
+;------------------------------------------------------------------------------
+; The address L2 resumes at: return zero to the C caller of the launcher.
+;------------------------------------------------------------------------------
+KswordARKHvmProbeL2Resume PROC
+    xor eax, eax
+    ret
+KswordARKHvmProbeL2Resume ENDP
+
+;------------------------------------------------------------------------------
+; ULONGLONG KswordARKHvmAsmProbeL2ResumePoint(VOID)
+;
+; Report the address above, so the probe can publish the RIP it aimed at next
+; to the RIP the exit reports.  Comparing those two is only meaningful within
+; one run - the driver loads at a different base every time.
+;------------------------------------------------------------------------------
+KswordARKHvmAsmProbeL2ResumePoint PROC
+    lea rax, KswordARKHvmProbeL2Resume
+    ret
+KswordARKHvmAsmProbeL2ResumePoint ENDP
 
 KswordARKHvmResidentGuestResume PROC
     ; Report successful VM entry when the guest wrapper resumes.

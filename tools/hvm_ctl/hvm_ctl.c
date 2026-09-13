@@ -4967,8 +4967,16 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson)
         }
         return 3;
     }
+    /*
+     * 五格，缺一不可。
+     *
+     * slotMarker 单列而不是并进 reachedL2：前者问的是 L2 继承的 GS 基址对不对
+     * （找槽位要走 GS），后者问的是 L2 的存储到不到内存（RIP 相对寻址）。两种
+     * 失败原因完全不同，合成一格就会塌成同一个 0。
+     */
     passed = (r->selfVirtAttempted == 1UL &&
               r->selfVirtReachedL2 == 1UL &&
+              r->selfVirtSlotMarker == 1UL &&
               r->selfVirtReturnedToL1 == 1UL &&
               r->selfVirtCpuidPassedThrough == 0UL &&
               (r->selfVirtExitReason & 0xFFFFULL) == 10ULL) ? 1 : 0;
@@ -4978,6 +4986,7 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson)
                "\"cpuidPassedThrough\":%lu,\"slotMarker\":%lu,"
                "\"exitReason\":%llu,\"guestRip\":\"0x%016llX\","
                "\"entryRip\":\"0x%016llX\","
+               "\"entryCount\":%lu,\"reflectCount\":%lu,"
                "\"vmlaunch\":%lu,\"lastInstructionError\":%lu,"
                "\"fuseTripped\":%lu,\"fuseReason\":%lu,\"fuseCount\":%lu,"
                "\"fuseRip\":\"0x%016llX\","
@@ -4987,6 +4996,7 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson)
                r->selfVirtSlotMarker,
                r->selfVirtExitReason & 0xFFFFULL, r->selfVirtGuestRip,
                r->selfVirtEntryRip,
+               r->selfVirtEntryCount, r->selfVirtReflectCount,
                r->vmlaunchResult, r->lastInstructionError,
                r->l2FuseTripped, r->l2FuseReason, r->l2FuseCount,
                r->l2FuseRip, passed);
@@ -5013,21 +5023,20 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson)
                 (long long)(r->selfVirtGuestRip - r->selfVirtEntryRip);
 
             /*
-             * 差值只有在 CPUID 那条路上才说明问题。
+             * 两个 RIP 只并排报，不做差值判据。
              *
-             * VMCALL 走的是另一个函数，差值本来就大 —— 拿同一条判据去套它会得出
-             * "L2 没从我们指的地方开始"，而那是假的。判据必须知道自己在看哪条路。
+             * L2 现在从汇编 launcher 里那个 resume 桩开始，而退出发生在 C 里，
+             * 两者本来就在不同函数，差值必然很大 —— 我拿差值做过判据，于是它对一次
+             * **完全正确**的运行打出了"L2 没从我们指的地方开始"。一条只在某种代码
+             * 布局下成立的判据，布局一变就变成假否定。
+             *
+             * "L2 有没有真的在跑"这个问题现在由 launcher 的返回值回答，不需要靠
+             * 地址推断。
              */
-            if ((r->selfVirtExitReason & 0xFFFFULL) == 10ULL) {
-                printf("  入口 RIP    : 0x%016llX   退出 RIP 相差 %lld 字节 %s\n",
-                       r->selfVirtEntryRip, delta,
-                       (delta > 0 && delta < 4096)
-                           ? "**L2 确实从我们指的地方开始往下跑了**"
-                           : "**L2 没从我们指的地方开始**");
-            } else {
-                printf("  入口 RIP    : 0x%016llX   （退出走的不是 CPUID 那条路，"
-                       "差值不适用）\n", r->selfVirtEntryRip);
-            }
+            (void)delta;
+            printf("  入口/退出   : 0x%016llX -> 0x%016llX"
+                   "（resume 桩与退出点本就不同函数，不比差值）\n",
+                   r->selfVirtEntryRip, r->selfVirtGuestRip);
         }
         /*
          * 退出原因在这里是一个**一位的答复**，不只是诊断。
@@ -5048,6 +5057,11 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson)
                r->selfVirtReturnedToL1
                    ? "**是** —— L1 的宿主处理器跑完并交还了上下文"
                    : "**否** —— 进去了没回来");
+        printf("  进出次数    : 进入 %lu 次   投递给 L1 %lu 次%s\n",
+               r->selfVirtEntryCount, r->selfVirtReflectCount,
+               (r->selfVirtEntryCount == 1UL && r->selfVirtReflectCount == 1UL)
+                   ? "  —— 一次干净的往返"
+                   : "  **不止一次 —— 有退出没被投递给 L1**");
         /*
          * 熔断的读数。这是挂死唯一会留下的东西 —— 没有它，同样的失败在来宾里
          * 读不到、在宿主日志里也读不到。

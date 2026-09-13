@@ -299,6 +299,28 @@ static KSW_HVM_PROBE_SLOT g_KswordProbeSlots[
  */
 static volatile LONG g_KswordProbeL2Marker;
 
+EXTERN_C
+/*
+ * Launch L2 so that it resumes by returning from this very call.
+ *
+ * Returns 0 to a caller that is now executing as L2, non-zero when the entry
+ * did not happen.  Both answers arrive as an ordinary function return, which
+ * is the entire point: L2 never has to read shared memory to work out where
+ * it is, and the C compiler's assumptions about registers and stack hold,
+ * because the resume point is the launch site.
+ */
+ULONG
+KswordARKHvmAsmProbeLaunchL2(
+    VOID
+    );
+
+EXTERN_C
+/* Report the address L2 resumes at, for the within-run RIP comparison. */
+ULONGLONG
+KswordARKHvmAsmProbeL2ResumePoint(
+    VOID
+    );
+
 /* Return this processor's slot, or NULL when its index is out of range. */
 static KSW_HVM_PROBE_SLOT*
 KswordARKHvmNestedProbeSlot(
@@ -904,15 +926,28 @@ KswordARKHvmNestedProbeExecute(
                  * L2 above runs on a made-up RIP and stack where the segments,
                  * CR3 and page tables never have to be real.
                  *
-                 * One capture point, three arrivals, told apart by two flags
-                 * read out of memory rather than registers the restore just
-                 * rewrote:
-                 *   L2Exited set  -> the host handler brought us back
-                 *   SelfStage set -> we are executing as L2 right now
-                 *   neither       -> first arrival, still L1, about to enter
+                 * L2 is never asked to work out where it is.
+                 *
+                 * An earlier shape had one capture point reached three times,
+                 * with L2 reading two shared flags to decide which arrival it
+                 * was.  That cannot work: L2 resumes with L1's registers as of
+                 * L1's VMLAUNCH, so the pointers those reads go through are
+                 * not the ones the source assumes, and the branch is decided
+                 * by whatever happened to be in a register.  Measured - a
+                 * store and the adjacent load of one volatile global
+                 * disagreed, which only happens when the store is not the
+                 * instruction that ran.
+                 *
+                 * Now the launcher returns 0 to a caller that has become L2
+                 * and non-zero when the entry failed, so "am I L2" is answered
+                 * by the calling convention.  The capture point is still here,
+                 * but only L1 ever evaluates it: once before the launch, and
+                 * once more when the host handler restores the context.
                  */
                 if (Probe->SelfVirtualize) {
                     response->selfVirtAttempted = 1UL;
+                    response->selfVirtEntryRip =
+                        KswordARKHvmAsmProbeL2ResumePoint();
                     if (InterlockedCompareExchange(
                             &slot->L2Exited, 0L, 0L) != 0L) {
                         /* Third arrival: L1 handled L2's exit and returned. */
@@ -938,116 +973,86 @@ KswordARKHvmNestedProbeExecute(
                             (InterlockedCompareExchange(
                                 &slot->L2SelfMarker, 0L, 0L) != 0L)
                                 ? 1UL : 0UL;
-                    } else if (InterlockedCompareExchange(
-                            &slot->SelfStage, 0L, 0L) != 0L) {
-                        /*
-                         * Second arrival: the entry worked and this code is
-                         * now running as L2, on its own stack, with its own
-                         * CR3 - the same instructions, one privilege domain
-                         * lower.
-                         */
-                        {
-                            int registers[4] = { 0 };
-
-                            /*
-                             * Store then load, with nothing at all in between.
-                             *
-                             * The previous shape had a call and an interlocked
-                             * write between the two, so "the load did not see
-                             * the store" could equally have meant "something
-                             * in between disturbed it".  One RIP-relative
-                             * store and one RIP-relative load, adjacent, is
-                             * the smallest question that still distinguishes
-                             * them.
-                             */
-                            g_KswordProbeL2Marker = 1L;
-                            /*
-                             * Ask L2 whether it can see its own store, and
-                             * answer through the exit reason.
-                             *
-                             * The reply cannot travel in memory: whether L2's
-                             * stores reach L1 is the very thing in question,
-                             * so any in-memory answer is unreadable exactly
-                             * when it matters.  The exit reason is a channel
-                             * already proven to work in both directions - one
-                             * bit, but the right one.
-                             *
-                             *   CPUID  (10) - L2 reads back what it wrote
-                             *   VMCALL (18) - L2 cannot see its own store
-                             *
-                             * Read back through a volatile, so the compiler
-                             * cannot answer from the value it just stored.
-                             */
-                            if (g_KswordProbeL2Marker != 0L) {
-                                __cpuid(registers, 0);
-                            } else {
-                                (void)KswordARKHvmAsmResidentHypercall(
-                                    0ULL, 0ULL);
-                            }
-                            /*
-                             * Reached only if neither instruction left L2,
-                             * which is architecturally impossible - recorded
-                             * rather than trusted.
-                             */
-                            response->selfVirtCpuidPassedThrough = 1UL;
-                        }
                     } else {
                         /*
-                         * First arrival.  Aim vmcs12's guest at this exact
-                         * point and enter; the processor does not load GPRs
-                         * from the VMCS, so L2 resumes with the registers and
-                         * the stack this frame already has.
-                         */
-                        InterlockedExchange(&slot->SelfStage, 1L);
-                        /* Record it before writing it, for the delta above. */
-                        response->selfVirtEntryRip =
-                            (ULONGLONG)slot->ResumeContext.Rip;
-                        KswordARKHvmNestedProbeVmcs12Write(
-                            KSW_PROBE_VMCS_GUEST_RIP,
-                            (ULONGLONG)slot->ResumeContext.Rip);
-                        KswordARKHvmNestedProbeVmcs12Write(
-                            KSW_PROBE_GUEST_RSP,
-                            (ULONGLONG)slot->ResumeContext.Rsp);
-                        /*
-                         * Enter with interrupts masked.  Measured: without
-                         * this the machine hangs, every time.
+                         * First arrival: still L1, about to enter.
                          *
-                         * The captured RFLAGS has IF set, because this code
-                         * runs at PASSIVE_LEVEL.  Carrying that into L2 means
-                         * the first clock interrupt is delivered *inside* L2:
-                         * the handler runs there, the scheduler runs there,
-                         * and the next thread runs there too.  The thread that
-                         * set L2 up gets switched away, nothing ever reaches
-                         * the VMXOFF, and the processor stays one
-                         * virtualization level deeper forever - which is not a
-                         * crash, so there is no bugcheck and no dump, just a
-                         * machine that stops answering.
+                         * Enter with interrupts masked.  The captured RFLAGS
+                         * has IF set because this runs at PASSIVE_LEVEL, and
+                         * carrying that into L2 would let the first clock
+                         * interrupt be delivered there - handler, scheduler
+                         * and the next thread all one level deeper, with
+                         * nothing ever reaching the VMXOFF.  That is what
+                         * residency does on purpose and what a transient L1
+                         * must not do.  Bit 1 is the reserved always-one bit
+                         * VM entry requires.
                          *
-                         * That is exactly what residency does on purpose, and
-                         * exactly what a transient L1 must not do.  The
-                         * synthetic L2 above never hit it because it enters
-                         * with a literal RFLAGS of 0x2, where IF is already
-                         * clear - the bug was invisible until L2 became real
-                         * code with real flags.
-                         *
-                         * Bit 1 is the reserved always-one bit; VM entry
-                         * refuses a guest RFLAGS without it.
+                         * RIP and RSP are the launcher's business now: it is
+                         * the only place that knows where L2 has to resume.
                          */
                         KswordARKHvmNestedProbeVmcs12Write(
                             KSW_PROBE_GUEST_RFLAGS,
                             ((ULONGLONG)slot->ResumeContext.EFlags &
                                 ~0x200ULL) | 0x2ULL);
-                        response->vmlaunchResult =
-                            (ULONG)__vmx_vmlaunch();
-                        if (response->vmlaunchResult != 0UL) {
-                            SIZE_T launchError = 0U;
+                    if (KswordARKHvmAsmProbeLaunchL2() == 0UL) {
+                        /*
+                         * The launcher returned zero, so this code is now
+                         * executing as L2 - same instructions, same stack,
+                         * same registers, one privilege domain lower.
+                         */
+                        int registers[4] = { 0 };
 
-                            if (__vmx_vmread(0x4400U, &launchError) == 0) {
-                                response->lastInstructionError =
-                                    (ULONG)launchError;
+                        /*
+                         * Leave a mark, then leave L2.
+                         *
+                         * The mark is RIP-relative, so it depends on nothing
+                         * inherited; CPUID exits unconditionally and the
+                         * routing default hands it to L1.  Whether the mark
+                         * survives is read by L1 afterwards - which is a
+                         * question about L2's stores, now that "did L2 run
+                         * this code" is answered by the return value instead
+                         * of by the mark itself.
+                         */
+                        g_KswordProbeL2Marker = 1L;
+                        /*
+                         * Second witness, now that it means something.
+                         *
+                         * Finding the slot goes through GS, so this tests the
+                         * segment base L2 inherited rather than just its
+                         * stores.  It was pointless while L2's branching was
+                         * unreliable; with the launcher it is a real check of
+                         * a different thing.
+                         */
+                        {
+                            KSW_HVM_PROBE_SLOT* live =
+                                KswordARKHvmNestedProbeSlot();
+
+                            if (live != NULL) {
+                                InterlockedExchange(&live->L2SelfMarker, 1L);
                             }
                         }
+                        __cpuid(registers, 0);
+                        /*
+                         * Reached only if CPUID did not leave L2, which is
+                         * architecturally impossible - recorded rather than
+                         * trusted.
+                         */
+                        response->selfVirtCpuidPassedThrough = 1UL;
+                    } else {
+                        /* The entry did not happen; say why. */
+                        SIZE_T launchError = 0U;
+
+                        response->vmlaunchResult = 1UL;
+                        if (__vmx_vmread(0x4400U, &launchError) == 0) {
+                            response->lastInstructionError =
+                                (ULONG)launchError;
+                        }
                     }
+                    }
+                    response->selfVirtEntryCount =
+                        (ULONG)vcpu->Nested.L2EntryCount;
+                    response->selfVirtReflectCount =
+                        (ULONG)vcpu->Nested.L2ExitReflectedCount;
                     response->selfVirtExitReason = slot->L2ExitReason;
                     response->selfVirtGuestRip = slot->L2GuestRip;
                     /*

@@ -2198,6 +2198,15 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
      */
     unsigned long long selfVirtEntryRip;
     /*
+     * 这一轮里 L2 进了几次、又有几次退出被投递给 L1。
+     *
+     * "退出原因是 10 且回到了 L1"说不出**发生了几次退出**。一次干净的往返和
+     * "先被我们自己吃掉一次、L2 接着跑、后来才有一次被反射"，在单个退出原因上
+     * 读起来一模一样，而两者含义相反。
+     */
+    unsigned long selfVirtEntryCount;
+    unsigned long selfVirtReflectCount;
+    /*
      * 无进展熔断：L2 一直在同一条指令上以同样的原因退出。
      *
      * 这三格是**挂死唯一会留下的东西**。实测过：这种挂死没有蓝屏、没有转储、
