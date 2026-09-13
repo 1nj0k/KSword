@@ -49,9 +49,15 @@ foreach ($f in @('C:\vmware\tinycore\vmware.log','C:\vmware\vmrun_start.txt')) {
 Get-ChildItem 'C:\Users\felix\AppData\Local\Temp\vmware-felix' -File -ErrorAction SilentlyContinue | ForEach-Object { try { [IO.File]::Delete($_.FullName) } catch { } }
 
 Note '>>> 启动 VMware 的虚拟机'
+# 交互会话不在的时候 Start-ScheduledTask 是**静默空操作** —— 上一轮整整 60 秒的
+# 采样都是在测一个没启动的 VMware。所以先把会话记下来，跑完再把任务的实际执行
+# 时间读回来对一遍。
+$expl = @(Get-Process -Name explorer -ErrorAction SilentlyContinue)
+Note ('  交互桌面 explorer=' + $expl.Count + ' session=' + $(if ($expl.Count) { $expl[0].SessionId } else { 'N/A' }))
+$before = (Get-ScheduledTaskInfo -TaskName 'KswordVmStart').LastRunTime
 Start-ScheduledTask -TaskName 'KswordVmStart'
 
-for ($i = 1; $i -le 12; $i++) {
+for ($i = 1; $i -le 24; $i++) {
     Start-Sleep -Seconds 5
     $r = Run @('--json','status')
     $s = $null
@@ -64,6 +70,12 @@ for ($i = 1; $i -le 12; $i++) {
 $r = Run @('--json','status')
 [IO.File]::WriteAllText('C:\ksword\final.json', $r.Out)
 Note '=== 采样结束 ==='
+
+# 任务到底跑没跑。LastRunTime 没动就说明 Start-ScheduledTask 空转了，
+# 那一轮所有读数都与 VMware 无关 —— 这一条必须在读计数器之前先看。
+$after = (Get-ScheduledTaskInfo -TaskName 'KswordVmStart')
+Note ('任务 LastRunTime ' + $before + ' -> ' + $after.LastRunTime + '  LastTaskResult=0x' + ('{0:X}' -f $after.LastTaskResult))
+if ($after.LastRunTime -eq $before) { Note '**任务没有执行 —— 本轮与 VMware 无关**' }
 
 if (Test-Path 'C:\vmware\vmrun_start.txt') { Note ('vmrun: ' + ([IO.File]::ReadAllText('C:\vmware\vmrun_start.txt')).Trim()) } else { Note 'vmrun: <无输出>' }
 if (Test-Path 'C:\vmware\tinycore\vmware.log') {
