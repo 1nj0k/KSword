@@ -5932,6 +5932,11 @@
     "settings.background.translucency_material.acrylic": "Frosted glass"
   },
   "source_translations": {
+    "内存区域清单被人动过手脚": "The memory region list has been tampered with",
+    "核对内存区域清单有没有被动过": "Check whether the memory region list has been tampered with",
+    "内存区域清单没能一次读完（条目太多被截断，或有节点读不到），所以“清单有没有被动过”这一项没查成": "The memory region list could not be read in one pass (too many entries to fit, or some nodes were unreadable), so the tamper check did not complete",
+    "系统内部记录内存区域用的是一棵树，这棵树自己对不上了——有节点的“父节点”不认它这个孩子，或者系统记的区域个数比树上实际找到的多。把一块内存从这棵树上摘下去，是隐藏内存最直接的做法：摘掉之后从外面就再也查询不到它，但内存本身还在、还能跑。本机 90 个进程、10199 个节点实测全部对得上，所以这一条出现即值得追查。": "The system records memory regions in a tree, and that tree no longer agrees with itself: some node's parent does not list it as a child, or the system's own region count exceeds what the tree actually holds. Detaching a region from this tree is the most direct way to hide memory - once detached it can no longer be found from outside, while the memory itself remains and still runs. Measured here across 90 processes and 10199 nodes, every one agreed, so this finding is worth following up whenever it appears.",
+    "系统记录内存区域的那棵树自己对不上 → 可以说\"有内存区域被从清单里摘掉了\"，不能说\"摘掉它的是谁、摘的是哪一块\"": "The tree the system records memory regions in disagrees with itself → you may say \"a region has been detached from the list\", not \"who detached it, or which region it was\"",
     "\n另查了 %1 个停着的线程的调用栈（共 %2 个线程；运行中的线程读到的调用栈不可信，只查停着的），其中 %3 个拿到了可信结果": "\nAlso walked the call stacks of %1 parked threads (out of %2; a running thread's call stack cannot be read reliably, so only parked ones are walked), %3 of which gave a trustworthy result",
     "一段不属于任何模块的内存里，出现了完整可执行文件才有的结构特征——像是有人把一个程序整个搬进了内存。如果这一条还标着「有多个独立来源互相印证」，说明有线程的调用栈确实落在这块内存里，也就是它不只是躺着，而是在被执行。": "A stretch of memory that belongs to no module carries the structure of a complete executable, as if a whole program had been moved into memory. If this entry is also marked “Corroborated by several independent sources”, a thread's call stack really does land inside this memory - it is not merely sitting there, it is being executed.",
     "查线程当前的调用栈": "Walk each thread's current call stack",

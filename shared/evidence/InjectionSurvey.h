@@ -733,8 +733,38 @@ struct KernelVadView final {
     std::uint64_t unreadableNodeCount = 0;
     bool truncated = false;
 
+    // --- 树结构完整性（断链检查）---------------------------------------------
+    // integrityValid 是这一整组的**硬闸门**：为假时下面几项一律不得参与判定。
+    // 部分遍历（截断 / 续扫 / 有节点读不到）下 visitedCount 本来就小于 vadCount，
+    // 拿它去比等于在正常机器上稳定误报。
+    bool integrityValid = false;
+    bool vadCountKnown = false;      // EPROCESS.VadCount 的偏移可用且读到了
+    bool vadHintKnown = false;       // EPROCESS.VadHint 的偏移可用且读到了
+    std::uint64_t vadCount = 0;      // 内核自己维护的计数
+    OptionalU64 vadHintAddress;
+    bool vadHintVisited = false;     // VadHint 指向的节点在遍历里被访问到
+    std::uint64_t parentMismatchNodes = 0;  // 父指针回指不上的节点数
+
     bool usableForAbsenceInference() const noexcept;
 };
+
+// 断链检查的三态结论。**刻意不是布尔**：
+//   NotChecked —— 没做，或者遍历不完整（这时不知道，不是"没问题"）
+//   Consistent —— 走完了，三项都对得上
+//   Inconsistent —— 走完了，至少一项对不上
+// 把 NotChecked 折进 Consistent 是这个功能最容易犯也最贵的错：
+// "没查成"会被读成"树是好的"。
+enum class VadLinkIntegrity {
+    NotChecked,
+    Consistent,
+    Inconsistent,
+};
+
+const char* VadLinkIntegrityName(VadLinkIntegrity integrity) noexcept;
+
+// 判一次 VAD 树的链接完整性。只看树内部的自洽性，不涉及 R3 交叉视图 ——
+// 那是另一维（用户态看不到但页表看得到）。
+VadLinkIntegrity EvaluateVadLinkIntegrity(const KernelVadView& view) noexcept;
 
 // R0 页表视图的一段可执行叶子页。
 struct KernelExecutableExtent final {
@@ -796,6 +826,18 @@ struct KernelCrossViewReport final {
     std::size_t r3OnlyCount = 0;
     std::size_t executableBeyondViewCount = 0;
     bool absenceInferenceAllowed = false;
+
+    // VAD 树自身的链接自洽性。和上面三个计数是互补的两维：那三个问"两个视图说的
+    // 一不一样"，这一个问"这棵树自己站不站得住"。摘链的直接痕迹在后者。
+    VadLinkIntegrity linkIntegrity = VadLinkIntegrity::NotChecked;
+    // 判定用到的原始读数，供结果里回源。
+    std::uint64_t linkVisitedCount = 0;
+    std::uint64_t linkVadCount = 0;
+    std::uint64_t linkParentMismatchNodes = 0;
+    bool linkVadCountKnown = false;
+    bool linkVadHintKnown = false;
+    bool linkVadHintVisited = false;
+    OptionalU64 linkVadHintAddress;
 
     AnalysisConclusion conclusion = AnalysisConclusion::NoEvidence;
 };
@@ -914,6 +956,9 @@ extern const char* const kRuleIdPayloadStructure;           // inject.payload.st
 extern const char* const kRuleIdKernelRegionHiddenFromR3;   // inject.kernel.region-hidden-from-r3
 extern const char* const kRuleIdKernelRegionMissingInVad;   // inject.kernel.region-missing-in-vad
 extern const char* const kRuleIdKernelExecutableBeyondView; // inject.kernel.executable-beyond-view
+// VAD 树自身的链接不自洽（父指针回指不上 / VadHint 指向树外 / 计数比走出来的多）。
+// 这是"摘链"的直接痕迹，和"用户态看不到但页表看得到"是互补的两维。
+extern const char* const kRuleIdKernelVadLinkBroken;        // inject.kernel.vad-link-broken
 
 // 可信度：不是分数，是"这条结果由多少独立观测撑起来"。
 enum class EvidenceConfidence {
@@ -970,6 +1015,7 @@ enum class ObservationClass {
     NormalizedImageDiffers,             // 归一化后代码仍与可靠参考不同
     PayloadStructureWithReliableFrame,  // 自洽载荷结构 + 可靠栈帧进入其中
     MappedModuleOutsideBaseline,        // 正常映射的 DLL 不符合可信应用基线
+    VadTreeLinkageInconsistent,         // VAD 树自身的链接不自洽（摘链痕迹）
     ScanCompleteNoStrongEvidence,       // 扫完了但没有强证据
     KeyInputUnavailable,                // 关键页面／线程／参考文件不可获得
 };
@@ -1021,6 +1067,8 @@ extern const char* const kGapModuleEnumerationWow64;   // inject.gap.module-enum
 extern const char* const kGapMainImageSourceMissing;   // inject.gap.main-image-source
 extern const char* const kGapKernelBackendUnavailable; // inject.gap.kernel-backend
 extern const char* const kGapKernelProfileUnverified;  // inject.gap.kernel-profile
+// VAD 后端跑成了，但树没走完（截断 / 续扫 / 有节点读不到），断链判据因此不成立。
+extern const char* const kGapVadLinkUncheckable;       // inject.gap.vad-link-uncheckable
 // 做了栈回溯，但一个线程的上下文都不够可信（全都在跑）。这是"打算查没查成"，
 // 不是"本版本不做"—— 后者是 kLimitStackUnwindUnavailable，两者不能混。
 extern const char* const kGapStackWalkUntrusted;       // inject.gap.stack-untrusted
@@ -1074,6 +1122,7 @@ extern const char* const kCheckPayloadStructure;       // inject.check.payload-s
 extern const char* const kCheckNonExecutableScan;      // inject.check.non-executable
 extern const char* const kCheckReliableStackWalk;      // inject.check.stack-walk
 extern const char* const kCheckKernelVadCrossView;     // inject.check.kernel-vad
+extern const char* const kCheckVadLinkIntegrity;       // inject.check.vad-link
 extern const char* const kCheckKernelPteScan;          // inject.check.kernel-pte
 
 // ---------------------------------------------------------------------------
@@ -1174,6 +1223,11 @@ struct SurveyReport final {
     //   trusted  —— 其中几个的上下文可信、且真的产出了可靠前缀
     //   frames   —— 可靠前缀里一共几帧（去重前）
     // "walked 大而 trusted 为 0"是缺口，不是"线程都正常"。
+    // VAD 树链接不自洽的条目数。单独计，不并进 kernelCrossIssueCount ——
+    // 那一个问的是"两个视图说的一不一样"，这一个问"这棵树自己站不站得住"。
+    std::size_t vadLinkIssueCount = 0;
+    VadLinkIntegrity vadLinkIntegrity = VadLinkIntegrity::NotChecked;
+
     std::size_t stackThreadsWalked = 0;
     std::size_t stackThreadsTrusted = 0;
     std::size_t stackReliableFrameCount = 0;

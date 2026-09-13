@@ -2326,6 +2326,129 @@ void TestSurveyPipeline(KswordTests::Suite& suite) {
     suite.expect(guessedHitReport.conclusion != AnalysisConclusion::DifferenceObserved,
                  L"栈 猜出来的落点不升结论");
 
+    // --- VAD 断链 ---
+    // 三态判据。最要紧的一条是 NotChecked 不能被折进 Consistent：
+    // "没走完" 被读成 "树是好的" 是这一维唯一致命的错法。
+    {
+        const auto makeView = []() {
+            KernelVadView view;
+            view.state = KernelBackendState::Available;
+            view.outcome = CollectionOutcome::success();
+            view.integrityValid = true;
+            view.vadCountKnown = true;
+            view.vadHintKnown = true;
+            view.visitedCount = 586U;
+            view.vadCount = 586U;
+            view.vadHintAddress = OptionalU64::of(0xFFFFCA827CAA1E00ULL);
+            view.vadHintVisited = true;
+            return view;
+        };
+
+        suite.expect(EvaluateVadLinkIntegrity(makeView()) == VadLinkIntegrity::Consistent,
+                     L"断链 全对得上即一致");
+
+        // 遍历不完整：一律 NotChecked，哪怕三项读数看着"没问题"。
+        KernelVadView partial = makeView();
+        partial.integrityValid = false;
+        suite.expect(EvaluateVadLinkIntegrity(partial) == VadLinkIntegrity::NotChecked,
+                     L"断链 遍历不完整即未检查");
+        KernelVadView notAvailable = makeView();
+        notAvailable.state = KernelBackendState::Partial;
+        suite.expect(EvaluateVadLinkIntegrity(notAvailable) == VadLinkIntegrity::NotChecked,
+                     L"断链 后端非完整即未检查");
+
+        // 父指针回指不上。
+        KernelVadView orphan = makeView();
+        orphan.parentMismatchNodes = 1U;
+        suite.expect(EvaluateVadLinkIntegrity(orphan) == VadLinkIntegrity::Inconsistent,
+                     L"断链 父指针回指不上即不一致");
+
+        // VadHint 指向树上找不到的节点。
+        KernelVadView hintLost = makeView();
+        hintLost.vadHintVisited = false;
+        suite.expect(EvaluateVadLinkIntegrity(hintLost) == VadLinkIntegrity::Inconsistent,
+                     L"断链 VadHint 不可达即不一致");
+        // 但 VadHint 为空是合法的（刚建的进程还没用过），不能算不一致。
+        KernelVadView hintNull = makeView();
+        hintNull.vadHintVisited = false;
+        hintNull.vadHintAddress = OptionalU64{};
+        suite.expect(EvaluateVadLinkIntegrity(hintNull) == VadLinkIntegrity::Consistent,
+                     L"断链 VadHint 为空不算不一致");
+        // 偏移不可用时也不能拿它判。
+        KernelVadView hintUnknown = makeView();
+        hintUnknown.vadHintKnown = false;
+        hintUnknown.vadHintVisited = false;
+        suite.expect(EvaluateVadLinkIntegrity(hintUnknown) == VadLinkIntegrity::Consistent,
+                     L"断链 VadHint 偏移不可用时不参与判定");
+
+        // 计数比走出来的多 = 有节点不在树上。
+        KernelVadView fewer = makeView();
+        fewer.visitedCount = 585U;
+        suite.expect(EvaluateVadLinkIntegrity(fewer) == VadLinkIntegrity::Inconsistent,
+                     L"断链 走出来比计数少即不一致");
+        // **反向不算**：并发建 VAD 时计数还没加上来是常态，算进去会在忙碌进程上误报。
+        KernelVadView more = makeView();
+        more.visitedCount = 587U;
+        suite.expect(EvaluateVadLinkIntegrity(more) == VadLinkIntegrity::Consistent,
+                     L"断链 走出来比计数多不算不一致");
+        KernelVadView countUnknown = makeView();
+        countUnknown.vadCountKnown = false;
+        countUnknown.visitedCount = 100U;
+        suite.expect(EvaluateVadLinkIntegrity(countUnknown) == VadLinkIntegrity::Consistent,
+                     L"断链 计数偏移不可用时不参与判定");
+    }
+
+    // 接进总入口：不一致只到"待解释"，不升到"观测到差异"。
+    {
+        SurveyInput linkBroken = MakeCleanInput();
+        linkBroken.kernelVadState = KernelBackendState::Available;
+        linkBroken.kernelPteState = KernelBackendState::Available;
+        linkBroken.kernelCrossView.linkIntegrity = VadLinkIntegrity::Inconsistent;
+        linkBroken.kernelCrossView.linkVisitedCount = 585U;
+        linkBroken.kernelCrossView.linkVadCount = 586U;
+        linkBroken.kernelCrossView.linkVadCountKnown = true;
+        linkBroken.kernelCrossView.linkParentMismatchNodes = 2U;
+        const SurveyReport brokenReport = RunInjectionSurvey(linkBroken);
+        suite.expect(brokenReport.vadLinkIssueCount == 1U, L"断链 总入口计数");
+        suite.expect(HasRule(brokenReport.findings, kRuleIdKernelVadLinkBroken),
+                     L"断链 总入口产出条目");
+        suite.expect(brokenReport.hasObservation(
+                         ObservationClass::VadTreeLinkageInconsistent),
+                     L"断链 总入口记观测类");
+        suite.expect(brokenReport.conclusion == AnalysisConclusion::Indeterminate,
+                     L"断链 只到待解释");
+        suite.expect(brokenReport.conclusion != AnalysisConclusion::DifferenceObserved,
+                     L"断链 不升到观测到差异（误报率尚未实测）");
+        const InjectionFinding* const brokenHit =
+            FindRule(brokenReport.findings, kRuleIdKernelVadLinkBroken);
+        suite.expect(brokenHit != nullptr &&
+                         std::any_of(brokenHit->facts.begin(), brokenHit->facts.end(),
+                                     [](const std::string& fact) {
+                                         return fact == "vad.count-from-eprocess=586";
+                                     }),
+                     L"断链 条目带内核计数可回源");
+
+        // 走完了且一致：记成已完成的检查，不留缺口。
+        SurveyInput linkOk = MakeCleanInput();
+        linkOk.kernelVadState = KernelBackendState::Available;
+        linkOk.kernelPteState = KernelBackendState::Available;
+        linkOk.kernelCrossView.linkIntegrity = VadLinkIntegrity::Consistent;
+        const SurveyReport okReport = RunInjectionSurvey(linkOk);
+        suite.expect(okReport.vadLinkIssueCount == 0U, L"断链 一致时无条目");
+        suite.expect(!okReport.hasGap(kGapVadLinkUncheckable), L"断链 一致时不留缺口");
+
+        // 后端跑成了但树没走完：**缺口**，不是"一致"。
+        SurveyInput linkUnchecked = MakeCleanInput();
+        linkUnchecked.kernelVadState = KernelBackendState::Available;
+        linkUnchecked.kernelPteState = KernelBackendState::Available;
+        linkUnchecked.kernelCrossView.linkIntegrity = VadLinkIntegrity::NotChecked;
+        const SurveyReport uncheckedReport = RunInjectionSurvey(linkUnchecked);
+        suite.expect(uncheckedReport.hasGap(kGapVadLinkUncheckable),
+                     L"断链 没走完记成缺口");
+        suite.expect(uncheckedReport.conclusion != AnalysisConclusion::NoDifferenceObserved,
+                     L"断链 缺口压制干净结论");
+    }
+
     // --- WOW64 采集器缺口透传 ---
     SurveyInput wow = MakeCleanInput();
     wow.collectorArchitecture = CollectorArchitecture::Wow64;

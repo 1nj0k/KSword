@@ -233,6 +233,54 @@ Return Value:
     return STATUS_SUCCESS;
 }
 
+static VOID
+KswordARKInjectionReadVadIntegrityInputs(
+    _In_ PEPROCESS ProcessObject,
+    _In_ const KSW_DYN_STATE* DynState,
+    _Out_ PVOID* VadHintOut,
+    _Out_ ULONG* VadCountOut,
+    _Inout_ ULONG* FieldFlags
+    )
+/*++
+
+Routine Description:
+
+    读断链检查要用的两项：EPROCESS.VadHint 与 EPROCESS.VadCount。
+    中文说明：两者都是可选的 —— 偏移不可用时对应的标志位不置，上层据此知道
+    这一项"没查"，而不是"查了等于 0"。缺一项不影响另一项。
+
+--*/
+{
+    ULONG offset = 0U;
+
+    *VadHintOut = NULL;
+    *VadCountOut = 0U;
+
+    if (ProcessObject == NULL || DynState == NULL) {
+        return;
+    }
+
+    offset = DynState->Kernel.EpVadHint;
+    if (offset != KSW_DYN_OFFSET_UNAVAILABLE && offset != 0U) {
+        PVOID hint = NULL;
+        if (KswordARKInjectionReadKernel(
+                (const UCHAR*)ProcessObject + offset, &hint, sizeof(hint))) {
+            *VadHintOut = hint;
+            *FieldFlags |= KSWORD_ARK_INJECTION_FIELD_VAD_HINT_PRESENT;
+        }
+    }
+
+    offset = DynState->Kernel.EpVadCount;
+    if (offset != KSW_DYN_OFFSET_UNAVAILABLE && offset != 0U) {
+        ULONG count = 0U;
+        if (KswordARKInjectionReadKernel(
+                (const UCHAR*)ProcessObject + offset, &count, sizeof(count))) {
+            *VadCountOut = count;
+            *FieldFlags |= KSWORD_ARK_INJECTION_FIELD_VAD_COUNT_PRESENT;
+        }
+    }
+}
+
 typedef struct _KSW_INJ_VAD_WALK_STATE
 {
     PVOID Stack[KSWORD_ARK_INJECTION_VAD_MAX_DEPTH];
@@ -240,7 +288,64 @@ typedef struct _KSW_INJ_VAD_WALK_STATE
     BOOLEAN DepthOverflow;
     ULONG UnreadableNodes;
     ULONG VisitedNodes;
+    // 断链检查的账。ParentMismatch 只在能读到父节点时才累加 —— 读不到父节点
+    // 记进 UnreadableNodes，不冒充"结构不一致"。
+    ULONG ParentMismatchNodes;
+    BOOLEAN VadHintVisited;
+    PVOID VadHint;
 } KSW_INJ_VAD_WALK_STATE;
+
+/*
+ * RTL_BALANCED_NODE.ParentValue 的低位是平衡位（Red:1 / Balance:2），
+ * 取父指针必须先掩掉。掩错会把一个正常节点算成"父指针不一致"。
+ */
+#define KSW_INJ_PARENT_VALUE_MASK (~(ULONG_PTR)0x3)
+
+static VOID
+KswordARKInjectionCheckParentLink(
+    _Inout_ KSW_INJ_VAD_WALK_STATE* State,
+    _In_ PVOID Node,
+    _In_ const KSW_INJ_MMVAD_SHORT* Core,
+    _In_ PVOID Root
+    )
+/*++
+
+Routine Description:
+
+    核对一个节点的父指针是否回指得上。中文说明：摘链的常见做法是改写父节点的
+    孩子指针，但不修被摘节点自己的 ParentValue，也不修被接上来的子树的
+    ParentValue —— 于是树上会留下"我认它当爹、它不认我这个儿子"的节点。
+
+    读不到父节点时**什么都不记**：那是读失败，不是结构不一致。把两者混在一起
+    会让"内存换出去了"报成"树被改过"。
+
+--*/
+{
+    ULONG_PTR parentValue = 0U;
+    PVOID parent = NULL;
+    KSW_INJ_MMVAD_SHORT parentCore;
+
+    parentValue = (ULONG_PTR)Core->NodeUnion.VadNode.ParentValue & KSW_INJ_PARENT_VALUE_MASK;
+    parent = (PVOID)parentValue;
+
+    if (parent == NULL || parent == Node) {
+        /*
+         * 根节点的两种表示：ParentValue 为 0，或者指向自己。都是正常的。
+         * 但**只有根**可以这样；别的节点这样就是断了。
+         */
+        if (Node != Root) {
+            ++State->ParentMismatchNodes;
+        }
+        return;
+    }
+    if (!KswordARKInjectionReadKernel(parent, &parentCore, sizeof(parentCore))) {
+        return;  // 读不到父节点 —— 不是判据，别记
+    }
+    if (parentCore.NodeUnion.VadNode.Children[0] != Node &&
+        parentCore.NodeUnion.VadNode.Children[1] != Node) {
+        ++State->ParentMismatchNodes;
+    }
+}
 
 static BOOLEAN
 KswordARKInjectionVadWalkPush(
@@ -384,6 +489,15 @@ Return Value:
     response->fieldFlags |= KSWORD_ARK_INJECTION_FIELD_ROOT_PRESENT;
 
     RtlZeroMemory(&walk, sizeof(walk));
+    {
+        PVOID hint = NULL;
+        ULONG count = 0U;
+        KswordARKInjectionReadVadIntegrityInputs(
+            processObject, &dynState, &hint, &count, &response->fieldFlags);
+        walk.VadHint = hint;
+        response->vadHintAddress = (ULONG64)(ULONG_PTR)hint;
+        response->vadCount = count;
+    }
     current = root;
 
     /*
@@ -424,6 +538,10 @@ Return Value:
             continue;
         }
         ++walk.VisitedNodes;
+        KswordARKInjectionCheckParentLink(&walk, current, &core, root);
+        if (walk.VadHint != NULL && current == walk.VadHint) {
+            walk.VadHintVisited = TRUE;
+        }
 
         startVa = KswordARKInjectionVadStartVa(&core);
         endVa = KswordARKInjectionVadEndVaExclusive(&core);
@@ -487,8 +605,25 @@ Return Value:
 
     response->visitedCount = walk.VisitedNodes;
     response->unreadableNodeCount = walk.UnreadableNodes;
+    response->parentMismatchNodes = walk.ParentMismatchNodes;
+    response->vadHintVisited = walk.VadHintVisited ? 1UL : 0UL;
     if (walk.DepthOverflow) {
         response->fieldFlags |= KSWORD_ARK_INJECTION_FIELD_INCONSISTENT_WALK;
+    }
+
+    /*
+     * 断链判据只在**整棵树都走完**时成立。这三个条件缺一不可：
+     *   - 没有截断（否则 visitedCount 本来就少）
+     *   - 没有起始游标（续扫的后半段不会重走前半段）
+     *   - 没有节点读不到、没有深度溢出（漏掉的子树会让计数天然对不上）
+     * 范围过滤**不影响** visitedCount —— 遍历仍然走全树，过滤只作用在返回条目上，
+     * 所以这里不把 rangeStart/rangeEnd 列进条件。
+     *
+     * 少一个条件就会把"这次没走完"报成"有节点被摘出去了"，那是本功能最不能犯的
+     * 那类错：它会在正常机器上稳定误报。
+     */
+    if (!truncated && cursorVpn == 0ULL && walk.UnreadableNodes == 0UL && !walk.DepthOverflow) {
+        response->fieldFlags |= KSWORD_ARK_INJECTION_FIELD_INTEGRITY_VALID;
     }
 
     if (truncated) {

@@ -121,6 +121,17 @@ namespace ksword::ark
         result.vadRootOffset = static_cast<std::uint32_t>(header->vadRootOffset);
         result.vadRootAddress = header->vadRootAddress;
         result.nextCursorVpn = header->nextCursorVpn;
+        result.integrityValid =
+            (header->fieldFlags & KSWORD_ARK_INJECTION_FIELD_INTEGRITY_VALID) != 0UL;
+        result.vadCountKnown =
+            (header->fieldFlags & KSWORD_ARK_INJECTION_FIELD_VAD_COUNT_PRESENT) != 0UL;
+        result.vadHintKnown =
+            (header->fieldFlags & KSWORD_ARK_INJECTION_FIELD_VAD_HINT_PRESENT) != 0UL;
+        result.vadCount = static_cast<std::uint32_t>(header->vadCount);
+        result.parentMismatchNodes =
+            static_cast<std::uint32_t>(header->parentMismatchNodes);
+        result.vadHintVisited = header->vadHintVisited != 0UL;
+        result.vadHintAddress = header->vadHintAddress;
 
         const std::size_t parsed =
             std::min<std::size_t>(available, static_cast<std::size_t>(header->returnedCount));

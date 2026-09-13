@@ -123,6 +123,24 @@
 而这条 IOCTL 是 `FILE_WRITE_ACCESS` ⇒ I/O 管理器在 handler 之前就 ACCESS_DENIED。
 已修。同族只此一处，紧邻的 v1/EX 两个都传的 READ|WRITE。
 
+### VAD 断链检查（2026-09-13 实机验过）
+
+摘链 = 把 VAD 从树上摘下去，`NtQueryVirtualMemory` 就再也查不到那块内存（它走的就是
+这棵树），但内存还在还能跑。这一维查**树自己站不站得住**，和"用户态看不到但页表看得到"
+是互补的两条路：交叉视图全对得上时树照样可能被摘过。
+
+三条判据在 `EvaluateVadLinkIntegrity()`，每条都有一个**容易写成误报**的坑：
+
+- `visited < VadCount` 才算。**反向不算** —— 并发建 VAD 时计数还没加上来是常态。
+- `VadHint` 不可达才算，但 **hint 为空是合法的**（刚建的进程没用过），偏移不可用也不算。
+- 父指针 `ParentValue & ~3`，低位是平衡位。**掩码写错 ⇒ 每个正常节点都报不一致。**
+
+**三态不是布尔**：遍历不完整一律 `NotChecked` + 覆盖缺口。把它折进 `Consistent`
+就是把"没查成"读成"树是好的"，这一维只有这一种致命错法。
+
+**实机底噪为零**：90 进程 / 10199 节点，`visited == vadCount` 精确相等、`parentMismatch`
+全 0、非空 hint 全可达。**结论仍只到 Indeterminate** —— 样本只有一台机器。
+
 ### 驱动侧的两个坑
 
 - `PsLookupProcessByProcessId` / `KeStackAttachProcess` / `KeUnstackDetachProcess` / `KAPC_STATE`

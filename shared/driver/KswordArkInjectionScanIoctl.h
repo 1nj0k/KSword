@@ -73,6 +73,14 @@
 #define KSWORD_ARK_INJECTION_FIELD_BUDGET_EXHAUSTED    0x00000008UL
 #define KSWORD_ARK_INJECTION_FIELD_INCONSISTENT_WALK   0x00000010UL
 #define KSWORD_ARK_INJECTION_FIELD_CR3_PRESENT         0x00000020UL
+// 本次遍历完整走完了整棵树（没有范围过滤、没有游标、没有截断），因此
+// visitedCount / parentMismatchNodes / vadHintVisited 可以拿来和 vadCount 比。
+// **没有这一位时那几个字段一律不得参与判定** —— 部分遍历下 visitedCount 本来就小。
+#define KSWORD_ARK_INJECTION_FIELD_INTEGRITY_VALID     0x00000040UL
+// EPROCESS.VadCount 的偏移可用且已读到。
+#define KSWORD_ARK_INJECTION_FIELD_VAD_COUNT_PRESENT   0x00000080UL
+// EPROCESS.VadHint 的偏移可用且已读到。
+#define KSWORD_ARK_INJECTION_FIELD_VAD_HINT_PRESENT    0x00000100UL
 
 // ---------------------------------------------------------------------------
 // VAD 枚举
@@ -149,6 +157,24 @@ typedef struct _KSWORD_ARK_ENUMERATE_PROCESS_VAD_RESPONSE
     unsigned long vadRootOffset;
     unsigned long long vadRootAddress;
     unsigned long long nextCursorVpn;    // 0 = 已走完
+
+    // --- 树结构完整性（断链检查）---------------------------------------------
+    // 这几项只在**完整走完整棵树**时才有意义：带范围过滤、带游标、或者命中条目
+    // 上限时，visitedCount 本来就不该等于 VadCount。所以它们由
+    // KSWORD_ARK_INJECTION_FIELD_INTEGRITY_VALID 单独把门，调用方必须先看那一位。
+    unsigned long long vadHintAddress;   // EPROCESS.VadHint 的值；0 = 偏移不可用
+    // EPROCESS.VadCount。内核自己维护的计数，摘链的人通常不会同步减它，
+    // 所以 visitedCount < vadCount 是"有节点不在树上"的直接读数。
+    unsigned long vadCount;
+    // 父指针回指不一致的节点数：ParentValue & ~3 指向的节点，其左右孩子里
+    // 没有一个是本节点。干净的摘链（把父的孩子指针接到自己的子树上）不会留下
+    // 这个痕迹，但粗暴改写会。
+    unsigned long parentMismatchNodes;
+    // EPROCESS.VadHint 指向的节点在本次遍历中被访问到了。VadHint 是内核的
+    // "最近用过的 VAD"缓存，它指向一个树上找不到的节点，说明树被动过。
+    unsigned long vadHintVisited;
+    unsigned long integrityReserved;
+
     KSWORD_ARK_PROCESS_VAD_ENTRY entries[1];
 } KSWORD_ARK_ENUMERATE_PROCESS_VAD_RESPONSE;
 

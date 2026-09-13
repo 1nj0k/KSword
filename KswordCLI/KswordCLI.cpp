@@ -2949,6 +2949,22 @@ namespace
                        << L" vadRootOffset=" << response->vadRootOffset
                        << L" vadRoot=" << hex64(response->vadRootAddress)
                        << L" nextCursorVpn=" << hex64(response->nextCursorVpn) << L"\n";
+            // 断链检查的读数。integrityValid=0 时后面三项一律不得用来判定 ——
+            // 部分遍历下 visited 本来就小于 vadCount。
+            std::wcout << L"  integrityValid="
+                       << (((response->fieldFlags &
+                             KSWORD_ARK_INJECTION_FIELD_INTEGRITY_VALID) != 0UL) ? 1 : 0)
+                       << L" vadCount=" << response->vadCount
+                       << L" vadCountKnown="
+                       << (((response->fieldFlags &
+                             KSWORD_ARK_INJECTION_FIELD_VAD_COUNT_PRESENT) != 0UL) ? 1 : 0)
+                       << L" parentMismatch=" << response->parentMismatchNodes
+                       << L" vadHint=" << hex64(response->vadHintAddress)
+                       << L" vadHintVisited=" << response->vadHintVisited
+                       << L" vadHintKnown="
+                       << (((response->fieldFlags &
+                             KSWORD_ARK_INJECTION_FIELD_VAD_HINT_PRESENT) != 0UL) ? 1 : 0)
+                       << L"\n";
             const std::size_t parsed = responseCountLimit(response->returnedCount, available, limit);
             for (std::size_t i = 0; i < parsed; ++i)
             {

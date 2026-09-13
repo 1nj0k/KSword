@@ -178,6 +178,11 @@ namespace
             return injectionText("process.detail.injection.rule.kernel_exec_beyond",
                                  QStringLiteral("页表说可执行，其它视图说不可执行"));
         }
+        if (ruleId == ev::kRuleIdKernelVadLinkBroken)
+        {
+            return injectionText("process.detail.injection.rule.vad_link_broken",
+                                 QStringLiteral("内存区域清单被人动过手脚"));
+        }
         return QString::fromStdString(ruleId);
     }
 
@@ -332,6 +337,12 @@ namespace
             return injectionText("process.detail.injection.gap.main_image",
                                  QStringLiteral("主映像身份来源不足，无法交叉核对"));
         }
+        if (key == ev::kGapVadLinkUncheckable)
+        {
+            return injectionText(
+                "process.detail.injection.gap.vad_link",
+                QStringLiteral("内存区域清单没能一次读完（条目太多被截断，或有节点读不到），所以“清单有没有被动过”这一项没查成"));
+        }
         if (key == ev::kGapStackWalkUntrusted)
         {
             return injectionText(
@@ -439,6 +450,11 @@ namespace
             return injectionText("process.detail.injection.check.non_executable",
                                  QStringLiteral("非可执行内存扫描"));
         }
+        if (key == ev::kCheckVadLinkIntegrity)
+        {
+            return injectionText("process.detail.injection.check.vad_link",
+                                 QStringLiteral("核对内存区域清单有没有被动过"));
+        }
         if (key == ev::kCheckReliableStackWalk)
         {
             return injectionText("process.detail.injection.check.stack_walk",
@@ -477,6 +493,10 @@ namespace
             return injectionText(
                 "process.detail.injection.observation.module_baseline",
                 QStringLiteral("模块交叉视图存在矛盾 → 可以说\"存在非预期模块\"，不能说\"一定通过某种特定注入 API 进入\""));
+        case ev::ObservationClass::VadTreeLinkageInconsistent:
+            return injectionText(
+                "process.detail.injection.observation.vad_link",
+                QStringLiteral("系统记录内存区域的那棵树自己对不上 → 可以说\"有内存区域被从清单里摘掉了\"，不能说\"摘掉它的是谁、摘的是哪一块\""));
         case ev::ObservationClass::ScanCompleteNoStrongEvidence:
             return injectionText(
                 "process.detail.injection.observation.no_strong_evidence",
@@ -799,6 +819,12 @@ namespace
             return injectionText(
                 "process.detail.injection.meaning.kernel_exec_beyond",
                 QStringLiteral("页表说这些页可以执行，但其它视图认为它们不可执行。"));
+        }
+        if (ruleId == ev::kRuleIdKernelVadLinkBroken)
+        {
+            return injectionText(
+                "process.detail.injection.meaning.vad_link_broken",
+                QStringLiteral("系统内部记录内存区域用的是一棵树，这棵树自己对不上了——有节点的“父节点”不认它这个孩子，或者系统记的区域个数比树上实际找到的多。把一块内存从这棵树上摘下去，是隐藏内存最直接的做法：摘掉之后从外面就再也查询不到它，但内存本身还在、还能跑。本机 90 个进程、10199 个节点实测全部对得上，所以这一条出现即值得追查。"));
         }
         return QString();
     }

@@ -1285,6 +1285,42 @@ bool KernelVadView::usableForAbsenceInference() const noexcept {
            unreadableNodeCount == 0U && OutcomeIsSuccess(outcome);
 }
 
+const char* VadLinkIntegrityName(const VadLinkIntegrity integrity) noexcept {
+    switch (integrity) {
+    case VadLinkIntegrity::NotChecked: return "NotChecked";
+    case VadLinkIntegrity::Consistent: return "Consistent";
+    case VadLinkIntegrity::Inconsistent: return "Inconsistent";
+    }
+    return "NotChecked";
+}
+
+VadLinkIntegrity EvaluateVadLinkIntegrity(const KernelVadView& view) noexcept {
+    // 硬闸门。遍历不完整时三项读数全部无意义 —— 返回"没查"，不是"一致"。
+    if (!view.integrityValid || view.state != KernelBackendState::Available) {
+        return VadLinkIntegrity::NotChecked;
+    }
+
+    // 父指针回指不上：干净的摘链不会留下这个痕迹，粗暴改写会。
+    if (view.parentMismatchNodes != 0U) {
+        return VadLinkIntegrity::Inconsistent;
+    }
+    // VadHint 指向树上找不到的节点。VadHint 为空是合法的（刚建的进程还没用过），
+    // 所以只有"知道 hint 且 hint 非空"时这一条才成立。
+    if (view.vadHintKnown && view.vadHintAddress.present && view.vadHintAddress.value != 0U &&
+        !view.vadHintVisited) {
+        return VadLinkIntegrity::Inconsistent;
+    }
+    // 内核计数比走出来的多：有节点不在树上。
+    //
+    // 只判**单向**：visitedCount < vadCount 才算。反向（走出来比计数多）在
+    // 采集与内核并发改树时会自然出现（新 VAD 已挂上、计数还没加），把它也算成
+    // 不一致会在忙碌进程上稳定误报。少了才是"有东西被摘走"的方向。
+    if (view.vadCountKnown && view.vadCount != 0U && view.visitedCount < view.vadCount) {
+        return VadLinkIntegrity::Inconsistent;
+    }
+    return VadLinkIntegrity::Consistent;
+}
+
 bool KernelPteView::usableForAbsenceInference() const noexcept {
     return KernelBackendSupportsAbsenceInference(state) && !truncated &&
            failedTableReads == 0U && OutcomeIsSuccess(outcome);
@@ -1371,6 +1407,17 @@ KernelCrossViewReport EvaluateKernelCrossView(const KernelCrossViewInput& input)
     // 只要用了内核视图，这一条恒挂。
     AddUnique(report.capabilityLimitKeys, kLimitKernelTrustAssumption);
     AddUnique(report.capabilityLimitKeys, kLimitKernelSectionCompare);
+
+    // 断链检查在这里定，因为这里是内核侧判据的入口。它只看树自身，和下面的
+    // R3/VAD/页表交叉完全独立 —— 交叉视图全对得上时树照样可能被摘过链。
+    report.linkIntegrity = EvaluateVadLinkIntegrity(input.vadView);
+    report.linkVisitedCount = input.vadView.visitedCount;
+    report.linkVadCount = input.vadView.vadCount;
+    report.linkParentMismatchNodes = input.vadView.parentMismatchNodes;
+    report.linkVadCountKnown = input.vadView.vadCountKnown;
+    report.linkVadHintKnown = input.vadView.vadHintKnown;
+    report.linkVadHintVisited = input.vadView.vadHintVisited;
+    report.linkVadHintAddress = input.vadView.vadHintAddress;
 
     if (input.r3Index == nullptr) {
         AddUnique(report.coverageGapKeys, kGapAddressSpaceIncomplete);
@@ -1692,6 +1739,7 @@ const char* const kRuleIdPayloadStructure = "inject.payload.structure";
 const char* const kRuleIdKernelRegionHiddenFromR3 = "inject.kernel.region-hidden-from-r3";
 const char* const kRuleIdKernelRegionMissingInVad = "inject.kernel.region-missing-in-vad";
 const char* const kRuleIdKernelExecutableBeyondView = "inject.kernel.executable-beyond-view";
+const char* const kRuleIdKernelVadLinkBroken = "inject.kernel.vad-link-broken";
 
 const char* const kGapAddressSpaceIncomplete = "inject.gap.address-space";
 const char* const kGapLoaderViewUnavailable = "inject.gap.loader-view";
@@ -1708,6 +1756,7 @@ const char* const kGapModuleEnumerationWow64 = "inject.gap.module-enum-wow64";
 const char* const kGapMainImageSourceMissing = "inject.gap.main-image-source";
 const char* const kGapKernelBackendUnavailable = "inject.gap.kernel-backend";
 const char* const kGapKernelProfileUnverified = "inject.gap.kernel-profile";
+const char* const kGapVadLinkUncheckable = "inject.gap.vad-link-uncheckable";
 const char* const kGapStackWalkUntrusted = "inject.gap.stack-untrusted";
 const char* const kLimitNonExecutableNotScanned = "inject.limit.non-executable";
 const char* const kLimitStackUnwindUnavailable = "inject.limit.stack-unwind";
@@ -1728,6 +1777,7 @@ const char* const kCheckPayloadStructure = "inject.check.payload-structure";
 const char* const kCheckNonExecutableScan = "inject.check.non-executable";
 const char* const kCheckReliableStackWalk = "inject.check.stack-walk";
 const char* const kCheckKernelVadCrossView = "inject.check.kernel-vad";
+const char* const kCheckVadLinkIntegrity = "inject.check.vad-link";
 const char* const kCheckKernelPteScan = "inject.check.kernel-pte";
 
 const char* EvidenceConfidenceName(const EvidenceConfidence confidence) noexcept {
@@ -1755,6 +1805,7 @@ const char* ObservationClassName(const ObservationClass observation) noexcept {
     case ObservationClass::PayloadStructureWithReliableFrame:
         return "PayloadStructureWithReliableFrame";
     case ObservationClass::MappedModuleOutsideBaseline: return "MappedModuleOutsideBaseline";
+    case ObservationClass::VadTreeLinkageInconsistent: return "VadTreeLinkageInconsistent";
     case ObservationClass::ScanCompleteNoStrongEvidence: return "ScanCompleteNoStrongEvidence";
     case ObservationClass::KeyInputUnavailable: return "KeyInputUnavailable";
     }
@@ -1783,6 +1834,14 @@ ObservationSemantics SemanticsFor(const ObservationClass observation) noexcept {
     case ObservationClass::MappedModuleOutsideBaseline:
         semantics.allowedConclusionKey = "inject.semantics.module-baseline.allowed";
         semantics.forbiddenConclusionKey = "inject.semantics.module-baseline.forbidden";
+        semantics.contribution = AnalysisConclusion::Indeterminate;
+        break;
+    case ObservationClass::VadTreeLinkageInconsistent:
+        semantics.allowedConclusionKey = "inject.semantics.vad-link.allowed";
+        semantics.forbiddenConclusionKey = "inject.semantics.vad-link.forbidden";
+        // 只到待解释。摘链没有已知的良性成因，但**这一维的误报率还没在实机上量过**，
+        // 而且遍历与内核改树是并发的。先按 Indeterminate 出货、量完再考虑升档，
+        // 和 kLimitKernelBenignBaseline 是同一个理由。
         semantics.contribution = AnalysisConclusion::Indeterminate;
         break;
     case ObservationClass::ScanCompleteNoStrongEvidence:
@@ -2326,9 +2385,47 @@ SurveyReport RunInjectionSurvey(const SurveyInput& input) {
                     KernelRegionCrossIssueName(crossFinding.issue));
             report.findings.push_back(std::move(finding));
         }
+
+        // --- VAD 断链：树自身的链接自洽性 ---
+        // 和上面的交叉视图是互补的两维：那一维问"两个视图说的一不一样"，
+        // 这一维问"这棵树自己站不站得住"。摘链的直接痕迹在后者。
+        const KernelCrossViewReport& kernel = input.kernelCrossView;
+        report.vadLinkIntegrity = kernel.linkIntegrity;
+        if (kernel.linkIntegrity == VadLinkIntegrity::Consistent) {
+            AddUnique(report.completedCheckKeys, kCheckVadLinkIntegrity);
+        } else if (kernel.linkIntegrity == VadLinkIntegrity::NotChecked) {
+            // 遍历不完整（截断 / 续扫 / 有节点读不到），或者根本没跑 VAD 后端。
+            // 这是**缺口**：打算查、没查成。折成"一致"就是把没查成读作树是好的。
+            AddUnique(report.notPerformedCheckKeys, kCheckVadLinkIntegrity);
+            if (input.kernelVadState == KernelBackendState::Available) {
+                AddUnique(report.coverageGapKeys, kGapVadLinkUncheckable);
+            }
+        } else {
+            AddUnique(report.completedCheckKeys, kCheckVadLinkIntegrity);
+            ++report.vadLinkIssueCount;
+            InjectionFinding finding = MakeFinding(input, kRuleIdKernelVadLinkBroken);
+            // 只到"单一观测"：这一维的误报率还没在实机上量过。量完再考虑升档，
+            // 和 kLimitKernelBenignBaseline 是同一个理由。
+            finding.confidence = EvidenceConfidence::SingleObservation;
+            AddFact(finding.facts, "vad.visited", DecText(kernel.linkVisitedCount));
+            if (kernel.linkVadCountKnown) {
+                AddFact(finding.facts, "vad.count-from-eprocess", DecText(kernel.linkVadCount));
+            }
+            AddFact(finding.facts, "vad.parent-mismatch",
+                    DecText(kernel.linkParentMismatchNodes));
+            if (kernel.linkVadHintKnown) {
+                AddFact(finding.facts, "vad.hint",
+                        HexText(kernel.linkVadHintAddress.valueOr(0U)));
+                AddFact(finding.facts, "vad.hint-visited",
+                        kernel.linkVadHintVisited ? "true" : "false");
+            }
+            AddObservation(report, ObservationClass::VadTreeLinkageInconsistent);
+            report.findings.push_back(std::move(finding));
+        }
     } else {
         AddUnique(report.notPerformedCheckKeys, kCheckKernelVadCrossView);
         AddUnique(report.notPerformedCheckKeys, kCheckKernelPteScan);
+        AddUnique(report.notPerformedCheckKeys, kCheckVadLinkIntegrity);
     }
 
     // --- 深度模式的两项额外要求 ---
@@ -2408,6 +2505,7 @@ SurveyReport RunInjectionSurvey(const SurveyInput& input) {
                report.threadStartAnomalyCount != 0U ||
                report.moduleCrossIssueCount != 0U ||
                report.kernelCrossIssueCount != 0U ||
+               report.vadLinkIssueCount != 0U ||
                !report.coverageGapKeys.empty()) {
         report.conclusion = AnalysisConclusion::Indeterminate;
     } else {

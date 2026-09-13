@@ -536,6 +536,15 @@ namespace ksword::ark
         std::uint32_t vadRootOffset = 0;
         std::uint64_t vadRootAddress = 0;
         std::uint64_t nextCursorVpn = 0;
+        // 断链检查的读数。integrityValid 是硬闸门：为假时下面几项一律不得
+        // 参与判定 —— 部分遍历下 visitedCount 本来就小于 vadCount。
+        bool integrityValid = false;
+        bool vadCountKnown = false;
+        bool vadHintKnown = false;
+        std::uint32_t vadCount = 0;
+        std::uint32_t parentMismatchNodes = 0;
+        bool vadHintVisited = false;
+        std::uint64_t vadHintAddress = 0;
         std::vector<ProcessVadEntry> entries;
     };
 

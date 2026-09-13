@@ -1738,11 +1738,29 @@ InjectionTraceResult ScanProcessInjectionTrace(const std::uint32_t pid,
                 }
                 vadView.visitedCount += r.visitedCount;
                 vadView.unreadableNodeCount += r.unreadableNodeCount;
+                if (cursorVpn == 0ULL)
+                {
+                    // 断链判据只认**第一次调用**的读数，而且只在它一次走完整棵树时
+                    // 有效。驱动侧已经按"没截断 + 没游标 + 没读不到的节点"置位，
+                    // 这里再把续扫的情况排掉：一旦要带游标再来一次，
+                    // 第一次的 visitedCount 就只是半棵树。
+                    vadView.integrityValid = r.integrityValid;
+                    vadView.vadCountKnown = r.vadCountKnown;
+                    vadView.vadHintKnown = r.vadHintKnown;
+                    vadView.vadCount = r.vadCount;
+                    vadView.parentMismatchNodes = r.parentMismatchNodes;
+                    vadView.vadHintVisited = r.vadHintVisited;
+                    vadView.vadHintAddress = r.vadHintAddress != 0ULL
+                        ? ev::OptionalU64::of(r.vadHintAddress)
+                        : ev::OptionalU64{};
+                }
                 if (r.status == KSWORD_ARK_INJECTION_SCAN_STATUS_TRUNCATED &&
                     r.nextCursorVpn != 0ULL &&
                     vadView.regions.size() < options.kernelVadMaxEntries)
                 {
                     cursorVpn = r.nextCursorVpn;
+                    // 要续扫就说明第一次没走完整棵树，断链判据作废。
+                    vadView.integrityValid = false;
                     continue;
                 }
                 truncated = (r.status == KSWORD_ARK_INJECTION_SCAN_STATUS_TRUNCATED);
