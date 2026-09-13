@@ -252,6 +252,9 @@
     <ClCompile Include="src\features\section\section_support.c" />
     <ClCompile Include="src\features\section\section_query.c" />
     <ClCompile Include="src\features\section\section_ioctl.c" />
+    <ClCompile Include="src\features\injection\injection_vad.c" />
+    <ClCompile Include="src\features\injection\injection_pte_scan.c" />
+    <ClCompile Include="src\features\injection\injection_ioctl.c" />
     <ClCompile Include="src\features\wsl\wsl_silo_query.c" />
     <ClCompile Include="src\features\wsl\wsl_silo_ioctl.c" />
     <ClCompile Include="src\features\trust\trust_query.c" />
@@ -400,6 +403,7 @@
     <ClInclude Include="src\features\alpc\alpc_support.h" />
     <ClInclude Include="src\features\alpc\alpc_runtime_fallback.h" />
     <ClInclude Include="include\ark\ark_section.h" />
+    <ClInclude Include="include\ark\ark_injection_scan.h" />
     <ClInclude Include="src\features\section\section_support.h" />
     <ClInclude Include="include\ark\ark_memory.h" />
     <ClInclude Include="include\ark\ark_memory_evidence.h" />

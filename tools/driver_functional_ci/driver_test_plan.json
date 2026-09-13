@@ -785,6 +785,56 @@
       ]
     },
     {
+      "id": "memory.enum-vad",
+      "tier": "probe",
+      "ioctls": [
+        "ENUMERATE_PROCESS_VAD"
+      ],
+      "steps": [
+        [
+          "memory",
+          "enum-vad",
+          "--pid",
+          "{target.pid}",
+          "--max-entries",
+          "256",
+          "--limit",
+          "8"
+        ]
+      ],
+      "expect": "graceful",
+      "timeoutSeconds": 120,
+      "requires": [
+        "target.pid"
+      ]
+    },
+    {
+      "id": "memory.scan-exec-pte",
+      "tier": "probe",
+      "ioctls": [
+        "SCAN_PROCESS_EXECUTABLE_PTE"
+      ],
+      "steps": [
+        [
+          "memory",
+          "scan-exec-pte",
+          "--pid",
+          "{target.pid}",
+          "--max-entries",
+          "256",
+          "--max-table-reads",
+          "4096",
+          "--limit",
+          "8"
+        ]
+      ],
+      "expect": "graceful",
+      "timeoutSeconds": 180,
+      "requires": [
+        "target.pid"
+      ]
+    },
+    {
       "id": "memory.query-pte",
       "tier": "probe",
       "ioctls": [

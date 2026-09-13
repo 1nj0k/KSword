@@ -1,0 +1,233 @@
+#pragma once
+
+#include "KswordArkSafetyIoctl.h"
+
+// ============================================================
+// KswordArkInjectionScanIoctl.h
+// 作用：
+// - 定义注入痕迹检查（issue #196）的 R0 扫描后端协议；
+// - 两个只读能力：进程 VAD 枚举、进程用户态可执行 PTE 范围扫描；
+// - 两者都是**独立视图**，用来和 R3 的 VirtualQueryEx/QueryWorkingSetEx 交叉核对，
+//   不是同一数据换个路径拿。
+//
+// 为什么需要这两条，而不是复用已有 IOCTL：
+//   * IOCTL_KSWORD_ARK_QUERY_VIRTUAL_MEMORY 走的是 ZwQueryVirtualMemory，
+//     与 R3 的 VirtualQueryEx 是**同一个来源**，交叉核对它等于自己和自己比。
+//     VAD 枚举直接读 EPROCESS.VadRoot 的平衡树，才是第二个来源。
+//   * IOCTL_KSWORD_ARK_QUERY_PAGE_TABLE_ENTRY 一次只解析一个 VA。要在整个用户地址
+//     空间里找"页表说可执行"的页（PteMalfind 的做法），逐 VA 调用是不可行的。
+//
+// 硬边界（写在协议里，免得实现或调用方后来忘了）：
+//   * 只读。本文件不提供任何写 VAD、写 PTE、改保护的入口。
+//   * 内部结构必须按目标 build 验证：VadRoot 偏移来自 DynData，未验证的版本一律
+//     返回 DYNDATA_MISSING 并把 profileVerified 置 0，**不允许**用相近版本的偏移继续读。
+//   * 扫描期间目标地址空间会变。协议不提供"一致性快照"，只提供游标续扫和
+//     不一致计数；调用方必须把它当作跨时点观测，不能当原子快照。
+//   * 内核采集依赖内核可信。有内核能力的对手可以改这里读到的元数据；
+//     本协议不承诺"有驱动便无法隐藏"。
+// ============================================================
+
+#define KSWORD_ARK_INJECTION_SCAN_PROTOCOL_VERSION 1UL
+
+#define KSWORD_ARK_IOCTL_FUNCTION_ENUMERATE_PROCESS_VAD 0x912UL
+#define KSWORD_ARK_IOCTL_FUNCTION_SCAN_PROCESS_EXECUTABLE_PTE 0x913UL
+
+// FILE_WRITE_ACCESS 与内存类 IOCTL 一致：这两条暴露内核内部结构，
+// 不能走 FILE_ANY_ACCESS 那一档。
+#define IOCTL_KSWORD_ARK_ENUMERATE_PROCESS_VAD \
+    CTL_CODE( \
+        KSWORD_ARK_IOCTL_DEVICE_TYPE, \
+        KSWORD_ARK_IOCTL_FUNCTION_ENUMERATE_PROCESS_VAD, \
+        METHOD_BUFFERED, \
+        FILE_WRITE_ACCESS)
+
+#define IOCTL_KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE \
+    CTL_CODE( \
+        KSWORD_ARK_IOCTL_DEVICE_TYPE, \
+        KSWORD_ARK_IOCTL_FUNCTION_SCAN_PROCESS_EXECUTABLE_PTE, \
+        METHOD_BUFFERED, \
+        FILE_WRITE_ACCESS)
+
+// ---------------------------------------------------------------------------
+// 通用状态
+// ---------------------------------------------------------------------------
+#define KSWORD_ARK_INJECTION_SCAN_STATUS_UNAVAILABLE           0UL
+#define KSWORD_ARK_INJECTION_SCAN_STATUS_OK                    1UL
+// PARTIAL：走完了请求范围，但中途有读不到的节点/表项。
+#define KSWORD_ARK_INJECTION_SCAN_STATUS_PARTIAL               2UL
+// TRUNCATED：命中条目或预算上限，**没有**走完请求范围。与 PARTIAL 分开是必须的：
+// 前者是"范围走完了但有洞"，后者是"范围根本没走完"，混用会让调用方以为已覆盖全程。
+#define KSWORD_ARK_INJECTION_SCAN_STATUS_TRUNCATED             3UL
+#define KSWORD_ARK_INJECTION_SCAN_STATUS_DYNDATA_MISSING       4UL
+#define KSWORD_ARK_INJECTION_SCAN_STATUS_PROCESS_LOOKUP_FAILED 5UL
+#define KSWORD_ARK_INJECTION_SCAN_STATUS_PROCESS_EXITING       6UL
+#define KSWORD_ARK_INJECTION_SCAN_STATUS_WALK_FAILED           7UL
+#define KSWORD_ARK_INJECTION_SCAN_STATUS_BUFFER_TOO_SMALL      8UL
+#define KSWORD_ARK_INJECTION_SCAN_STATUS_IRQL_REJECTED         9UL
+#define KSWORD_ARK_INJECTION_SCAN_STATUS_INVALID_RANGE         10UL
+
+// 响应字段可用性。
+#define KSWORD_ARK_INJECTION_FIELD_ENTRIES_PRESENT     0x00000001UL
+#define KSWORD_ARK_INJECTION_FIELD_CURSOR_PRESENT      0x00000002UL
+#define KSWORD_ARK_INJECTION_FIELD_ROOT_PRESENT        0x00000004UL
+#define KSWORD_ARK_INJECTION_FIELD_BUDGET_EXHAUSTED    0x00000008UL
+#define KSWORD_ARK_INJECTION_FIELD_INCONSISTENT_WALK   0x00000010UL
+#define KSWORD_ARK_INJECTION_FIELD_CR3_PRESENT         0x00000020UL
+
+// ---------------------------------------------------------------------------
+// VAD 枚举
+// ---------------------------------------------------------------------------
+#define KSWORD_ARK_INJECTION_VAD_LIMIT_DEFAULT 2048UL
+#define KSWORD_ARK_INJECTION_VAD_LIMIT_MAX     16384UL
+// 平衡树最大深度。真实 VAD 树深度远小于此；设死上限是为了让中序遍历的显式栈
+// 有固定大小，且畸形/被改写的树不会让遍历跑飞。
+#define KSWORD_ARK_INJECTION_VAD_MAX_DEPTH     64UL
+
+// entryFlags
+#define KSWORD_ARK_INJECTION_VAD_FLAG_PRIVATE_MEMORY 0x00000001UL
+#define KSWORD_ARK_INJECTION_VAD_FLAG_HAS_SUBSECTION 0x00000002UL
+#define KSWORD_ARK_INJECTION_VAD_FLAG_LONG_VAD       0x00000004UL
+#define KSWORD_ARK_INJECTION_VAD_FLAG_NODE_UNREADABLE 0x00000008UL
+#define KSWORD_ARK_INJECTION_VAD_FLAG_RANGE_MALFORMED 0x00000010UL
+// protection / vadType / PRIVATE_MEMORY 是按**假定的**位域布局从 LongFlags 解出来的。
+// DynData 只验证了 EPROCESS.VadRoot 的偏移，没有验证 MMVAD_FLAGS 的位位置，
+// 所以这三项只能当展示用，**不得**用来和 R3 的保护属性做"矛盾"判定 ——
+// 位布局猜错时那会变成整片假矛盾。原始 vadFlagsRaw 始终一并返回，便于事后复核。
+#define KSWORD_ARK_INJECTION_VAD_FLAG_FLAGS_LAYOUT_ASSUMED 0x00000020UL
+
+// MMVAD_FLAGS.VadType（winnt 未公开，取值随版本稳定）。解析不出来时用 UNKNOWN，
+// 不猜。
+#define KSWORD_ARK_INJECTION_VAD_TYPE_UNKNOWN 0xFFFFFFFFUL
+
+typedef struct _KSWORD_ARK_ENUMERATE_PROCESS_VAD_REQUEST
+{
+    unsigned long flags;
+    unsigned long processId;
+    unsigned long maxEntries;
+    unsigned long reserved0;
+    unsigned long long startAddress;   // 0 表示从用户空间起点
+    unsigned long long endAddress;     // 0 表示到用户空间终点
+    // 续扫游标：上一次响应的 nextCursorVpn。0 表示从头开始。
+    unsigned long long cursorVpn;
+    unsigned long long reserved1;
+} KSWORD_ARK_ENUMERATE_PROCESS_VAD_REQUEST;
+
+// 一条 VAD 记录。**刻意不含文件名**：从 VAD 反查文件名要经
+// Subsection -> ControlArea -> FilePointer 三次不可信解引用，风险远大于收益 ——
+// 路径这一维 R3 的 GetMappedFileNameW 已经给了，交叉核对需要的是范围与保护属性。
+// controlArea 非 0 只说明"这是一段有 section 支撑的映射"，够用于分类。
+typedef struct _KSWORD_ARK_PROCESS_VAD_ENTRY
+{
+    unsigned long long startVa;
+    unsigned long long endVaExclusive;
+    unsigned long long vadNodeAddress;
+    unsigned long long controlArea;      // 0 = 私有内存或读不到
+    unsigned long long firstPrototypePte; // 仅诊断
+    unsigned long vadFlagsRaw;           // MMVAD_SHORT.LongFlags 原值
+    unsigned long protection;            // MMVAD_FLAGS.Protection（MM_ 编码）
+    unsigned long vadType;               // MMVAD_FLAGS.VadType
+    unsigned long entryFlags;
+} KSWORD_ARK_PROCESS_VAD_ENTRY;
+
+typedef struct _KSWORD_ARK_ENUMERATE_PROCESS_VAD_RESPONSE
+{
+    unsigned long version;
+    unsigned long size;
+    unsigned long processId;
+    unsigned long fieldFlags;
+    unsigned long status;
+    long lastStatus;
+    unsigned long entrySize;
+    unsigned long returnedCount;
+    // 本次遍历真正访问到的节点数（含被范围过滤掉的）。它与 returnedCount 分开，
+    // 否则"过滤掉很多"和"只走了很少"在账目上长得一样。
+    unsigned long visitedCount;
+    unsigned long unreadableNodeCount;
+    // DynData 里的 EPROCESS.VadRoot 偏移是否已针对当前 build 验证。为 0 时
+    // 结果不可用于"缺项推断"，调用方必须降级。
+    unsigned long profileVerified;
+    unsigned long vadRootOffset;
+    unsigned long long vadRootAddress;
+    unsigned long long nextCursorVpn;    // 0 = 已走完
+    KSWORD_ARK_PROCESS_VAD_ENTRY entries[1];
+} KSWORD_ARK_ENUMERATE_PROCESS_VAD_RESPONSE;
+
+#define KSWORD_ARK_INJECTION_VAD_RESPONSE_HEADER_SIZE \
+    (sizeof(KSWORD_ARK_ENUMERATE_PROCESS_VAD_RESPONSE) - sizeof(KSWORD_ARK_PROCESS_VAD_ENTRY))
+
+// ---------------------------------------------------------------------------
+// 用户态可执行 PTE 扫描
+// ---------------------------------------------------------------------------
+// 默认条目上限按实测定，不是拍的：2026-09-12 在 Win11 22621.4317 上，
+// explorer.exe 的整个用户地址空间产出 7266 段（443 次表读、22779 个可执行 4 KiB 页），
+// lsass 产出 1044 段。4096 曾是默认值，explorer 上直接截断在半路。16384 留了一倍余量。
+#define KSWORD_ARK_INJECTION_PTE_LIMIT_DEFAULT 16384UL
+#define KSWORD_ARK_INJECTION_PTE_LIMIT_MAX     32768UL
+// 读表预算：一次请求最多读多少张页表页。4 级页表每张 4 KiB。
+// 默认值按"覆盖一个普通进程的全部已映射区域"量级给，超过即 TRUNCATED + 游标续扫。
+#define KSWORD_ARK_INJECTION_PTE_TABLE_READS_DEFAULT 8192UL
+#define KSWORD_ARK_INJECTION_PTE_TABLE_READS_MAX     262144UL
+
+// flags
+// 默认只报"页表说可执行"的叶子。置位后连不可执行的已映射叶子也报 —— 量极大，
+// 只用于诊断，不要在常规扫描里打开。
+#define KSWORD_ARK_INJECTION_PTE_FLAG_INCLUDE_NON_EXECUTABLE 0x00000001UL
+// 默认跳过 supervisor 页（用户地址空间里不该有）。置位后一并报出来。
+#define KSWORD_ARK_INJECTION_PTE_FLAG_INCLUDE_SUPERVISOR 0x00000002UL
+
+// entryFlags
+#define KSWORD_ARK_INJECTION_PTE_ENTRY_FLAG_EXECUTABLE 0x00000001UL
+#define KSWORD_ARK_INJECTION_PTE_ENTRY_FLAG_WRITABLE   0x00000002UL
+#define KSWORD_ARK_INJECTION_PTE_ENTRY_FLAG_USER       0x00000004UL
+#define KSWORD_ARK_INJECTION_PTE_ENTRY_FLAG_LARGE_PAGE 0x00000008UL
+
+typedef struct _KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE_REQUEST
+{
+    unsigned long flags;
+    unsigned long processId;
+    unsigned long maxEntries;
+    unsigned long maxTableReads;
+    unsigned long long startAddress;
+    unsigned long long endAddress;      // 0 表示到用户空间终点
+    unsigned long long cursorAddress;   // 续扫游标；0 表示从 startAddress 开始
+    unsigned long long reserved0;
+} KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE_REQUEST;
+
+// 一段属性相同、地址连续的叶子页。按"段"而不是"页"返回：一个 2 MiB 的可执行
+// 私有分配是 512 个 4 KiB 叶子，逐页返回会把缓冲撑爆且没有额外信息。
+typedef struct _KSWORD_ARK_PROCESS_EXECUTABLE_PTE_ENTRY
+{
+    unsigned long long startVa;
+    unsigned long long byteLength;
+    unsigned long long firstPhysicalAddress;
+    unsigned long long firstEntryValue;   // 该段第一个叶子项的原始值
+    unsigned long pageSize;
+    unsigned long pageCount;
+    unsigned long effectiveFlags;         // KSWORD_ARK_PAGE_TABLE_FLAG_*（逐级合并后）
+    unsigned long entryFlags;             // KSWORD_ARK_INJECTION_PTE_ENTRY_FLAG_*
+} KSWORD_ARK_PROCESS_EXECUTABLE_PTE_ENTRY;
+
+typedef struct _KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE_RESPONSE
+{
+    unsigned long version;
+    unsigned long size;
+    unsigned long processId;
+    unsigned long fieldFlags;
+    unsigned long status;
+    long lastStatus;
+    unsigned long entrySize;
+    unsigned long returnedCount;
+    unsigned long tableReads;          // 实际读了多少张表页
+    unsigned long failedTableReads;    // 读失败的表页数；>0 即 PARTIAL
+    unsigned long executablePageCount; // 命中的可执行叶子页总数（按 4 KiB 计）
+    unsigned long reserved0;
+    unsigned long long scannedBegin;   // 实际扫描到的范围
+    unsigned long long scannedEnd;
+    unsigned long long nextCursorAddress;  // 0 = 已走完
+    unsigned long long cr3PhysicalAddress;
+    KSWORD_ARK_PROCESS_EXECUTABLE_PTE_ENTRY entries[1];
+} KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE_RESPONSE;
+
+#define KSWORD_ARK_INJECTION_PTE_RESPONSE_HEADER_SIZE \
+    (sizeof(KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE_RESPONSE) - \
+     sizeof(KSWORD_ARK_PROCESS_EXECUTABLE_PTE_ENTRY))

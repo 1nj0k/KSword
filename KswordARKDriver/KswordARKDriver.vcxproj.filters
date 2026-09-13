@@ -35,6 +35,9 @@
     <Filter Include="Source Files\Features\HVM">
       <UniqueIdentifier>{2A123E07-8900-4B37-A85B-4FA28AB7AA12}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\Features\Injection">
+      <UniqueIdentifier>{7F41C6B2-0D3E-4A57-9C18-6B2E5F0A7D41}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source Files\Features\DebugOutput">
       <UniqueIdentifier>{654E78AA-7742-498B-9C45-9A875F5DD5C3}</UniqueIdentifier>
     </Filter>
@@ -315,6 +318,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\ark\ark_section.h">
+      <Filter>Header Files\Ark</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ark\ark_injection_scan.h">
       <Filter>Header Files\Ark</Filter>
     </ClInclude>
     <ClInclude Include="src\features\section\section_support.h">
@@ -985,6 +991,15 @@
     </ClCompile>
     <ClCompile Include="src\features\section\section_ioctl.c">
       <Filter>Source Files\Features\Section</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\injection\injection_vad.c">
+      <Filter>Source Files\Features\Injection</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\injection\injection_pte_scan.c">
+      <Filter>Source Files\Features\Injection</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\injection\injection_ioctl.c">
+      <Filter>Source Files\Features\Injection</Filter>
     </ClCompile>
     <ClCompile Include="src\features\wsl\wsl_silo_query.c">
       <Filter>Source Files\Features\WSL</Filter>

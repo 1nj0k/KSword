@@ -51,6 +51,7 @@
 #include "../shared/driver/KswordArkRegistryIoctl.h"
 #include "../shared/driver/KswordArkSafetyIoctl.h"
 #include "../shared/driver/KswordArkSecurityAuditIoctl.h"
+#include "../shared/driver/KswordArkInjectionScanIoctl.h"
 #include "../shared/driver/KswordArkSectionIoctl.h"
 #include "../shared/driver/KswordArkStorageIoctl.h"
 #include "../shared/driver/KswordArkThreadIoctl.h"
@@ -1160,6 +1161,8 @@ namespace
         { L"memory", L"translate-va", L"KswordCLI.exe memory translate-va --pid PID --address VA [--flags 0xN]", L"Translate a virtual address to page-table evidence.", L"Required: --pid, --address. Optional: --flags.", L"" },
         { L"memory", L"query-pte", L"KswordCLI.exe memory query-pte --pid PID --address VA [--flags 0xN]", L"Query page-table entries for one virtual address.", L"Required: --pid, --address. Optional: --flags.", L"" },
         { L"memory", L"scan-kexec", L"KswordCLI.exe memory scan-kexec [--flags 0xN] [--max-entries N] [--start VA] [--end VA] [--limit N]", L"Scan executable kernel memory evidence.", L"Optional: --flags, --max-entries, --start, --end, --limit.", L"" },
+        { L"memory", L"enum-vad", L"KswordCLI.exe memory enum-vad --pid PID [--start VA] [--end VA] [--cursor-vpn VPN] [--max-entries N] [--flags 0xN] [--limit N]", L"Enumerate the target process VAD tree as an independent region view.", L"Required: --pid. Optional: --start, --end, --cursor-vpn, --max-entries, --flags, --limit.", L"Backed by IOCTL_KSWORD_ARK_ENUMERATE_PROCESS_VAD; profileVerified=0 means the DynData VadRoot offset is not validated for this build and the result cannot support absence inference." },
+        { L"memory", L"scan-exec-pte", L"KswordCLI.exe memory scan-exec-pte --pid PID [--start VA] [--end VA] [--cursor VA] [--max-entries N] [--max-table-reads N] [--flags 0xN] [--limit N]", L"Scan the target process page tables for user-space executable leaves.", L"Required: --pid. Optional: --start, --end, --cursor, --max-entries, --max-table-reads, --flags, --limit.", L"Backed by IOCTL_KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE; reports what the processor treats as executable, independent of VAD protection." },
         { L"memory", L"scan-evidence", L"KswordCLI.exe memory scan-evidence [--flags 0xN] [--max-rows N] [--start VA] [--end VA] [--max-bytes N] [--max-bigpool-rows N] [--sample-bytes N] [--limit N]", L"Scan kernel memory evidence rows.", L"Optional: --flags, --max-rows, --start, --end, --max-bytes, --max-bigpool-rows, --sample-bytes, --limit.", L"" },
         { L"file", L"delete-path", L"KswordCLI.exe file delete-path --path PATH [--flags 0xN]", L"Delete one path through the driver.", L"Required: --path. Optional: --flags.", L"" },
         { L"file", L"query-info", L"KswordCLI.exe file query-info --path PATH [--flags 0xN]", L"Query file object and basic file metadata.", L"Required: --path. Optional: --flags.", L"" },
@@ -2912,6 +2915,98 @@ namespace
                            << L" last=0x" << static_cast<unsigned long>(row->lastStatus)
                            << std::dec << L" owner='" << fixedWide(row->ownerName, KSWORD_ARK_MEMORY_EVIDENCE_OWNER_NAME_CHARS)
                            << L"' detail='" << fixedWide(row->detail, KSWORD_ARK_MEMORY_EVIDENCE_DETAIL_CHARS) << L"'\n";
+            }
+            return 0;
+        }
+        if (sub == L"enum-vad")
+        {
+            // 注入痕迹检查的 R0 区域视图。与 query-va 是**不同的来源**：
+            // 后者走 ZwQueryVirtualMemory，和 R3 的 VirtualQueryEx 同源。
+            KSWORD_ARK_ENUMERATE_PROCESS_VAD_REQUEST request{};
+            request.flags = getOptionU32(args, L"--flags", 0U);
+            request.processId = requireOptionU32(args, L"--pid");
+            request.maxEntries = getOptionU32(args, L"--max-entries", KSWORD_ARK_INJECTION_VAD_LIMIT_DEFAULT);
+            request.startAddress = getOptionU64(args, L"--start", 0ULL);
+            request.endAddress = getOptionU64(args, L"--end", 0ULL);
+            request.cursorVpn = getOptionU64(args, L"--cursor-vpn", 0ULL);
+            const std::uint32_t limit = getOptionU32(args, L"--limit", 64U);
+            std::vector<std::uint8_t> buffer(kHugeResponseBytes, 0U);
+            const int rc = sendRawIoctl(L"IOCTL_KSWORD_ARK_ENUMERATE_PROCESS_VAD", IOCTL_KSWORD_ARK_ENUMERATE_PROCESS_VAD, &request, sizeof(request), buffer, io);
+            if (rc != 0) return normalizeIoctlRc(L"memory enum-vad", io, rc);
+            constexpr std::size_t headerSize = KSWORD_ARK_INJECTION_VAD_RESPONSE_HEADER_SIZE;
+            if (io.bytesReturned < headerSize) { std::wcerr << L"error: enum-vad response too small\n"; return 4; }
+            const auto* response = reinterpret_cast<const KSWORD_ARK_ENUMERATE_PROCESS_VAD_RESPONSE*>(buffer.data());
+            std::size_t available = 0U;
+            try { available = validateVariable(io.bytesReturned, headerSize, response->entrySize, sizeof(KSWORD_ARK_PROCESS_VAD_ENTRY), L"enum-vad"); }
+            catch (...) { return 4; }
+            printResponseBanner(response->version, response->status, response->lastStatus, io.bytesReturned);
+            std::wcout << L"pid=" << response->processId
+                       << L" fields=0x" << std::hex << response->fieldFlags << std::dec
+                       << L" returned=" << response->returnedCount
+                       << L" visited=" << response->visitedCount
+                       << L" unreadable=" << response->unreadableNodeCount
+                       << L" profileVerified=" << response->profileVerified
+                       << L" vadRootOffset=" << response->vadRootOffset
+                       << L" vadRoot=" << hex64(response->vadRootAddress)
+                       << L" nextCursorVpn=" << hex64(response->nextCursorVpn) << L"\n";
+            const std::size_t parsed = responseCountLimit(response->returnedCount, available, limit);
+            for (std::size_t i = 0; i < parsed; ++i)
+            {
+                const auto* entry = reinterpret_cast<const KSWORD_ARK_PROCESS_VAD_ENTRY*>(buffer.data() + headerSize + (i * response->entrySize));
+                std::wcout << L"  [" << i << L"] " << hex64(entry->startVa)
+                           << L"-" << hex64(entry->endVaExclusive)
+                           << L" node=" << hex64(entry->vadNodeAddress)
+                           << L" controlArea=" << hex64(entry->controlArea)
+                           << L" flagsRaw=0x" << std::hex << entry->vadFlagsRaw
+                           << L" entryFlags=0x" << entry->entryFlags << std::dec
+                           << L" protection=" << entry->protection
+                           << L" vadType=" << entry->vadType << L"\n";
+            }
+            return 0;
+        }
+        if (sub == L"scan-exec-pte")
+        {
+            // "处理器实际会把哪些用户页当代码执行"。它和 VAD/VirtualQueryEx 记的
+            // 保护属性是两个独立事实，不一致时以页表为准。
+            KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE_REQUEST request{};
+            request.flags = getOptionU32(args, L"--flags", 0U);
+            request.processId = requireOptionU32(args, L"--pid");
+            request.maxEntries = getOptionU32(args, L"--max-entries", KSWORD_ARK_INJECTION_PTE_LIMIT_DEFAULT);
+            request.maxTableReads = getOptionU32(args, L"--max-table-reads", KSWORD_ARK_INJECTION_PTE_TABLE_READS_DEFAULT);
+            request.startAddress = getOptionU64(args, L"--start", 0ULL);
+            request.endAddress = getOptionU64(args, L"--end", 0ULL);
+            request.cursorAddress = getOptionU64(args, L"--cursor", 0ULL);
+            const std::uint32_t limit = getOptionU32(args, L"--limit", 64U);
+            std::vector<std::uint8_t> buffer(kHugeResponseBytes, 0U);
+            const int rc = sendRawIoctl(L"IOCTL_KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE", IOCTL_KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE, &request, sizeof(request), buffer, io);
+            if (rc != 0) return normalizeIoctlRc(L"memory scan-exec-pte", io, rc);
+            constexpr std::size_t headerSize = KSWORD_ARK_INJECTION_PTE_RESPONSE_HEADER_SIZE;
+            if (io.bytesReturned < headerSize) { std::wcerr << L"error: scan-exec-pte response too small\n"; return 4; }
+            const auto* response = reinterpret_cast<const KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE_RESPONSE*>(buffer.data());
+            std::size_t available = 0U;
+            try { available = validateVariable(io.bytesReturned, headerSize, response->entrySize, sizeof(KSWORD_ARK_PROCESS_EXECUTABLE_PTE_ENTRY), L"scan-exec-pte"); }
+            catch (...) { return 4; }
+            printResponseBanner(response->version, response->status, response->lastStatus, io.bytesReturned);
+            std::wcout << L"pid=" << response->processId
+                       << L" fields=0x" << std::hex << response->fieldFlags << std::dec
+                       << L" returned=" << response->returnedCount
+                       << L" tableReads=" << response->tableReads
+                       << L" failedTableReads=" << response->failedTableReads
+                       << L" execPages=" << response->executablePageCount
+                       << L" scanned=" << hex64(response->scannedBegin) << L"-" << hex64(response->scannedEnd)
+                       << L" nextCursor=" << hex64(response->nextCursorAddress)
+                       << L" cr3=" << hex64(response->cr3PhysicalAddress) << L"\n";
+            const std::size_t parsed = responseCountLimit(response->returnedCount, available, limit);
+            for (std::size_t i = 0; i < parsed; ++i)
+            {
+                const auto* entry = reinterpret_cast<const KSWORD_ARK_PROCESS_EXECUTABLE_PTE_ENTRY*>(buffer.data() + headerSize + (i * response->entrySize));
+                std::wcout << L"  [" << i << L"] " << hex64(entry->startVa)
+                           << L" len=" << hex64(entry->byteLength)
+                           << L" pageSize=" << entry->pageSize
+                           << L" pages=" << entry->pageCount
+                           << L" effective=0x" << std::hex << entry->effectiveFlags
+                           << L" entryFlags=0x" << entry->entryFlags
+                           << L" firstPte=" << hex64(entry->firstEntryValue) << std::dec << L"\n";
             }
             return 0;
         }

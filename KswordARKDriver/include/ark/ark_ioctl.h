@@ -15,6 +15,7 @@
 #include "driver/KswordArkHandleIoctl.h"
 #include "driver/KswordArkAlpcIoctl.h"
 #include "driver/KswordArkSectionIoctl.h"
+#include "driver/KswordArkInjectionScanIoctl.h"
 #include "driver/KswordArkMemoryIoctl.h"
 #include "driver/KswordArkFileMonitorIoctl.h"
 #include "driver/KswordArkWslSiloIoctl.h"

@@ -24,6 +24,7 @@
 #include "ark_handle.h"
 #include "ark_alpc.h"
 #include "ark_section.h"
+#include "ark_injection_scan.h"
 #include "ark_memory.h"
 #include "ark_file_monitor.h"
 #include "ark_wsl_silo.h"

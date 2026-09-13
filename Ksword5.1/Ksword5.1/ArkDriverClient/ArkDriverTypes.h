@@ -28,6 +28,7 @@
 #include "../../../shared/driver/KswordArkWorkQueueIoctl.h"
 #include "../../../shared/driver/KswordArkAlpcIoctl.h"
 #include "../../../shared/driver/KswordArkSectionIoctl.h"
+#include "../../../shared/driver/KswordArkInjectionScanIoctl.h"
 #include "../../../shared/driver/KswordArkRegistryIoctl.h"
 #include "../../../shared/driver/KswordArkNetworkIoctl.h"
 #include "../../../shared/driver/KswordArkStorageIoctl.h"
@@ -497,6 +498,77 @@ namespace ksword::ark
         std::uint32_t processId = 0;
         std::uint64_t startVa = 0;
         std::uint64_t endVa = 0;
+    };
+
+    // ---------------------------------------------------------------------
+    // 注入痕迹检查的 R0 扫描后端（issue #196 §五）
+    // ---------------------------------------------------------------------
+
+    // 一条 VAD 记录。protection/vadType 带 FLAGS_LAYOUT_ASSUMED 时只能展示，
+    // 不能参与"矛盾"判定 —— 位布局没有经过 build 验证。
+    struct ProcessVadEntry
+    {
+        std::uint64_t startVa = 0;
+        std::uint64_t endVaExclusive = 0;
+        std::uint64_t vadNodeAddress = 0;
+        std::uint64_t controlArea = 0;
+        std::uint64_t firstPrototypePte = 0;
+        std::uint32_t vadFlagsRaw = 0;
+        std::uint32_t protection = 0;
+        std::uint32_t vadType = KSWORD_ARK_INJECTION_VAD_TYPE_UNKNOWN;
+        std::uint32_t entryFlags = 0;
+    };
+
+    struct ProcessVadEnumResult
+    {
+        IoResult io;
+        std::uint32_t version = 0;
+        std::uint32_t processId = 0;
+        std::uint32_t fieldFlags = 0;
+        std::uint32_t status = KSWORD_ARK_INJECTION_SCAN_STATUS_UNAVAILABLE;
+        long lastStatus = 0;
+        std::uint32_t returnedCount = 0;
+        std::uint32_t visitedCount = 0;
+        std::uint32_t unreadableNodeCount = 0;
+        // 0 表示 DynData 没有为当前 build 验证过 VadRoot 偏移。为 0 时这份结果
+        // 不具备"缺项推断"资格，调用方必须降级。
+        std::uint32_t profileVerified = 0;
+        std::uint32_t vadRootOffset = 0;
+        std::uint64_t vadRootAddress = 0;
+        std::uint64_t nextCursorVpn = 0;
+        std::vector<ProcessVadEntry> entries;
+    };
+
+    // 一段属性相同、地址连续的可执行叶子页。
+    struct ProcessExecutablePteEntry
+    {
+        std::uint64_t startVa = 0;
+        std::uint64_t byteLength = 0;
+        std::uint64_t firstPhysicalAddress = 0;
+        std::uint64_t firstEntryValue = 0;
+        std::uint32_t pageSize = 0;
+        std::uint32_t pageCount = 0;
+        std::uint32_t effectiveFlags = 0;
+        std::uint32_t entryFlags = 0;
+    };
+
+    struct ProcessExecutablePteScanResult
+    {
+        IoResult io;
+        std::uint32_t version = 0;
+        std::uint32_t processId = 0;
+        std::uint32_t fieldFlags = 0;
+        std::uint32_t status = KSWORD_ARK_INJECTION_SCAN_STATUS_UNAVAILABLE;
+        long lastStatus = 0;
+        std::uint32_t returnedCount = 0;
+        std::uint32_t tableReads = 0;
+        std::uint32_t failedTableReads = 0;
+        std::uint32_t executablePageCount = 0;
+        std::uint64_t scannedBegin = 0;
+        std::uint64_t scannedEnd = 0;
+        std::uint64_t nextCursorAddress = 0;
+        std::uint64_t cr3PhysicalAddress = 0;
+        std::vector<ProcessExecutablePteEntry> entries;
     };
 
     // ProcessSectionQueryResult 承载 Phase-7 进程 SectionObject / ControlArea 查询响应。
