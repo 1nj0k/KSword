@@ -40,7 +40,23 @@ EXTERN_C_START
 ULONG
 KswordARKHvmNestedL2Enter(
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context,
+    _In_opt_ struct _KSW_HVM_GPR_FRAME* Frame,
     _In_ BOOLEAN IsResume
+    );
+
+/*
+ * Load L1's registers and perform the entry, in that order and atomically.
+ *
+ * Has to be assembly: the whole point is that no compiler-generated code runs
+ * between the last register load and the entry instruction, because anything
+ * that did would put its own values back.
+ *
+ * Returns non-zero only when the entry failed; on success it does not return.
+ */
+UCHAR
+KswordARKHvmAsmNestedL2Enter(
+    _In_ const struct _KSW_HVM_GPR_FRAME* Frame,
+    _In_ ULONG IsResume
     );
 
 /*

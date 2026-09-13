@@ -203,6 +203,7 @@ KswordARKHvmNestedL2ClampControl(
 ULONG
 KswordARKHvmNestedL2Enter(
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context,
+    _In_opt_ struct _KSW_HVM_GPR_FRAME* Frame,
     _In_ BOOLEAN IsResume
     )
 {
@@ -535,7 +536,21 @@ KswordARKHvmNestedL2Enter(
      * Enter L2.  On success this does not return - the processor leaves for
      * L2 and comes back through the exit stub with vmcs02 loaded.
      */
-    if (IsResume) {
+    /*
+     * Enter with L1's registers, not ours.
+     *
+     * The entry that actually runs is issued here, in the exit handler, so
+     * without this the processor carries the handler's register values into
+     * L2 - and VM entry never loads GPRs from the VMCS to correct them.
+     * Frame holds exactly what L1 had when it executed its VMLAUNCH, which is
+     * what the architecture says its guest inherits.
+     *
+     * A missing Frame keeps the old behaviour rather than refusing: the entry
+     * is still architecturally valid, just with registers nobody promised.
+     */
+    if (Frame != NULL) {
+        (void)KswordARKHvmAsmNestedL2Enter(Frame, IsResume ? 1UL : 0UL);
+    } else if (IsResume) {
         (void)__vmx_vmresume();
     } else {
         (void)__vmx_vmlaunch();
@@ -922,10 +937,12 @@ KswordARKHvmNestedL2Reflect(
 ULONG
 KswordARKHvmNestedL2Enter(
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context,
+    _In_opt_ struct _KSW_HVM_GPR_FRAME* Frame,
     _In_ BOOLEAN IsResume
     )
 {
     UNREFERENCED_PARAMETER(Context);
+    UNREFERENCED_PARAMETER(Frame);
     UNREFERENCED_PARAMETER(IsResume);
     /* Report the explicit unsupported-architecture control failure. */
     return 7UL;

@@ -260,6 +260,19 @@ typedef struct _KSW_HVM_PROBE_SLOT
      * cannot say: it is clear for the first two arrivals.
      */
     volatile LONG SelfStage;
+    /*
+     * Set by L2 itself, through a pointer it re-derives rather than inherits.
+     *
+     * L2 starts with L1's registers as of L1's entry instruction, which is a
+     * different point in the function from where its RIP resumes - so whatever
+     * the compiler was holding in registers there, including the pointer to
+     * the response row, is not what this code expects.  Writing the marker
+     * through a freshly looked-up slot removes that dependency, and reading it
+     * back from the third arrival - where registers are restored wholesale -
+     * is what makes "L2 really executed our code" a fact rather than an
+     * inference from the exit reason.
+     */
+    volatile LONG L2SelfMarker;
     volatile ULONGLONG L2ExitReason;
     volatile ULONGLONG L2Qualification;
     volatile ULONGLONG L2GuestRip;
@@ -860,6 +873,7 @@ KswordARKHvmNestedProbeExecute(
                 slot->L2GuestRip = 0ULL;
                 InterlockedExchange(&slot->L2Exited, 0L);
                 InterlockedExchange(&slot->SelfStage, 0L);
+                InterlockedExchange(&slot->L2SelfMarker, 0L);
                 RtlCaptureContext(&slot->ResumeContext);
                 /*
                  * Self-virtualization: L1 makes *this* context its guest.
@@ -887,6 +901,15 @@ KswordARKHvmNestedProbeExecute(
                         response->selfVirtReturnedToL1 = 1UL;
                         response->vmlaunchResult = 0UL;
                         response->l2Reached = 1UL;
+                        /*
+                         * Report what L2 left behind, not what L2 tried to
+                         * write into this row.  Registers are whole again
+                         * here, so this write is the one that can be trusted.
+                         */
+                        response->selfVirtReachedL2 =
+                            (InterlockedCompareExchange(
+                                &slot->L2SelfMarker, 0L, 0L) != 0L)
+                                ? 1UL : 0UL;
                     } else if (InterlockedCompareExchange(
                             &slot->SelfStage, 0L, 0L) != 0L) {
                         /*
@@ -895,9 +918,19 @@ KswordARKHvmNestedProbeExecute(
                          * CR3 - the same instructions, one privilege domain
                          * lower.
                          */
-                        response->selfVirtReachedL2 = 1UL;
                         {
                             int registers[4] = { 0 };
+                            /*
+                             * Re-derive the slot instead of using the one this
+                             * frame captured: the pointer a register held
+                             * belongs to a different point in the function.
+                             */
+                            KSW_HVM_PROBE_SLOT* live =
+                                KswordARKHvmNestedProbeSlot();
+
+                            if (live != NULL) {
+                                InterlockedExchange(&live->L2SelfMarker, 1L);
+                            }
 
                             /*
                              * CPUID exits unconditionally, so this is the

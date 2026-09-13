@@ -868,6 +868,7 @@ KswordARKHvmNestedHandleExit(
              */
             const ULONG entryError = KswordARKHvmNestedL2Enter(
                 Vcpu,
+                Frame,
                 (BOOLEAN)(ExitReason == KSW_VMX_EXIT_VMRESUME));
 
             /* Reaching here at all means the entry did not happen. */

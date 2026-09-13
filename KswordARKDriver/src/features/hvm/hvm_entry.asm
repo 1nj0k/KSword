@@ -49,6 +49,7 @@ PUBLIC KswordARKHvmResidentGuestResume
 PUBLIC KswordARKHvmResidentVmExitEntry
 PUBLIC KswordARKHvmAsmInveptSingle
 PUBLIC KswordARKHvmAsmHostNmiStub
+PUBLIC KswordARKHvmAsmNestedL2Enter
 EXTERN g_KswordHvmOriginalNmiHandler:QWORD
 EXTERN g_KswordHvmPendingTlbNmi:DWORD
 
@@ -299,6 +300,94 @@ KswordARKHvmAsmLaunchResidentConfigFailed:
     ; Return to the current-processor lifecycle without VMLAUNCH.
     ret
 KswordARKHvmAsmLaunchResident ENDP
+
+;------------------------------------------------------------------------------
+; UCHAR KswordARKHvmAsmNestedL2Enter(KSW_HVM_GPR_FRAME* Frame, ULONG IsResume)
+;
+; Enter L2 with L1's general-purpose registers actually in the registers.
+;
+; VM entry does not load GPRs from the VMCS: the guest keeps whatever the
+; processor held when the entry instruction executed.  For an ordinary
+; hypervisor that is free, because the guest's VMLAUNCH *is* the entry.  For a
+; nested one it is not: L1's VMLAUNCH traps to us, and the entry that actually
+; runs is ours, issued from the exit handler with the exit handler's registers.
+; L2 therefore started with our values in every register.
+;
+; The synthetic L2 the probe has been running never noticed - it loads every
+; register it reads before reading it.  Any real guest dereferences one and
+; faults inside L2, where nothing is intercepting exceptions, which is not a
+; crash and not an exit: the processor never comes back and the machine stops
+; answering with no dump and no host-side event.  That is the measured failure
+; this exists to fix.
+;
+; RSP is deliberately not restored here: it is a VMCS guest field, loaded by
+; the entry itself.  Not touching it is also what leaves this routine a stack
+; to return on when the entry fails.
+;------------------------------------------------------------------------------
+KswordARKHvmAsmNestedL2Enter PROC
+    ; Preserve every callee-saved register the frame load below overwrites.
+    push rbx
+    push rbp
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    ; Branch on the selector before loading, since loading destroys it.
+    test dl, dl
+    jnz KswordARKHvmAsmNestedL2Resume
+    ; --- VMLAUNCH path ---------------------------------------------------
+    mov rax, [rcx + 00h]
+    mov rdx, [rcx + 10h]
+    mov rbx, [rcx + 18h]
+    mov rbp, [rcx + 20h]
+    mov rsi, [rcx + 28h]
+    mov rdi, [rcx + 30h]
+    mov r8,  [rcx + 38h]
+    mov r9,  [rcx + 40h]
+    mov r10, [rcx + 48h]
+    mov r11, [rcx + 50h]
+    mov r12, [rcx + 58h]
+    mov r13, [rcx + 60h]
+    mov r14, [rcx + 68h]
+    mov r15, [rcx + 70h]
+    ; RCX last, because it is the pointer every load above went through.
+    mov rcx, [rcx + 08h]
+    vmlaunch
+    jmp KswordARKHvmAsmNestedL2Failed
+KswordARKHvmAsmNestedL2Resume:
+    ; --- VMRESUME path ---------------------------------------------------
+    mov rax, [rcx + 00h]
+    mov rdx, [rcx + 10h]
+    mov rbx, [rcx + 18h]
+    mov rbp, [rcx + 20h]
+    mov rsi, [rcx + 28h]
+    mov rdi, [rcx + 30h]
+    mov r8,  [rcx + 38h]
+    mov r9,  [rcx + 40h]
+    mov r10, [rcx + 48h]
+    mov r11, [rcx + 50h]
+    mov r12, [rcx + 58h]
+    mov r13, [rcx + 60h]
+    mov r14, [rcx + 68h]
+    mov r15, [rcx + 70h]
+    mov rcx, [rcx + 08h]
+    vmresume
+KswordARKHvmAsmNestedL2Failed:
+    ; Reached only when the entry did not happen; RSP is still ours.
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbp
+    pop rbx
+    ; Report that the entry failed; the caller reads the architectural reason.
+    mov eax, 1
+    ret
+KswordARKHvmAsmNestedL2Enter ENDP
 
 KswordARKHvmResidentGuestResume PROC
     ; Report successful VM entry when the guest wrapper resumes.
