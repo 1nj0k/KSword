@@ -10214,21 +10214,9 @@ namespace
             return page;
         }
 
-        QTabWidget* buildMetadataAdvancedTabs(QWidget* parent)
+        QWidget* buildMetadataBasicPropertiesPage(QWidget* parent)
         {
-            QTabWidget* tabs = new QTabWidget(parent);
-            tabs->addTab(buildMetadataNameAndFilesystemPage(tabs), QStringLiteral("名称与文件系统"));
-            tabs->addTab(buildMetadataShellPropertyPage(tabs), QStringLiteral("Shell 属性"));
-            tabs->addTab(buildMetadataAdsPage(tabs), QStringLiteral("ADS"));
-            tabs->addTab(buildMetadataEaPage(tabs), QStringLiteral("EA"));
-            tabs->addTab(buildMetadataSecurityPage(tabs), QStringLiteral("安全描述符"));
-            tabs->addTab(buildMetadataPeAndReparsePage(tabs), QStringLiteral("重解析点 / PE / 签名"));
-            return tabs;
-        }
-
-        QWidget* buildMetadataTab()
-        {
-            QWidget* page = new QWidget(this);
+            QWidget* page = new QWidget(parent);
             QVBoxLayout* layout = new QVBoxLayout(page);
             layout->setSpacing(10);
 
@@ -10330,8 +10318,30 @@ namespace
                     });
             }
             layout->addWidget(attributeGroup);
+            layout->addStretch(1);
+            return page;
+        }
 
-            layout->addWidget(buildMetadataAdvancedTabs(page), 1);
+        QTabWidget* buildMetadataEditorTabs(QWidget* parent)
+        {
+            QTabWidget* tabs = new QTabWidget(parent);
+            tabs->addTab(
+                buildMetadataBasicPropertiesPage(tabs),
+                ks::i18n::sourceText(QStringLiteral("基础属性")));
+            tabs->addTab(buildMetadataNameAndFilesystemPage(tabs), QStringLiteral("名称与文件系统"));
+            tabs->addTab(buildMetadataShellPropertyPage(tabs), QStringLiteral("Shell 属性"));
+            tabs->addTab(buildMetadataAdsPage(tabs), QStringLiteral("ADS"));
+            tabs->addTab(buildMetadataEaPage(tabs), QStringLiteral("EA"));
+            tabs->addTab(buildMetadataSecurityPage(tabs), QStringLiteral("安全描述符"));
+            tabs->addTab(buildMetadataPeAndReparsePage(tabs), QStringLiteral("重解析点 / PE / 签名"));
+            return tabs;
+        }
+
+        QWidget* buildMetadataTab()
+        {
+            QWidget* page = new QWidget(this);
+            QVBoxLayout* layout = new QVBoxLayout(page);
+            layout->addWidget(buildMetadataEditorTabs(page), 1);
 
             QHBoxLayout* actionLayout = new QHBoxLayout();
             m_metadataRefreshButton = new QPushButton(QStringLiteral("重新读取"), page);
