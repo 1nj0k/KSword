@@ -727,11 +727,36 @@ static const char* ExitReasonName(unsigned long r)
     case 0UL:  return "EXCEPTION_OR_NMI";
     case 1UL:  return "EXTERNAL_INTERRUPT";
     case 2UL:  return "TRIPLE_FAULT";
+    case 3UL:  return "INIT_SIGNAL";
+    case 4UL:  return "SIPI";
     case 7UL:  return "INTERRUPT_WINDOW";
+    case 8UL:  return "NMI_WINDOW";
+    case 9UL:  return "TASK_SWITCH";
     case 10UL: return "CPUID";
+    case 11UL: return "GETSEC";
     case 12UL: return "HLT";
     case 13UL: return "INVD";
+    case 14UL: return "INVLPG";
+    case 15UL: return "RDPMC";
+    case 16UL: return "RDTSC";
+    case 17UL: return "RSM";
     case 18UL: return "VMCALL";
+    /*
+     * 19..27 是**另一个 hypervisor 在我们下面跑**时产生的那一族。
+     * 编号与 hvm_nested.c 的 KSW_VMX_EXIT_* 保持一致（那边是派发侧的权威
+     * 定义），改任何一边都要对着另一边核。写这一段是因为在真机上看 VMware
+     * 的第一份直方图时，这九个原因原本全打印成"见 SDM Appendix C"，
+     * 而它们恰恰是唯一要看的那几行。
+     */
+    case 19UL: return "VMCLEAR";
+    case 20UL: return "VMLAUNCH";
+    case 21UL: return "VMPTRLD";
+    case 22UL: return "VMPTRST";
+    case 23UL: return "VMREAD";
+    case 24UL: return "VMRESUME";
+    case 25UL: return "VMWRITE";
+    case 26UL: return "VMXOFF";
+    case 27UL: return "VMXON";
     case 28UL: return "MOV_CR";
     case 29UL: return "MOV_DR";
     case 30UL: return "IO_INSTRUCTION";
@@ -739,10 +764,19 @@ static const char* ExitReasonName(unsigned long r)
     case 32UL: return "WRMSR";
     case 33UL: return "VM_ENTRY_FAILURE_GUEST_STATE";
     case 34UL: return "VM_ENTRY_FAILURE_MSR_LOADING";
+    case 36UL: return "MWAIT";
     case 37UL: return "MONITOR_TRAP_FLAG";
+    case 39UL: return "MONITOR";
+    case 40UL: return "PAUSE";
     case 48UL: return "EPT_VIOLATION";
     case 49UL: return "EPT_MISCONFIGURATION";
+    case 50UL: return "INVEPT";
+    case 51UL: return "RDTSCP";
+    case 52UL: return "VMX_PREEMPTION_TIMER";
+    case 53UL: return "INVVPID";
+    case 54UL: return "WBINVD";
     case 55UL: return "XSETBV";
+    case 58UL: return "INVPCID";
     case 59UL: return "VMFUNC";
     default:   return "见 SDM Appendix C";
     }
