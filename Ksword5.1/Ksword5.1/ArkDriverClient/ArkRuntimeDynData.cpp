@@ -14,6 +14,8 @@
 #include <DbgHelp.h>
 #include <WinHttp.h>
 
+#include "../ksword/dbghelp_serialization.h"
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -2524,6 +2526,10 @@ namespace ksword::ark
                 pdbPreparationDiagnostic);
         }
 
+        // 两把锁：g_dbgHelpMutex 串行化本解析器自己的重入，ks::dbghelp 那把是
+        // **进程级**的 —— DbgHelp 整个 DLL 单线程，本进程里注入检查的栈展开也用它，
+        // 只锁自己这一把的话两边可以同时进去。
+        std::lock_guard<std::mutex> processLock(ks::dbghelp::SerializationMutex());
         std::lock_guard<std::mutex> lock(g_dbgHelpMutex);
         DbgHelpSession session{};
         IMAGEHLP_MODULEW64 moduleInfo{};
