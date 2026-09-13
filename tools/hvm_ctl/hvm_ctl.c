@@ -974,7 +974,8 @@ static int DoQuery(HANDLE h, int asJson)
                "\"overwrittenEventCount\":%lu,"
                "\"publishedEventCount\":%llu,"
                "\"nestedL2LaunchRefusedCount\":%lu,"
-               "\"nestedVmcs12EvictionCount\":%lu",
+               "\"nestedVmcs12EvictionCount\":%lu,"
+               "\"nestedFuseTripCount\":%lu",
                rsp.generation, rsp.processorCount,
                rsp.preparedProcessorCount, rsp.selfTestPassedProcessorCount,
                rsp.residentProcessorCount,
@@ -999,7 +1000,8 @@ static int DoQuery(HANDLE h, int asJson)
                rsp.eventCount, rsp.droppedEventCount,
                rsp.overwrittenEventCount, rsp.publishedEventCount,
                rsp.nestedL2LaunchRefusedCount,
-               rsp.nestedVmcs12EvictionCount);
+               rsp.nestedVmcs12EvictionCount,
+               rsp.nestedFuseTripCount);
         /*
          * 只发非零项，键是退出原因编号。
          *
@@ -1058,6 +1060,11 @@ static int DoQuery(HANDLE h, int asJson)
            rsp.nestedVmcs12EvictionCount,
            (rsp.nestedVmcs12EvictionCount != 0UL)
                ? "  **池子装不下这个 L1 的 VMCS**"
+               : "");
+    printf("                 无进展熔断跳闸 %lu 次%s\n",
+           rsp.nestedFuseTripCount,
+           (rsp.nestedFuseTripCount != 0UL)
+               ? "  **我们停掉过某个 L1 的来宾：它在原地打转**"
                : "");
     /*
      * 退出安全物理窗口的就绪数。

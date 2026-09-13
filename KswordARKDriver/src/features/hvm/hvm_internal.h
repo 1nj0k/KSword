@@ -649,6 +649,15 @@ typedef struct _KSW_HVM_RUNTIME
      */
     volatile LONG NestedVmcs12EvictionCount;
     /*
+     * Times the no-progress fuse stopped an L2, machine-wide and durable.
+     *
+     * Same reason as the two counts above: the per-processor record dies with
+     * the residency, and the thing worth knowing afterwards is that it ever
+     * happened.  A real L1 does not run our probe, so without this a tripped
+     * fuse is invisible in exactly the situation it exists for.
+     */
+    volatile LONG NestedFuseTripCount;
+    /*
      * How many bits our own MSR bitmap holds.
      *
      * The nested merge points vmcs02 straight at L1's bitmap page when our

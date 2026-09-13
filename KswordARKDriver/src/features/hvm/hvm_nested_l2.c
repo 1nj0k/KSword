@@ -720,6 +720,7 @@ KswordARKHvmNestedL2ExitOwner(
 static BOOLEAN
 KswordARKHvmNestedL2FuseTrips(
     _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _Inout_ KSW_HVM_RUNTIME* Runtime,
     _In_ const struct _KSW_HVM_GPR_FRAME* Frame,
     _In_ ULONG ExitReason
     )
@@ -758,6 +759,10 @@ KswordARKHvmNestedL2FuseTrips(
     Nested->L2FuseRip = rip;
     Nested->L2FuseReason = ExitReason;
     Nested->L2FuseCount = Nested->L2NoProgressCount;
+    /* And durably, where a reader who is not our probe can find it. */
+    if (Runtime != NULL) {
+        InterlockedIncrement(&Runtime->NestedFuseTripCount);
+    }
     /* Report the trip. */
     return TRUE;
 }
@@ -813,7 +818,8 @@ KswordARKHvmNestedL2Reflect(
          * control back and the machine keeps running.
          */
         const ULONG owner =
-            KswordARKHvmNestedL2FuseTrips(nested, Frame, ExitReason)
+            KswordARKHvmNestedL2FuseTrips(
+                nested, Context->Runtime, Frame, ExitReason)
                 ? KSW_L2_OWNER_L1
                 : KswordARKHvmNestedL2ExitOwner(Context, Frame, ExitReason);
 

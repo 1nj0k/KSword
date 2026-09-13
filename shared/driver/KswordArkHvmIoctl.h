@@ -696,7 +696,18 @@ typedef struct _KSWORD_ARK_QUERY_HVM_RESPONSE
     unsigned short evmcsVersion;
     unsigned short reservedVersion;
     unsigned long evmcsFlags;
-    unsigned long reservedEvmcs;
+    /*
+     * 无进展熔断跳闸的次数，整机累计。
+     *
+     * 熔断本身在别处**看不见**：它的读数一直只在嵌套探针的行里，而真正的 L1
+     * （VMware 的 VMM、别人的 hypervisor）不会去跑我们的探针。于是"L2 打转被我们
+     * 拦下来了"这件事，在真实场景里没有任何地方读得到 —— 而那恰恰是最需要知道的
+     * 时候：机器没挂，但某个 hypervisor 的来宾被我们停了。
+     *
+     * 占用原先的 reservedEvmcs 槽位（没有任何读写方），结构大小不变，旧 GUI 读到的
+     * 每个字段都不移位。
+     */
+    unsigned long nestedFuseTripCount;
     unsigned long long evmcsVpAssistMsr;
     unsigned long eptPageCount;
     unsigned long eptPml4Entries;

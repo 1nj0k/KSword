@@ -2684,6 +2684,15 @@ KswordARKHvmQuery(
             (volatile LONG*)&g_KswordHvm.NestedVmcs12EvictionCount,
             0L,
             0L);
+    /*
+     * And the fuse.  A real L1 does not run our probe, so this is the only
+     * place "we had to stop somebody's guest" is readable at all.
+     */
+    Response->nestedFuseTripCount =
+        (ULONG)InterlockedCompareExchange(
+            (volatile LONG*)&g_KswordHvm.NestedFuseTripCount,
+            0L,
+            0L);
     Response->evmcsState =
         g_KswordHvm.EvmcsState;
     Response->evmcsVersion =
