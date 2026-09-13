@@ -332,6 +332,12 @@ namespace
             return injectionText("process.detail.injection.gap.main_image",
                                  QStringLiteral("主映像身份来源不足，无法交叉核对"));
         }
+        if (key == ev::kGapStackWalkUntrusted)
+        {
+            return injectionText(
+                "process.detail.injection.gap.stack_untrusted",
+                QStringLiteral("查线程调用栈时，没有一个线程是停着的——运行中的线程读到的调用栈不可信，所以这一项没查成"));
+        }
         if (key == ev::kGapKernelBackendUnavailable)
         {
             return injectionText("process.detail.injection.gap.kernel_backend",
@@ -436,7 +442,7 @@ namespace
         if (key == ev::kCheckReliableStackWalk)
         {
             return injectionText("process.detail.injection.check.stack_walk",
-                                 QStringLiteral("可靠栈回溯"));
+                                 QStringLiteral("查线程当前的调用栈"));
         }
         if (key == ev::kCheckKernelVadCrossView)
         {
@@ -774,7 +780,7 @@ namespace
         {
             return injectionText(
                 "process.detail.injection.meaning.payload_structure",
-                QStringLiteral("一段不属于任何模块的内存里，出现了完整可执行文件才有的结构特征——像是有人把一个程序整个搬进了内存。"));
+                QStringLiteral("一段不属于任何模块的内存里，出现了完整可执行文件才有的结构特征——像是有人把一个程序整个搬进了内存。如果这一条还标着「有多个独立来源互相印证」，说明有线程的调用栈确实落在这块内存里，也就是它不只是躺着，而是在被执行。"));
         }
         if (ruleId == ev::kRuleIdKernelRegionHiddenFromR3)
         {
@@ -1087,6 +1093,18 @@ namespace
                     .arg(result.loaderModuleCount)
                     .arg(result.threadCount)
                     .arg(result.comparedRangeCount));
+            if (report.stackThreadsWalked != 0U)
+            {
+                // 只在真做了栈回溯时才出这一行。walked 远小于 threadCount 是常态，
+                // 所以要说清楚原因，否则会被读成"漏查了一大半线程"。
+                statsLabel->setText(
+                    statsLabel->text() +
+                    injectionText("process.detail.injection.stats.stack_line",
+                                  QStringLiteral("\n另查了 %1 个停着的线程的调用栈（共 %2 个线程；运行中的线程读到的调用栈不可信，只查停着的），其中 %3 个拿到了可信结果"))
+                        .arg(report.stackThreadsWalked)
+                        .arg(result.threadCount)
+                        .arg(report.stackThreadsTrusted));
+            }
         }
         else if (!result.diagnosticText.isEmpty())
         {

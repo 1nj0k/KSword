@@ -5932,6 +5932,16 @@
     "settings.background.translucency_material.acrylic": "磨砂玻璃"
   },
   "source_translations": {
+    "\n另查了 %1 个停着的线程的调用栈（共 %2 个线程；运行中的线程读到的调用栈不可信，只查停着的），其中 %3 个拿到了可信结果": "\n另查了 %1 个停着的线程的调用栈（共 %2 个线程；运行中的线程读到的调用栈不可信，只查停着的），其中 %3 个拿到了可信结果",
+    "一段不属于任何模块的内存里，出现了完整可执行文件才有的结构特征——像是有人把一个程序整个搬进了内存。如果这一条还标着「有多个独立来源互相印证」，说明有线程的调用栈确实落在这块内存里，也就是它不只是躺着，而是在被执行。": "一段不属于任何模块的内存里，出现了完整可执行文件才有的结构特征——像是有人把一个程序整个搬进了内存。如果这一条还标着「有多个独立来源互相印证」，说明有线程的调用栈确实落在这块内存里，也就是它不只是躺着，而是在被执行。",
+    "查线程当前的调用栈": "查线程当前的调用栈",
+    "查线程调用栈时，没有一个线程是停着的——运行中的线程读到的调用栈不可信，所以这一项没查成": "查线程调用栈时，没有一个线程是停着的——运行中的线程读到的调用栈不可信，所以这一项没查成",
+    "stack walk skipped: thread state layout mismatch": "stack walk skipped: thread state layout mismatch",
+    "frame limit reached": "frame limit reached",
+    "stack walk skipped: no process handle": "stack walk skipped: no process handle",
+    "stack walk skipped: target is not native x64": "stack walk skipped: target is not native x64",
+    "stack walk skipped: thread snapshot failed": "stack walk skipped: thread snapshot failed",
+    "stack walk skipped: thread states unavailable": "stack walk skipped: thread states unavailable",
     "快速注入检查": "快速注入检查",
     "只读检查：有没有来路不明的可执行内存、模块清单对不对得上、线程从哪里开始跑。只比对当前正在使用的代码页，一般几秒出结果。不挂起进程、不改内存权限。结果只说明看到了什么，不会给出“已注入/未注入”的判定。": "只读检查：有没有来路不明的可执行内存、模块清单对不对得上、线程从哪里开始跑。只比对当前正在使用的代码页，一般几秒出结果。不挂起进程、不改内存权限。结果只说明看到了什么，不会给出“已注入/未注入”的判定。",
     "深度注入检查": "深度注入检查",

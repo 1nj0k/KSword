@@ -85,6 +85,12 @@ namespace ks::process
         std::uint64_t bytesRead = 0;
         std::uint64_t elapsedMs = 0;
 
+        // 栈回溯的现场账（只在深度模式非零）。walked 远小于 considered 是常态：
+        // 只有停在等待里的线程才取上下文。
+        std::uint32_t stackThreadsConsidered = 0;
+        std::uint32_t stackThreadsWaiting = 0;
+        std::uint32_t stackThreadsWalked = 0;
+
         // R0 后端的现场读数。state 为 NotRequested 表示没打算用；
         // DriverUnavailable 表示想用但驱动不在（能力降级，不是缺陷）。
         Ksword::Evidence::KernelBackendState kernelVadState =

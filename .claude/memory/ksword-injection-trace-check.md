@@ -119,6 +119,43 @@
 **改动代价提醒**：这一轮新增 85 条待翻译文本，两个语言包各插 85 行。
 i18n 门禁是 PreBuildEvent，C++ 还没编译就会先失败——先跑 audit 再跑构建，省一轮。
 
+## 栈回溯（深度模式专有）
+
+`ksword/process/injection_stack_walk.{h,cpp}`。它是本版本里**唯一**能把纯内存型
+shellcode 抬到 `DifferenceObserved` 的一维 —— 内存里有载荷结构只是结构事实，
+"有线程正停在里面"才撑得起结论。
+
+- **不要自己写 x64 展开器**。写错的展开器会把错的帧标成"可靠"，而这一位是抬结论的
+  三道闸门之一，错在这里比没有栈回溯糟得多。展开交给 `StackWalk64`，
+  我们只给内存读取 / 模块基址 / `RUNTIME_FUNCTION` 三个回调。
+- **可靠性判据必须自己做**：`StackWalk64` 查不到展开数据时会退回扫栈猜，
+  而且**不告诉你哪一帧是猜的**。判据是"PC 落在带非空异常目录的 MEM_IMAGE 里
+  ⇒ 下一帧是算出来的"，实现在 `AdmitStackFrames()`（判据层，有离线测试）。
+  可靠前缀一断不再接上；shellcode 帧本身**在**前缀内（由调用者算出），它下面的不在。
+- **不挂起也能有可信上下文**：第四态 `ThreadContextTrust::WaitingThreadStable`。
+  `SystemProcessInformation` 的 `ThreadState == 5` 选出停着的线程，再连取两次
+  `GetThreadContext` 要求 RIP/RSP/RBP 一字不差。微软那句警告针对的是正在别的核上跑的
+  线程。最值得查的信标正好停在等待里，所以这一态够用。
+- **`SurveyInput` 里没有 `reliableStackWalkAvailable` 这个布尔**，是刻意删掉的：
+  做成可赋值字段就等于给了一个绕过 `AdmitStackFrames` 的后门。只能由 `threadStacks` 推出。
+- **只做原生 x64**，WOW64 整节不做 —— x64 展开器走 32 位栈会产出看着像帧的垃圾。
+- **DbgHelp 是进程级单线程**，锁在 `ksword/dbghelp_serialization.h`，
+  与 DynData 的 PDB 解析共用。各锁各的等于没锁。
+
+### 手写内核结构布局必须自带"写错会被发现"的判据
+
+`SYSTEM_THREAD_INFORMATION` 的偏移写错 ⇒ 解析出垃圾 tid ⇒ 安静退化成
+"没有等待中的线程" ⇒ 和"这个进程确实都在跑"长得一模一样。所以立了一道：
+Toolhelp 数出的线程必须过半能在状态表里找到，否则报 `thread state layout mismatch`。
+**验的办法是对照实验**：同一个 tid 忙等时读 2、睡眠时读 5，而不是"看着像对"。
+
+### 良性靶子
+
+`scratchpad/beaconfixture.cpp`：自己进程里把一段只调 `Sleep` 的桩放进私有 RWX 内存，
+在那儿起线程。没有跨进程写入、没有注入、没有规避，只造出要识别的那个形态。
+实测信标线程第 4 帧 PC = 载荷基址 + 0x1A（桩里 `call rax` 之后的返回地址），
+`derived=1` 且 `unwind=0` —— 判据按设计生效。**改这一维之前先把靶子跑一遍。**
+
 ## 权限
 
 最小权限优先，但两项能力需要按能力单独提权，否则**静默问不出数据**：

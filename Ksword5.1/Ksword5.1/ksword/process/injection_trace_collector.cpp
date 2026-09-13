@@ -1,6 +1,7 @@
 #include "injection_trace_collector.h"
 
 #include "process.h"
+#include "injection_stack_walk.h"
 #include "../../ArkDriverClient/ArkDriverClient.h"
 
 #ifndef NOMINMAX
@@ -1302,6 +1303,30 @@ InjectionTraceResult ScanProcessInjectionTrace(const std::uint32_t pid,
     input.threadEnumerationOutcome = threads.outcome;
     input.threadStarts =
         ev::EvaluateThreadStarts(threads.threads, input.addressSpace, codeExtents);
+
+    // --- 栈回溯 ---------------------------------------------------------------
+    // 只在深度模式做：它要对每个等待中的线程走一遍展开，还要按模块读 .pdata，
+    // 代价不属于"几秒出结果"的快速模式。不做时 threadStacks 留空，判据层会把它
+    // 记成能力限制而不是缺口 —— 两者的区别见 InjectionSurvey.h。
+    if (options.deepMode && !budget.exhausted())
+    {
+        StackWalkOptions stackOptions;
+        stackOptions.maxThreads = options.maxThreads;
+        const StackWalkResult stacks = WalkProcessStacks(
+            process.get(), pid, owner, architecture, stackOptions);
+        input.threadStacks = stacks.stacks;
+        result.stackThreadsConsidered = stacks.threadsConsidered;
+        result.stackThreadsWaiting = stacks.threadsWaiting;
+        result.stackThreadsWalked = stacks.threadsWalked;
+        if (!stacks.diagnostic.empty())
+        {
+            if (!result.diagnosticText.isEmpty())
+            {
+                result.diagnosticText += QStringLiteral("; ");
+            }
+            result.diagnosticText += QString::fromStdString(stacks.diagnostic);
+        }
+    }
 
     // --- 工作集筛选 -----------------------------------------------------------
     std::vector<ev::ComparisonPlanInput::ScreenedPage> screenedPages;

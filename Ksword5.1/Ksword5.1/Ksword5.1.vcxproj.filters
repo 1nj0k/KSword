@@ -1029,6 +1029,9 @@
     <ClCompile Include="ksword\process\dll_hijack_detector.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ksword\process\injection_stack_walk.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="ksword\process\injection_trace_collector.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -1919,6 +1922,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ksword\process\dll_hijack_detector.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ksword\dbghelp_serialization.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ksword\process\injection_stack_walk.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ksword\process\injection_trace_collector.h">

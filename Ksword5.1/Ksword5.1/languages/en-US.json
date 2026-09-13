@@ -5932,6 +5932,16 @@
     "settings.background.translucency_material.acrylic": "Frosted glass"
   },
   "source_translations": {
+    "\n另查了 %1 个停着的线程的调用栈（共 %2 个线程；运行中的线程读到的调用栈不可信，只查停着的），其中 %3 个拿到了可信结果": "\nAlso walked the call stacks of %1 parked threads (out of %2; a running thread's call stack cannot be read reliably, so only parked ones are walked), %3 of which gave a trustworthy result",
+    "一段不属于任何模块的内存里，出现了完整可执行文件才有的结构特征——像是有人把一个程序整个搬进了内存。如果这一条还标着「有多个独立来源互相印证」，说明有线程的调用栈确实落在这块内存里，也就是它不只是躺着，而是在被执行。": "A stretch of memory that belongs to no module carries the structure of a complete executable, as if a whole program had been moved into memory. If this entry is also marked “Corroborated by several independent sources”, a thread's call stack really does land inside this memory - it is not merely sitting there, it is being executed.",
+    "查线程当前的调用栈": "Walk each thread's current call stack",
+    "查线程调用栈时，没有一个线程是停着的——运行中的线程读到的调用栈不可信，所以这一项没查成": "When the call stacks were walked, not one thread was parked. A running thread's call stack cannot be read reliably, so this check did not complete",
+    "stack walk skipped: thread state layout mismatch": "stack walk skipped: thread state layout mismatch",
+    "frame limit reached": "frame limit reached",
+    "stack walk skipped: no process handle": "stack walk skipped: no process handle",
+    "stack walk skipped: target is not native x64": "stack walk skipped: target is not native x64",
+    "stack walk skipped: thread snapshot failed": "stack walk skipped: thread snapshot failed",
+    "stack walk skipped: thread states unavailable": "stack walk skipped: thread states unavailable",
     "快速注入检查": "Quick injection check",
     "只读检查：有没有来路不明的可执行内存、模块清单对不对得上、线程从哪里开始跑。只比对当前正在使用的代码页，一般几秒出结果。不挂起进程、不改内存权限。结果只说明看到了什么，不会给出“已注入/未注入”的判定。": "A read-only check: is there executable memory with no known origin, does the module list add up, and where do the threads start. It compares only the code pages currently in use, so it usually finishes in seconds. The process is never suspended and memory permissions are never changed. The result states what was seen; it never returns a verdict of “injected” or “not injected”.",
     "深度注入检查": "Deep injection check",
