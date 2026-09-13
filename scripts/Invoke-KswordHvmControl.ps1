@@ -456,8 +456,13 @@ try {
         # 真的维护、并在 L2 停下时折回 L1 自己的表。折不回去的后果是 L1 读回
         # 全零，据此跳过来宾真正写过的页 —— 那条路上没有任何读数会变，
         # 只有这条用例看得见。
+        # nested-selfvirt-all 排在 nested-probe-all 之后：前者验的是"我们能托住
+        # 一个自己写的 L1"，后者验的是"我们能托住一个**做和我们自己一样的事**的
+        # hypervisor" —— 捕获状态、把 guest RIP 指回自己下一条指令、VMLAUNCH，
+        # 于是自己成了自己的来宾，然后走 VMRESUME 反复往返。真 hypervisor
+        # （我们的常驻路径、VMware 的 VMM）做的就是这件事，段/CR3/页表全得当真。
         'nested'    { @('self-test', 'resident-nested', 'nested-probe-all',
-                        'nested-ad', 'stop') }
+                        'nested-selfvirt-all', 'nested-ad', 'stop') }
         'soak'      { @('self-test', 'soak') }
         'full'      { @('self-test', 'soak', 'stop', 'teardown') }
         default     { @() }
@@ -481,7 +486,7 @@ try {
         # 执行 VMX 指令，随后探针真的会进出 L2 一次。
         $risky = $step -in @('self-test', 'launch-test-guest', 'resident',
                              'resident-nested', 'nested-probe-all',
-                             'nested-ad',
+                             'nested-selfvirt-all', 'nested-ad',
                              'soak', 'probe-flags', 'probe-xonly', 'view-effect')
         $snap = $null
         $bootBefore = $null

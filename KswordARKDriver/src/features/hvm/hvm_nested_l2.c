@@ -780,6 +780,15 @@ KswordARKHvmNestedL2Reflect(
         return KSW_HVM_L2_ROUTE_NOT_L2;
     }
     /*
+     * Count it before deciding whose it is.
+     *
+     * Every L2 exit reaches this function, so this is the only place the total
+     * exists.  Counting after the decision would only ever count the ones that
+     * went to L1, which is the number we already had and the one that cannot
+     * detect an exit being answered here instead.
+     */
+    nested->L2ExitTotalCount += 1ULL;
+    /*
      * An exit that was never L1's stops here, in one of two ways.
      *
      * RESOLVED means the ownership test itself finished the job - composing a

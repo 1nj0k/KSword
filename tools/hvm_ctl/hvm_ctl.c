@@ -4933,7 +4933,34 @@ static int DoMsrPolicy(HANDLE h, unsigned long operation,
  * 是 10，从 vmcs12 读出来的）、以及 L1 拿回控制权并收尾（returnedToL1）。
  * 只看第一格是不够的：进得去出不来，对一个真 hypervisor 来说跟进不去一样是死的。
  */
-static int DoNestedSelfVirtualize(HANDLE h, int asJson)
+/* 判定一行自虚拟化结果。多核模式下每一行都要过。 */
+static int SelfVirtRowPassed(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
+{
+    return (r->selfVirtAttempted == 1UL &&
+            r->selfVirtReachedL2 == 1UL &&
+            r->selfVirtSlotMarker == 1UL &&
+            r->selfVirtReturnedToL1 == 1UL &&
+            r->selfVirtCpuidPassedThrough == 0UL &&
+            (r->selfVirtExitReason & 0xFFFFULL) == 10ULL &&
+            /*
+             * 往返不止一次，而且 L1 armed 的退出全部到达。
+             *
+             * 一次进入一次退出不是 hypervisor —— 回程走 VMRESUME，是另一条指令、
+             * 另一套 launch-state 检查，首次进入通过推不出它通过。
+             *
+             * 判的是**每一条 CPUID 都到了 L1**（投递数 = 往返数），不是"全部退出
+             * 都到 L1"。后者我先写错过：实测 29 条退出只投递了 9 条，差出来的 20
+             * 条是影子 EPT 填叶 —— L1 的 EPT12 授权了那些访问，合成叶子本来就该
+             * 是我们的活，L1 从没要求看见。要求它们也投递，等于让每一次**正确**
+             * 的运行都判 FAIL。
+             */
+            r->selfVirtResumeCount >= 1UL &&
+            r->selfVirtEntryCount == r->selfVirtResumeCount + 1UL &&
+            r->selfVirtReflectCount ==
+                r->selfVirtResumeCount + 1UL) ? 1 : 0;
+}
+
+static int DoNestedSelfVirtualize(HANDLE h, int asJson, int allProcessors)
 {
     KSWORD_ARK_HVM_NESTED_PROBE_REQUEST req;
     KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE rsp;
@@ -4947,6 +4974,9 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson)
     req.size = (unsigned long)sizeof(req);
     req.flags = KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
                 KSWORD_ARK_HVM_NESTED_PROBE_FLAG_SELF_VIRTUALIZE;
+    if (allProcessors) {
+        req.flags |= KSWORD_ARK_HVM_NESTED_PROBE_FLAG_ALL_PROCESSORS;
+    }
     req.confirmationToken = KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN;
     memset(&rsp, 0, sizeof(rsp));
     ok = DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_NESTED_PROBE,
@@ -4974,12 +5004,44 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson)
      * （找槽位要走 GS），后者问的是 L2 的存储到不到内存（RIP 相对寻址）。两种
      * 失败原因完全不同，合成一格就会塌成同一个 0。
      */
-    passed = (r->selfVirtAttempted == 1UL &&
-              r->selfVirtReachedL2 == 1UL &&
-              r->selfVirtSlotMarker == 1UL &&
-              r->selfVirtReturnedToL1 == 1UL &&
-              r->selfVirtCpuidPassedThrough == 0UL &&
-              (r->selfVirtExitReason & 0xFFFFULL) == 10ULL) ? 1 : 0;
+    passed = SelfVirtRowPassed(r);
+    /*
+     * 多核模式下逐行判，**任一行 FAIL 即整体 FAIL**。
+     *
+     * 每个处理器有自己的 vmcs02、自己的影子层次、自己的映射窗口，结构上互不干涉 ——
+     * 而这个仓库里"单核跑通推不出多核跑通"已经栽过不止一次。
+     */
+    if (allProcessors) {
+        unsigned long row = 0UL;
+
+        for (row = 0UL; row < rsp.returnedRows &&
+                        row < KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS; ++row) {
+            if (!SelfVirtRowPassed(&rsp.rows[row])) { passed = 0; }
+        }
+        if (!asJson) {
+            printf("\n=== 嵌套自虚拟化（多核，%lu 个处理器各起一个线程）===\n",
+                   rsp.returnedRows);
+            for (row = 0UL; row < rsp.returnedRows &&
+                            row < KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS; ++row) {
+                const KSWORD_ARK_HVM_NESTED_PROBE_ROW* q = &rsp.rows[row];
+
+                printf("  CPU %lu: 进 L2 %s  写入 %s/%s  往返 %lu  "
+                       "投递 %lu/%lu  原因 %llu  => %s\n",
+                       q->processorIndex,
+                       q->selfVirtReachedL2 ? "是" : "**否**",
+                       q->selfVirtReachedL2 ? "到" : "**丢**",
+                       q->selfVirtSlotMarker ? "到" : "**丢**",
+                       q->selfVirtResumeCount,
+                       q->selfVirtReflectCount, q->selfVirtTotalExitCount,
+                       q->selfVirtExitReason & 0xFFFFULL,
+                       SelfVirtRowPassed(q) ? "**PASS**" : "FAIL");
+            }
+            printf("\n  判据：每一行都要过。每核有自己的 vmcs02、影子层次与映射窗口，\n"
+                   "        结构上互不干涉 —— 单核跑通推不出多核跑通。\n");
+            printf("  => %s\n", passed ? "**PASS**" : "FAIL");
+            return passed ? 0 : 2;
+        }
+    }
     if (asJson) {
         printf("{\"kind\":\"nested-selfvirt\",\"attempted\":%lu,"
                "\"reachedL2\":%lu,\"returnedToL1\":%lu,"
@@ -4987,6 +5049,7 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson)
                "\"exitReason\":%llu,\"guestRip\":\"0x%016llX\","
                "\"entryRip\":\"0x%016llX\","
                "\"entryCount\":%lu,\"reflectCount\":%lu,"
+               "\"totalExitCount\":%lu,\"resumeCount\":%lu,"
                "\"vmlaunch\":%lu,\"lastInstructionError\":%lu,"
                "\"fuseTripped\":%lu,\"fuseReason\":%lu,\"fuseCount\":%lu,"
                "\"fuseRip\":\"0x%016llX\","
@@ -4997,6 +5060,7 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson)
                r->selfVirtExitReason & 0xFFFFULL, r->selfVirtGuestRip,
                r->selfVirtEntryRip,
                r->selfVirtEntryCount, r->selfVirtReflectCount,
+               r->selfVirtTotalExitCount, r->selfVirtResumeCount,
                r->vmlaunchResult, r->lastInstructionError,
                r->l2FuseTripped, r->l2FuseReason, r->l2FuseCount,
                r->l2FuseRip, passed);
@@ -5057,11 +5121,24 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson)
                r->selfVirtReturnedToL1
                    ? "**是** —— L1 的宿主处理器跑完并交还了上下文"
                    : "**否** —— 进去了没回来");
-        printf("  进出次数    : 进入 %lu 次   投递给 L1 %lu 次%s\n",
-               r->selfVirtEntryCount, r->selfVirtReflectCount,
-               (r->selfVirtEntryCount == 1UL && r->selfVirtReflectCount == 1UL)
-                   ? "  —— 一次干净的往返"
-                   : "  **不止一次 —— 有退出没被投递给 L1**");
+        /*
+         * 进入次数 = 1 + resume 次数：首次 VMLAUNCH 加上每次 VMRESUME。
+         *
+         * 全部退出与被投递的退出必须相等 —— 差出来的那些是**我们替 L1 回答了它自己
+         * 的来宾**，而 L1 永远不知道被问过。只看被投递的数，这个差永远不可见。
+         */
+        printf("  往返        : 进入 %lu 次（VMLAUNCH 1 + VMRESUME %lu）\n",
+               r->selfVirtEntryCount, r->selfVirtResumeCount);
+        printf("  退出归属    : 共 %lu 次   投递给 L1 %lu 次   我们自己处理 %lu 次\n",
+               r->selfVirtTotalExitCount, r->selfVirtReflectCount,
+               (r->selfVirtTotalExitCount >= r->selfVirtReflectCount)
+                   ? (r->selfVirtTotalExitCount - r->selfVirtReflectCount)
+                   : 0UL);
+        printf("                 %s\n",
+               (r->selfVirtReflectCount == r->selfVirtResumeCount + 1UL)
+                   ? "每一条 CPUID 都到了 L1；自己处理的那些是影子 EPT 填叶，"
+                     "本就该是我们的"
+                   : "**L1 armed 的退出没有全部到达 —— 我们替它回答了它的来宾**");
         /*
          * 熔断的读数。这是挂死唯一会留下的东西 —— 没有它，同样的失败在来宾里
          * 读不到、在宿主日志里也读不到。
@@ -5470,8 +5547,9 @@ static void PrintUsage(void)
            "映射窗口，\n"
            "                   它们结构上互不干涉——而本仓库里这句话已经栽过不止一次。"
            "任一行 FAIL 即整体 FAIL。\n");
-    printf("  nested-selfvirt  **本版本会把机器挂住，实测两次，别在要用的机器上跑。**\n"
-           "                   自虚拟化：让 L1 把**它自己正在跑的上下文**变成来宾。\n"
+    printf("  nested-selfvirt-all 同上，但每个处理器各起一个线程并发跑。任一行 "
+           "FAIL 即整体 FAIL。\n");
+    printf("  nested-selfvirt  自虚拟化：让 L1 把**它自己正在跑的上下文**变成来宾。\n"
            "                   与上面那两条的区别是 L2 不再是一页合成代码——真 "
            "hypervisor（我们自己的\n"
            "                   常驻路径、VMware 的 VMM）做的正是这件事，段/CR3/"
@@ -5566,7 +5644,9 @@ int main(int argc, char** argv)
     } else if (strcmp(cmd, "nested-ad") == 0) {
         rc = DoNestedProbeAdRefusal(h, asJson);
     } else if (strcmp(cmd, "nested-selfvirt") == 0) {
-        rc = DoNestedSelfVirtualize(h, asJson);
+        rc = DoNestedSelfVirtualize(h, asJson, 0);
+    } else if (strcmp(cmd, "nested-selfvirt-all") == 0) {
+        rc = DoNestedSelfVirtualize(h, asJson, 1);
     } else if (strcmp(cmd, "gdt-dump") == 0) {
         /* 第二个参数是处理器号，缺省 0。GDT 是每处理器的。 */
         int cpu = (argc > 2) ? atoi(argv[2]) : 0;

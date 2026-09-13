@@ -100,6 +100,17 @@ typedef struct _KSW_HVM_NESTED_VCPU
     /* Count L2 exits delivered to L1 rather than handled here. */
     ULONGLONG L2ExitReflectedCount;
     /*
+     * Count every L2 exit, whoever ended up owning it.
+     *
+     * The reflected count alone cannot say whether an exit was consumed here
+     * instead of reaching L1 - and that distinction is the whole of nested
+     * correctness.  An exit we answer ourselves is us impersonating L1 to its
+     * own guest: L1's guest asks something, we reply, and L1 never learns it
+     * was asked.  The difference between these two numbers is exactly how
+     * often that happened.
+     */
+    ULONGLONG L2ExitTotalCount;
+    /*
      * Preserve what vmcs02 actually carried into the last VM entry.
      *
      * Read back from the loaded vmcs02 immediately before VMLAUNCH, not

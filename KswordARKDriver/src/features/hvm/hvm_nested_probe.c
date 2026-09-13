@@ -90,6 +90,20 @@ C_ASSERT(KSW_PROBE_DEPTH_REGIONS <= 64UL);
 #define KSW_PROBE_MSR_LOAD_OFFSET 0x000UL
 #define KSW_PROBE_MSR_STORE_OFFSET 0x100UL
 
+/*
+ * How many round trips the self-virtualize loop makes.
+ *
+ * One entry and one exit is not a hypervisor.  A real one goes back and forth
+ * continuously, and the return leg is VMRESUME rather than VMLAUNCH - a
+ * different instruction, a different launch-state check, and the first thing
+ * that has to keep working if vmcs12 state is to survive a round trip at all.
+ *
+ * Small on purpose: the question is whether the second and third trips behave
+ * like the first, which a handful answers as well as a million, without
+ * leaving a processor in L2 for any length of time.
+ */
+#define KSW_PROBE_SELF_ROUND_TRIPS 8L
+
 /* Name the VMCS fields the L2 construction writes by hand. */
 #define KSW_PROBE_VMCS_LINK_POINTER 0x2800UL
 #define KSW_PROBE_GUEST_EFER 0x2806UL
@@ -273,6 +287,20 @@ typedef struct _KSW_HVM_PROBE_SLOT
      * inference from the exit reason.
      */
     volatile LONG L2SelfMarker;
+    /* How many times L1's handler has resumed L2 in this run. */
+    volatile LONG L2ResumeCount;
+    /*
+     * Where the per-vCPU exit counters stood before this run started.
+     *
+     * Those counters are cumulative for the whole residency, not per probe.
+     * Reading them absolutely worked only while nothing else had ever entered
+     * L2 - and the moment nested-probe-all ran first in the same residency,
+     * a correct self-virtualize run reported one entry too many and failed.
+     * The number this test is about is the difference.
+     */
+    ULONGLONG BaseEntryCount;
+    ULONGLONG BaseReflectCount;
+    ULONGLONG BaseTotalExitCount;
     volatile ULONGLONG L2ExitReason;
     volatile ULONGLONG L2Qualification;
     volatile ULONGLONG L2GuestRip;
@@ -390,6 +418,32 @@ KswordARKHvmNestedProbeL1Host(
     }
     if (__vmx_vmread((SIZE_T)KSW_PROBE_VMCS_GUEST_RIP, &value) == 0) {
         slot->L2GuestRip = (ULONGLONG)value;
+    }
+    /*
+     * A CPUID exit means L2 has more to do: put it back.
+     *
+     * This is what makes the test a round trip rather than a one-way entry.
+     * The return leg is VMRESUME, which is a different instruction from the
+     * VMLAUNCH that started L2 and is checked against a different launch
+     * state, so a vmcs12 that survives the first entry can still fail here.
+     * L2's RIP has already been written back into vmcs12 by the reflection,
+     * so resuming continues after the CPUID rather than repeating it.
+     *
+     * Bounded by the loop count, and only for CPUID: L2 ends the run with a
+     * VMCALL, which falls through to the VMXOFF below.  An exit of any other
+     * reason does too, so an unexpected one ends the run rather than being
+     * resumed past.
+     */
+    if (slot->L2ExitReason == 10ULL &&
+        InterlockedCompareExchange(&slot->L2ResumeCount, 0L, 0L) <
+            KSW_PROBE_SELF_ROUND_TRIPS) {
+        InterlockedIncrement(&slot->L2ResumeCount);
+        (void)__vmx_vmresume();
+        /*
+         * Only reached when the resume did not happen.  Fall through and end
+         * the run rather than spinning: the counts reported afterwards say
+         * how far it got.
+         */
     }
     InterlockedExchange(&slot->L2Exited, 1L);
     /* Leave emulated VMX operation before abandoning this stack. */
@@ -925,6 +979,11 @@ KswordARKHvmNestedProbeExecute(
                 InterlockedExchange(&slot->L2Exited, 0L);
                 InterlockedExchange(&slot->SelfStage, 0L);
                 InterlockedExchange(&slot->L2SelfMarker, 0L);
+                InterlockedExchange(&slot->L2ResumeCount, 0L);
+                /* Baseline the cumulative counters, so the run reports a delta. */
+                slot->BaseEntryCount = vcpu->Nested.L2EntryCount;
+                slot->BaseReflectCount = vcpu->Nested.L2ExitReflectedCount;
+                slot->BaseTotalExitCount = vcpu->Nested.L2ExitTotalCount;
                 g_KswordProbeL2Marker = 0L;
                 g_KswordProbeL2PassThrough = 0L;
                 RtlCaptureContext(&slot->ResumeContext);
@@ -1046,14 +1105,40 @@ KswordARKHvmNestedProbeExecute(
                                 InterlockedExchange(&live->L2SelfMarker, 1L);
                             }
                         }
-                        __cpuid(registers, 0);
                         /*
-                         * Reached only if CPUID did not leave L2, which is
-                         * architecturally impossible - recorded rather than
-                         * trusted, through a volatile so the record cannot be
-                         * scheduled above the instruction it is about.
+                         * Go round the loop, then leave for good.
+                         *
+                         * Each CPUID exits and is reflected; L1's handler
+                         * resumes L2 with VMRESUME and execution continues
+                         * here, one iteration further on.  The loop counter
+                         * lives in L2's own registers and stack, so surviving
+                         * eight trips is also a statement that the guest state
+                         * vmcs12 carries back and forth is intact.
+                         *
+                         * The run ends on the last CPUID, not on the VMCALL
+                         * below: the handler stops resuming once the trip
+                         * count is spent, so that exit falls through to its
+                         * VMXOFF.  The VMCALL is only reachable if CPUID
+                         * stopped leaving L2, which is why it sits after the
+                         * marker rather than instead of it.
+                         */
+                        {
+                            LONG trip = 0L;
+
+                            for (trip = 0L;
+                                 trip <= KSW_PROBE_SELF_ROUND_TRIPS;
+                                 ++trip) {
+                                __cpuid(registers, 0);
+                            }
+                        }
+                        /*
+                         * Reached only if CPUID stopped leaving L2, which is
+                         * architecturally impossible - recorded through a
+                         * volatile so it cannot be scheduled above the
+                         * instruction it is about.
                          */
                         g_KswordProbeL2PassThrough = 1L;
+                        (void)KswordARKHvmAsmResidentHypercall(0ULL, 0ULL);
                     } else {
                         /* The entry did not happen; say why. */
                         SIZE_T launchError = 0U;
@@ -1066,9 +1151,17 @@ KswordARKHvmNestedProbeExecute(
                     }
                     }
                     response->selfVirtEntryCount =
-                        (ULONG)vcpu->Nested.L2EntryCount;
+                        (ULONG)(vcpu->Nested.L2EntryCount -
+                            slot->BaseEntryCount);
                     response->selfVirtReflectCount =
-                        (ULONG)vcpu->Nested.L2ExitReflectedCount;
+                        (ULONG)(vcpu->Nested.L2ExitReflectedCount -
+                            slot->BaseReflectCount);
+                    response->selfVirtTotalExitCount =
+                        (ULONG)(vcpu->Nested.L2ExitTotalCount -
+                            slot->BaseTotalExitCount);
+                    response->selfVirtResumeCount =
+                        (ULONG)InterlockedCompareExchange(
+                            &slot->L2ResumeCount, 0L, 0L);
                     response->selfVirtExitReason = slot->L2ExitReason;
                     response->selfVirtGuestRip = slot->L2GuestRip;
                     /*

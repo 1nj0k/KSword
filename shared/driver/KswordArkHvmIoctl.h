@@ -2207,6 +2207,18 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
     unsigned long selfVirtEntryCount;
     unsigned long selfVirtReflectCount;
     /*
+     * L2 的**全部**退出次数，以及 L1 把 L2 放回去的次数。
+     *
+     * 全部退出与被投递的退出之差，正是"有多少条退出被我们自己消化掉、L1 从不知道
+     * 它的来宾问过"。那是嵌套正确性的全部要害：我们替 L1 回答它自己的来宾，L1 无从
+     * 察觉。只数被投递的那些，永远看不见这个差。
+     *
+     * resume 次数单列：回程走的是 VMRESUME 而不是 VMLAUNCH —— 不同指令、不同的
+     * launch-state 检查。一个能通过首次进入的 vmcs12，完全可能在这里失败。
+     */
+    unsigned long selfVirtTotalExitCount;
+    unsigned long selfVirtResumeCount;
+    /*
      * 无进展熔断：L2 一直在同一条指令上以同样的原因退出。
      *
      * 这三格是**挂死唯一会留下的东西**。实测过：这种挂死没有蓝屏、没有转储、
