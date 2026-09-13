@@ -1,65 +1,49 @@
 # KswordARKDriver IOCTL Audit Report
 
-- Generated at: `2026-08-08T06:58:45.612070+00:00`
+- Generated at: `2026-09-13T00:14:28.771077+00:00`
 - Repository root: `C:\Users\Felix\CLionProjects\KSword`
-- Headers scanned: `45`
+- Headers scanned: `51`
 - Registry scanned: `KswordARKDriver/src/dispatch/ioctl_registry.c`
 
 ## Summary
 
 | Metric | Value |
 | --- | --- |
-| Shared IOCTL definitions | 170 |
-| Registry entries | 170 |
-| Registered definitions | 170 |
+| Shared IOCTL definitions | 197 |
+| Registry entries | 197 |
+| Registered definitions | 197 |
 | Unregistered definitions | 0 |
-| HIGH findings | 14 |
-| MEDIUM findings | 6 |
+| HIGH findings | 0 |
+| MEDIUM findings | 19 |
 | LOW findings | 0 |
 
 ## High-risk findings
 
-| Category | IOCTL | Message | Details |
-| --- | --- | --- | --- |
-| mutating_any_access | IOCTL_KSWORD_ARK_ANSWER_CALLBACK_EVENT | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["ANSWER"], "source": "shared/driver/KswordArkCallbackIoctl.h", "line": 48} |
-| mutating_any_access | IOCTL_KSWORD_ARK_APPLY_DYN_PROFILE_V4 | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["APPLY"], "source": "shared/driver/KswordArkDynDataIoctl.h", "line": 61} |
-| mutating_any_access | IOCTL_KSWORD_ARK_CANCEL_ALL_PENDING_DECISIONS | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["CANCEL"], "source": "shared/driver/KswordArkCallbackIoctl.h", "line": 55} |
-| mutating_any_access | IOCTL_KSWORD_ARK_DELETE_PATH | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["DELETE"], "source": "shared/driver/KswordArkFileIoctl.h", "line": 21} |
-| mutating_any_access | IOCTL_KSWORD_ARK_FILE_MONITOR_CONTROL | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["CONTROL"], "source": "shared/driver/KswordArkFileMonitorIoctl.h", "line": 67} |
-| mutating_any_access | IOCTL_KSWORD_ARK_HWID_DISPATCH_CONTROL | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["CONTROL", "PATCH"], "source": "shared/driver/KswordArkHwidIoctl.h", "line": 25} |
-| mutating_any_access | IOCTL_KSWORD_ARK_HWID_DISPATCH_QUERY | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["PATCH"], "source": "shared/driver/KswordArkHwidIoctl.h", "line": 18} |
-| mutating_any_access | IOCTL_KSWORD_ARK_QUERY_APP_CONTROL_STATUS | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["CONTROL"], "source": "shared/driver/KswordArkSecurityAuditIoctl.h", "line": 41} |
-| mutating_any_access | IOCTL_KSWORD_ARK_QUERY_UNLOADED_DRIVERS | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["UNLOAD"], "source": "shared/driver/KswordArkUnloadedDriverIoctl.h", "line": 16} |
-| mutating_any_access | IOCTL_KSWORD_ARK_SET_CALLBACK_RULES | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["SET"], "source": "shared/driver/KswordArkCallbackIoctl.h", "line": 27} |
-| mutating_any_access | IOCTL_KSWORD_ARK_SET_MINIFILTER_BYPASS_PIDS | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["SET"], "source": "shared/driver/KswordArkCallbackIoctl.h", "line": 83} |
-| mutating_any_access | IOCTL_KSWORD_ARK_SET_PPL_LEVEL | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["SET"], "source": "shared/driver/KswordArkProcessIoctl.h", "line": 79} |
-| mutating_any_access | IOCTL_KSWORD_ARK_SUSPEND_PROCESS | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["SUSPEND"], "source": "shared/driver/KswordArkProcessIoctl.h", "line": 67} |
-| mutating_any_access | IOCTL_KSWORD_ARK_TERMINATE_PROCESS | Mutating keyword matched but access is FILE_ANY_ACCESS. | {"keywords": ["TERMINATE"], "source": "shared/driver/KswordArkProcessIoctl.h", "line": 54} |
+No HIGH findings.
 
 ## All findings
 
 | Severity | Category | Name | Message |
 | --- | --- | --- | --- |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_ANSWER_CALLBACK_EVENT | Mutating keyword matched but access is FILE_ANY_ACCESS. |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_APPLY_DYN_PROFILE_V4 | Mutating keyword matched but access is FILE_ANY_ACCESS. |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_CANCEL_ALL_PENDING_DECISIONS | Mutating keyword matched but access is FILE_ANY_ACCESS. |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_DELETE_PATH | Mutating keyword matched but access is FILE_ANY_ACCESS. |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_FILE_MONITOR_CONTROL | Mutating keyword matched but access is FILE_ANY_ACCESS. |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_HWID_DISPATCH_CONTROL | Mutating keyword matched but access is FILE_ANY_ACCESS. |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_HWID_DISPATCH_QUERY | Mutating keyword matched but access is FILE_ANY_ACCESS. |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_QUERY_APP_CONTROL_STATUS | Mutating keyword matched but access is FILE_ANY_ACCESS. |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_QUERY_UNLOADED_DRIVERS | Mutating keyword matched but access is FILE_ANY_ACCESS. |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_SET_CALLBACK_RULES | Mutating keyword matched but access is FILE_ANY_ACCESS. |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_SET_MINIFILTER_BYPASS_PIDS | Mutating keyword matched but access is FILE_ANY_ACCESS. |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_SET_PPL_LEVEL | Mutating keyword matched but access is FILE_ANY_ACCESS. |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_SUSPEND_PROCESS | Mutating keyword matched but access is FILE_ANY_ACCESS. |
-| HIGH | mutating_any_access | IOCTL_KSWORD_ARK_TERMINATE_PROCESS | Mutating keyword matched but access is FILE_ANY_ACCESS. |
+| MEDIUM | query_write_access | IOCTL_KSWORD_ARK_CALLBACK_MONITOR_QUERY | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
+| MEDIUM | query_write_access | IOCTL_KSWORD_ARK_CALLBACK_MONITOR_READ | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
 | MEDIUM | query_write_access | IOCTL_KSWORD_ARK_DEBUG_OUTPUT_DRAIN | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
+| MEDIUM | query_write_access | IOCTL_KSWORD_ARK_ENUMERATE_PROCESS_VAD | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
 | MEDIUM | query_write_access | IOCTL_KSWORD_ARK_QUERY_IMAGE_SIGNATURE | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
+| MEDIUM | query_write_access | IOCTL_KSWORD_ARK_QUERY_PAGE_TABLE_ENTRY | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
+| MEDIUM | query_write_access | IOCTL_KSWORD_ARK_QUERY_RESEARCH_TOPIC | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
+| MEDIUM | query_write_access | IOCTL_KSWORD_ARK_QUERY_VIRTUAL_MEMORY | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
+| MEDIUM | query_write_access | IOCTL_KSWORD_ARK_READ_PHYSICAL_MEMORY | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
+| MEDIUM | query_write_access | IOCTL_KSWORD_ARK_READ_REGISTRY_VALUE | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
+| MEDIUM | query_write_access | IOCTL_KSWORD_ARK_READ_VIRTUAL_MEMORY | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
 | MEDIUM | query_write_access | IOCTL_KSWORD_ARK_RXPF_DRAIN_EVENTS | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
 | MEDIUM | query_write_access | IOCTL_KSWORD_ARK_RXPF_QUERY_PAGE | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
 | MEDIUM | query_write_access | IOCTL_KSWORD_ARK_RXPF_QUERY_STATS | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
 | MEDIUM | query_write_access | IOCTL_KSWORD_ARK_RXPF_QUERY_SUPPORT | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
+| MEDIUM | query_write_access | IOCTL_KSWORD_ARK_SCAN_KERNEL_EXECUTABLE_MEMORY | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
+| MEDIUM | query_write_access | IOCTL_KSWORD_ARK_SCAN_KERNEL_MEMORY_EVIDENCE | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
+| MEDIUM | query_write_access | IOCTL_KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
+| MEDIUM | query_write_access | IOCTL_KSWORD_ARK_TRANSLATE_VIRTUAL_ADDRESS | Query/read-only keyword matched but access requires FILE_WRITE_ACCESS. |
 
 ## IOCTL inventory
 
@@ -67,17 +51,23 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | IOCTL_KSWORD_ARK_QUERY_ALPC_PORT | 0x80E | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKAlpcIoctlQueryAlpcPort | shared/driver/KswordArkAlpcIoctl.h:17 |
 | IOCTL_KSWORD_ARK_SET_BUGCHECK_BITMAP | 0x8FA | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKBugcheckIoctlSetBitmap | shared/driver/KswordArkBugcheckIoctl.h:24 |
-| IOCTL_KSWORD_ARK_CONFIGURE_BUGCHECK_GUARD | 0x8FB | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKBugcheckGuardIoctlConfigure | shared/driver/KswordArkBugcheckIoctl.h:56 |
-| IOCTL_KSWORD_ARK_SET_CALLBACK_RULES | 0x880 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKCallbackIoctlSetRulesHandler | shared/driver/KswordArkCallbackIoctl.h:27 |
+| IOCTL_KSWORD_ARK_SET_BUGCHECK_VERDICT_RESOURCES | 0x8FC | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKBugcheckIoctlSetVerdictResources | shared/driver/KswordArkBugcheckIoctl.h:77 |
+| IOCTL_KSWORD_ARK_CONFIGURE_BUGCHECK_DIAGNOSTICS | 0x8FD | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKBugcheckIoctlConfigureDiagnostics | shared/driver/KswordArkBugcheckIoctl.h:117 |
+| IOCTL_KSWORD_ARK_CONFIGURE_BUGCHECK_GUARD | 0x8FB | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKBugcheckGuardIoctlConfigure | shared/driver/KswordArkBugcheckIoctl.h:177 |
+| IOCTL_KSWORD_ARK_CONFIGURE_BUGCHECK_SHIELD | 0x8FE | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKBugcheckShieldIoctlConfigure | shared/driver/KswordArkBugcheckIoctl.h:264 |
+| IOCTL_KSWORD_ARK_SET_CALLBACK_RULES | 0x880 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKCallbackIoctlSetRulesHandler | shared/driver/KswordArkCallbackIoctl.h:27 |
 | IOCTL_KSWORD_ARK_GET_CALLBACK_RUNTIME_STATE | 0x881 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKCallbackIoctlGetRuntimeStateHandler | shared/driver/KswordArkCallbackIoctl.h:34 |
 | IOCTL_KSWORD_ARK_WAIT_CALLBACK_EVENT | 0x882 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKCallbackIoctlWaitEventHandler | shared/driver/KswordArkCallbackIoctl.h:41 |
-| IOCTL_KSWORD_ARK_ANSWER_CALLBACK_EVENT | 0x883 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKCallbackIoctlAnswerEventHandler | shared/driver/KswordArkCallbackIoctl.h:48 |
-| IOCTL_KSWORD_ARK_CANCEL_ALL_PENDING_DECISIONS | 0x884 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKCallbackIoctlCancelAllPendingHandler | shared/driver/KswordArkCallbackIoctl.h:55 |
+| IOCTL_KSWORD_ARK_ANSWER_CALLBACK_EVENT | 0x883 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKCallbackIoctlAnswerEventHandler | shared/driver/KswordArkCallbackIoctl.h:48 |
+| IOCTL_KSWORD_ARK_CANCEL_ALL_PENDING_DECISIONS | 0x884 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKCallbackIoctlCancelAllPendingHandler | shared/driver/KswordArkCallbackIoctl.h:55 |
 | IOCTL_KSWORD_ARK_REMOVE_EXTERNAL_CALLBACK | 0x885 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKCallbackIoctlRemoveExternalCallbackHandler | shared/driver/KswordArkCallbackIoctl.h:62 |
 | IOCTL_KSWORD_ARK_ENUM_CALLBACKS | 0x886 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKCallbackIoctlEnumCallbacksHandler | shared/driver/KswordArkCallbackIoctl.h:69 |
 | IOCTL_KSWORD_ARK_REMOVE_EXTERNAL_CALLBACK_EX | 0x887 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKCallbackIoctlRemoveExternalCallbackExHandler | shared/driver/KswordArkCallbackIoctl.h:76 |
-| IOCTL_KSWORD_ARK_SET_MINIFILTER_BYPASS_PIDS | 0x888 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKCallbackIoctlSetMinifilterBypassPidsHandler | shared/driver/KswordArkCallbackIoctl.h:83 |
+| IOCTL_KSWORD_ARK_SET_MINIFILTER_BYPASS_PIDS | 0x888 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKCallbackIoctlSetMinifilterBypassPidsHandler | shared/driver/KswordArkCallbackIoctl.h:83 |
 | IOCTL_KSWORD_ARK_QUERY_MINIFILTER_BYPASS_PIDS | 0x889 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKCallbackIoctlQueryMinifilterBypassPidsHandler | shared/driver/KswordArkCallbackIoctl.h:90 |
+| IOCTL_KSWORD_ARK_CALLBACK_MONITOR_CONTROL | 0x88A | METHOD_BUFFERED | FILE_READ_ACCESS\|FILE_WRITE_ACCESS | yes | KswordARKCallbackMonitorIoctlControl | shared/driver/KswordArkCallbackMonitorIoctl.h:27 |
+| IOCTL_KSWORD_ARK_CALLBACK_MONITOR_QUERY | 0x88B | METHOD_BUFFERED | FILE_READ_ACCESS\|FILE_WRITE_ACCESS | yes | KswordARKCallbackMonitorIoctlQuery | shared/driver/KswordArkCallbackMonitorIoctl.h:34 |
+| IOCTL_KSWORD_ARK_CALLBACK_MONITOR_READ | 0x88C | METHOD_BUFFERED | FILE_READ_ACCESS\|FILE_WRITE_ACCESS | yes | KswordARKCallbackMonitorIoctlRead | shared/driver/KswordArkCallbackMonitorIoctl.h:41 |
 | IOCTL_KSWORD_ARK_QUERY_DRIVER_CAPABILITIES | 0x80A | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKCapabilityIoctlQueryDriverCapabilities | shared/driver/KswordArkCapabilityIoctl.h:19 |
 | IOCTL_KSWORD_ARK_QUERY_CPU_POWER | 0x8F2 | METHOD_BUFFERED | FILE_READ_ACCESS | yes | KswordARKCpuPowerIoctlQuery | shared/driver/KswordArkCpuPowerIoctl.h:19 |
 | IOCTL_KSWORD_ARK_CONTROL_CPU_POWER | 0x8F3 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKCpuPowerIoctlControl | shared/driver/KswordArkCpuPowerIoctl.h:26 |
@@ -95,28 +85,41 @@
 | IOCTL_KSWORD_ARK_QUERY_CAPABILITIES | 0x809 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKDynDataIoctlQueryCapabilities | shared/driver/KswordArkDynDataIoctl.h:40 |
 | IOCTL_KSWORD_ARK_APPLY_DYN_PROFILE | 0x82F | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKDynDataIoctlApplyProfile | shared/driver/KswordArkDynDataIoctl.h:47 |
 | IOCTL_KSWORD_ARK_APPLY_DYN_PROFILE_EX | 0x830 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKDynDataIoctlApplyProfileEx | shared/driver/KswordArkDynDataIoctl.h:54 |
-| IOCTL_KSWORD_ARK_APPLY_DYN_PROFILE_V4 | 0x860 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKDynDataIoctlApplyProfileV4 | shared/driver/KswordArkDynDataIoctl.h:61 |
+| IOCTL_KSWORD_ARK_APPLY_DYN_PROFILE_V4 | 0x860 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKDynDataIoctlApplyProfileV4 | shared/driver/KswordArkDynDataIoctl.h:61 |
 | IOCTL_KSWORD_ARK_QUERY_DYN_V4_MODULES | 0x861 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKDynDataIoctlQueryV4Modules | shared/driver/KswordArkDynDataIoctl.h:68 |
 | IOCTL_KSWORD_ARK_QUERY_DYN_V4_CAPABILITY_GROUPS | 0x862 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKDynDataIoctlQueryV4CapabilityGroups | shared/driver/KswordArkDynDataIoctl.h:75 |
 | IOCTL_KSWORD_ARK_QUERY_DYN_V4_MISSING_ITEMS | 0x863 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKDynDataIoctlQueryV4MissingItems | shared/driver/KswordArkDynDataIoctl.h:82 |
 | IOCTL_KSWORD_ARK_QUERY_DYN_V4_ITEMS | 0x864 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKDynDataIoctlQueryV4Items | shared/driver/KswordArkDynDataIoctl.h:89 |
-| IOCTL_KSWORD_ARK_DELETE_PATH | 0x804 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKFileIoctlDeletePath | shared/driver/KswordArkFileIoctl.h:21 |
+| IOCTL_KSWORD_ARK_DELETE_PATH | 0x804 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKFileIoctlDeletePath | shared/driver/KswordArkFileIoctl.h:21 |
 | IOCTL_KSWORD_ARK_QUERY_FILE_INFO | 0x812 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKFileIoctlQueryFileInfo | shared/driver/KswordArkFileIoctl.h:28 |
 | IOCTL_KSWORD_ARK_SET_FILE_INTEGRITY | 0x84D | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKFileIoctlSetIntegrity | shared/driver/KswordArkFileIoctl.h:35 |
 | IOCTL_KSWORD_ARK_ENUM_DIRECTORY | 0x8CF | METHOD_BUFFERED | FILE_READ_ACCESS | yes | KswordARKFileIoctlEnumDirectory | shared/driver/KswordArkFileIoctl.h:42 |
-| IOCTL_KSWORD_ARK_FILE_MONITOR_CONTROL | 0x815 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKFileMonitorIoctlControl | shared/driver/KswordArkFileMonitorIoctl.h:67 |
+| IOCTL_KSWORD_ARK_FILE_IRP_ENUM_DIRECTORY | 0x90A | METHOD_BUFFERED | FILE_READ_ACCESS | yes | KswordARKFileIrpIoctlEnumDirectory | shared/driver/KswordArkFileIrpIoctl.h:24 |
+| IOCTL_KSWORD_ARK_FILE_IRP_SUBMIT | 0x90B | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKFileIrpIoctlSubmit | shared/driver/KswordArkFileIrpIoctl.h:31 |
+| IOCTL_KSWORD_ARK_FILE_MONITOR_CONTROL | 0x815 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKFileMonitorIoctlControl | shared/driver/KswordArkFileMonitorIoctl.h:67 |
 | IOCTL_KSWORD_ARK_FILE_MONITOR_DRAIN | 0x816 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKFileMonitorIoctlDrain | shared/driver/KswordArkFileMonitorIoctl.h:74 |
 | IOCTL_KSWORD_ARK_FILE_MONITOR_QUERY_STATUS | 0x817 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKFileMonitorIoctlQueryStatus | shared/driver/KswordArkFileMonitorIoctl.h:81 |
 | IOCTL_KSWORD_ARK_QUERY_MINIFILTER_INVENTORY | 0x8B0 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKMinifilterIoctlQueryInventory | shared/driver/KswordArkFilterIoctl.h:18 |
 | IOCTL_KSWORD_ARK_ENUM_PROCESS_HANDLES | 0x80C | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKHandleIoctlEnumProcessHandles | shared/driver/KswordArkHandleIoctl.h:18 |
 | IOCTL_KSWORD_ARK_QUERY_HANDLE_OBJECT | 0x80D | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKHandleIoctlQueryHandleObject | shared/driver/KswordArkHandleIoctl.h:25 |
-| IOCTL_KSWORD_ARK_QUERY_HVM | 0x8CA | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKHvmIoctlQuery | shared/driver/KswordArkHvmIoctl.h:14 |
-| IOCTL_KSWORD_ARK_CONTROL_HVM | 0x8CB | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlControl | shared/driver/KswordArkHvmIoctl.h:16 |
-| IOCTL_KSWORD_ARK_HVM_EPT_RULE | 0x8B8 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlEptRule | shared/driver/KswordArkHvmIoctl.h:18 |
-| IOCTL_KSWORD_ARK_HVM_EVENTS | 0x8B9 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlEvents | shared/driver/KswordArkHvmIoctl.h:20 |
+| IOCTL_KSWORD_ARK_QUERY_HVM | 0x8CA | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKHvmIoctlQuery | shared/driver/KswordArkHvmIoctl.h:66 |
+| IOCTL_KSWORD_ARK_CONTROL_HVM | 0x8CB | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlControl | shared/driver/KswordArkHvmIoctl.h:68 |
+| IOCTL_KSWORD_ARK_HVM_EPT_RULE | 0x8B8 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlEptRule | shared/driver/KswordArkHvmIoctl.h:70 |
+| IOCTL_KSWORD_ARK_HVM_EVENTS | 0x8B9 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlEvents | shared/driver/KswordArkHvmIoctl.h:72 |
+| IOCTL_KSWORD_ARK_HVM_MEMORY | 0x8BA | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlMemory | shared/driver/KswordArkHvmIoctl.h:75 |
+| IOCTL_KSWORD_ARK_HVM_VIEW | 0x8BB | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlView | shared/driver/KswordArkHvmIoctl.h:673 |
+| IOCTL_KSWORD_ARK_HVM_MSR_POLICY | 0x8BC | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlMsrPolicy | shared/driver/KswordArkHvmIoctl.h:757 |
+| IOCTL_KSWORD_ARK_HVM_CR_POLICY | 0x8BD | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlCrPolicy | shared/driver/KswordArkHvmIoctl.h:838 |
+| IOCTL_KSWORD_ARK_HVM_PLATFORM | 0x8BF | METHOD_BUFFERED | FILE_READ_ACCESS | yes | KswordARKHvmIoctlPlatform | shared/driver/KswordArkHvmIoctl.h:906 |
+| IOCTL_KSWORD_ARK_HVM_DOMAIN | 0x8BE | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlDomain | shared/driver/KswordArkHvmIoctl.h:962 |
+| IOCTL_KSWORD_ARK_HVM_PROCESS | 0x90F | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlProcess | shared/driver/KswordArkHvmIoctl.h:1036 |
+| IOCTL_KSWORD_ARK_HVM_INJECT | 0x910 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlInject | shared/driver/KswordArkHvmIoctl.h:1124 |
+| IOCTL_KSWORD_ARK_HVM_NESTED_PROBE | 0x911 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHvmIoctlNestedProbe | shared/driver/KswordArkHvmIoctl.h:1231 |
 | IOCTL_KSWORD_ARK_HWID_DISPATCH_QUERY | 0x8F0 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKHwidIoctlQueryDispatch | shared/driver/KswordArkHwidIoctl.h:18 |
-| IOCTL_KSWORD_ARK_HWID_DISPATCH_CONTROL | 0x8F1 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKHwidIoctlControlDispatch | shared/driver/KswordArkHwidIoctl.h:25 |
+| IOCTL_KSWORD_ARK_HWID_DISPATCH_CONTROL | 0x8F1 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKHwidIoctlControlDispatch | shared/driver/KswordArkHwidIoctl.h:25 |
 | IOCTL_KSWORD_ARK_QUERY_I8042_AUDIT | 0x8E5 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKI8042AuditIoctlQuery | shared/driver/KswordArkI8042AuditIoctl.h:17 |
+| IOCTL_KSWORD_ARK_ENUMERATE_PROCESS_VAD | 0x912 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKInjectionIoctlEnumerateProcessVad | shared/driver/KswordArkInjectionScanIoctl.h:37 |
+| IOCTL_KSWORD_ARK_SCAN_PROCESS_EXECUTABLE_PTE | 0x913 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKInjectionIoctlScanExecutablePte | shared/driver/KswordArkInjectionScanIoctl.h:44 |
 | IOCTL_KSWORD_ARK_RESTORE_IDT_BASELINE | 0x8C7 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKKernelIoctlRestoreIdtBaseline | shared/driver/KswordArkKernelBaselineIoctl.h:9 |
 | IOCTL_KSWORD_ARK_ENUM_SSDT | 0x806 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKKernelIoctlEnumSsdt | shared/driver/KswordArkKernelIoctl.h:29 |
 | IOCTL_KSWORD_ARK_QUERY_DRIVER_OBJECT | 0x811 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKKernelIoctlQueryDriverObject | shared/driver/KswordArkKernelIoctl.h:36 |
@@ -136,17 +139,18 @@
 | IOCTL_KSWORD_ARK_QUERY_KERNEL_OBJECT_SUMMARY | 0x879 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKKernelObjectIoctlQueryObjectSummary | shared/driver/KswordArkKernelObjectIoctl.h:27 |
 | IOCTL_KSWORD_ARK_QUERY_IPC_SUMMARY | 0x87A | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKKernelObjectIoctlQueryIpcSummary | shared/driver/KswordArkKernelObjectIoctl.h:34 |
 | IOCTL_KSWORD_ARK_ENUM_OBJECT_TYPE_TABLE | 0x87B | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKKernelObjectIoctlEnumTypeTable | shared/driver/KswordArkKernelObjectIoctl.h:41 |
-| IOCTL_KSWORD_ARK_ENUM_KEYBOARD_HOTKEYS | 0x847 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKKeyboardIoctlEnumHotkeys | shared/driver/KswordArkKeyboardIoctl.h:18 |
-| IOCTL_KSWORD_ARK_ENUM_KEYBOARD_HOOKS | 0x848 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKKeyboardIoctlEnumHooks | shared/driver/KswordArkKeyboardIoctl.h:25 |
-| IOCTL_KSWORD_ARK_QUERY_VIRTUAL_MEMORY | 0x813 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKMemoryIoctlQueryVirtualMemory | shared/driver/KswordArkMemoryIoctl.h:30 |
-| IOCTL_KSWORD_ARK_READ_VIRTUAL_MEMORY | 0x814 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKMemoryIoctlReadVirtualMemory | shared/driver/KswordArkMemoryIoctl.h:37 |
+| IOCTL_KSWORD_ARK_ENUM_KEYBOARD_HOTKEYS | 0x847 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKKeyboardIoctlEnumHotkeys | shared/driver/KswordArkKeyboardIoctl.h:21 |
+| IOCTL_KSWORD_ARK_ENUM_KEYBOARD_HOOKS | 0x848 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKKeyboardIoctlEnumHooks | shared/driver/KswordArkKeyboardIoctl.h:28 |
+| IOCTL_KSWORD_ARK_MUTATE_KEYBOARD_HOTKEY | 0x856 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKKeyboardIoctlMutateHotkey | shared/driver/KswordArkKeyboardIoctl.h:35 |
+| IOCTL_KSWORD_ARK_QUERY_VIRTUAL_MEMORY | 0x813 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKMemoryIoctlQueryVirtualMemory | shared/driver/KswordArkMemoryIoctl.h:30 |
+| IOCTL_KSWORD_ARK_READ_VIRTUAL_MEMORY | 0x814 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKMemoryIoctlReadVirtualMemory | shared/driver/KswordArkMemoryIoctl.h:37 |
 | IOCTL_KSWORD_ARK_WRITE_VIRTUAL_MEMORY | 0x81D | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKMemoryIoctlWriteVirtualMemory | shared/driver/KswordArkMemoryIoctl.h:44 |
-| IOCTL_KSWORD_ARK_READ_PHYSICAL_MEMORY | 0x82B | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKMemoryIoctlReadPhysicalMemory | shared/driver/KswordArkMemoryIoctl.h:51 |
+| IOCTL_KSWORD_ARK_READ_PHYSICAL_MEMORY | 0x82B | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKMemoryIoctlReadPhysicalMemory | shared/driver/KswordArkMemoryIoctl.h:51 |
 | IOCTL_KSWORD_ARK_WRITE_PHYSICAL_MEMORY | 0x82C | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKMemoryIoctlWritePhysicalMemory | shared/driver/KswordArkMemoryIoctl.h:58 |
-| IOCTL_KSWORD_ARK_TRANSLATE_VIRTUAL_ADDRESS | 0x82D | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKMemoryIoctlTranslateVirtualAddress | shared/driver/KswordArkMemoryIoctl.h:65 |
-| IOCTL_KSWORD_ARK_QUERY_PAGE_TABLE_ENTRY | 0x82E | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKMemoryIoctlQueryPageTableEntry | shared/driver/KswordArkMemoryIoctl.h:72 |
-| IOCTL_KSWORD_ARK_SCAN_KERNEL_EXECUTABLE_MEMORY | 0x831 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKMemoryIoctlScanKernelExecutableMemory | shared/driver/KswordArkMemoryIoctl.h:79 |
-| IOCTL_KSWORD_ARK_SCAN_KERNEL_MEMORY_EVIDENCE | 0x832 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKMemoryIoctlScanKernelMemoryEvidence | shared/driver/KswordArkMemoryIoctl.h:86 |
+| IOCTL_KSWORD_ARK_TRANSLATE_VIRTUAL_ADDRESS | 0x82D | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKMemoryIoctlTranslateVirtualAddress | shared/driver/KswordArkMemoryIoctl.h:65 |
+| IOCTL_KSWORD_ARK_QUERY_PAGE_TABLE_ENTRY | 0x82E | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKMemoryIoctlQueryPageTableEntry | shared/driver/KswordArkMemoryIoctl.h:72 |
+| IOCTL_KSWORD_ARK_SCAN_KERNEL_EXECUTABLE_MEMORY | 0x831 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKMemoryIoctlScanKernelExecutableMemory | shared/driver/KswordArkMemoryIoctl.h:79 |
+| IOCTL_KSWORD_ARK_SCAN_KERNEL_MEMORY_EVIDENCE | 0x832 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKMemoryIoctlScanKernelMemoryEvidence | shared/driver/KswordArkMemoryIoctl.h:86 |
 | IOCTL_KSWORD_ARK_MUTATION_PREPARE | 0x838 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKMutationIoctlPrepare | shared/driver/KswordArkMutationIoctl.h:25 |
 | IOCTL_KSWORD_ARK_MUTATION_COMMIT | 0x839 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKMutationIoctlCommit | shared/driver/KswordArkMutationIoctl.h:32 |
 | IOCTL_KSWORD_ARK_MUTATION_ROLLBACK | 0x83A | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKMutationIoctlRollback | shared/driver/KswordArkMutationIoctl.h:39 |
@@ -162,24 +166,29 @@
 | IOCTL_KSWORD_ARK_NETWORK_CONTROL_TRAFFIC_CAPTURE | 0x8AC | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKNetworkIoctlControlTrafficCapture | shared/driver/KswordArkNetworkIoctl.h:82 |
 | IOCTL_KSWORD_ARK_QUERY_PIDDB | 0x8C8 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKKernelIoctlQueryPiDdb | shared/driver/KswordArkPiDdbIoctl.h:10 |
 | IOCTL_KSWORD_ARK_DELETE_PIDDB | 0x8C9 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKKernelIoctlDeletePiDdb | shared/driver/KswordArkPiDdbIoctl.h:12 |
-| IOCTL_KSWORD_ARK_QUERY_PLATFORM_AUDIT | 0x8E4 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKPlatformAuditIoctlQuery | shared/driver/KswordArkPlatformAuditIoctl.h:18 |
-| IOCTL_KSWORD_ARK_CONTROL_PLATFORM_AUDIT | 0x8E6 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKPlatformAuditIoctlControl | shared/driver/KswordArkPlatformAuditIoctl.h:25 |
+| IOCTL_KSWORD_ARK_QUERY_PLATFORM_AUDIT | 0x8E4 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKPlatformAuditIoctlQuery | shared/driver/KswordArkPlatformAuditIoctl.h:20 |
+| IOCTL_KSWORD_ARK_CONTROL_PLATFORM_AUDIT | 0x8E6 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKPlatformAuditIoctlControl | shared/driver/KswordArkPlatformAuditIoctl.h:27 |
 | IOCTL_KSWORD_ARK_QUERY_PREFLIGHT | 0x81C | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKPreflightIoctlQuery | shared/driver/KswordArkPreflightIoctl.h:19 |
-| IOCTL_KSWORD_ARK_TERMINATE_PROCESS | 0x801 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKProcessIoctlTerminate | shared/driver/KswordArkProcessIoctl.h:54 |
-| IOCTL_KSWORD_ARK_SUSPEND_PROCESS | 0x802 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKProcessIoctlSuspend | shared/driver/KswordArkProcessIoctl.h:67 |
-| IOCTL_KSWORD_ARK_SET_PPL_LEVEL | 0x803 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKProcessIoctlSetPplLevel | shared/driver/KswordArkProcessIoctl.h:79 |
-| IOCTL_KSWORD_ARK_SET_PROCESS_INTEGRITY | 0x84C | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlSetIntegrity | shared/driver/KswordArkProcessIoctl.h:93 |
-| IOCTL_KSWORD_ARK_ENUM_PROCESS | 0x805 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKProcessIoctlEnumProcess | shared/driver/KswordArkProcessIoctl.h:128 |
-| IOCTL_KSWORD_ARK_QUERY_PROCESS_CROSSVIEW | 0x836 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKProcessIoctlQueryCrossView | shared/driver/KswordArkProcessIoctl.h:359 |
-| IOCTL_KSWORD_ARK_QUERY_PROCESS_DETAIL | 0x83C | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKProcessIoctlQueryDetail | shared/driver/KswordArkProcessIoctl.h:370 |
-| IOCTL_KSWORD_ARK_QUERY_PROCESS_RUNTIME_FIELDS | 0x83E | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKProcessIoctlQueryRuntimeFields | shared/driver/KswordArkProcessIoctl.h:377 |
-| IOCTL_KSWORD_ARK_SET_PROCESS_VISIBILITY | 0x822 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlSetVisibility | shared/driver/KswordArkProcessIoctl.h:654 |
-| IOCTL_KSWORD_ARK_SET_PROCESS_SPECIAL_FLAGS | 0x824 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlSetSpecialFlags | shared/driver/KswordArkProcessIoctl.h:679 |
-| IOCTL_KSWORD_ARK_DKOM_PROCESS | 0x825 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlDkomProcess | shared/driver/KswordArkProcessIoctl.h:720 |
-| IOCTL_KSWORD_ARK_INJECT_PROCESS | 0x833 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlInjectProcess | shared/driver/KswordArkProcessIoctl.h:758 |
+| IOCTL_KSWORD_ARK_TERMINATE_PROCESS | 0x801 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlTerminate | shared/driver/KswordArkProcessIoctl.h:57 |
+| IOCTL_KSWORD_ARK_SUSPEND_PROCESS | 0x802 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlSuspend | shared/driver/KswordArkProcessIoctl.h:73 |
+| IOCTL_KSWORD_ARK_SET_PPL_LEVEL | 0x803 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlSetPplLevel | shared/driver/KswordArkProcessIoctl.h:85 |
+| IOCTL_KSWORD_ARK_SET_PROCESS_INTEGRITY | 0x84C | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlSetIntegrity | shared/driver/KswordArkProcessIoctl.h:127 |
+| IOCTL_KSWORD_ARK_PROCESS_TOKEN_PRIVILEGES | 0x855 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlTokenPrivileges | shared/driver/KswordArkProcessIoctl.h:162 |
+| IOCTL_KSWORD_ARK_QUERY_PROCESS_TOKEN_PRIVILEGES | 0x853 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKProcessIoctlQueryTokenPrivileges | shared/driver/KswordArkProcessIoctl.h:169 |
+| IOCTL_KSWORD_ARK_ADJUST_PROCESS_TOKEN_PRIVILEGE | 0x854 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlAdjustTokenPrivilege | shared/driver/KswordArkProcessIoctl.h:176 |
+| IOCTL_KSWORD_ARK_ENUM_PROCESS | 0x805 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKProcessIoctlEnumProcess | shared/driver/KswordArkProcessIoctl.h:298 |
+| IOCTL_KSWORD_ARK_QUERY_PROCESS_CROSSVIEW | 0x836 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKProcessIoctlQueryCrossView | shared/driver/KswordArkProcessIoctl.h:529 |
+| IOCTL_KSWORD_ARK_QUERY_PROCESS_DETAIL | 0x83C | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKProcessIoctlQueryDetail | shared/driver/KswordArkProcessIoctl.h:540 |
+| IOCTL_KSWORD_ARK_QUERY_PROCESS_RUNTIME_FIELDS | 0x83E | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKProcessIoctlQueryRuntimeFields | shared/driver/KswordArkProcessIoctl.h:547 |
+| IOCTL_KSWORD_ARK_SET_PROCESS_VISIBILITY | 0x822 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlSetVisibility | shared/driver/KswordArkProcessIoctl.h:828 |
+| IOCTL_KSWORD_ARK_SET_PROCESS_SPECIAL_FLAGS | 0x824 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlSetSpecialFlags | shared/driver/KswordArkProcessIoctl.h:853 |
+| IOCTL_KSWORD_ARK_DKOM_PROCESS | 0x825 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlDkomProcess | shared/driver/KswordArkProcessIoctl.h:897 |
+| IOCTL_KSWORD_ARK_INJECT_PROCESS | 0x833 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessIoctlInjectProcess | shared/driver/KswordArkProcessIoctl.h:935 |
+| IOCTL_KSWORD_ARK_SET_PROCESS_PROTECT_CONFIG | 0x90C | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKProcessProtectIoctlSetConfigHandler | shared/driver/KswordArkProcessProtectIoctl.h:28 |
+| IOCTL_KSWORD_ARK_QUERY_PROCESS_PROTECT_STATE | 0x90D | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKProcessProtectIoctlQueryStateHandler | shared/driver/KswordArkProcessProtectIoctl.h:35 |
 | IOCTL_KSWORD_ARK_REDIRECT_SET_RULES | 0x827 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKRedirectIoctlSetRules | shared/driver/KswordArkRedirectIoctl.h:18 |
 | IOCTL_KSWORD_ARK_REDIRECT_QUERY_STATUS | 0x828 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKRedirectIoctlQueryStatus | shared/driver/KswordArkRedirectIoctl.h:25 |
-| IOCTL_KSWORD_ARK_READ_REGISTRY_VALUE | 0x823 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKRegistryIoctlReadValue | shared/driver/KswordArkRegistryIoctl.h:23 |
+| IOCTL_KSWORD_ARK_READ_REGISTRY_VALUE | 0x823 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKRegistryIoctlReadValue | shared/driver/KswordArkRegistryIoctl.h:23 |
 | IOCTL_KSWORD_ARK_ENUM_REGISTRY_KEY | 0x840 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKRegistryIoctlEnumKey | shared/driver/KswordArkRegistryIoctl.h:30 |
 | IOCTL_KSWORD_ARK_SET_REGISTRY_VALUE | 0x841 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKRegistryIoctlSetValue | shared/driver/KswordArkRegistryIoctl.h:37 |
 | IOCTL_KSWORD_ARK_DELETE_REGISTRY_VALUE | 0x842 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKRegistryIoctlDeleteValue | shared/driver/KswordArkRegistryIoctl.h:44 |
@@ -187,6 +196,7 @@
 | IOCTL_KSWORD_ARK_DELETE_REGISTRY_KEY | 0x844 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKRegistryIoctlDeleteKey | shared/driver/KswordArkRegistryIoctl.h:58 |
 | IOCTL_KSWORD_ARK_RENAME_REGISTRY_VALUE | 0x845 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKRegistryIoctlRenameValue | shared/driver/KswordArkRegistryIoctl.h:65 |
 | IOCTL_KSWORD_ARK_RENAME_REGISTRY_KEY | 0x846 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKRegistryIoctlRenameKey | shared/driver/KswordArkRegistryIoctl.h:72 |
+| IOCTL_KSWORD_ARK_QUERY_RESEARCH_TOPIC | 0x90E | METHOD_BUFFERED | FILE_READ_ACCESS\|FILE_WRITE_ACCESS | yes | KswordARKResearchIoctlQueryTopic | shared/driver/KswordArkResearchIoctl.h:24 |
 | IOCTL_KSWORD_ARK_RXPF_QUERY_SUPPORT | 0x900 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKRxpfIoctlQuerySupport | shared/driver/KswordArkRxPfIoctl.h:19 |
 | IOCTL_KSWORD_ARK_RXPF_REGISTER_PAGE | 0x901 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKRxpfIoctlRegisterPage | shared/driver/KswordArkRxPfIoctl.h:21 |
 | IOCTL_KSWORD_ARK_RXPF_CHANGE_PAGE | 0x902 | METHOD_BUFFERED | FILE_WRITE_ACCESS | yes | KswordARKRxpfIoctlChangePage | shared/driver/KswordArkRxPfIoctl.h:23 |
@@ -233,6 +243,7 @@
 | IOCTL_KSWORD_ARK_QUERY_WIN32K_WINDOW_DETAIL | 0x895 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKWin32kIoctlQueryWindowDetail | shared/driver/KswordArkWin32kIoctl.h:63 |
 | IOCTL_KSWORD_ARK_QUERY_WIN32K_TIMERS | 0x896 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKWin32kIoctlQueryTimers | shared/driver/KswordArkWin32kIoctl.h:71 |
 | IOCTL_KSWORD_ARK_QUERY_WIN32K_EVENT_HOOKS | 0x897 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKWin32kIoctlQueryEventHooks | shared/driver/KswordArkWin32kIoctl.h:79 |
+| IOCTL_KSWORD_ARK_WINDOW_BAND | 0x898 | METHOD_BUFFERED | FILE_READ_ACCESS\|FILE_WRITE_ACCESS | yes | KswordARKWindowBandIoctl | shared/driver/KswordArkWindowBandIoctl.h:6 |
 | IOCTL_KSWORD_ARK_ENUM_WORK_QUEUE | 0x852 | METHOD_BUFFERED | FILE_READ_ACCESS | yes | KswordARKWorkQueueIoctlEnum | shared/driver/KswordArkWorkQueueIoctl.h:16 |
 | IOCTL_KSWORD_ARK_QUERY_WSL_SILO | 0x818 | METHOD_BUFFERED | FILE_ANY_ACCESS | yes | KswordARKWslSiloIoctlQuery | shared/driver/KswordArkWslSiloIoctl.h:17 |
 
@@ -240,7 +251,12 @@
 
 ```json
 {
-  "allowedAnyAccess": [],
+  "allowedAnyAccess": [
+    "IOCTL_KSWORD_ARK_HWID_DISPATCH_QUERY",
+    "IOCTL_KSWORD_ARK_QUERY_APP_CONTROL_STATUS",
+    "IOCTL_KSWORD_ARK_QUERY_PROCESS_PROTECT_STATE",
+    "IOCTL_KSWORD_ARK_QUERY_UNLOADED_DRIVERS"
+  ],
   "mutatingKeywords": [
     "SET",
     "WRITE",
@@ -276,6 +292,8 @@
   "notes": {
     "purpose": "Policy file for the KswordARKDriver IOCTL static auditor.",
     "allowedAnyAccess": "Add a full IOCTL_KSWORD_ARK_* name here only when FILE_ANY_ACCESS is intentional and documented.",
+    "allowedAnyAccessWhy": "All four are keyword false positives, not exceptions: QUERY_UNLOADED_DRIVERS matches UNLOAD, HWID_DISPATCH_QUERY matches PATCH, QUERY_APP_CONTROL_STATUS matches CONTROL, QUERY_PROCESS_PROTECT_STATE matches PROTECT. Each is a read-only query; requiring FILE_WRITE_ACCESS would break the read path without closing anything. The list exists so the audit can gate the build on HIGH findings - it stays empty of genuine exceptions.",
+    "readPrimitiveGap": "The auditor classifies by mutating/query keyword only, so it does not flag read primitives that are themselves privilege escalation - arbitrary physical or virtual memory reads disclose whatever the caller cannot otherwise see. Those were gated by hand on 2026-09-12 and now show up as query_write_access MEDIUM findings, which is the expected shape rather than a regression.",
     "mutatingKeywords": "Tokens that usually indicate state-changing or destructive operations and should not stay FILE_ANY_ACCESS by default.",
     "queryKeywords": "Tokens that usually indicate read-only/query operations and should not require FILE_WRITE_ACCESS unless there is a documented reason.",
     "ignoredHeaders": "Use repository-relative paths or basenames for protocols owned by a different driver project."
