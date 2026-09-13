@@ -948,19 +948,19 @@ KswordARKHvmNestedProbeExecute(
                          */
                         {
                             int registers[4] = { 0 };
-                            /*
-                             * Re-derive the slot instead of using the one this
-                             * frame captured: the pointer a register held
-                             * belongs to a different point in the function.
-                             */
-                            KSW_HVM_PROBE_SLOT* live =
-                                KswordARKHvmNestedProbeSlot();
 
-                            /* RIP-relative, so nothing inherited can break it. */
+                            /*
+                             * Store then load, with nothing at all in between.
+                             *
+                             * The previous shape had a call and an interlocked
+                             * write between the two, so "the load did not see
+                             * the store" could equally have meant "something
+                             * in between disturbed it".  One RIP-relative
+                             * store and one RIP-relative load, adjacent, is
+                             * the smallest question that still distinguishes
+                             * them.
+                             */
                             g_KswordProbeL2Marker = 1L;
-                            if (live != NULL) {
-                                InterlockedExchange(&live->L2SelfMarker, 1L);
-                            }
                             /*
                              * Ask L2 whether it can see its own store, and
                              * answer through the exit reason.
