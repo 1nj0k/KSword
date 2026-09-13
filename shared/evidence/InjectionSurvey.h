@@ -481,16 +481,29 @@ struct ThreadStartInput final {
 
 // 线程上下文的可信度。微软明确指出：运行中的线程无法通过 GetThreadContext 取得
 // 有效上下文。所以"没挂起也没快照"拿到的上下文只能标成不可信，不得当执行证据。
+//
+// WaitingThreadStable 是第四态，也是本功能实际吃得到的那一态：**不运行的线程，
+// 上下文本来就是稳定的**。微软那句警告针对的是"正在别的核上跑"的线程 —— 它的
+// RIP/RSP 在你读的同时就在变。阻塞在 NtDelayExecution / NtWaitForSingleObject 里
+// 的线程不存在这个问题，读到的就是它真正停着的那一组值。
+//
+// 这一态是整条线的关键：本功能的硬约束是**不挂起目标**，所以 SuspendedOrSnapshot
+// 永远拿不到；而最值得查的 shellcode 形态恰好是"打个盹再醒"的信标，它就停在等待里。
+// 采集侧必须在取上下文**前后各查一次线程状态**，两次都是等待才允许标这一态；
+// 中间被唤醒的话，展开出来的第一个返回地址就不会落在任何模块里，可靠前缀当场
+// 截断——失败方向是"不敢声称可靠"，这是对的那一侧。
 enum class ThreadContextTrust {
     NotCaptured,
     RunningThreadUntrusted,
+    WaitingThreadStable,
     SuspendedOrSnapshot,
 };
 
 const char* ThreadContextTrustName(ThreadContextTrust trust) noexcept;
 
 ThreadContextTrust ClassifyThreadContextTrust(bool captured,
-                                              bool suspendedOrSnapshot) noexcept;
+                                              bool suspendedOrSnapshot,
+                                              bool waitingBeforeAndAfter) noexcept;
 
 bool ContextUsableAsExecutionEvidence(ThreadContextTrust trust) noexcept;
 
@@ -506,6 +519,44 @@ const char* StackEvidenceKindName(StackEvidenceKind kind) noexcept;
 
 // 只有可靠展开的帧才算执行证据。
 bool StackEvidenceCountsAsExecution(StackEvidenceKind kind) noexcept;
+
+// 采集侧交上来的一个原始栈帧。**采集侧不判可靠性**，它只回答两件事实：
+// 展开到了哪儿，以及**上一帧的 PC 有没有落在一个能查到 RUNTIME_FUNCTION 的函数里**。
+// 后者是判可靠性的全部依据，理由见 AdmitStackFrames。
+struct RawStackFrame final {
+    OptionalU64 instructionPointer;
+    OptionalU64 stackPointer;
+    // 本帧是由**上一帧的展开数据**算出来的（而不是扫栈猜的）。
+    // 栈顶帧直接来自线程上下文，它恒为 true（没有"上一帧"要展开）。
+    bool derivedFromUnwindData = false;
+    // 本帧的 PC 自身能不能查到展开数据。它决定的是**下一帧**可不可靠，不是本帧。
+    bool unwindDataAvailableAtPc = false;
+};
+
+// 一个线程的栈采集结果。
+struct ThreadStackInput final {
+    ThreadInstanceId thread;
+    ThreadContextTrust trust = ThreadContextTrust::NotCaptured;
+    CollectionOutcome outcome;
+    // 由栈顶向下排列。
+    std::vector<RawStackFrame> frames;
+    // 展开在中途停下的原因（读栈失败、超过帧数上限……），空表示走到了栈底。
+    std::string terminationReason;
+};
+
+// 判可靠性的唯一入口。返回**可靠前缀的长度**：从栈顶起，连续满足
+// "由展开数据算出" 的帧数。
+//
+// 为什么是前缀而不是逐帧判：x64 没有帧指针链，一旦某一帧的 PC 查不到
+// RUNTIME_FUNCTION（shellcode 正是如此），再往下走就只能靠扫栈猜，猜出来的
+// "返回地址"里混着大量早已过期的陈旧值。所以可靠性一旦断了就不会再接上。
+//
+// 注意这条规则**恰好**把 shellcode 帧本身算进可靠前缀：它是从有展开数据的调用者
+// （KERNELBASE 之类）算出来的，所以它可靠；不可靠的是它下面那些。这正是要的语义。
+//
+// trust 不够时一律返回 0 —— 上下文本身就不可信的话，从它展开出来的东西再"可靠"
+// 也没有意义。
+std::size_t AdmitStackFrames(const ThreadStackInput& stack) noexcept;
 
 struct ThreadStartFinding final {
     ThreadInstanceId thread;
@@ -958,6 +1009,9 @@ extern const char* const kGapModuleEnumerationWow64;   // inject.gap.module-enum
 extern const char* const kGapMainImageSourceMissing;   // inject.gap.main-image-source
 extern const char* const kGapKernelBackendUnavailable; // inject.gap.kernel-backend
 extern const char* const kGapKernelProfileUnverified;  // inject.gap.kernel-profile
+// 做了栈回溯，但一个线程的上下文都不够可信（全都在跑）。这是"打算查没查成"，
+// 不是"本版本不做"—— 后者是 kLimitStackUnwindUnavailable，两者不能混。
+extern const char* const kGapStackWalkUntrusted;       // inject.gap.stack-untrusted
 
 // ---------------------------------------------------------------------------
 // 能力限制键：与覆盖缺口是**两类东西**，不能混在一张表里
@@ -1056,8 +1110,12 @@ struct SurveyInput final {
     KernelBackendState kernelVadState = KernelBackendState::NotRequested;
     KernelBackendState kernelPteState = KernelBackendState::NotRequested;
 
-    // 可靠展开的栈帧是否可用。深度模式没有它就留缺口，而不是当成"线程都正常"。
-    bool reliableStackWalkAvailable = false;
+    // 各线程的栈采集结果。空表示这一轮根本没做栈回溯（能力限制，不是缺口）。
+    //
+    // 这里**没有** reliableStackWalkAvailable 这样一个布尔开关，是刻意的：
+    // "可靠展开可用"是抬结论的三道闸门之一，做成可直接赋值的字段，就等于给了
+    // 一个绕过 AdmitStackFrames 的后门。它只能由本 vector 的内容推出来。
+    std::vector<ThreadStackInput> threadStacks;
     // 深度模式是否扫了非可执行内存。载荷休眠时可以不保持执行权限，
     // 所以"只看当前带执行权限的页"在深度模式下是一个必须显式记录的缺口。
     bool nonExecutableMemoryScanned = false;
@@ -1098,6 +1156,15 @@ struct SurveyReport final {
     // 自洽载荷结构 **且** 有可靠展开的帧进入其中。只有它能和"归一化差异""交叉视图
     // 矛盾"一起撑起 DifferenceObserved；光有结构不行。
     std::size_t payloadWithExecutionCount = 0;
+
+    // 栈回溯的账。三个数分开记，因为它们各自回答不同的问题：
+    //   walked   —— 尝试展开过几个线程（0 表示这一轮根本没做）
+    //   trusted  —— 其中几个的上下文可信、且真的产出了可靠前缀
+    //   frames   —— 可靠前缀里一共几帧（去重前）
+    // "walked 大而 trusted 为 0"是缺口，不是"线程都正常"。
+    std::size_t stackThreadsWalked = 0;
+    std::size_t stackThreadsTrusted = 0;
+    std::size_t stackReliableFrameCount = 0;
 
     CoverageAccount coverage;
     AnalysisConclusion conclusion = AnalysisConclusion::NoEvidence;

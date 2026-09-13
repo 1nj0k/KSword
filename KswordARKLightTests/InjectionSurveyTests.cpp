@@ -112,6 +112,15 @@ bool HasRule(const std::vector<InjectionFinding>& findings, const char* ruleId) 
                        });
 }
 
+const InjectionFinding* FindRule(const std::vector<InjectionFinding>& findings,
+                                 const char* const ruleId) {
+    const auto hit = std::find_if(findings.begin(), findings.end(),
+                                  [ruleId](const InjectionFinding& finding) {
+                                      return finding.ruleId == ruleId;
+                                  });
+    return hit == findings.end() ? nullptr : &*hit;
+}
+
 std::size_t CountIssue(const ModuleCrossViewReport& report, const ModuleCrossIssue issue) {
     return static_cast<std::size_t>(
         std::count_if(report.findings.begin(), report.findings.end(),
@@ -823,19 +832,33 @@ void TestThreadStarts(KswordTests::Suite& suite) {
                  L"J-04 代码布局未知单独成态");
 
     // 线程上下文可信度。
-    suite.expect(ClassifyThreadContextTrust(false, false) == ThreadContextTrust::NotCaptured,
+    suite.expect(ClassifyThreadContextTrust(false, false, false) == ThreadContextTrust::NotCaptured,
                  L"J-04 未取上下文");
-    suite.expect(ClassifyThreadContextTrust(true, false) ==
+    suite.expect(ClassifyThreadContextTrust(true, false, false) ==
                      ThreadContextTrust::RunningThreadUntrusted,
                  L"J-04 运行中线程上下文不可信");
-    suite.expect(ClassifyThreadContextTrust(true, true) == ThreadContextTrust::SuspendedOrSnapshot,
+    suite.expect(ClassifyThreadContextTrust(true, true, false) ==
+                     ThreadContextTrust::SuspendedOrSnapshot,
                  L"J-04 挂起/快照上下文可用");
+    // 不挂起也没快照，但前后两次查都在等待 —— 这是本功能实际吃得到的那一态。
+    suite.expect(ClassifyThreadContextTrust(true, false, true) ==
+                     ThreadContextTrust::WaitingThreadStable,
+                 L"J-04 等待中线程上下文稳定");
+    // 挂起优先于"两次都在等待"：它不依赖"采集期间状态没变过"这个前提。
+    suite.expect(ClassifyThreadContextTrust(true, true, true) ==
+                     ThreadContextTrust::SuspendedOrSnapshot,
+                 L"J-04 挂起优先于等待态");
+    // 没取到上下文的话，线程在不在等待都无关紧要。
+    suite.expect(ClassifyThreadContextTrust(false, true, true) == ThreadContextTrust::NotCaptured,
+                 L"J-04 没取到就是没取到");
     suite.expect(!ContextUsableAsExecutionEvidence(ThreadContextTrust::RunningThreadUntrusted),
                  L"J-04 运行中上下文不得当执行证据");
     suite.expect(!ContextUsableAsExecutionEvidence(ThreadContextTrust::NotCaptured),
                  L"J-04 未取上下文不得当执行证据");
     suite.expect(ContextUsableAsExecutionEvidence(ThreadContextTrust::SuspendedOrSnapshot),
                  L"J-04 快照上下文可当执行证据");
+    suite.expect(ContextUsableAsExecutionEvidence(ThreadContextTrust::WaitingThreadStable),
+                 L"J-04 等待中上下文可当执行证据");
 
     // 栈证据三档分离。
     suite.expect(StackEvidenceCountsAsExecution(StackEvidenceKind::ReliableUnwoundFrame),
@@ -957,6 +980,27 @@ void TestComparisonPlan(KswordTests::Suite& suite) {
 // J-06：R0 扫描后端的交叉视图
 // ---------------------------------------------------------------------------
 SurveyInput MakeCleanInput();  // 定义在下面的"总入口"一节
+
+// 造一个"可信上下文 + 全部由展开数据算出"的栈。frameIps 按栈顶到栈底排列。
+// lastFrameHasUnwindData 决定最后一帧的 PC 自身有没有展开数据 —— 它只影响
+// **再下一帧**可不可靠，对给定的这几帧没有影响。
+ThreadStackInput MakeTrustedStack(const std::uint64_t tid,
+                                  const std::vector<std::uint64_t>& frameIps,
+                                  const bool lastFrameHasUnwindData = true) {
+    ThreadStackInput stack;
+    stack.thread.tid = OptionalU64::of(tid);
+    stack.trust = ThreadContextTrust::WaitingThreadStable;
+    for (std::size_t index = 0U; index < frameIps.size(); ++index) {
+        RawStackFrame frame;
+        frame.instructionPointer = OptionalU64::of(frameIps[index]);
+        frame.stackPointer = OptionalU64::of(0x9000000ULL + index * 0x100ULL);
+        frame.derivedFromUnwindData = true;
+        frame.unwindDataAvailableAtPc =
+            (index + 1U == frameIps.size()) ? lastFrameHasUnwindData : true;
+        stack.frames.push_back(frame);
+    }
+    return stack;
+}
 
 void TestKernelCrossView(KswordTests::Suite& suite) {
     // 资格判据先钉死。
@@ -1929,7 +1973,7 @@ void TestSurveyPipeline(KswordTests::Suite& suite) {
 
     SurveyInput deepFull = MakeCleanInput();
     deepFull.mode = SurveyMode::Deep;
-    deepFull.reliableStackWalkAvailable = true;
+    deepFull.threadStacks = { MakeTrustedStack(100U, { 0x7FF800001000ULL }) };
     deepFull.nonExecutableMemoryScanned = true;
     const SurveyReport deepFullReport = RunInjectionSurvey(deepFull);
     suite.expect(!deepFullReport.hasLimit(kLimitStackUnwindUnavailable),
@@ -2036,8 +2080,11 @@ void TestSurveyPipeline(KswordTests::Suite& suite) {
                  L"总入口 载荷结构并进区域证据");
 
     // 光有"栈回溯能力可用"不够：必须**这块内存确实被可靠帧进入**。
+    // 这个栈是可信的、帧也都可靠，但落点全在 0x600000 那块之外。
     SurveyInput payloadWalkOnly = payload;
-    payloadWalkOnly.reliableStackWalkAvailable = true;
+    payloadWalkOnly.threadStacks = {
+        MakeTrustedStack(201U, { 0x7FF800001000ULL, 0x7FF800002000ULL })
+    };
     const SurveyReport payloadWalkOnlyReport = RunInjectionSurvey(payloadWalkOnly);
     suite.expect(!payloadWalkOnlyReport.hasObservation(
                      ObservationClass::PayloadStructureWithReliableFrame),
@@ -2047,9 +2094,14 @@ void TestSurveyPipeline(KswordTests::Suite& suite) {
     suite.expect(payloadWalkOnlyReport.conclusion != AnalysisConclusion::DifferenceObserved,
                  L"总入口 无帧进入不升到观测到差异");
 
+    // 睡着的信标就是这个形状：栈顶两帧在 ntdll/kernelbase，第三帧落进 0x600000 那块
+    // 非映像内存里。第三帧是**从有展开数据的调用者算出来的**，所以它进可靠前缀。
     SurveyInput payloadWithFrame = payload;
-    payloadWithFrame.reliableStackWalkAvailable = true;
-    payloadWithFrame.payloadCandidates[0].reliableFrameEntersRegion = true;
+    payloadWithFrame.threadStacks = {
+        MakeTrustedStack(202U,
+                         { 0x7FF800001000ULL, 0x7FF800002000ULL, 0x600100ULL },
+                         /*lastFrameHasUnwindData=*/false)
+    };
     const SurveyReport payloadFrameReport = RunInjectionSurvey(payloadWithFrame);
     suite.expect(payloadFrameReport.hasObservation(
                      ObservationClass::PayloadStructureWithReliableFrame),
@@ -2063,9 +2115,11 @@ void TestSurveyPipeline(KswordTests::Suite& suite) {
     SurveyInput dataPeWithFrame = MakeCleanInput();
     PayloadCandidateEntry dataOnlyFramed = erased;
     dataOnlyFramed.structure = PayloadStructure::DataOnlyPeFile;
-    dataOnlyFramed.reliableFrameEntersRegion = true;
     dataPeWithFrame.payloadCandidates = { dataOnlyFramed };
-    dataPeWithFrame.reliableStackWalkAvailable = true;
+    dataPeWithFrame.threadStacks = {
+        MakeTrustedStack(203U, { 0x7FF800001000ULL, 0x600100ULL },
+                         /*lastFrameHasUnwindData=*/false)
+    };
     const SurveyReport dataPeFramedReport = RunInjectionSurvey(dataPeWithFrame);
     suite.expect(dataPeFramedReport.payloadWithExecutionCount == 0U,
                  L"总入口 数据中的 PE 即使有帧也不升格");
@@ -2075,7 +2129,7 @@ void TestSurveyPipeline(KswordTests::Suite& suite) {
     PayloadCandidateEntry dataOnly = erased;
     dataOnly.structure = PayloadStructure::DataOnlyPeFile;
     dataPe.payloadCandidates = { dataOnly };
-    dataPe.reliableStackWalkAvailable = true;
+    dataPe.threadStacks = { MakeTrustedStack(204U, { 0x7FF800001000ULL }) };
     const SurveyReport dataPeReport = RunInjectionSurvey(dataPe);
     suite.expect(!dataPeReport.hasObservation(
                      ObservationClass::PayloadStructureWithReliableFrame),
@@ -2094,6 +2148,134 @@ void TestSurveyPipeline(KswordTests::Suite& suite) {
                            std::string(kCheckPayloadStructure)) !=
                      notExaminedReport.notPerformedCheckKeys.end(),
                  L"总入口 未检查候选登记为未执行");
+
+    // --- 栈回溯：可靠前缀 ---
+    // AdmitStackFrames 单独测一遍，再测它经过总入口的效果。
+    {
+        // 不可信上下文：整条链作废，不是"降级成启发式"。
+        ThreadStackInput running = MakeTrustedStack(300U, { 0x7FF800001000ULL, 0x600100ULL });
+        running.trust = ThreadContextTrust::RunningThreadUntrusted;
+        suite.expect(AdmitStackFrames(running) == 0U, L"栈 运行中线程的上下文整条作废");
+
+        ThreadStackInput notCaptured = MakeTrustedStack(301U, { 0x7FF800001000ULL });
+        notCaptured.trust = ThreadContextTrust::NotCaptured;
+        suite.expect(AdmitStackFrames(notCaptured) == 0U, L"栈 没取到上下文不产生可靠帧");
+
+        // 挂起/快照与"两次都在等待"都算可信。
+        ThreadStackInput suspended = MakeTrustedStack(302U, { 0x7FF800001000ULL });
+        suspended.trust = ThreadContextTrust::SuspendedOrSnapshot;
+        suite.expect(AdmitStackFrames(suspended) == 1U, L"栈 挂起/快照可信");
+        suite.expect(AdmitStackFrames(MakeTrustedStack(303U, { 0x7FF800001000ULL })) == 1U,
+                     L"栈 等待中线程可信");
+
+        // 可靠前缀在"本帧 PC 查不到展开数据"处**收下本帧后**截断。
+        // 这正是 shellcode 帧的位置：它由调用者算出来，所以它算数；它下面的不算。
+        ThreadStackInput beacon = MakeTrustedStack(
+            304U, { 0x7FF800001000ULL, 0x7FF800002000ULL, 0x600100ULL });
+        beacon.frames[2].unwindDataAvailableAtPc = false;
+        beacon.frames.push_back(RawStackFrame{ OptionalU64::of(0x7FF800009000ULL),
+                                               OptionalU64::of(0x9000400ULL), false, true });
+        suite.expect(AdmitStackFrames(beacon) == 3U, L"栈 载荷帧进可靠前缀而其后的不进");
+
+        // 缺 PC 的帧直接截断：没有落点的帧无法参与任何判定。
+        ThreadStackInput missingPc = MakeTrustedStack(305U, { 0x7FF800001000ULL, 0x600100ULL });
+        missingPc.frames[1].instructionPointer = OptionalU64{};
+        suite.expect(AdmitStackFrames(missingPc) == 1U, L"栈 无落点的帧截断可靠前缀");
+
+        // 猜出来的帧不进可靠前缀，哪怕它自己有展开数据。
+        ThreadStackInput guessed = MakeTrustedStack(306U, { 0x7FF800001000ULL, 0x600100ULL });
+        guessed.frames[1].derivedFromUnwindData = false;
+        suite.expect(AdmitStackFrames(guessed) == 1U, L"栈 扫栈猜出的帧不进可靠前缀");
+    }
+
+    // 走了栈但一个可信上下文都没拿到 —— 是缺口，不是能力限制。两者混同会让
+    // "这次没查成"被说成"本版本不做"。
+    SurveyInput allRunning = MakeCleanInput();
+    allRunning.mode = SurveyMode::Deep;
+    allRunning.nonExecutableMemoryScanned = true;
+    ThreadStackInput runningStack = MakeTrustedStack(310U, { 0x7FF800001000ULL });
+    runningStack.trust = ThreadContextTrust::RunningThreadUntrusted;
+    allRunning.threadStacks = { runningStack };
+    const SurveyReport allRunningReport = RunInjectionSurvey(allRunning);
+    suite.expect(allRunningReport.hasGap(kGapStackWalkUntrusted),
+                 L"栈 全在跑记成缺口");
+    suite.expect(!allRunningReport.hasLimit(kLimitStackUnwindUnavailable),
+                 L"栈 做过就不再记能力限制");
+    suite.expect(allRunningReport.stackThreadsWalked == 1U, L"栈 走过的线程计数");
+    suite.expect(allRunningReport.stackThreadsTrusted == 0U, L"栈 可信线程计数为零");
+    suite.expect(allRunningReport.conclusion != AnalysisConclusion::NoDifferenceObserved,
+                 L"栈 缺口压制干净结论");
+
+    // 一个线程都没走过：那才是能力限制。
+    SurveyInput noStacks = MakeCleanInput();
+    noStacks.mode = SurveyMode::Deep;
+    noStacks.nonExecutableMemoryScanned = true;
+    const SurveyReport noStacksReport = RunInjectionSurvey(noStacks);
+    suite.expect(noStacksReport.hasLimit(kLimitStackUnwindUnavailable),
+                 L"栈 没做记能力限制");
+    suite.expect(!noStacksReport.hasGap(kGapStackWalkUntrusted), L"栈 没做不记缺口");
+    suite.expect(noStacksReport.conclusion == AnalysisConclusion::NoDifferenceObserved,
+                 L"栈 能力限制不压制干净结论");
+
+    // 账目：可靠帧计数与线程回源。
+    SurveyInput beaconSurvey = MakeCleanInput();
+    PayloadCandidateEntry beaconPayload;
+    beaconPayload.base = OptionalU64::of(0x600000U);
+    beaconPayload.size = OptionalU64::of(0x3000U);
+    beaconPayload.type = RegionType::Private;
+    beaconPayload.structure = PayloadStructure::HeaderErasedPe;
+    beaconPayload.outcome = CollectionOutcome::success();
+    beaconSurvey.payloadCandidates = { beaconPayload };
+    beaconSurvey.threadStacks = {
+        MakeTrustedStack(311U, { 0x7FF800001000ULL, 0x7FF800002000ULL, 0x600100ULL },
+                         /*lastFrameHasUnwindData=*/false)
+    };
+    const SurveyReport beaconReport = RunInjectionSurvey(beaconSurvey);
+    suite.expect(beaconReport.stackThreadsTrusted == 1U, L"栈 可信线程计数");
+    suite.expect(beaconReport.stackReliableFrameCount == 3U, L"栈 可靠帧计数");
+    suite.expect(beaconReport.payloadWithExecutionCount == 1U, L"栈 落点自动判出执行关联");
+    suite.expect(beaconReport.conclusion == AnalysisConclusion::DifferenceObserved,
+                 L"栈 落点升到观测到差异");
+    {
+        const InjectionFinding* const hit =
+            FindRule(beaconReport.findings, kRuleIdPayloadStructure);
+        suite.expect(hit != nullptr, L"栈 载荷条目存在");
+        if (hit != nullptr) {
+            suite.expect(hit->confidence == EvidenceConfidence::CorroboratedIndependent,
+                         L"栈 结构与执行两个来源互证");
+            suite.expect(!hit->relatedThreads.empty() &&
+                             hit->relatedThreads.front().tid.valueOr(0U) == 311ULL,
+                         L"栈 落点回源到具体线程");
+            suite.expect(std::any_of(hit->facts.begin(), hit->facts.end(),
+                                     [](const std::string& fact) {
+                                         return fact == "stack.frame.depth=2";
+                                     }),
+                         L"栈 落点记录栈深度");
+        }
+    }
+
+    // 落点在载荷范围外一个字节：不算进入。
+    SurveyInput justOutside = beaconSurvey;
+    justOutside.threadStacks = {
+        MakeTrustedStack(312U, { 0x7FF800001000ULL, 0x603000ULL },
+                         /*lastFrameHasUnwindData=*/false)
+    };
+    const SurveyReport justOutsideReport = RunInjectionSurvey(justOutside);
+    suite.expect(justOutsideReport.payloadWithExecutionCount == 0U,
+                 L"栈 范围外一字节不算进入");
+
+    // 不可靠的那一段里出现落点：不算数。把 shellcode 帧标成猜出来的，
+    // 它就不该再撑起执行关联。
+    SurveyInput guessedHit = beaconSurvey;
+    ThreadStackInput guessedStack =
+        MakeTrustedStack(313U, { 0x7FF800001000ULL, 0x600100ULL });
+    guessedStack.frames[1].derivedFromUnwindData = false;
+    guessedHit.threadStacks = { guessedStack };
+    const SurveyReport guessedHitReport = RunInjectionSurvey(guessedHit);
+    suite.expect(guessedHitReport.payloadWithExecutionCount == 0U,
+                 L"栈 猜出来的落点不撑执行关联");
+    suite.expect(guessedHitReport.conclusion != AnalysisConclusion::DifferenceObserved,
+                 L"栈 猜出来的落点不升结论");
 
     // --- WOW64 采集器缺口透传 ---
     SurveyInput wow = MakeCleanInput();

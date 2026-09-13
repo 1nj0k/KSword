@@ -894,22 +894,30 @@ const char* ThreadContextTrustName(const ThreadContextTrust trust) noexcept {
     switch (trust) {
     case ThreadContextTrust::NotCaptured: return "NotCaptured";
     case ThreadContextTrust::RunningThreadUntrusted: return "RunningThreadUntrusted";
+    case ThreadContextTrust::WaitingThreadStable: return "WaitingThreadStable";
     case ThreadContextTrust::SuspendedOrSnapshot: return "SuspendedOrSnapshot";
     }
     return "NotCaptured";
 }
 
 ThreadContextTrust ClassifyThreadContextTrust(const bool captured,
-                                              const bool suspendedOrSnapshot) noexcept {
+                                              const bool suspendedOrSnapshot,
+                                              const bool waitingBeforeAndAfter) noexcept {
     if (!captured) {
         return ThreadContextTrust::NotCaptured;
     }
-    return suspendedOrSnapshot ? ThreadContextTrust::SuspendedOrSnapshot
-                               : ThreadContextTrust::RunningThreadUntrusted;
+    if (suspendedOrSnapshot) {
+        return ThreadContextTrust::SuspendedOrSnapshot;
+    }
+    // 顺序有讲究：挂起/快照优先于"两次都在等待"。两个条件同时成立时前者更强，
+    // 而且它不依赖"采集期间状态没变过"这个前提。
+    return waitingBeforeAndAfter ? ThreadContextTrust::WaitingThreadStable
+                                 : ThreadContextTrust::RunningThreadUntrusted;
 }
 
 bool ContextUsableAsExecutionEvidence(const ThreadContextTrust trust) noexcept {
-    return trust == ThreadContextTrust::SuspendedOrSnapshot;
+    return trust == ThreadContextTrust::SuspendedOrSnapshot ||
+           trust == ThreadContextTrust::WaitingThreadStable;
 }
 
 const char* StackEvidenceKindName(const StackEvidenceKind kind) noexcept {
@@ -924,6 +932,28 @@ const char* StackEvidenceKindName(const StackEvidenceKind kind) noexcept {
 
 bool StackEvidenceCountsAsExecution(const StackEvidenceKind kind) noexcept {
     return kind == StackEvidenceKind::ReliableUnwoundFrame;
+}
+
+std::size_t AdmitStackFrames(const ThreadStackInput& stack) noexcept {
+    if (!ContextUsableAsExecutionEvidence(stack.trust)) {
+        // 上下文本身不可信，从它展开出来的一切都不算数。不是"降级成启发式"，
+        // 是整条链作废：起点错了，后面每一步都在错的栈上走。
+        return 0U;
+    }
+    std::size_t admitted = 0U;
+    for (const RawStackFrame& frame : stack.frames) {
+        if (!frame.derivedFromUnwindData || !frame.instructionPointer.present) {
+            break;
+        }
+        ++admitted;
+        if (!frame.unwindDataAvailableAtPc) {
+            // 本帧的 PC 查不到展开数据 —— 它自己仍然是可靠的（由上一帧算出来的），
+            // 但**下一帧**只能靠扫栈猜。可靠前缀到此为止。
+            // shellcode 帧正是走这一支：它被收进来，它下面的被切掉。
+            break;
+        }
+    }
+    return admitted;
 }
 
 namespace {
@@ -1674,6 +1704,7 @@ const char* const kGapModuleEnumerationWow64 = "inject.gap.module-enum-wow64";
 const char* const kGapMainImageSourceMissing = "inject.gap.main-image-source";
 const char* const kGapKernelBackendUnavailable = "inject.gap.kernel-backend";
 const char* const kGapKernelProfileUnverified = "inject.gap.kernel-profile";
+const char* const kGapStackWalkUntrusted = "inject.gap.stack-untrusted";
 const char* const kLimitNonExecutableNotScanned = "inject.limit.non-executable";
 const char* const kLimitStackUnwindUnavailable = "inject.limit.stack-unwind";
 const char* const kLimitPayloadHeaderErased = "inject.limit.payload-erased-header";
@@ -2113,6 +2144,43 @@ SurveyReport RunInjectionSurvey(const SurveyInput& input) {
         AddObservation(report, ObservationClass::NormalizedImageDiffers);
     }
 
+    // --- 栈回溯：算出可靠前缀里各帧的落点 ---
+    // 采集侧只交原始帧和"上一帧有没有展开数据"这两项事实，可靠性判定全在这里，
+    // 因为这一层有离线测试而采集侧没有。
+    struct ReliableFrameHit final {
+        std::uint64_t instructionPointer = 0U;
+        ThreadInstanceId thread;
+        std::size_t depth = 0U;
+    };
+    std::vector<ReliableFrameHit> reliableFrames;
+    for (const ThreadStackInput& stack : input.threadStacks) {
+        ++report.stackThreadsWalked;
+        const std::size_t admitted = AdmitStackFrames(stack);
+        if (admitted == 0U) {
+            continue;
+        }
+        ++report.stackThreadsTrusted;
+        for (std::size_t depth = 0U; depth < admitted; ++depth) {
+            const RawStackFrame& frame = stack.frames[depth];
+            if (!frame.instructionPointer.present) {
+                continue;
+            }
+            ++report.stackReliableFrameCount;
+            ReliableFrameHit hit;
+            hit.instructionPointer = frame.instructionPointer.value;
+            hit.thread = stack.thread;
+            hit.depth = depth;
+            reliableFrames.push_back(std::move(hit));
+        }
+    }
+    // 这一位由实际产出重算，不采信调用方填的值 —— 否则"能力可用"会变成一个
+    // 可以被随手置真的开关，而它是抬结论的三道闸门之一。
+    const bool stackWalkAvailable = report.stackThreadsTrusted != 0U;
+    if (report.stackThreadsWalked != 0U && report.stackThreadsTrusted == 0U) {
+        // 做了，但一个可信上下文都没拿到。是缺口，不是能力限制。
+        AddUnique(report.coverageGapKeys, kGapStackWalkUntrusted);
+    }
+
     // --- 非映像载荷结构 ---
     bool payloadExamined = false;
     for (const PayloadCandidateEntry& payload : input.payloadCandidates) {
@@ -2128,10 +2196,13 @@ SurveyReport RunInjectionSurvey(const SurveyInput& input) {
         }
 
         // 这块内存已经作为动态代码区域报过了：把结构事实并进那一条，不再单独成行。
+        // 记下落在哪一条上，下面"可靠帧进入"要往同一条里加线程与栈深。
+        std::size_t payloadFindingIndex = report.findings.size();
         const auto existing = payload.base.present
                                   ? dynamicFindingByBase.find(payload.base.value)
                                   : dynamicFindingByBase.end();
         if (existing != dynamicFindingByBase.end() && existing->second < report.findings.size()) {
+            payloadFindingIndex = existing->second;
             InjectionFinding& target = report.findings[existing->second];
             AddFact(target.facts, "payload.structure", PayloadStructureName(payload.structure));
             for (const std::string& fact : payload.structureFacts) {
@@ -2151,13 +2222,40 @@ SurveyReport RunInjectionSurvey(const SurveyInput& input) {
             report.findings.push_back(std::move(finding));
         }
 
+        // 可靠帧有没有落进这块内存。调用方（或测试）已经算出来的话就认，
+        // 否则用上面刚算出的可靠前缀自己判一次。
+        bool frameEnters = payload.reliableFrameEntersRegion;
+        const ReliableFrameHit* enteringFrame = nullptr;
+        if (payload.base.present && payload.size.present && payload.size.value != 0U) {
+            for (const ReliableFrameHit& hit : reliableFrames) {
+                // 相减而不是相加：base + size 在畸形输入下会绕回。
+                if (hit.instructionPointer >= payload.base.value &&
+                    hit.instructionPointer - payload.base.value < payload.size.value) {
+                    frameEnters = true;
+                    enteringFrame = &hit;
+                    break;
+                }
+            }
+        }
+
         // "自洽载荷结构 + 可靠栈帧进入其中"才是那条更强的观测。三个条件缺一不可：
         // 栈回溯能力可用、这块内存**确实**被可靠帧进入、结构不是"数据里的一个 PE 文件"
         // （缓冲区里躺着一个 PE，与这个 PE 已经被加载执行，是两件事）。
-        if (input.reliableStackWalkAvailable && payload.reliableFrameEntersRegion &&
+        if (stackWalkAvailable && frameEnters &&
             payload.structure != PayloadStructure::DataOnlyPeFile) {
             AddObservation(report, ObservationClass::PayloadStructureWithReliableFrame);
             ++report.payloadWithExecutionCount;
+            if (enteringFrame != nullptr && payloadFindingIndex < report.findings.size()) {
+                // 落点要能回源到具体线程和栈深度，否则"有可靠帧进入"没法复核。
+                InjectionFinding& target = report.findings[payloadFindingIndex];
+                AddFact(target.facts, "stack.frame.pc", HexText(enteringFrame->instructionPointer));
+                AddFact(target.facts, "stack.frame.depth", DecText(enteringFrame->depth));
+                AddFact(target.facts, "stack.frame.tid",
+                        DecText(enteringFrame->thread.tid.valueOr(0U)));
+                target.relatedThreads.push_back(enteringFrame->thread);
+                // 内存结构与线程执行是两个独立来源，凑到一起才够 CorroboratedIndependent。
+                target.confidence = EvidenceConfidence::CorroboratedIndependent;
+            }
         }
     }
     if (payloadExamined) {
@@ -2227,8 +2325,12 @@ SurveyReport RunInjectionSurvey(const SurveyInput& input) {
 
     // --- 深度模式的两项额外要求 ---
     if (input.mode == SurveyMode::Deep) {
-        if (input.reliableStackWalkAvailable) {
+        if (stackWalkAvailable) {
             AddUnique(report.completedCheckKeys, kCheckReliableStackWalk);
+        } else if (report.stackThreadsWalked != 0U) {
+            // 做了但没拿到可信上下文：缺口已经在上面记过，这里只记"没做成"，
+            // **不**再记能力限制 —— 那会把"这次没查成"说成"本版本不做"。
+            AddUnique(report.notPerformedCheckKeys, kCheckReliableStackWalk);
         } else {
             AddUnique(report.notPerformedCheckKeys, kCheckReliableStackWalk);
             AddUnique(report.capabilityLimitKeys, kLimitStackUnwindUnavailable);
