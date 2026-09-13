@@ -89,6 +89,10 @@ Environment:
  * fails VM entry with nothing but an error number to explain it.
  */
 #define KSW_L2_SECONDARY_UNRESTRICTED_GUEST 0x00000080UL
+/* Name the primary control that makes CR8 read and write a guest page. */
+#define KSW_L2_PRIMARY_USE_TPR_SHADOW 0x00200000UL
+/* Name the vmcs field holding the page that control points at. */
+#define KSW_L2_VIRTUAL_APIC_ADDRESS 0x2012UL
 /* Name the primary control that activates the secondary controls. */
 #define KSW_L2_PRIMARY_ACTIVATE_SECONDARY 0x80000000UL
 
@@ -142,8 +146,22 @@ static const ULONG g_KswordL2CopiedControlFields[] = {
     0x4004UL, 0x4006UL, 0x4008UL,
     /* Event injection. */
     0x4016UL, 0x4018UL, 0x401AUL,
-    /* TPR threshold. */
-    0x401CUL,
+    /*
+     * TPR shadow: the threshold and the page it is compared against.
+     *
+     * These two must travel together.  The threshold was copied here long
+     * before the address was, which was harmless only because the control that
+     * consumes them was never advertised - the moment "use TPR shadow" became
+     * advertisable, a copied threshold with an uncopied address would have sent
+     * the processor to read a virtual-APIC page at physical zero.  That is the
+     * same split that once made USE_MSR_BITMAPS live with no bitmap address,
+     * and it is invisible from every status bit.
+     *
+     * The address is one of L1's guest-physical addresses and goes into vmcs02
+     * unchanged, which is sound for the same reason the MSR-area addresses
+     * above it are: our EPT identity-maps RAM.
+     */
+    0x401CUL, 0x2012UL,
     /* TSC offset. */
     0x2010UL,
     /* Control-register masks and read shadows. */
@@ -335,6 +353,28 @@ KswordARKHvmNestedL2Enter(
          * to point the control at.
          */
         return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
+    }
+    /*
+     * The same rule for the virtual-APIC page.
+     *
+     * Only L1 can turn this control on - we never request it for ourselves -
+     * so the address is entirely L1's to supply, and a zero or misaligned one
+     * would have the processor treat physical page zero as a virtual APIC.
+     * The architecture would fail the entry for the alignment on its own, but
+     * it reports that as a bare error number against L1's launch; refusing here
+     * says which field, in a place that has not yet touched vmcs02.
+     */
+    if ((primary & KSW_L2_PRIMARY_USE_TPR_SHADOW) != 0UL) {
+        ULONGLONG virtualApic = 0ULL;
+
+        (void)KswordARKHvmNestedVmcs12Read(
+            vmcs12,
+            KSW_L2_VIRTUAL_APIC_ADDRESS,
+            &virtualApic);
+        if (virtualApic == 0ULL || (virtualApic & 0xFFFULL) != 0ULL) {
+            /* Return the exact unusable-virtual-APIC-page error. */
+            return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
+        }
     }
     /* Capture our host state while vmcs01 is still the loaded VMCS. */
     for (index = 0UL;

@@ -500,8 +500,13 @@ KswordArkHvmIsVmxCapabilityMsr(
  * primary processor-based 控制里允许宣告的位。
  *
  * 清掉的几个都是"要一个配套地址字段而我们不写"的：
- *   bit 21 use TPR shadow  -> 0x2012 virtual-APIC 页
  *   bit 27 monitor trap flag -> 我们没为 L2 实现 MTF
+ *
+ * bit 21（use TPR shadow）曾在这一行里，理由正是"要 0x2012 而我们不写"。现在写了：
+ * 0x2012 与 0x401C 一起进了 hvm_nested_l2.c 的被拷控制字段表，进入前还会校验这一页
+ * 的地址非零且页对齐。加它是因为 VMware Workstation 17.6 点名要它
+ * （`True Primary Processor-Based VM-Execution Controls: Use TPR shadow`）。
+ * 注意它与 secondary 的 virtualize-APIC-accesses（bit 0）是两件事，后者仍然不宣告。
  * 保留 bit 25 使用 I/O 位图与 bit 28 使用 MSR 位图（这两条路已经端到端验过），
  * 以及 bit 31 激活 secondary。
  *
@@ -510,7 +515,7 @@ KswordArkHvmIsVmxCapabilityMsr(
  * 一次自己造出来的倒退。判断一位该不该留，**去 hvm_nested_l2.c 的字段表里查，
  * 不要 grep 宏名**：那三张表是循环应用的，表里的字段一个宏都没有。
  */
-#define KSWORD_ARK_HVM_VMX_PROC_ALLOWED 0xF3D99E8CUL
+#define KSWORD_ARK_HVM_VMX_PROC_ALLOWED 0xF3F99E8CUL
 
 /*
  * secondary 控制里允许宣告的位：EPT 与 unrestricted guest。

@@ -1920,16 +1920,18 @@ void TestVmxCapabilityMasks(KswordTests::Suite& s) {
 
     // --- primary processor-based ---
     // 2 中断窗口 / 3 TSC 偏移 / 7 HLT / 9 INVLPG / 10 MWAIT / 11 RDPMC / 12 RDTSC /
-    // 15 CR3 载入 / 16 CR3 存储 / 19 CR8 载入 / 20 CR8 存储 / 22 NMI 窗口 /
-    // 23 MOV-DR / 24 无条件 I/O / 25 I/O 位图 / 28 MSR 位图 / 29 MONITOR /
-    // 30 PAUSE / 31 激活 secondary。
+    // 15 CR3 载入 / 16 CR3 存储 / 19 CR8 载入 / 20 CR8 存储 / 21 TPR 影子 /
+    // 22 NMI 窗口 / 23 MOV-DR / 24 无条件 I/O / 25 I/O 位图 / 28 MSR 位图 /
+    // 29 MONITOR / 30 PAUSE / 31 激活 secondary。
     s.expect(KSWORD_ARK_HVM_VMX_PROC_ALLOWED ==
-                 BitsOf({2, 3, 7, 9, 10, 11, 12, 15, 16, 19, 20, 22, 23, 24, 25, 28, 29, 30, 31}),
+                 BitsOf({2, 3, 7, 9, 10, 11, 12, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31}),
              L"the primary processor-based allow mask matches the bit list its comment names");
     s.expect((KSWORD_ARK_HVM_VMX_PROC_ALLOWED & (1ULL << 3)) != 0ULL,
              L"TSC offsetting stays advertised: 0x2010 is in the copied control field table");
-    s.expect((KSWORD_ARK_HVM_VMX_PROC_ALLOWED & (1ULL << 21)) == 0ULL,
-             L"the TPR shadow stays unadvertised: the virtual-APIC page is not written");
+    // 这一位的前提是 0x2012 与 0x401C 都进了 vmcs02 的被拷字段表。宣告了却只拷一个，
+    // 处理器会把**物理页 0** 当 virtual-APIC 页用，而且状态位上一点痕迹都没有。
+    s.expect((KSWORD_ARK_HVM_VMX_PROC_ALLOWED & (1ULL << 21)) != 0ULL,
+             L"the TPR shadow stays advertised: both the threshold and the page address are copied now");
     s.expect((KSWORD_ARK_HVM_VMX_PROC_ALLOWED & (1ULL << 27)) == 0ULL,
              L"the monitor trap flag stays unadvertised: it is not implemented for L2");
     s.expect((KSWORD_ARK_HVM_VMX_PROC_ALLOWED & (1ULL << 31)) != 0ULL,
