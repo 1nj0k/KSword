@@ -82,6 +82,13 @@ Environment:
 
 /* Name the secondary control that turns on EPT for L2. */
 #define KSW_L2_SECONDARY_ENABLE_EPT 0x00000002UL
+/*
+ * Name the secondary control that lets L2 run unpaged or in real mode.
+ *
+ * Intel requires enable-EPT alongside it; a VMCS with one and not the other
+ * fails VM entry with nothing but an error number to explain it.
+ */
+#define KSW_L2_SECONDARY_UNRESTRICTED_GUEST 0x00000080UL
 /* Name the primary control that activates the secondary controls. */
 #define KSW_L2_PRIMARY_ACTIVATE_SECONDARY 0x80000000UL
 
@@ -401,11 +408,29 @@ KswordARKHvmNestedL2Enter(
         KswordARKHvmNestedL2ClampControl(
             primary | Context->Runtime->ActiveControls.Primary,
             Context->Runtime->ActiveControls.PrimaryCapability));
-    KswordARKHvmNestedL2Write(
-        KSW_L2_SECONDARY_CONTROLS,
-        KswordARKHvmNestedL2ClampControl(
+    {
+        ULONG mergedSecondary = KswordARKHvmNestedL2ClampControl(
             secondary | Context->Runtime->ActiveControls.Secondary,
-            Context->Runtime->ActiveControls.SecondaryCapability));
+            Context->Runtime->ActiveControls.SecondaryCapability);
+
+        /*
+         * Unrestricted guest without enable-EPT is an illegal pair that fails
+         * VM entry, exactly like virtual NMIs without NMI exiting.  Drop the
+         * dependent bit rather than send a control pair we did not verify into
+         * VMLAUNCH - the failure would arrive as a bare error number on a path
+         * where L1, not us, looks responsible.
+         *
+         * The clamp above can produce this on its own: L1 may legitimately ask
+         * for unrestricted guest while its own EPT bit is cleared by the
+         * capability clamp, and then the two disagree through no fault of L1's.
+         */
+        if ((mergedSecondary & KSW_L2_SECONDARY_ENABLE_EPT) == 0UL) {
+            mergedSecondary &= ~(ULONG)KSW_L2_SECONDARY_UNRESTRICTED_GUEST;
+        }
+        KswordARKHvmNestedL2Write(
+            KSW_L2_SECONDARY_CONTROLS,
+            mergedSecondary);
+    }
     value = 0ULL;
     (void)KswordARKHvmNestedVmcs12Read(vmcs12, KSW_L2_EXIT_CONTROLS, &value);
     KswordARKHvmNestedL2Write(

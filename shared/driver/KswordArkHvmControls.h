@@ -513,17 +513,31 @@ KswordArkHvmIsVmxCapabilityMsr(
 #define KSWORD_ARK_HVM_VMX_PROC_ALLOWED 0xF3D99E8CUL
 
 /*
- * secondary 控制里允许宣告的位：只有 EPT。
+ * secondary 控制里允许宣告的位：EPT 与 unrestricted guest。
  *
- * 这是整份白名单里最窄的一条，也是最诚实的一条 —— secondary 控制里几乎每一位
- * 都要一个我们没拷进 vmcs02 的字段：VPID 要 VPID 字段与 INVVPID 处理、VMFUNC 要
- * 0x2018、VMCS shadowing 要 0x2026/0x2028、PML 要 0x200E、#VE 要 0x202A、
- * EPTP 切换要 0x2024、TSC scaling 要 0x2032。
+ * 其余每一位都要一个我们没拷进 vmcs02 的字段：VPID 要 VPID 字段与 INVVPID 处理、
+ * VMFUNC 要 0x2018、VMCS shadowing 要 0x2026/0x2028、PML 要 0x200E、#VE 要
+ * 0x202A、EPTP 切换要 0x2024、TSC scaling 要 0x2032。
  *
- * 后果要说清楚：这么窄的一份能力，很多 hypervisor 会直接拒绝启动。那正是想要的
- * 结果 —— 干净地拒绝，好过答应了再静默地做不到。
+ * bit 7（unrestricted guest）**不需要任何新字段**，这是它与上面那些的根本区别：
+ * 它只是放宽处理器对来宾 CR0.PE/PG 的要求，让 L2 可以跑在实模式或未分页保护模式。
+ * 来宾 CR0、段属性、CR0 掩码与读影子本来就逐字段从 vmcs12 拷过来，进入路径也没有
+ * 任何一处校验 CR0.PE —— 也就是说这一位所需要的东西**全都已经在了**。
+ *
+ * 加它是因为真机上量到的需求：VMware Workstation 17.6 在自己的日志里点名
+ * `The Intel "VMX Unrestricted Guest" feature is necessary to run this virtual
+ * machine` —— 它的来宾从**实模式**启动，没有这一位一定起不来。这是四项缺件里
+ * 唯一无法绕开的一项（另外三项是 TPR shadow、ack-interrupt-on-exit、INVVPID）。
+ *
+ * 依赖关系必须由代码保证而不是靠 L1 自觉：Intel 规定 unrestricted guest = 1 时
+ * enable EPT 也必须为 1，否则 VM entry 失败。合并 vmcs02 控制时会把 EPT 关着的
+ * unrestricted guest 位丢掉 —— 与 pin 控制里"虚拟 NMI 不能没有 NMI 退出"同一种
+ * 处理，理由也一样：**不把一对没验过的控制送进 VMLAUNCH**。
+ *
+ * 后果仍然要说清楚：这份能力依旧很窄，很多 hypervisor 会直接拒绝启动。那正是想要
+ * 的结果 —— 干净地拒绝，好过答应了再静默地做不到。
  */
-#define KSWORD_ARK_HVM_VMX_PROC2_ALLOWED 0x00000002UL
+#define KSWORD_ARK_HVM_VMX_PROC2_ALLOWED 0x00000082UL
 
 /*
  * VM-exit 控制里允许宣告的位。

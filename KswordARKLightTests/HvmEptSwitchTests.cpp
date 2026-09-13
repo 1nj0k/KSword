@@ -1935,9 +1935,20 @@ void TestVmxCapabilityMasks(KswordTests::Suite& s) {
     s.expect((KSWORD_ARK_HVM_VMX_PROC_ALLOWED & (1ULL << 31)) != 0ULL,
              L"activating secondary controls stays advertised, or EPT could never be offered");
 
-    // --- secondary：只有 EPT（bit 1）---
-    s.expect(KSWORD_ARK_HVM_VMX_PROC2_ALLOWED == BitsOf({1}),
-             L"the secondary allow mask offers EPT and nothing else");
+    // --- secondary：EPT（bit 1）与 unrestricted guest（bit 7）---
+    s.expect(KSWORD_ARK_HVM_VMX_PROC2_ALLOWED == BitsOf({1, 7}),
+             L"the secondary allow mask offers EPT and unrestricted guest, and nothing else");
+    // 这一位是 VMware 点名要的，而且是它四项缺件里唯一无法绕开的：它的来宾从实模式
+    // 启动。它与其余 secondary 位的区别是**不需要任何新的 vmcs02 字段**。
+    s.expect((KSWORD_ARK_HVM_VMX_PROC2_ALLOWED & (1ULL << 7)) != 0ULL,
+             L"unrestricted guest stays advertised: a guest that boots in real mode cannot start without it");
+    // 宣告它就等于承诺 EPT 也在，因为 Intel 不允许只开一个。这里断言的是**我们宣告的
+    // 那两位本身自洽**；运行期那一对是否自洽由 hvm_nested_l2.c 的合并负责。
+    s.expect((KSWORD_ARK_HVM_VMX_PROC2_ALLOWED & (1ULL << 7)) == 0ULL ||
+                 (KSWORD_ARK_HVM_VMX_PROC2_ALLOWED & (1ULL << 1)) != 0ULL,
+             L"advertising unrestricted guest without EPT would promise a pair the processor refuses");
+    s.expect((KSWORD_ARK_HVM_VMX_PROC2_ALLOWED & (1ULL << 5)) == 0ULL,
+             L"VPID stays unadvertised: INVVPID is not implemented, whatever else is added here");
 
     // --- VM-exit 控制 ---
     s.expect(KSWORD_ARK_HVM_VMX_EXIT_ALLOWED == BitsOf({2, 9, 18, 19, 20, 21}),
