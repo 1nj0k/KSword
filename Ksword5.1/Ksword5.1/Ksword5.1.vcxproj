@@ -386,6 +386,7 @@
     <ClCompile Include="ProcessDock\ProcessDetailWindow.cpp" />
     <ClCompile Include="ProcessDock\ProcessDetailWindow.BaseAndUi.cpp" />
     <ClCompile Include="ProcessDock\ProcessDetailWindow.DllHijack.cpp" />
+    <ClCompile Include="ProcessDock\ProcessDetailWindow.InjectionTrace.cpp" />
     <ClCompile Include="ProcessDock\ProcessDetailWindow.Module.cpp" />
     <ClCompile Include="ProcessDock\ProcessDetailWindow.Hotkey.cpp" />
     <ClCompile Include="ProcessDock\ProcessDetailWindow.PdbCatalog.cpp" />
@@ -498,6 +499,7 @@
     <ClCompile Include="ksword\network\network_nids.cpp" />
     <ClCompile Include="ksword\network\network_process_etw_monitor.cpp" />
     <ClCompile Include="ksword\process\dll_hijack_detector.cpp" />
+    <ClCompile Include="ksword\process\injection_trace_collector.cpp" />
     <ClCompile Include="ksword\process\process_cpu_core_etw_monitor.cpp" />
     <ClCompile Include="ksword\process\process.cpp" />
     <ClCompile Include="ksword\process\ProcessImageDeleteGuard.cpp" />
@@ -532,6 +534,8 @@
     <ClCompile Include="..\..\shared\evidence\CrossViewDiff.cpp" />
     <ClCompile Include="..\..\shared\evidence\PeImageMap.cpp" />
     <ClCompile Include="..\..\shared\evidence\ImageDiff.cpp" />
+    <ClCompile Include="..\..\shared\evidence\MemoryRegionEvidence.cpp" />
+    <ClCompile Include="..\..\shared\evidence\InjectionSurvey.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverCapability.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverDynData.cpp" />
     <ClCompile Include="ArkDriverClient\ArkRuntimeDynData.cpp" />
@@ -542,6 +546,7 @@
     <ClCompile Include="ArkDriverClient\ArkDriverHandle.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverAlpc.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverSection.cpp" />
+    <ClCompile Include="ArkDriverClient\ArkDriverInjectionScan.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverMemory.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverFile.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverFileIrp.cpp" />
@@ -647,6 +652,7 @@
     <ClInclude Include="ksword\network\network_process_etw_monitor.h" />
     <ClInclude Include="ksword\network\network_request_tools.h" />
     <ClInclude Include="ksword\process\dll_hijack_detector.h" />
+    <ClInclude Include="ksword\process\injection_trace_collector.h" />
     <ClInclude Include="ksword\process\ProcessCpuUsageModel.h" />
     <ClInclude Include="ksword\process\process_cpu_core_etw_monitor.h" />
     <ClInclude Include="ksword\process\process.h" />
@@ -851,6 +857,8 @@
     <ClInclude Include="..\..\shared\evidence\CrossViewDiff.h" />
     <ClInclude Include="..\..\shared\evidence\PeImageMap.h" />
     <ClInclude Include="..\..\shared\evidence\ImageDiff.h" />
+    <ClInclude Include="..\..\shared\evidence\MemoryRegionEvidence.h" />
+    <ClInclude Include="..\..\shared\evidence\InjectionSurvey.h" />
     <ClInclude Include="..\..\shared\crash\WinCrashHandler.h" />
     <ClInclude Include="ArkDriverClient\ArkDriverCapabilities.h" />
     <ClInclude Include="..\..\third_party\zydis\Zydis.h" />

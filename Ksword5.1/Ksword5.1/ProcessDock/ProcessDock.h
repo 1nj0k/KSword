@@ -230,6 +230,10 @@ private:
         GpuSharedMemory,         // 共享 GPU 内存。
         ProcessType,             // 类型：应用 / 后台进程 / Windows 进程。
         CpuCore,                 // CPU核心：真实逻辑处理器逐核心占用扇形图。
+        // 注入面：只由右键“筛选注入面”手动填充，不跟随周期刷新。
+        // 它是**计数不是结论**：实测 310 个可打开进程里 284 个都有动态代码，
+        // “有/无”没有区分度，能看的是数量的离群程度。
+        InjectionSurface,        // 注入面：动态代码区域数 / 其中可写可执行。
         Count                    // 列总数。
     };
 
@@ -920,6 +924,9 @@ private:
     // 调用方式：进程列表右键菜单或详细视图手动刷新入口调用。
     // 参数：无。
     // 返回值：无。
+    // executeScreenInjectionSurfaceAction：对选中进程做只读的注入面筛选，
+    // 只填“注入面”列；不跟随周期刷新，也不产生结论。
+    void executeScreenInjectionSurfaceAction();
     void executeRefreshPplProtectionLevelAction();
     // executeTerminateThreadsAction 作用：
     // - 单独执行 TerminateThread(全部线程)（保留给其他入口复用）；

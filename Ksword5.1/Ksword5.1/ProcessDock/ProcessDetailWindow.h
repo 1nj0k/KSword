@@ -567,6 +567,10 @@ private:
     // requestAsyncDllHijackScan：只读扫描程序目录与实际加载模块，
     // 使用签名可信的架构匹配系统 DLL 作为基线，不加载任何待检 DLL。
     void requestAsyncDllHijackScan();
+    // requestAsyncInjectionTraceScan：只读采集地址空间、模块交叉视图、工作集、
+    // 线程起点与归一化映像差异，结论只有四态，不输出"已注入/未注入"。
+    // deepMode=true 时比较全部可执行映像范围，耗时显著更长。
+    void requestAsyncInjectionTraceScan(bool deepMode);
 
     // ======== 模块表右键 ========
     void showModuleContextMenu(const QPoint& localPosition);
@@ -863,6 +867,8 @@ private:
     QHBoxLayout* m_moduleTopBarLayout = nullptr; // 模块页顶部工具栏布局。
     QPushButton* m_refreshModuleButton = nullptr; // 模块刷新按钮。
     QPushButton* m_dllHijackScanButton = nullptr; // 只读 DLL 劫持检测按钮。
+    QPushButton* m_injectionTraceButton = nullptr;     // 只读注入痕迹检查按钮（快速）。
+    QPushButton* m_injectionTraceDeepButton = nullptr; // 只读注入痕迹检查按钮（深度）。
     QCheckBox* m_signatureCheckBox = nullptr;  // 是否刷新时做签名校验。
     QLabel* m_moduleStatusLabel = nullptr;     // 模块刷新状态标签。
     QTreeWidget* m_moduleTable = nullptr;      // 模块表格。
@@ -896,6 +902,8 @@ private:
     int m_moduleRefreshProgressPid = 0;        // 首轮模块刷新对应的 kPro 任务 PID。
     bool m_dllHijackScanRunning = false;       // DLL 劫持检测后台任务运行标记。
     std::uint64_t m_dllHijackScanTicket = 0;   // DLL 劫持检测结果防乱序序号。
+    bool m_injectionTraceRunning = false;      // 注入痕迹检查后台任务运行标记。
+    std::uint64_t m_injectionTraceTicket = 0;  // 注入痕迹检查结果防乱序序号。
 
     // ======== 线程细节刷新状态 ========
     bool m_threadInspectRefreshing = false;        // 线程细节是否正在刷新。

@@ -5146,6 +5146,22 @@ void ProcessDetailWindow::initializeModuleTab()
         m_moduleTab);
     m_dllHijackScanButton->setToolTip(ks::i18n::sourceText(
         QStringLiteral("只读比较程序目录 DLL 与架构匹配、签名可信的系统 DLL；不会加载待检 DLL")));
+    // 快速与深度拆成两个按钮：模式差别只有"比对多大范围"，用隐藏的修饰键表达
+    // 等于要求用户先知道有这回事。
+    m_injectionTraceButton = new QPushButton(
+        QIcon(":/Icon/process_details.svg"),
+        ks::i18n::sourceText(QStringLiteral("快速注入检查")),
+        m_moduleTab);
+    // 注意：字面量必须写成一行。i18n 审计把相邻字符串拼接的**每一段**都当成独立
+    // 待翻译文本，拆行会凭空多出一堆半句词条。
+    m_injectionTraceButton->setToolTip(ks::i18n::sourceText(
+        QStringLiteral("只读检查：有没有来路不明的可执行内存、模块清单对不对得上、线程从哪里开始跑。只比对当前正在使用的代码页，一般几秒出结果。不挂起进程、不改内存权限。结果只说明看到了什么，不会给出“已注入/未注入”的判定。")));
+    m_injectionTraceDeepButton = new QPushButton(
+        QIcon(":/Icon/process_details.svg"),
+        ks::i18n::sourceText(QStringLiteral("深度注入检查")),
+        m_moduleTab);
+    m_injectionTraceDeepButton->setToolTip(ks::i18n::sourceText(
+        QStringLiteral("和快速检查用的是同一套判据，区别只在比对范围：深度会把每个模块的可执行代码整段与磁盘上的原文件比一遍，因此能查出“暂时没在运行、但已经被改过”的代码，代价是最长可能跑上一两分钟。同样是只读检查。")));
     m_signatureCheckBox = new QCheckBox("刷新时校验签名", m_moduleTab);
     m_signatureCheckBox->setChecked(true);
     m_signatureCheckBox->setStyleSheet(QStringLiteral(
@@ -5157,6 +5173,8 @@ void ProcessDetailWindow::initializeModuleTab()
         .arg(KswordTheme::TextSecondaryHex()));
     m_moduleTopBarLayout->addWidget(m_refreshModuleButton);
     m_moduleTopBarLayout->addWidget(m_dllHijackScanButton);
+    m_moduleTopBarLayout->addWidget(m_injectionTraceButton);
+    m_moduleTopBarLayout->addWidget(m_injectionTraceDeepButton);
     m_moduleTopBarLayout->addWidget(m_signatureCheckBox);
     m_moduleTopBarLayout->addStretch(1);
     m_moduleTopBarLayout->addWidget(m_moduleStatusLabel);
@@ -5199,6 +5217,8 @@ void ProcessDetailWindow::initializeModuleTab()
 
     m_refreshModuleButton->setStyleSheet(buildBlueButtonStyle());
     m_dllHijackScanButton->setStyleSheet(buildBlueButtonStyle());
+    m_injectionTraceButton->setStyleSheet(buildBlueButtonStyle());
+    m_injectionTraceDeepButton->setStyleSheet(buildBlueButtonStyle());
 }
 
 void ProcessDetailWindow::initializeTokenTab()
@@ -6271,6 +6291,15 @@ void ProcessDetailWindow::initializeConnections()
     // DLL 劫持检测始终在后台只读执行，不复用注入/加载路径。
     connect(m_dllHijackScanButton, &QPushButton::clicked, this, [this]() {
         requestAsyncDllHijackScan();
+    });
+
+    // 注入痕迹检查同样是只读采集。两个按钮的判据完全相同（归一化 profile 是同一份），
+    // 只差比较范围：深度把全部可执行映像范围都比一遍，因此更慢。
+    connect(m_injectionTraceButton, &QPushButton::clicked, this, [this]() {
+        requestAsyncInjectionTraceScan(false);
+    });
+    connect(m_injectionTraceDeepButton, &QPushButton::clicked, this, [this]() {
+        requestAsyncInjectionTraceScan(true);
     });
 
     // 模块表右键菜单。

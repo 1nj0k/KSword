@@ -9,6 +9,7 @@
 #include "ProcessDetailWindow.h"
 #include "ProcessMessageHookWindow.h"
 #include "../ArkDriverClient/ArkDriverClient.h"
+#include "../ksword/process/injection_trace_collector.h"
 #include "../OnlineScan/SandboxUploadActions.h"
 #include "../UI/FlatTableModel.h"
 #include "../UI/TableColumnAutoFit.h"
@@ -468,7 +469,8 @@ namespace
         "专用 GPU 内存",
         "共享 GPU 内存",
         "类型",
-        "CPU核心"
+        "CPU核心",
+        "注入面"
     };
 
     const char* const ProcessTableHeaderKeys[] = {
@@ -535,7 +537,8 @@ namespace
         "process.table.header.gpu_dedicated_memory",
         "process.table.header.gpu_shared_memory",
         "process.table.header.process_type",
-        "process.table.header.cpu_core"
+        "process.table.header.cpu_core",
+        "process.table.header.injection_surface"
     };
 
     // ProcessTableHeaderKeyCount：
@@ -552,6 +555,35 @@ namespace
     QString processContextText(const QString& key, const QString& sourceText)
     {
         return ks::i18n::contextText(key, sourceText);
+    }
+
+    // 注入面列的文本。硬规则：非 Screened 一律显示状态词，
+    // 绝不显示 0 —— “打不开进程”和“真的一块没有”在这一列里必须分开。
+    QString processInjectionSurfaceText(const ks::process::ProcessRecord& processRecord)
+    {
+        using Ksword::Evidence::SurfaceScreenState;
+        const auto state = static_cast<SurfaceScreenState>(processRecord.injectionSurfaceState);
+        switch (state)
+        {
+        case SurfaceScreenState::NotScreened:
+            return processContextText("process.table.cell.injection.not_screened",
+                                      QStringLiteral("未筛选"));
+        case SurfaceScreenState::AccessDenied:
+            return processContextText("process.table.cell.injection.access_denied",
+                                      QStringLiteral("访问受限"));
+        case SurfaceScreenState::IdentityMismatch:
+            return processContextText("process.table.cell.injection.identity_mismatch",
+                                      QStringLiteral("身份不符"));
+        case SurfaceScreenState::Failed:
+            return processContextText("process.table.cell.injection.failed",
+                                      QStringLiteral("筛选失败"));
+        case SurfaceScreenState::Screened:
+            break;
+        }
+        return processContextText("process.table.cell.injection.counts",
+                                  QStringLiteral("%1 块 / %2 可写可执行"))
+            .arg(processRecord.injectionDynamicRegions)
+            .arg(processRecord.injectionWritableExecRegions);
     }
 
     QString translatedProcessHeader(const int section, const QString& sourceText)
@@ -3668,6 +3700,12 @@ namespace
         {
             return true;
         }
+        if (oldRecord.injectionSurfaceState != newRecord.injectionSurfaceState ||
+            oldRecord.injectionDynamicRegions != newRecord.injectionDynamicRegions ||
+            oldRecord.injectionWritableExecRegions != newRecord.injectionWritableExecRegions)
+        {
+            return true;
+        }
 
         if (oldRecord.threadCount != newRecord.threadCount ||
             oldRecord.handleCount != newRecord.handleCount ||
@@ -6566,6 +6604,7 @@ void ProcessDock::applyDefaultColumnWidths()
     m_processTable->setColumnWidth(toColumnIndex(TableColumn::Status), 90);
     m_processTable->setColumnWidth(toColumnIndex(TableColumn::SessionId), 80);
     m_processTable->setColumnWidth(toColumnIndex(TableColumn::JobObject), 100);
+    m_processTable->setColumnWidth(toColumnIndex(TableColumn::InjectionSurface), 170);
     m_processTable->setColumnWidth(toColumnIndex(TableColumn::CpuTime), 100);
     m_processTable->setColumnWidth(toColumnIndex(TableColumn::CycleTime), 140);
     m_processTable->setColumnWidth(toColumnIndex(TableColumn::WorkingSet), 120);
@@ -7557,6 +7596,15 @@ ProcessDock::RefreshResult ProcessDock::buildRefreshResult(
             processRecord.protectionLevelKnown = false;
             processRecord.protectionLevel = 0;
             processRecord.protectionLevelText.clear();
+            /*
+             * 注入面与 PPL 相反：它是手动筛选但**必须跨轮沿用**。
+             * 进程表每秒刷新一次，每轮清空就意味着这一列永远是空的。
+             * 缓存按进程身份做键，PID 复用会走新条目，不会把旧计数带到新进程上。
+             */
+            processRecord.injectionSurfaceState = oldRecord.injectionSurfaceState;
+            processRecord.injectionDynamicRegions = oldRecord.injectionDynamicRegions;
+            processRecord.injectionWritableExecRegions = oldRecord.injectionWritableExecRegions;
+            processRecord.injectionDynamicBytes = oldRecord.injectionDynamicBytes;
             processRecord.r0Flags = oldRecord.r0Flags;
             processRecord.r0DynDataCapabilityMask = oldRecord.r0DynDataCapabilityMask;
             processRecord.r0Protection = oldRecord.r0Protection;
@@ -8064,6 +8112,12 @@ ProcessDock::RefreshResult ProcessDock::buildRefreshResult(
         exitedEntry.record.protectionLevelKnown = false;
         exitedEntry.record.protectionLevel = 0;
         exitedEntry.record.protectionLevelText.clear();
+        // 退出保留行同理不再携带注入面计数：进程已经不在了，
+        // 那一列的数字只会让人以为它还在被观测。
+        exitedEntry.record.injectionSurfaceState = 0U;
+        exitedEntry.record.injectionDynamicRegions = 0U;
+        exitedEntry.record.injectionWritableExecRegions = 0U;
+        exitedEntry.record.injectionDynamicBytes = 0ULL;
         refreshResult.nextCache.emplace(oldPair.first, std::move(exitedEntry));
         ++refreshResult.exitedProcessCount;
 
@@ -9388,6 +9442,14 @@ QVariant ProcessDock::processNumericSortValue(
         return processRecord.cpuPercent;
     case TableColumn::CpuCore:
         return processRecord.cpuCorePercent;
+    case TableColumn::InjectionSurface:
+        // 未筛选/访问受限排在最后：它们的 0 是“不知道”，
+        // 和真正数出来的 0 不能排在一起。
+        return Ksword::Evidence::SurfaceScreenCountsAreMeaningful(
+                   static_cast<Ksword::Evidence::SurfaceScreenState>(
+                       processRecord.injectionSurfaceState))
+            ? static_cast<double>(processRecord.injectionDynamicRegions)
+            : -1.0;
     case TableColumn::Ram:
         return processRecord.workingSetMB;
     case TableColumn::Disk:
@@ -10919,6 +10981,13 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
         buildR0ActionIcon(":/Icon/process_refresh.svg"),
         processContextText("process.menu.hvm_inject_release", QStringLiteral("%1 撤销注入"))
             .arg(hvmName));
+    QAction* screenInjectionSurfaceAction = contextMenu.addAction(
+        blueTintedIcon(":/Icon/process_details.svg"),
+        processContextText("process.menu.screen_injection_surface",
+                           QStringLiteral("筛选注入面（填充注入面列）")));
+    screenInjectionSurfaceAction->setToolTip(processContextText(
+        "process.menu.screen_injection_surface.tooltip",
+        QStringLiteral("只读枚举选中进程的地址空间，数出动态/非映像可执行区域。这是计数不是结论——实测绝大多数进程都有动态代码，能看的是数量的离群程度。要完整结论请开进程详情→模块→注入痕迹检查")));
     QAction* refreshPplLevelAction = contextMenu.addAction(
         blueTintedIcon(":/Icon/process_refresh.svg"),
         processContextText("process.menu.refresh_ppl", QStringLiteral("手动刷新PPL保护级别")));
@@ -12154,6 +12223,7 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
         else if (selectedAction == r0DisableBreakAction) { executeR0SetBreakOnTerminationAction(false); }
         else if (selectedAction == r0DisableApcAction) { executeR0DisableApcInsertionAction(); }
         else if (selectedAction == r0DkomCidRemoveAction) { executeR0DkomRemoveFromCidTableAction(); }
+        else if (selectedAction == screenInjectionSurfaceAction) { executeScreenInjectionSurfaceAction(); }
         else if (selectedAction == refreshPplLevelAction) { executeRefreshPplProtectionLevelAction(); }
         else if (selectedAction == suspendAction) { executeSuspendAction(); }
         else if (selectedAction == resumeAction) { executeResumeAction(); }
@@ -13173,6 +13243,8 @@ QString ProcessDock::formatColumnText(const ks::process::ProcessRecord& processR
     case TableColumn::CpuCore:
         // CPU核心列只由 delegate 自绘真实逐核心扇形，不额外显示文本。
         return QString();
+    case TableColumn::InjectionSurface:
+        return processInjectionSurfaceText(processRecord);
     default:
         return QString();
     }
@@ -15678,6 +15750,77 @@ void ProcessDock::executeRefreshPplProtectionLevelAction()
         << "[ProcessDock] PPL 保护级别手动刷新完成, targets=" << actionTargets.size()
         << ", success=" << successCount
         << ", failure=" << failureCount
+        << ", detail=" << resultLineList.join(" | ").toStdString()
+        << eol;
+}
+
+void ProcessDock::executeScreenInjectionSurfaceAction()
+{
+    /*
+     * 注入面筛选（issue #196）。只对**选中项**执行，不跟随周期刷新：
+     * 实测全机 496 个进程一轮 1073 ms（中位 2.52 ms、p95 9.5 ms），
+     * 挂在每秒一次的表刷新上是不可接受的。
+     *
+     * 这一步只枚举地址空间，不读内存、不碰模块/PE/工作集/线程。
+     * 它给出的是计数，不是结论。
+     */
+    const std::vector<ProcessActionTarget> actionTargets = selectedActionTargets();
+    if (actionTargets.empty())
+    {
+        kLogEvent logEvent;
+        warn << logEvent << "[ProcessDock] 注入面筛选被忽略：当前没有选中进程。" << eol;
+        return;
+    }
+
+    std::size_t screenedCount = 0;
+    std::size_t limitedCount = 0;
+    QStringList resultLineList;
+    resultLineList.reserve(static_cast<qsizetype>(actionTargets.size()));
+
+    for (const ProcessActionTarget& actionTarget : actionTargets)
+    {
+        auto cacheIt = m_cacheByIdentity.find(actionTarget.identityKey);
+        if (cacheIt == m_cacheByIdentity.end())
+        {
+            resultLineList.push_back(QStringLiteral("PID %1: cache missing")
+                .arg(actionTarget.record.pid));
+            continue;
+        }
+
+        const Ksword::Evidence::ProcessSurfaceScreen screen =
+            ks::process::ScreenProcessInjectionSurface(
+                actionTarget.record.pid,
+                actionTarget.record.creationTime100ns);
+
+        cacheIt->second.record.injectionSurfaceState =
+            static_cast<std::uint32_t>(screen.state);
+        cacheIt->second.record.injectionDynamicRegions = screen.dynamicCodeRegions;
+        cacheIt->second.record.injectionWritableExecRegions =
+            screen.writableExecutableRegions;
+        cacheIt->second.record.injectionDynamicBytes = screen.dynamicCodeBytes;
+
+        if (Ksword::Evidence::SurfaceScreenCountsAreMeaningful(screen.state))
+        {
+            ++screenedCount;
+        }
+        else
+        {
+            ++limitedCount;
+        }
+        resultLineList.push_back(QStringLiteral("PID %1: %2 dyn=%3 wx=%4")
+            .arg(actionTarget.record.pid)
+            .arg(QString::fromLatin1(
+                Ksword::Evidence::SurfaceScreenStateName(screen.state)))
+            .arg(screen.dynamicCodeRegions)
+            .arg(screen.writableExecutableRegions));
+    }
+
+    rebuildTable();
+    kLogEvent actionEvent;
+    info << actionEvent
+        << "[ProcessDock] 注入面筛选完成, targets=" << actionTargets.size()
+        << ", screened=" << screenedCount
+        << ", limited=" << limitedCount
         << ", detail=" << resultLineList.join(" | ").toStdString()
         << eol;
 }

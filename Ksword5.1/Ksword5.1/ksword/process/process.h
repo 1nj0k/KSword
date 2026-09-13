@@ -309,6 +309,13 @@ namespace ks::process
         std::uint32_t protectionLevel = 0;  // PPL 保护级别枚举值，来自手动刷新快照。
         bool protectionLevelKnown = false;  // protectionLevelKnown：true 表示本轮已手动查询 PPL。
         std::string protectionLevelText;    // protectionLevelText：PPL 枚举文本，未刷新时保持空。
+        // 注入面筛选（issue #196）：只由手动动作填充，不跟随周期刷新。
+        // injectionSurfaceState 取 Ksword::Evidence::SurfaceScreenState 的数值；
+        // 非 Screened 时下面两个计数的 0 是“不知道”，不是“没有”。
+        std::uint32_t injectionSurfaceState = 0;      // 0 = NotScreened
+        std::uint32_t injectionDynamicRegions = 0;    // 动态/非映像可执行区域数
+        std::uint32_t injectionWritableExecRegions = 0; // 其中可写可执行的
+        std::uint64_t injectionDynamicBytes = 0;      // 动态代码字节数
 
         // ======== 原始性能计数器（用于相邻两轮差值计算） ========
         std::uint64_t rawCpuTime100ns = 0;      // Kernel + User 总 CPU 时间（100ns）。

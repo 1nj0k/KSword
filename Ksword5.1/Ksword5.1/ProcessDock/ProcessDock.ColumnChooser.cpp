@@ -112,6 +112,7 @@ ProcessDock::ProcessColumnGroup ProcessDock::processColumnGroupOf(const TableCol
     case TableColumn::HardwareStackProtection:
     case TableColumn::EnterpriseContext:
     case TableColumn::JobObject:
+    case TableColumn::InjectionSurface:
         return ProcessColumnGroup::Security;
 
     case TableColumn::Protection:
