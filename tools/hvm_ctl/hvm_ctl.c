@@ -4975,35 +4975,74 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson)
     if (asJson) {
         printf("{\"kind\":\"nested-selfvirt\",\"attempted\":%lu,"
                "\"reachedL2\":%lu,\"returnedToL1\":%lu,"
-               "\"cpuidPassedThrough\":%lu,"
+               "\"cpuidPassedThrough\":%lu,\"slotMarker\":%lu,"
                "\"exitReason\":%llu,\"guestRip\":\"0x%016llX\","
+               "\"entryRip\":\"0x%016llX\","
                "\"vmlaunch\":%lu,\"lastInstructionError\":%lu,"
                "\"fuseTripped\":%lu,\"fuseReason\":%lu,\"fuseCount\":%lu,"
                "\"fuseRip\":\"0x%016llX\","
                "\"pass\":%d}\n",
                r->selfVirtAttempted, r->selfVirtReachedL2,
                r->selfVirtReturnedToL1, r->selfVirtCpuidPassedThrough,
+               r->selfVirtSlotMarker,
                r->selfVirtExitReason & 0xFFFFULL, r->selfVirtGuestRip,
+               r->selfVirtEntryRip,
                r->vmlaunchResult, r->lastInstructionError,
                r->l2FuseTripped, r->l2FuseReason, r->l2FuseCount,
                r->l2FuseRip, passed);
     } else {
         printf("\n=== 嵌套自虚拟化（L1 把自己变成来宾）===\n");
+        printf("  L2 的写入   : 全局标记 %s   经槽位 %s\n",
+               r->selfVirtReachedL2 ? "**到了**" : "**没到**",
+               r->selfVirtSlotMarker ? "**到了**" : "**没到**");
         printf("  进入 L2     : %s%s\n",
                r->selfVirtReachedL2 ? "**是**" : "**否**",
                r->selfVirtReachedL2
                    ? "  —— 同一段代码，低一个特权域在跑"
-                   : "  —— VM entry 没成功");
+                   : "  —— L2 的存储没有回到 L1 眼里（两者含义不同，见上一行）");
         if (!r->selfVirtReachedL2) {
             printf("  VMLAUNCH    : 结果 %lu   指令错误号 %lu\n",
                    r->vmlaunchResult, r->lastInstructionError);
             PrintVmInstructionError("  ", r->lastInstructionError);
         }
+        /*
+         * 入口与退出 RIP 的差值 —— 同一轮之内的比较，不受加载基址影响。
+         */
+        if (r->selfVirtEntryRip != 0ULL) {
+            const long long delta =
+                (long long)(r->selfVirtGuestRip - r->selfVirtEntryRip);
+
+            /*
+             * 差值只有在 CPUID 那条路上才说明问题。
+             *
+             * VMCALL 走的是另一个函数，差值本来就大 —— 拿同一条判据去套它会得出
+             * "L2 没从我们指的地方开始"，而那是假的。判据必须知道自己在看哪条路。
+             */
+            if ((r->selfVirtExitReason & 0xFFFFULL) == 10ULL) {
+                printf("  入口 RIP    : 0x%016llX   退出 RIP 相差 %lld 字节 %s\n",
+                       r->selfVirtEntryRip, delta,
+                       (delta > 0 && delta < 4096)
+                           ? "**L2 确实从我们指的地方开始往下跑了**"
+                           : "**L2 没从我们指的地方开始**");
+            } else {
+                printf("  入口 RIP    : 0x%016llX   （退出走的不是 CPUID 那条路，"
+                       "差值不适用）\n", r->selfVirtEntryRip);
+            }
+        }
+        /*
+         * 退出原因在这里是一个**一位的答复**，不只是诊断。
+         *
+         * L2 没法用内存回话 —— "L2 的写 L1 看不看得见"正是被问的那件事，所以任何
+         * 写在内存里的答复，恰好在它有意义的时候不可读。退出原因这条路两个方向都
+         * 验过是通的：CPUID 表示 L2 读回了自己写的值，VMCALL 表示读不回来。
+         */
         printf("  L2 的退出   : 原因 %llu %s   停在 0x%016llX\n",
                r->selfVirtExitReason & 0xFFFFULL,
                ((r->selfVirtExitReason & 0xFFFFULL) == 10ULL)
-                   ? "**CPUID，已投递给 L1**"
-                   : "**不是 CPUID —— 没被投递给 L1，或者根本没退出**",
+                   ? "**CPUID —— L2 读回了自己写的值**"
+                   : (((r->selfVirtExitReason & 0xFFFFULL) == 18ULL)
+                          ? "**VMCALL —— L2 连自己刚写的值都读不回来**"
+                          : "**既不是 CPUID 也不是 VMCALL —— 走到了别处**"),
                r->selfVirtGuestRip);
         printf("  回到 L1     : %s\n",
                r->selfVirtReturnedToL1

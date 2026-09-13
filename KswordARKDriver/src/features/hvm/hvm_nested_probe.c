@@ -282,6 +282,23 @@ typedef struct _KSW_HVM_PROBE_SLOT
 static KSW_HVM_PROBE_SLOT g_KswordProbeSlots[
     KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS];
 
+/*
+ * The one thing L2 writes that depends on nothing.
+ *
+ * Every earlier attempt to have L2 report back went through something it
+ * inherits rather than computes: a pointer the compiler left in a register, a
+ * slot found through GS, a response row addressed off the frame.  Any of those
+ * can be wrong in L2 for reasons that have nothing to do with whether its
+ * stores work, and all of them read back as "L2 did not run".
+ *
+ * A module-level global is addressed RIP-relative: no register, no segment
+ * base, no call.  If this stays zero while the exit RIP proves L2 executed the
+ * instruction after it, then L2's stores genuinely are not reaching the page,
+ * and that is a statement about our shadow hierarchy rather than about the
+ * probe's plumbing.
+ */
+static volatile LONG g_KswordProbeL2Marker;
+
 /* Return this processor's slot, or NULL when its index is out of range. */
 static KSW_HVM_PROBE_SLOT*
 KswordARKHvmNestedProbeSlot(
@@ -874,6 +891,7 @@ KswordARKHvmNestedProbeExecute(
                 InterlockedExchange(&slot->L2Exited, 0L);
                 InterlockedExchange(&slot->SelfStage, 0L);
                 InterlockedExchange(&slot->L2SelfMarker, 0L);
+                g_KswordProbeL2Marker = 0L;
                 RtlCaptureContext(&slot->ResumeContext);
                 /*
                  * Self-virtualization: L1 makes *this* context its guest.
@@ -906,7 +924,17 @@ KswordARKHvmNestedProbeExecute(
                          * write into this row.  Registers are whole again
                          * here, so this write is the one that can be trusted.
                          */
+                        /*
+                         * Two independent witnesses, reported separately.
+                         *
+                         * The global says whether L2's stores reach memory at
+                         * all; the slot says whether the path L2 took to find
+                         * its own slot worked.  Folding them together would
+                         * turn two different failures into one zero.
+                         */
                         response->selfVirtReachedL2 =
+                            (g_KswordProbeL2Marker != 0L) ? 1UL : 0UL;
+                        response->selfVirtSlotMarker =
                             (InterlockedCompareExchange(
                                 &slot->L2SelfMarker, 0L, 0L) != 0L)
                                 ? 1UL : 0UL;
@@ -928,19 +956,39 @@ KswordARKHvmNestedProbeExecute(
                             KSW_HVM_PROBE_SLOT* live =
                                 KswordARKHvmNestedProbeSlot();
 
+                            /* RIP-relative, so nothing inherited can break it. */
+                            g_KswordProbeL2Marker = 1L;
                             if (live != NULL) {
                                 InterlockedExchange(&live->L2SelfMarker, 1L);
                             }
-
                             /*
-                             * CPUID exits unconditionally, so this is the
-                             * cheapest instruction that must leave L2, and
-                             * the routing default hands it to L1.  If it ever
-                             * does not exit, execution simply falls through
-                             * to the line below - which is why that line
-                             * exists rather than trusting it to.
+                             * Ask L2 whether it can see its own store, and
+                             * answer through the exit reason.
+                             *
+                             * The reply cannot travel in memory: whether L2's
+                             * stores reach L1 is the very thing in question,
+                             * so any in-memory answer is unreadable exactly
+                             * when it matters.  The exit reason is a channel
+                             * already proven to work in both directions - one
+                             * bit, but the right one.
+                             *
+                             *   CPUID  (10) - L2 reads back what it wrote
+                             *   VMCALL (18) - L2 cannot see its own store
+                             *
+                             * Read back through a volatile, so the compiler
+                             * cannot answer from the value it just stored.
                              */
-                            __cpuid(registers, 0);
+                            if (g_KswordProbeL2Marker != 0L) {
+                                __cpuid(registers, 0);
+                            } else {
+                                (void)KswordARKHvmAsmResidentHypercall(
+                                    0ULL, 0ULL);
+                            }
+                            /*
+                             * Reached only if neither instruction left L2,
+                             * which is architecturally impossible - recorded
+                             * rather than trusted.
+                             */
                             response->selfVirtCpuidPassedThrough = 1UL;
                         }
                     } else {
@@ -951,6 +999,9 @@ KswordARKHvmNestedProbeExecute(
                          * the stack this frame already has.
                          */
                         InterlockedExchange(&slot->SelfStage, 1L);
+                        /* Record it before writing it, for the delta above. */
+                        response->selfVirtEntryRip =
+                            (ULONGLONG)slot->ResumeContext.Rip;
                         KswordARKHvmNestedProbeVmcs12Write(
                             KSW_PROBE_VMCS_GUEST_RIP,
                             (ULONGLONG)slot->ResumeContext.Rip);

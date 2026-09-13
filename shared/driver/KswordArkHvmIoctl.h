@@ -2176,8 +2176,27 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
     unsigned long selfVirtReachedL2;
     unsigned long selfVirtReturnedToL1;
     unsigned long selfVirtCpuidPassedThrough;
+    /*
+     * L2 通过**自己找到的**槽位写的标记，与上面那个全局标记分开报。
+     *
+     * 两个见证者问的是两件事：全局标记问"L2 的存储到底有没有进内存"（RIP 相对
+     * 寻址，不依赖任何继承来的东西）；这一格问"L2 靠 GS 找自己那个槽位这条路
+     * 通不通"。合成一格的话，两种完全不同的失败会塌成同一个 0。
+     */
+    unsigned long selfVirtSlotMarker;
     unsigned long long selfVirtExitReason;
     unsigned long long selfVirtGuestRip;
+    /*
+     * L1 写进 vmcs12 的那个入口 RIP，和退出 RIP 放在一起报。
+     *
+     * 必须是**同一轮之内**的比较。驱动每次加载基址都不一样，所以跨两次运行去比
+     * 绝对地址什么也证明不了 —— 我就是这么误判过一次，把"地址随我改代码而移动"
+     * 当成了"L2 在跑我们的代码"。
+     *
+     * 两者之差才是答案：差几十字节说明 L2 确实从我们指的地方开始、走到了那条
+     * CPUID；差得离谱说明它根本没从那儿开始。
+     */
+    unsigned long long selfVirtEntryRip;
     /*
      * 无进展熔断：L2 一直在同一条指令上以同样的原因退出。
      *
