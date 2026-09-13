@@ -226,6 +226,24 @@ KswordARKHvmNestedL2Enter(
     ULONG secondary = 0UL;
     ULONG index = 0UL;
 
+    /*
+     * Refuse to re-enter an L2 the fuse already stopped.
+     *
+     * Reflecting the looping exit hands L1 control, and the very next thing a
+     * hypervisor does with control is resume its guest - straight back into
+     * the same loop.  The latch is what turns one trip into a permanent
+     * refusal, so L1 sees a VM-instruction error it can report instead of the
+     * machine going away.
+     *
+     * Reported as an invalid control field because that is what it is from
+     * L1's side: some control it set produces an entry we cannot make
+     * progress on.  Clearing the latch takes VMXOFF, which is L1 starting
+     * over.
+     */
+    if (nested->L2FuseTripped) {
+        /* Return the refusal L1 can read a number from. */
+        return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
+    }
     /* Refuse an entry whose launch state does not match the instruction. */
     if (IsResume && !vmcs12->Launched) {
         /* Return the exact resume-before-launch error. */
@@ -669,6 +687,66 @@ KswordARKHvmNestedL2ExitOwner(
     return KSW_L2_OWNER_L1;
 }
 
+/*
+ * How many identical L2 exits in a row count as "not going anywhere".
+ *
+ * High enough that nothing legitimate reaches it once RCX is part of the key,
+ * low enough that tripping costs milliseconds rather than the machine.
+ */
+#define KSW_L2_NO_PROGRESS_LIMIT 1000UL
+
+/*
+ * Decide whether this L2 exit is the same one over again.
+ *
+ * Returns TRUE the moment the fuse trips, and keeps returning TRUE until
+ * something resets it - the latch is what stops the caller from re-entering
+ * L2 straight back into the same loop.
+ */
+static BOOLEAN
+KswordARKHvmNestedL2FuseTrips(
+    _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _In_ const struct _KSW_HVM_GPR_FRAME* Frame,
+    _In_ ULONG ExitReason
+    )
+{
+    const ULONGLONG rip = KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+    const ULONGLONG rcx = (Frame != NULL) ? Frame->Rcx : 0ULL;
+
+    if (Nested->L2FuseTripped) {
+        /* Report the latched trip without re-measuring anything. */
+        return TRUE;
+    }
+    if (rip == Nested->L2ProgressRip &&
+        rcx == Nested->L2ProgressRcx &&
+        ExitReason == Nested->L2ProgressReason) {
+        Nested->L2NoProgressCount += 1UL;
+    } else {
+        Nested->L2ProgressRip = rip;
+        Nested->L2ProgressRcx = rcx;
+        Nested->L2ProgressReason = ExitReason;
+        Nested->L2NoProgressCount = 1UL;
+        /* Report that something moved. */
+        return FALSE;
+    }
+    if (Nested->L2NoProgressCount < KSW_L2_NO_PROGRESS_LIMIT) {
+        /* Report that it has not gone on long enough to be a loop. */
+        return FALSE;
+    }
+    /*
+     * Latch, and keep what tripped it.
+     *
+     * These three values are the entire diagnosis: which exit, at which
+     * instruction, how many times.  Without them a tripped fuse says only
+     * "something looped", which is what we already knew.
+     */
+    Nested->L2FuseTripped = TRUE;
+    Nested->L2FuseRip = rip;
+    Nested->L2FuseReason = ExitReason;
+    Nested->L2FuseCount = Nested->L2NoProgressCount;
+    /* Report the trip. */
+    return TRUE;
+}
+
 ULONG
 KswordARKHvmNestedL2Reflect(
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context,
@@ -701,8 +779,19 @@ KswordARKHvmNestedL2Reflect(
      * the same interception, forever, with no error raised anywhere.
      */
     {
+        /*
+         * The fuse runs before the ownership test, not after it.
+         *
+         * The loop that matters resolves its own exit and returns HANDLED, so
+         * it never reaches the reflection below - putting the check after the
+         * test would leave exactly the failure it exists to catch untouched.
+         * Once tripped, the exit is forced down the reflection path so L1 gets
+         * control back and the machine keeps running.
+         */
         const ULONG owner =
-            KswordARKHvmNestedL2ExitOwner(Context, Frame, ExitReason);
+            KswordARKHvmNestedL2FuseTrips(nested, Frame, ExitReason)
+                ? KSW_L2_OWNER_L1
+                : KswordARKHvmNestedL2ExitOwner(Context, Frame, ExitReason);
 
         if (owner == KSW_L2_OWNER_US_RESOLVED) {
             /* Report that the exit needs nothing further before resuming. */

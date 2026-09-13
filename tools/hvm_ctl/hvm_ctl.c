@@ -4978,11 +4978,15 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson)
                "\"cpuidPassedThrough\":%lu,"
                "\"exitReason\":%llu,\"guestRip\":\"0x%016llX\","
                "\"vmlaunch\":%lu,\"lastInstructionError\":%lu,"
+               "\"fuseTripped\":%lu,\"fuseReason\":%lu,\"fuseCount\":%lu,"
+               "\"fuseRip\":\"0x%016llX\","
                "\"pass\":%d}\n",
                r->selfVirtAttempted, r->selfVirtReachedL2,
                r->selfVirtReturnedToL1, r->selfVirtCpuidPassedThrough,
                r->selfVirtExitReason & 0xFFFFULL, r->selfVirtGuestRip,
-               r->vmlaunchResult, r->lastInstructionError, passed);
+               r->vmlaunchResult, r->lastInstructionError,
+               r->l2FuseTripped, r->l2FuseReason, r->l2FuseCount,
+               r->l2FuseRip, passed);
     } else {
         printf("\n=== 嵌套自虚拟化（L1 把自己变成来宾）===\n");
         printf("  进入 L2     : %s%s\n",
@@ -5005,6 +5009,19 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson)
                r->selfVirtReturnedToL1
                    ? "**是** —— L1 的宿主处理器跑完并交还了上下文"
                    : "**否** —— 进去了没回来");
+        /*
+         * 熔断的读数。这是挂死唯一会留下的东西 —— 没有它，同样的失败在来宾里
+         * 读不到、在宿主日志里也读不到。
+         */
+        if (r->l2FuseTripped) {
+            printf("  **熔断跳闸** : L2 在同一条指令上以同样的原因退出了 %lu 次\n",
+                   r->l2FuseCount);
+            printf("                 退出原因 %lu   停在 0x%016llX\n",
+                   r->l2FuseReason, r->l2FuseRip);
+            printf("                 —— 这就是之前那次挂死的样子，只是这回被拦住了\n");
+        } else {
+            printf("  熔断        : 未跳闸（L2 一直在往前走）\n");
+        }
         if (r->selfVirtCpuidPassedThrough) {
             printf("  **CPUID 没有退出** —— 架构上不该发生，记下来而不是当它没发生\n");
         }

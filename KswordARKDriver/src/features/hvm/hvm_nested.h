@@ -58,6 +58,35 @@ typedef struct _KSW_HVM_NESTED_VCPU
     UCHAR Reserved1[3];
     /* Preserve a monotonic dispatched instruction count. */
     ULONGLONG InstructionCount;
+    /*
+     * The no-progress fuse.
+     *
+     * An L2 that exits, gets resolved, resumes and faults identically forever
+     * never reaches L1 and never reaches a bugcheck: the processor is busy, so
+     * nothing times out, and the machine simply stops answering with no dump
+     * and no host-side event.  That is measured, not hypothetical - it is what
+     * self-virtualization does today.
+     *
+     * Progress is keyed on RIP, exit reason and RCX together.  RIP alone is
+     * wrong: a REP string instruction with I/O exiting legitimately exits at
+     * the same RIP once per iteration, and RCX is what tells that apart from
+     * an access that is genuinely not advancing.
+     *
+     * This is not only instrumentation.  Hosting an L1 we do not control means
+     * a misbehaving one must not be able to wedge the machine, and a fuse is
+     * the only thing standing between "L1 has a bug" and "the box is gone".
+     */
+    ULONGLONG L2ProgressRip;
+    ULONGLONG L2ProgressRcx;
+    ULONG L2ProgressReason;
+    ULONG L2NoProgressCount;
+    /* Latch the trip, so the next entry is refused rather than re-looping. */
+    BOOLEAN L2FuseTripped;
+    UCHAR Reserved2[3];
+    /* Preserve what the fuse saw, which is the whole point of tripping. */
+    ULONGLONG L2FuseRip;
+    ULONG L2FuseReason;
+    ULONG L2FuseCount;
     /* Preserve the VMCS that runs L1, so reflection can return to it. */
     ULONGLONG Vmcs01Physical;
     /* Preserve where L1 would resume had its entry instruction merely failed. */

@@ -966,6 +966,19 @@ KswordARKHvmNestedProbeExecute(
                     }
                     response->selfVirtExitReason = slot->L2ExitReason;
                     response->selfVirtGuestRip = slot->L2GuestRip;
+                    /*
+                     * The fuse's verdict, read whether or not it tripped.
+                     *
+                     * Reported on every arrival rather than only the third:
+                     * if the fuse is what ended the run, the third arrival is
+                     * exactly the one that happens, and if it did not trip the
+                     * zeroes say so.
+                     */
+                    response->l2FuseTripped =
+                        vcpu->Nested.L2FuseTripped ? 1UL : 0UL;
+                    response->l2FuseReason = vcpu->Nested.L2FuseReason;
+                    response->l2FuseCount = vcpu->Nested.L2FuseCount;
+                    response->l2FuseRip = vcpu->Nested.L2FuseRip;
                 } else if (InterlockedCompareExchange(
                         &slot->L2Exited, 0L, 0L) == 0L) {
                     response->vmlaunchResult =

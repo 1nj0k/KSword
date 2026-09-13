@@ -831,6 +831,18 @@ KswordARKHvmNestedHandleExit(
             Nested->VmcsCurrent = FALSE;
             /* Clear any prior L2 launch attempt. */
             Nested->L2LaunchAttempted = FALSE;
+            /*
+             * Clear the no-progress latch: VMXOFF is L1 starting over.
+             *
+             * Not cleared anywhere earlier on purpose.  The latch exists to
+             * stop an L1 from resuming straight back into the loop it was just
+             * pulled out of, so anything short of abandoning VMX operation
+             * entirely leaves it armed.  What it recorded is kept - the
+             * diagnosis outlives the latch, because the reader of that
+             * diagnosis always arrives after L1 has given up.
+             */
+            Nested->L2FuseTripped = FALSE;
+            Nested->L2NoProgressCount = 0UL;
             /* Publish dispatch-ready state after VMXOFF. */
             Nested->State =
                 KSWORD_ARK_HVM_NESTED_STATE_DISPATCH_READY;

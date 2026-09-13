@@ -2178,6 +2178,22 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
     unsigned long selfVirtCpuidPassedThrough;
     unsigned long long selfVirtExitReason;
     unsigned long long selfVirtGuestRip;
+    /*
+     * 无进展熔断：L2 一直在同一条指令上以同样的原因退出。
+     *
+     * 这三格是**挂死唯一会留下的东西**。实测过：这种挂死没有蓝屏、没有转储、
+     * 宿主 Hyper-V 日志里也没有任何事件 —— 处理器一直很忙，所以什么超时都不会
+     * 触发，机器只是不再应答。熔断把它变成一条可读的记录。
+     *
+     * 进展的判定键是 RIP + 退出原因 + RCX 三者。只看 RIP 是错的：带 I/O 拦截的
+     * REP 串指令每迭代一次就在同一个 RIP 上退出一次，完全合法，而 RCX 正是把
+     * 那种情况和"真的没往前走"分开的东西。
+     */
+    unsigned long l2FuseTripped;
+    unsigned long l2FuseReason;
+    unsigned long l2FuseCount;
+    unsigned long l2FuseReserved;
+    unsigned long long l2FuseRip;
 } KSWORD_ARK_HVM_NESTED_PROBE_ROW;
 
 /*
