@@ -1908,6 +1908,19 @@ typedef struct _KSWORD_ARK_HVM_INJECT_RESPONSE
  * 期望结果是 VMLAUNCH 拿到 Intel 错误 7（控制字段非法），且「L2 跑过」为否。
  */
 #define KSWORD_ARK_HVM_NESTED_PROBE_FLAG_REQUEST_AD 0x00020000UL
+/*
+ * 让 L1 虚拟化**正在跑的这个上下文**，而不是一页玩具代码。
+ *
+ * 这是"能不能托住一个真 hypervisor"与"能不能托住我们写的那个 L2 小程序"之间的
+ * 分界线。真 hypervisor（我们自己的常驻路径、VMware 的 VMM）做的都是同一件事：
+ * 捕获当前处理器状态、把 vmcs 的 guest RIP 指回自己紧接着的那条指令、VMLAUNCH，
+ * 于是**它自己**变成了来宾。玩具 L2 用的是合成的 RIP、合成的栈和一页恒等映射的
+ * 代码，段/CR3/页表全都不必当真。
+ *
+ * 单独一个 flag 而不是替换原来的 L2：MSR 路由那条判据依赖 L2 程序里确定的指令
+ * 偏移，换掉它等于把一条已经绿的、来之不易的判据拆掉去换一条新的。
+ */
+#define KSWORD_ARK_HVM_NESTED_PROBE_FLAG_SELF_VIRTUALIZE 0x00040000UL
 
 /*
  * L2 那段程序里三个有意义的停靠点，按距代码页起点的字节偏移。
@@ -2146,6 +2159,25 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
     unsigned long long vmcs02ExitMsrStoreAddress;
     unsigned long vmcs02EntryMsrLoadCount;
     unsigned long vmcs02ExitMsrStoreCount;
+    /*
+     * 自虚拟化：L1 把**自己**变成来宾，跑完一圈再回来。
+     *
+     * 三格分别是三次到达同一个捕获点，缺一不可：
+     *   reachedL2   —— VM entry 成功了，我们现在是以 L2 的身份在执行自己的代码
+     *   exitReason  —— L2 里那条 CPUID 退出之后，**L1 从 vmcs12 里读到的**原因，
+     *                  应当是 10。这一格才证明退出被正确投递给了 L1，而不是被
+     *                  外层自己吃掉
+     *   returnedToL1 —— L1 的宿主处理器跑完、VMXOFF、把上下文还了回来
+     *
+     * 只看 reachedL2 不够：进得去出不来，和根本进不去，对一个真 hypervisor 来说
+     * 一样是死的。
+     */
+    unsigned long selfVirtAttempted;
+    unsigned long selfVirtReachedL2;
+    unsigned long selfVirtReturnedToL1;
+    unsigned long selfVirtCpuidPassedThrough;
+    unsigned long long selfVirtExitReason;
+    unsigned long long selfVirtGuestRip;
 } KSWORD_ARK_HVM_NESTED_PROBE_ROW;
 
 /*

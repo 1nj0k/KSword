@@ -210,6 +210,8 @@ typedef struct _KSW_HVM_NESTED_PROBE_CONTEXT
      */
     PVOID MsrAreaVirtual;
     ULONGLONG MsrAreaPhysical;
+    /* Run L2 as this very context instead of the synthetic code page. */
+    BOOLEAN SelfVirtualize;
     /* One page of L2 code, plus the stack L2 runs on. */
     PVOID L2CodeVirtual;
     /* The stack this probe's own L1 VM-exit handler runs on. */
@@ -249,6 +251,15 @@ typedef struct _KSW_HVM_NESTED_PROBE_CONTEXT
 typedef struct _KSW_HVM_PROBE_SLOT
 {
     volatile LONG L2Exited;
+    /*
+     * Which arrival at the self-virtualize capture point this is.
+     *
+     * One capture point is reached three times - as L1 before entry, as L2
+     * after it, and as L1 again once the host handler restores the context -
+     * and the code has to take a different branch each time.  L2Exited alone
+     * cannot say: it is clear for the first two arrivals.
+     */
+    volatile LONG SelfStage;
     volatile ULONGLONG L2ExitReason;
     volatile ULONGLONG L2Qualification;
     volatile ULONGLONG L2GuestRip;
@@ -848,18 +859,114 @@ KswordARKHvmNestedProbeExecute(
                 slot->L2Qualification = 0ULL;
                 slot->L2GuestRip = 0ULL;
                 InterlockedExchange(&slot->L2Exited, 0L);
+                InterlockedExchange(&slot->SelfStage, 0L);
                 RtlCaptureContext(&slot->ResumeContext);
                 /*
-                 * Two paths arrive here.
+                 * Self-virtualization: L1 makes *this* context its guest.
                  *
-                 * The first is the ordinary one, immediately after the
-                 * capture, with the flag clear - that path launches.  The
-                 * second is the L1 exit handler restoring this context, with
-                 * the flag set - that path must not launch again.  The flag
-                 * is read through an interlocked access so it comes from
-                 * memory rather than a register the restore just rewrote.
+                 * This is the difference between hosting a hypervisor and
+                 * hosting a test program.  A real one - our own resident path,
+                 * VMware's VMM - captures the processor's state, points the
+                 * VMCS's guest RIP back at its own next instruction, and
+                 * launches, so that it becomes its own guest.  The synthetic
+                 * L2 above runs on a made-up RIP and stack where the segments,
+                 * CR3 and page tables never have to be real.
+                 *
+                 * One capture point, three arrivals, told apart by two flags
+                 * read out of memory rather than registers the restore just
+                 * rewrote:
+                 *   L2Exited set  -> the host handler brought us back
+                 *   SelfStage set -> we are executing as L2 right now
+                 *   neither       -> first arrival, still L1, about to enter
                  */
-                if (InterlockedCompareExchange(
+                if (Probe->SelfVirtualize) {
+                    response->selfVirtAttempted = 1UL;
+                    if (InterlockedCompareExchange(
+                            &slot->L2Exited, 0L, 0L) != 0L) {
+                        /* Third arrival: L1 handled L2's exit and returned. */
+                        response->selfVirtReturnedToL1 = 1UL;
+                        response->vmlaunchResult = 0UL;
+                        response->l2Reached = 1UL;
+                    } else if (InterlockedCompareExchange(
+                            &slot->SelfStage, 0L, 0L) != 0L) {
+                        /*
+                         * Second arrival: the entry worked and this code is
+                         * now running as L2, on its own stack, with its own
+                         * CR3 - the same instructions, one privilege domain
+                         * lower.
+                         */
+                        response->selfVirtReachedL2 = 1UL;
+                        {
+                            int registers[4] = { 0 };
+
+                            /*
+                             * CPUID exits unconditionally, so this is the
+                             * cheapest instruction that must leave L2, and
+                             * the routing default hands it to L1.  If it ever
+                             * does not exit, execution simply falls through
+                             * to the line below - which is why that line
+                             * exists rather than trusting it to.
+                             */
+                            __cpuid(registers, 0);
+                            response->selfVirtCpuidPassedThrough = 1UL;
+                        }
+                    } else {
+                        /*
+                         * First arrival.  Aim vmcs12's guest at this exact
+                         * point and enter; the processor does not load GPRs
+                         * from the VMCS, so L2 resumes with the registers and
+                         * the stack this frame already has.
+                         */
+                        InterlockedExchange(&slot->SelfStage, 1L);
+                        KswordARKHvmNestedProbeVmcs12Write(
+                            KSW_PROBE_VMCS_GUEST_RIP,
+                            (ULONGLONG)slot->ResumeContext.Rip);
+                        KswordARKHvmNestedProbeVmcs12Write(
+                            KSW_PROBE_GUEST_RSP,
+                            (ULONGLONG)slot->ResumeContext.Rsp);
+                        /*
+                         * Enter with interrupts masked.  Measured: without
+                         * this the machine hangs, every time.
+                         *
+                         * The captured RFLAGS has IF set, because this code
+                         * runs at PASSIVE_LEVEL.  Carrying that into L2 means
+                         * the first clock interrupt is delivered *inside* L2:
+                         * the handler runs there, the scheduler runs there,
+                         * and the next thread runs there too.  The thread that
+                         * set L2 up gets switched away, nothing ever reaches
+                         * the VMXOFF, and the processor stays one
+                         * virtualization level deeper forever - which is not a
+                         * crash, so there is no bugcheck and no dump, just a
+                         * machine that stops answering.
+                         *
+                         * That is exactly what residency does on purpose, and
+                         * exactly what a transient L1 must not do.  The
+                         * synthetic L2 above never hit it because it enters
+                         * with a literal RFLAGS of 0x2, where IF is already
+                         * clear - the bug was invisible until L2 became real
+                         * code with real flags.
+                         *
+                         * Bit 1 is the reserved always-one bit; VM entry
+                         * refuses a guest RFLAGS without it.
+                         */
+                        KswordARKHvmNestedProbeVmcs12Write(
+                            KSW_PROBE_GUEST_RFLAGS,
+                            ((ULONGLONG)slot->ResumeContext.EFlags &
+                                ~0x200ULL) | 0x2ULL);
+                        response->vmlaunchResult =
+                            (ULONG)__vmx_vmlaunch();
+                        if (response->vmlaunchResult != 0UL) {
+                            SIZE_T launchError = 0U;
+
+                            if (__vmx_vmread(0x4400U, &launchError) == 0) {
+                                response->lastInstructionError =
+                                    (ULONG)launchError;
+                            }
+                        }
+                    }
+                    response->selfVirtExitReason = slot->L2ExitReason;
+                    response->selfVirtGuestRip = slot->L2GuestRip;
+                } else if (InterlockedCompareExchange(
                         &slot->L2Exited, 0L, 0L) == 0L) {
                     response->vmlaunchResult =
                         (ULONG)__vmx_vmlaunch();
@@ -1039,10 +1146,12 @@ static NTSTATUS
 KswordARKHvmNestedProbeRunOne(
     _Out_ KSWORD_ARK_HVM_NESTED_PROBE_ROW* Response,
     _In_ const PROCESSOR_NUMBER* TargetProcessor,
-    _In_ BOOLEAN RequestAccessedDirty
+    _In_ BOOLEAN RequestAccessedDirty,
+    _In_ BOOLEAN SelfVirtualize
     )
 {
     const BOOLEAN requestAccessedDirty = RequestAccessedDirty;
+    const BOOLEAN selfVirtualize = SelfVirtualize;
     KSW_HVM_NESTED_PROBE_CONTEXT probe = { 0 };
     PHYSICAL_ADDRESS lowest = { 0 };
     PHYSICAL_ADDRESS highest = { 0 };
@@ -1240,6 +1349,7 @@ KswordARKHvmNestedProbeRunOne(
      * exactly the pointer it had, and the only difference between the two runs
      * is this one bit.
      */
+    probe.SelfVirtualize = selfVirtualize;
     if (requestAccessedDirty && probe.Ept12Pointer != 0ULL) {
         probe.Ept12Pointer |= (1ULL << 6);
     }
@@ -1346,6 +1456,8 @@ typedef struct _KSW_HVM_PROBE_WORKER
     PVOID Thread;
     /* Carry the negative-case selector to the worker that will use it. */
     BOOLEAN RequestAccessedDirty;
+    /* Carry the self-virtualize selector the same way. */
+    BOOLEAN SelfVirtualize;
 } KSW_HVM_PROBE_WORKER;
 
 /* Run one worker's probe and exit.  One thread per processor. */
@@ -1359,7 +1471,8 @@ KswordARKHvmNestedProbeWorker(
     (void)KswordARKHvmNestedProbeRunOne(
         worker->Row,
         &worker->Target,
-        worker->RequestAccessedDirty);
+        worker->RequestAccessedDirty,
+        worker->SelfVirtualize);
     PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
@@ -1409,6 +1522,10 @@ KswordARKHvmNestedProbeRun(
             ((Request->flags &
                 KSWORD_ARK_HVM_NESTED_PROBE_FLAG_REQUEST_AD) != 0UL)
                 ? TRUE
+                : FALSE,
+            ((Request->flags &
+                KSWORD_ARK_HVM_NESTED_PROBE_FLAG_SELF_VIRTUALIZE) != 0UL)
+                ? TRUE
                 : FALSE);
         Response->status = Response->rows[0].status;
         /* Return the single-processor result. */
@@ -1454,6 +1571,11 @@ KswordARKHvmNestedProbeRun(
         workers[index].RequestAccessedDirty =
             ((Request->flags &
                 KSWORD_ARK_HVM_NESTED_PROBE_FLAG_REQUEST_AD) != 0UL)
+                ? TRUE
+                : FALSE;
+        workers[index].SelfVirtualize =
+            ((Request->flags &
+                KSWORD_ARK_HVM_NESTED_PROBE_FLAG_SELF_VIRTUALIZE) != 0UL)
                 ? TRUE
                 : FALSE;
         Response->rows[index].processorIndex = index;

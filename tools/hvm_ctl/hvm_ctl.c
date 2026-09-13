@@ -4921,6 +4921,101 @@ static int DoMsrPolicy(HANDLE h, unsigned long operation,
  * 期望：L2 真的跑起来（VMLAUNCH 成功、l2Reached），且驱动报 A/D 处于**在维护**
  * 状态。只看"跑起来了"不够 —— 不维护也一样跑得起来，区别全在那一格。
  */
+/*
+ * 自虚拟化：让 L1 把**它自己正在跑的那个上下文**变成来宾。
+ *
+ * 这是"托住一个 hypervisor"与"托住一段测试程序"之间的分界线。之前那个 L2 跑在
+ * 一页合成代码上、用合成的 RIP 与栈，段/CR3/页表都不必当真；而我们自己的常驻
+ * 路径、以及 VMware 的 VMM，做的都是同一件事 —— 捕获当前状态、把 guest RIP
+ * 指回自己下一条指令、VMLAUNCH，于是自己成了自己的来宾。
+ *
+ * 判据要三格齐全：进得去（reachedL2）、L2 里的退出被**投递给 L1**（exitReason
+ * 是 10，从 vmcs12 读出来的）、以及 L1 拿回控制权并收尾（returnedToL1）。
+ * 只看第一格是不够的：进得去出不来，对一个真 hypervisor 来说跟进不去一样是死的。
+ */
+static int DoNestedSelfVirtualize(HANDLE h, int asJson)
+{
+    KSWORD_ARK_HVM_NESTED_PROBE_REQUEST req;
+    KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE rsp;
+    DWORD returned = 0;
+    BOOL ok;
+    const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r;
+    int passed;
+
+    memset(&req, 0, sizeof(req));
+    req.version = KSWORD_ARK_HVM_NESTED_PROBE_PROTOCOL_VERSION;
+    req.size = (unsigned long)sizeof(req);
+    req.flags = KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
+                KSWORD_ARK_HVM_NESTED_PROBE_FLAG_SELF_VIRTUALIZE;
+    req.confirmationToken = KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN;
+    memset(&rsp, 0, sizeof(rsp));
+    ok = DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_NESTED_PROBE,
+                         &req, (DWORD)sizeof(req),
+                         &rsp, (DWORD)sizeof(rsp), &returned, NULL);
+    if (returned < sizeof(rsp) || rsp.returnedRows == 0UL) {
+        fprintf(stderr,
+                "NESTED_PROBE(self) 无完整响应：ok=%d returned=%lu win32=%lu\n",
+                (int)ok, returned, GetLastError());
+        return 1;
+    }
+    r = &rsp.rows[0];
+    /* 前置没建立就不算测到，跟 A/D 那条同一个道理。 */
+    if (r->vmxonResult != 0UL || r->vmptrldResult != 0UL) {
+        if (!asJson) {
+            printf("=== 嵌套自虚拟化 ===\n");
+            printf("  **空过**：VMXON/VMPTRLD 没成功，这一轮没走到进入那道门。\n");
+        }
+        return 3;
+    }
+    passed = (r->selfVirtAttempted == 1UL &&
+              r->selfVirtReachedL2 == 1UL &&
+              r->selfVirtReturnedToL1 == 1UL &&
+              r->selfVirtCpuidPassedThrough == 0UL &&
+              (r->selfVirtExitReason & 0xFFFFULL) == 10ULL) ? 1 : 0;
+    if (asJson) {
+        printf("{\"kind\":\"nested-selfvirt\",\"attempted\":%lu,"
+               "\"reachedL2\":%lu,\"returnedToL1\":%lu,"
+               "\"cpuidPassedThrough\":%lu,"
+               "\"exitReason\":%llu,\"guestRip\":\"0x%016llX\","
+               "\"vmlaunch\":%lu,\"lastInstructionError\":%lu,"
+               "\"pass\":%d}\n",
+               r->selfVirtAttempted, r->selfVirtReachedL2,
+               r->selfVirtReturnedToL1, r->selfVirtCpuidPassedThrough,
+               r->selfVirtExitReason & 0xFFFFULL, r->selfVirtGuestRip,
+               r->vmlaunchResult, r->lastInstructionError, passed);
+    } else {
+        printf("\n=== 嵌套自虚拟化（L1 把自己变成来宾）===\n");
+        printf("  进入 L2     : %s%s\n",
+               r->selfVirtReachedL2 ? "**是**" : "**否**",
+               r->selfVirtReachedL2
+                   ? "  —— 同一段代码，低一个特权域在跑"
+                   : "  —— VM entry 没成功");
+        if (!r->selfVirtReachedL2) {
+            printf("  VMLAUNCH    : 结果 %lu   指令错误号 %lu\n",
+                   r->vmlaunchResult, r->lastInstructionError);
+            PrintVmInstructionError("  ", r->lastInstructionError);
+        }
+        printf("  L2 的退出   : 原因 %llu %s   停在 0x%016llX\n",
+               r->selfVirtExitReason & 0xFFFFULL,
+               ((r->selfVirtExitReason & 0xFFFFULL) == 10ULL)
+                   ? "**CPUID，已投递给 L1**"
+                   : "**不是 CPUID —— 没被投递给 L1，或者根本没退出**",
+               r->selfVirtGuestRip);
+        printf("  回到 L1     : %s\n",
+               r->selfVirtReturnedToL1
+                   ? "**是** —— L1 的宿主处理器跑完并交还了上下文"
+                   : "**否** —— 进去了没回来");
+        if (r->selfVirtCpuidPassedThrough) {
+            printf("  **CPUID 没有退出** —— 架构上不该发生，记下来而不是当它没发生\n");
+        }
+        printf("\n  判据：进得去、L2 的退出被投递给 L1（原因 10）、L1 拿回控制权，\n"
+               "        三格缺一不可。进得去出不来，对一个真 hypervisor 来说\n"
+               "        跟进不去一样是死的。\n");
+        printf("  => %s\n", passed ? "**PASS**" : "FAIL");
+    }
+    return passed ? 0 : 2;
+}
+
 static int DoNestedProbeAdRefusal(HANDLE h, int asJson)
 {
     KSWORD_ARK_HVM_NESTED_PROBE_REQUEST req;
@@ -5305,6 +5400,14 @@ static void PrintUsage(void)
            "映射窗口，\n"
            "                   它们结构上互不干涉——而本仓库里这句话已经栽过不止一次。"
            "任一行 FAIL 即整体 FAIL。\n");
+    printf("  nested-selfvirt  **本版本会把机器挂住，实测两次，别在要用的机器上跑。**\n"
+           "                   自虚拟化：让 L1 把**它自己正在跑的上下文**变成来宾。\n"
+           "                   与上面那两条的区别是 L2 不再是一页合成代码——真 "
+           "hypervisor（我们自己的\n"
+           "                   常驻路径、VMware 的 VMM）做的正是这件事，段/CR3/"
+           "页表全都得当真。\n"
+           "                   三格齐全才算过：进得去、L2 的退出被投递给 L1、L1 "
+           "拿回控制权。\n");
     printf("  probe-xonly      execute-only 探针（要求常驻**没在跑**；自己走完 "
            "装规则→起常驻→读→停→清）\n");
     printf("  rule-allowonce   ALLOW_ONCE 规则**安装期**的门（要求常驻没在跑；"
@@ -5392,6 +5495,8 @@ int main(int argc, char** argv)
         rc = DoNestedProbe(h, asJson, 1);
     } else if (strcmp(cmd, "nested-ad") == 0) {
         rc = DoNestedProbeAdRefusal(h, asJson);
+    } else if (strcmp(cmd, "nested-selfvirt") == 0) {
+        rc = DoNestedSelfVirtualize(h, asJson);
     } else if (strcmp(cmd, "gdt-dump") == 0) {
         /* 第二个参数是处理器号，缺省 0。GDT 是每处理器的。 */
         int cpu = (argc > 2) ? atoi(argv[2]) : 0;
