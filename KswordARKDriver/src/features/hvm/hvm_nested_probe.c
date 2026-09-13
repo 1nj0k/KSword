@@ -299,6 +299,18 @@ static KSW_HVM_PROBE_SLOT g_KswordProbeSlots[
  */
 static volatile LONG g_KswordProbeL2Marker;
 
+/*
+ * Set only if the instruction after L2's CPUID executes, which it must not.
+ *
+ * A volatile global rather than a field of the response row, because the row
+ * is ordinary memory: the compiler is free to schedule a plain store to it
+ * above the __cpuid intrinsic, and it did.  That produced a flag reading "CPUID
+ * fell through" on a run where the exit count says the CPUID left L2 exactly
+ * once - two instruments disagreeing because one of them was measuring the
+ * optimizer rather than the processor.
+ */
+static volatile LONG g_KswordProbeL2PassThrough;
+
 EXTERN_C
 /*
  * Launch L2 so that it resumes by returning from this very call.
@@ -914,6 +926,7 @@ KswordARKHvmNestedProbeExecute(
                 InterlockedExchange(&slot->SelfStage, 0L);
                 InterlockedExchange(&slot->L2SelfMarker, 0L);
                 g_KswordProbeL2Marker = 0L;
+                g_KswordProbeL2PassThrough = 0L;
                 RtlCaptureContext(&slot->ResumeContext);
                 /*
                  * Self-virtualization: L1 makes *this* context its guest.
@@ -973,6 +986,8 @@ KswordARKHvmNestedProbeExecute(
                             (InterlockedCompareExchange(
                                 &slot->L2SelfMarker, 0L, 0L) != 0L)
                                 ? 1UL : 0UL;
+                        response->selfVirtCpuidPassedThrough =
+                            (g_KswordProbeL2PassThrough != 0L) ? 1UL : 0UL;
                     } else {
                         /*
                          * First arrival: still L1, about to enter.
@@ -1035,9 +1050,10 @@ KswordARKHvmNestedProbeExecute(
                         /*
                          * Reached only if CPUID did not leave L2, which is
                          * architecturally impossible - recorded rather than
-                         * trusted.
+                         * trusted, through a volatile so the record cannot be
+                         * scheduled above the instruction it is about.
                          */
-                        response->selfVirtCpuidPassedThrough = 1UL;
+                        g_KswordProbeL2PassThrough = 1L;
                     } else {
                         /* The entry did not happen; say why. */
                         SIZE_T launchError = 0U;
