@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build" ToolsVersion="12.0">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -331,7 +331,18 @@
     <ClCompile Include="src\features\rxpf\rxpf_self_test.c" />
     <ClCompile Include="src\features\rxpf\x64_instruction_emulator.c" />
     <ClCompile Include="src\features\rxpf\x64_instruction_emulator_tests.c" />
-  <ClCompile Include="src\features\callback\callback_external_wfp.c" /><ClCompile Include="src\features\callback\callback_external_minifilter.c" /><ClCompile Include="src\features\callback\callback_external_safe.c" /><ClCompile Include="src\features\memory\memory_physical.c" /><ClCompile Include="src\features\memory\memory_physical_layout.c" /><ClCompile Include="src\features\memory\memory_pagetable.c" /><ClCompile Include="src\features\memory\memory_kernel_exec_scan.c" /><ClCompile Include="src\features\memory\memory_kernel_exec_scan_helpers.c" /><ClCompile Include="src\features\memory\memory_kernel_evidence.c" /><ClCompile Include="src\features\memory\memory_evidence_enrichment.c" /><ClCompile Include="src\features\memory\memory_ioctl.c" /></ItemGroup>
+    <ClCompile Include="src\features\callback\callback_external_wfp.c" />
+    <ClCompile Include="src\features\callback\callback_external_minifilter.c" />
+    <ClCompile Include="src\features\callback\callback_external_safe.c" />
+    <ClCompile Include="src\features\memory\memory_physical.c" />
+    <ClCompile Include="src\features\memory\memory_physical_layout.c" />
+    <ClCompile Include="src\features\memory\memory_pagetable.c" />
+    <ClCompile Include="src\features\memory\memory_kernel_exec_scan.c" />
+    <ClCompile Include="src\features\memory\memory_kernel_exec_scan_helpers.c" />
+    <ClCompile Include="src\features\memory\memory_kernel_evidence.c" />
+    <ClCompile Include="src\features\memory\memory_evidence_enrichment.c" />
+    <ClCompile Include="src\features\memory\memory_ioctl.c" />
+  </ItemGroup>
   <ItemGroup>
     <MASM Include="src\features\hvm\hvm_entry.asm">
       <ExcludedFromBuild Condition="'$(Platform)'=='ARM64'">true</ExcludedFromBuild>
@@ -518,7 +529,11 @@
     <ClInclude Include="src\features\win32k\win32k_query.h" />
     <ClInclude Include="src\features\device_audit\device_audit_internal.h" />
     <ClInclude Include="src\features\hwid\hwid_dispatch_hooks.h" />
-  <ClInclude Include="src\features\callback\callback_external_core.h" /><ClInclude Include="src\features\callback\callback_external_wfp.h" /><ClInclude Include="src\features\callback\callback_external_minifilter.h" /><ClInclude Include="src\features\callback\callback_external_safe.h" /></ItemGroup>
+    <ClInclude Include="src\features\callback\callback_external_core.h" />
+    <ClInclude Include="src\features\callback\callback_external_wfp.h" />
+    <ClInclude Include="src\features\callback\callback_external_minifilter.h" />
+    <ClInclude Include="src\features\callback\callback_external_safe.h" />
+  </ItemGroup>
   <ItemGroup>
     <Inf Include="KswordARKDriver.inf">
       <SpecifyDriverVerDirectiveDate>true</SpecifyDriverVerDirectiveDate>
@@ -533,6 +548,7 @@
     <Configuration>Debug</Configuration>
     <Platform Condition="'$(Platform)' == ''">x64</Platform>
     <RootNamespace>KswordARKDriver</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <PropertyGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
@@ -694,7 +710,7 @@
     <PropertyGroup>
       <KswordArkCleanDriverPath>$(TargetDir)KswordARK_Clean$(TargetExt)</KswordArkCleanDriverPath>
     </PropertyGroup>
-    <Message Importance="High" Text="KswordARK: copying unsigned clean driver before post-build variant signing: $(TargetPath) -> $(KswordArkCleanDriverPath)" />
+    <Message Importance="High" Text="KswordARK: copying unsigned clean driver before post-build variant signing: $(TargetPath) -&gt; $(KswordArkCleanDriverPath)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(KswordArkCleanDriverPath)" SkipUnchangedFiles="false" />
   </Target>
   <Target Name="KswordArkAutoVariantSignAfterBuild" AfterTargets="Build" Condition="'$(ConfigurationType)'=='Driver' and Exists('$(TargetPath)') and '$(KswordArkSkipAutoVariantSign)'!='true' and '$(KswordArkSkipAutoTestSign)'!='true'">

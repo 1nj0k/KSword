@@ -736,6 +736,30 @@ namespace
         return reinterpret_cast<INT_PTR>(shellResult) > 32;
     }
 
+    bool tryLaunchUacDeskCompanion()
+    {
+        const std::wstring mainPath = queryCurrentExecutablePath();
+        if (mainPath.empty()) return false;
+        const std::wstring directory = resolveExecutableDirectoryPath(mainPath);
+        if (directory.empty()) return false;
+        const std::wstring helperPath = directory + L"\\KswordUacDesk.exe";
+        if (::GetFileAttributesW(helperPath.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
+        std::wstring commandLine = L"\"" + helperPath + L"\"";
+        std::vector<wchar_t> mutableCommand(commandLine.begin(), commandLine.end());
+        mutableCommand.push_back(L'\0');
+        STARTUPINFOW startupInfo{};
+        startupInfo.cb = sizeof(startupInfo);
+        startupInfo.dwFlags = STARTF_USESHOWWINDOW;
+        startupInfo.wShowWindow = SW_HIDE;
+        PROCESS_INFORMATION processInformation{};
+        const BOOL createOk = ::CreateProcessW(nullptr, mutableCommand.data(), nullptr, nullptr, FALSE,
+            CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW, nullptr, directory.c_str(), &startupInfo, &processInformation);
+        if (!createOk) return false;
+        ::CloseHandle(processInformation.hThread);
+        ::CloseHandle(processInformation.hProcess);
+        return true;
+    }
+
     // tryCreateRestartedSelfBeforeSplash 作用：
     // - 在 QApplication 创建前使用 CreateProcessW 重新启动当前程序；
     // - 只依赖配置文件承载缩放结果，不通过参数传递缩放状态；
@@ -1445,7 +1469,7 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    if (startupSettings.autoRequestAdminOnStartup && !isCurrentProcessElevated())
+    if (!privilegeRestartLaunch && !isCurrentProcessElevated())
     {
         startupTraceRaw("autoRequestAdminOnStartup enabled and process not elevated");
         kLogEvent adminRequestEvent;
@@ -1800,6 +1824,14 @@ int main(int argc, char* argv[])
             << eol;
     }
     applyNativeAppIconToWidget(&window);
+
+    if (isCurrentProcessElevated())
+    {
+        QTimer::singleShot(0, &window, []()
+            {
+                (void)tryLaunchUacDeskCompanion();
+            });
+    }
 
     if (!unlockPathList.isEmpty())
     {

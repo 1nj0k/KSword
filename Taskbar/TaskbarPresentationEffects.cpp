@@ -3,9 +3,31 @@
 
 #include <QColor>
 #include <QGraphicsOpacityEffect>
+#include <QPainter>
 #include <QPropertyAnimation>
 #include <QResizeEvent>
 #include <QVariantAnimation>
+
+namespace
+{
+// 将 Logo 着色为指定前景色，同时保留 PNG 原有 alpha，避免把 QLabel 的透明区域填成实色矩形。
+QPixmap tintPixmapPreservingAlpha(const QPixmap& source, const QColor& color)
+{
+    if (source.isNull())
+    {
+        return QPixmap();
+    }
+
+    QPixmap tinted(source.size());
+    tinted.fill(Qt::transparent);
+    QPainter painter(&tinted);
+    painter.setCompositionMode(QPainter::CompositionMode_Source);
+    painter.drawPixmap(0, 0, source);
+    painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    painter.fillRect(tinted.rect(), color);
+    return tinted;
+}
+}
 
 void Taskbar::applyTaskbarTheme(bool earthquakeAlert, const QColor& backgroundColor)
 {
@@ -36,8 +58,14 @@ void Taskbar::applyTaskbarTheme(bool earthquakeAlert, const QColor& backgroundCo
     }
     m_leftSpectrum->setBarColor(foreground);
     m_rightSpectrum->setBarColor(foreground);
-    logoColorEffect->setColor(foreground);
-    logoColorEffect->setStrength(earthquakeAlert ? 1.0 : 0.0);
+    if (logoLabel != nullptr && !logoPixmap.isNull())
+    {
+        const QPixmap displayPixmap = earthquakeAlert
+            ? tintPixmapPreservingAlpha(logoPixmap, foreground)
+            : logoPixmap;
+        logoLabel->setPixmap(displayPixmap.scaled(QSize(QWIDGETSIZE_MAX, logoLabel->height()),
+            Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    }
     for (GlowIconButton* button : { lockBtn, toolBtn, settingsBtn, userBtn })
     {
         if (button != nullptr)

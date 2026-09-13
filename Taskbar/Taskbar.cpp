@@ -18,7 +18,6 @@
 #include <QDateTime>
 #include <QCoreApplication>
 #include <QAbstractAnimation>
-#include <QGraphicsColorizeEffect>
 #include <QGraphicsOpacityEffect>
 #include <QEasingCurve>
 #include <QPropertyAnimation>
@@ -288,7 +287,6 @@ Taskbar::Taskbar(QScreen* targetScreen, TaskbarSharedState* sharedState,
     , timeLabel(nullptr)
     , contentLabel(nullptr)
     , logoLabel(nullptr)
-    , logoColorEffect(nullptr)
     , networkSpeedContainer(nullptr)
     , uploadSpeedLabel(nullptr)
     , downloadSpeedLabel(nullptr)
@@ -337,20 +335,16 @@ Taskbar::Taskbar(QScreen* targetScreen, TaskbarSharedState* sharedState,
     hLayout->setContentsMargins(2, 2, 2, 2);
     hLayout->setSpacing(5);
 
-    // 左侧 Logo 使用图形效果统一在地震警报态变黑，不需要复制或新增 WindowsMarker 图标。
+    // 左侧 Logo 在警报态由 applyTaskbarTheme 仅对非透明像素着色。
     logoLabel = new QLabel(centralWidget);
-    QPixmap pixmap(":/Image/Resource/Image/MainLogo.png");
-    if (!pixmap.isNull()) {
+    logoPixmap = QPixmap(":/Image/Resource/Image/MainLogo.png");
+    if (!logoPixmap.isNull()) {
         logoLabel->setFixedHeight(kTaskbarContentHeight);
         logoLabel->setMinimumWidth(1);
-        logoLabel->setPixmap(pixmap.scaled(QSize(QWIDGETSIZE_MAX, logoLabel->height()),
+        logoLabel->setPixmap(logoPixmap.scaled(QSize(QWIDGETSIZE_MAX, logoLabel->height()),
             Qt::KeepAspectRatio, Qt::SmoothTransformation));
         logoLabel->setAlignment(Qt::AlignCenter);
     }
-    logoColorEffect = new QGraphicsColorizeEffect(logoLabel);
-    logoColorEffect->setColor(Qt::white);
-    logoColorEffect->setStrength(0.0);
-    logoLabel->setGraphicsEffect(logoColorEffect);
     hLayout->addWidget(logoLabel);
 
     contentLabel = new QLabel(centralWidget);
