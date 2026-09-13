@@ -866,9 +866,8 @@ namespace
             : QWidget(parent),
               m_iconPixmap(removeFlatBackground(icon.pixmap(QSize(32, 32))))
         {
-            // Keep the branding bar compact enough to share the UAC prompt's
-            // vertical footprint.  The actual window height is aligned when
-            // a new consent HWND is identified.
+            // Keep the branding bar compact.  The companion window height is
+            // determined by its complete content, not by the UAC window.
             setFixedHeight(31);
             setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         }
@@ -945,7 +944,7 @@ namespace
             "QWidget#kswordUacDeskRoot{background:palette(window);color:palette(window-text);}"
             "QLabel{background:transparent;color:palette(window-text);}"
             "QLabel#uacIdentityLabel{color:palette(window-text);}"
-            "QLabel#uacProcessDetailsLabel,QLabel#uacCommandLineLabel{color:#000000;}"
+            "QLabel#uacProcessDetailsLabel{color:#000000;}"
             "QPushButton{min-height:24px;max-height:24px;padding:1px 7px;background:palette(button);color:palette(button-text);"
             "border:1px solid palette(highlight);border-radius:0;}"
             "QPushButton#uacTerminateButton{background:palette(highlight);color:palette(highlighted-text);}"
@@ -2703,8 +2702,10 @@ UacDeskWindow::UacDeskWindow(QWidget* parent)
     // 确保显示伴随窗口不会改变 UAC 的键盘焦点。
     setWindowFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
     resize(430, 460);
-    setMinimumSize(320, 300);
-    setMaximumSize(460, 800);
+    setMinimumWidth(320);
+    setMinimumHeight(0);
+    setMaximumWidth(460);
+    setMaximumHeight(QWIDGETSIZE_MAX);
     auto* root = new QWidget(this);
     root->setObjectName(QStringLiteral("kswordUacDeskRoot"));
     auto* layout = new QVBoxLayout(root);
@@ -2740,16 +2741,12 @@ UacDeskWindow::UacDeskWindow(QWidget* parent)
     originLayout->addWidget(m_identityLabel, 1);
     contentLayout->addWidget(originRow);
 
-    m_processLabel = new QLabel(QStringLiteral("启动参数：不可用\n进程位置：不可用\n启动链：不可用"), content);
+    m_processLabel = new QLabel(QStringLiteral(
+        "启动参数：不可用\n进程位置：不可用\n启动链：不可用\n完整性级别：不可用\n提升类型：不可用\n启动时间：不可用\n运行时长：不可用\n数字签名（发起者）：不可用\n数字签名（目标）：不可用"), content);
     m_processLabel->setObjectName(QStringLiteral("uacProcessDetailsLabel"));
     m_processLabel->setWordWrap(true);
     m_processLabel->setTextFormat(Qt::PlainText);
     contentLayout->addWidget(m_processLabel);
-    m_commandLineLabel = new QLabel(QStringLiteral("完整性级别：不可用\n提升类型：不可用\n启动时间：不可用\n运行时长：不可用"), content);
-    m_commandLineLabel->setObjectName(QStringLiteral("uacCommandLineLabel"));
-    m_commandLineLabel->setWordWrap(true);
-    m_commandLineLabel->setTextFormat(Qt::PlainText);
-    contentLayout->addWidget(m_commandLineLabel);
     contentLayout->addStretch(1);
     auto* actions = new QGridLayout();
     actions->setHorizontalSpacing(14);
@@ -2793,9 +2790,8 @@ UacDeskWindow::UacDeskWindow(QWidget* parent)
     if (QScreen* screen = QGuiApplication::primaryScreen())
     {
         const QRect work = screen->availableGeometry();
-        setMaximumSize(std::min(maximumWidth(), std::max(520, work.width() - 40)),
-                       std::min(maximumHeight(), std::max(360, work.height() - 40)));
-        resize(std::min(width(), maximumWidth()), std::min(height(), maximumHeight()));
+        setMaximumWidth(std::min(maximumWidth(), std::max(320, work.width() - 40)));
+        adjustToContent();
         const int x = std::max(work.left(), work.right() - width() - 24);
         const int y = std::max(work.top(), std::min(work.top() + 72, work.bottom() - height() + 1));
         move(x, y);
@@ -2853,8 +2849,18 @@ void UacDeskWindow::refreshAppearance()
 {
     applySystemPalette();
     setStyleSheet(uacDeskSystemStyle());
+    adjustToContent();
     if (m_brandHeader)
         m_brandHeader->update();
+}
+
+void UacDeskWindow::adjustToContent()
+{
+    if (!centralWidget()) return;
+    centralWidget()->layout()->activate();
+    const int desiredHeight = qMax(1, sizeHint().height());
+    if (height() != desiredHeight)
+        resize(width(), desiredHeight);
 }
 
 bool UacDeskWindow::eventFilter(QObject* watched, QEvent* event)
@@ -2957,8 +2963,9 @@ void UacDeskWindow::applyScanResult(const UacApplicationIdentity& identity, cons
         m_actionState = {};
         m_originIconLabel->setPixmap(removeFlatBackground(QIcon(QStringLiteral(":/KswordUacDesk/KswordLogo.ico")).pixmap(20, 20)));
         m_identityLabel->setText(QStringLiteral("等待 UAC 发起者..."));
-        m_processLabel->setText(QStringLiteral("启动参数：不可用\n进程位置：不可用\n启动链：不可用"));
-        m_commandLineLabel->setText(QStringLiteral("完整性级别：不可用\n提升类型：不可用\n启动时间：不可用\n运行时长：不可用"));
+        m_processLabel->setText(QStringLiteral(
+            "启动参数：不可用\n进程位置：不可用\n启动链：不可用\n完整性级别：不可用\n提升类型：不可用\n启动时间：不可用\n运行时长：不可用\n数字签名（发起者）：不可用\n数字签名（目标）：不可用"));
+        adjustToContent();
         updateButtons();
         return;
     }
@@ -2975,43 +2982,32 @@ void UacDeskWindow::applyScanResult(const UacApplicationIdentity& identity, cons
         m_identityLabel->setText(QStringLiteral("%1 · PID %2")
                                      .arg(processName.isEmpty() ? QStringLiteral("未知") : processName)
                                      .arg(m_actionState.origin.pid));
-        m_processLabel->setText(QStringLiteral("启动参数：%1\n进程位置：%2\n启动链：%3")
+        m_processLabel->setText(QStringLiteral(
+            "启动参数：%1\n进程位置：%2\n启动链：%3\n完整性级别：%4\n提升类型：%5\n启动时间：%6\n运行时长：%7\n数字签名（发起者）：%8\n数字签名（目标）：%9")
                                     .arg(m_actionState.origin.commandLine.isEmpty() ? QStringLiteral("不可用") : m_actionState.origin.commandLine)
                                     .arg(m_actionState.origin.imagePath)
-                                    .arg(m_actionState.launchChain.isEmpty() ? QStringLiteral("不可用") : m_actionState.launchChain));
-        m_commandLineLabel->setText(QStringLiteral("完整性级别：%1\n提升类型：%2\n启动时间：%3\n运行时长：%4\n数字签名（发起者）：%5\n数字签名（目标）：%6")
-                                         .arg(m_actionState.integrityLevel)
-                                         .arg(m_actionState.elevationType)
-                                         .arg(m_actionState.startTime)
-                                         .arg(m_actionState.runDuration)
-                                         .arg(m_actionState.originSignature)
-                                         .arg(m_actionState.targetSignature));
+                                    .arg(m_actionState.launchChain.isEmpty() ? QStringLiteral("不可用") : m_actionState.launchChain)
+                                    .arg(m_actionState.integrityLevel)
+                                    .arg(m_actionState.elevationType)
+                                    .arg(m_actionState.startTime)
+                                    .arg(m_actionState.runDuration)
+                                    .arg(m_actionState.originSignature)
+                                    .arg(m_actionState.targetSignature));
     }
     else
     {
         m_originIconLabel->setPixmap(removeFlatBackground(QIcon(QStringLiteral(":/KswordUacDesk/KswordLogo.ico")).pixmap(20, 20)));
         m_identityLabel->setText(QStringLiteral("UAC 已出现，正在读取发起者..."));
-        m_processLabel->setText(QStringLiteral("启动参数：不可用\n进程位置：不可用\n启动链：不可用"));
-        m_commandLineLabel->setText(QStringLiteral("完整性级别：不可用\n提升类型：不可用\n启动时间：不可用\n运行时长：不可用"));
+        m_processLabel->setText(QStringLiteral(
+            "启动参数：不可用\n进程位置：不可用\n启动链：不可用\n完整性级别：不可用\n提升类型：不可用\n启动时间：不可用\n运行时长：不可用\n数字签名（发起者）：不可用\n数字签名（目标）：不可用"));
     }
+    adjustToContent();
     updateButtons();
     if (shouldPosition)
     {
-        // UAC is policy/theme/version dependent; there is no supported fixed
-        // pixel size. Match the newly observed consent window itself, once.
-        // Keeping this inside the new-HWND branch prevents timer-driven jumps
-        // after the user drags the diagnostic window.
-        RECT nativeUac{};
-        if (GetWindowRect(identity.consentWindow, &nativeUac) && nativeUac.bottom > nativeUac.top)
-        {
-            const UINT dpi = dpiForWindow(identity.consentWindow);
-            const int uacHeight = qMax(1, qRound((nativeUac.bottom - nativeUac.top) * 96.0 / dpi));
-            setFixedHeight(uacHeight);
-            PrivilegeStage::writeDiagnosticLog(QStringLiteral("uac-layout: native height aligned=%1 qtHeight=%2 dpi=%3")
-                                                   .arg(nativeUac.bottom - nativeUac.top)
-                                                   .arg(uacHeight)
-                                                   .arg(dpi));
-        }
+        // Keep the panel attached only by its top-left relationship to the
+        // newly observed consent window.  Its height is content-driven and is
+        // intentionally not forced to match the native UAC window.
         show();
         repositionBesideUac(identity);
         m_positionedUacWindow = identity.consentWindow;
@@ -3046,11 +3042,11 @@ void UacDeskWindow::repositionBesideUac(const UacApplicationIdentity& identity)
     const int minimumNativeWidth = qRound(minimumWidth() * scale);
     const int preferredNativeWidth = qRound(430 * scale);
     int panelWidth = nativePanel.right - nativePanel.left;
-    const int panelHeight = nativeUac.bottom - nativeUac.top;
+    const int panelHeight = nativePanel.bottom - nativePanel.top;
 
     // The panel is attached in the same native coordinate space as consent:
-    // zero gap, identical top and identical native height. If the monitor
-    // edge leaves a narrower strip, shrink the Qt window before placing it.
+    // zero gap, identical top, and content-driven height. If the monitor edge
+    // leaves a narrower strip, shrink the Qt window before placing it.
     HMONITOR monitor = MonitorFromWindow(identity.consentWindow, MONITOR_DEFAULTTONEAREST);
     MONITORINFO monitorInfo{sizeof(monitorInfo)};
     if (monitor && GetMonitorInfoW(monitor, &monitorInfo))

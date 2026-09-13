@@ -232,6 +232,7 @@ public:
 private:
     void refreshUacState();
     void applyScanResult(const UacApplicationIdentity& identity, const ProcessActionState& actionState);
+    void adjustToContent();
     void repositionBesideUac(const UacApplicationIdentity& identity);
     void updateButtons();
     void showStatus(const QString& status, bool error = false);
@@ -247,7 +248,6 @@ private:
     QLabel* m_originIconLabel = nullptr;
     QLabel* m_identityLabel = nullptr;
     QLabel* m_processLabel = nullptr;
-    QLabel* m_commandLineLabel = nullptr;
     QPushButton* m_suspendButton = nullptr;
     QPushButton* m_terminateButton = nullptr;
     QPushButton* m_powerShellButton = nullptr;
