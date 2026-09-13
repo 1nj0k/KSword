@@ -593,6 +593,27 @@ KswordARKHvmNestedDispatchVmcsPointer(
 }
 
 /*
+ * Report whether one linear address is canonical under 4-level paging.
+ *
+ * Bits 63:47 must all match bit 47.  Five-level paging widens this to 57 bits,
+ * and an address canonical only under that rule is rejected here - which agrees
+ * with the rest of the nested path: the guest page walk in hvm_nested_decode.c
+ * refuses LA57 outright rather than walk a structure format it does not
+ * implement.  A guest using five-level paging is refused consistently rather
+ * than served inconsistently.
+ */
+static BOOLEAN
+KswordARKHvmNestedIsCanonicalAddress(
+    _In_ ULONGLONG LinearAddress
+    )
+{
+    const ULONGLONG high = LinearAddress >> 47;
+
+    /* Report canonical for the low half and for the sign-extended high half. */
+    return (high == 0ULL || high == 0x1FFFFULL) ? TRUE : FALSE;
+}
+
+/*
  * Dispatch INVEPT and INVVPID.
  *
  * These used to be refused, and the stated reason was that precise
@@ -619,6 +640,7 @@ KswordARKHvmNestedDispatchInvalidate(
     KSW_HVM_VMX_OPERAND operand = { 0 };
     ULONGLONG type = 0ULL;
     ULONGLONG descriptor = 0ULL;
+    ULONGLONG linearAddress = 0ULL;
 
     *InstructionError = 0UL;
     /* Refuse invalidation outside L1 VMX operation. */
@@ -645,9 +667,7 @@ KswordARKHvmNestedDispatchInvalidate(
      * Read the first eight bytes of the descriptor.
      *
      * That is the EPT pointer for INVEPT and the VPID plus reserved bits for
-     * INVVPID.  The remaining eight are a linear address INVVPID uses only for
-     * its individual-address type, which is refused below - so reading them
-     * would be reading something nothing acts on.
+     * INVVPID.
      */
     if (!NT_SUCCESS(KswordARKHvmNestedReadGuestQword(
             Nested->PhysWindow,
@@ -657,13 +677,88 @@ KswordARKHvmNestedDispatchInvalidate(
         return KSW_HVM_VMX_RESULT_FAIL_INVALID;
     }
     /*
-     * Accept only the two context-wide types.
+     * The second eight bytes carry a linear address, and only one form reads
+     * them: INVVPID's individual-address type.
      *
-     * Individual-address INVVPID names one linear address, and answering it
-     * with a whole-hierarchy drop would be correct but would also let L1
-     * believe we support a granularity we do not - which matters the moment it
-     * relies on the cheaper call in a loop.  Reporting the operand as invalid
-     * is what the architecture provides for a type we do not implement.
+     * Fetched conditionally rather than always, because every fetch is a walk
+     * of the guest's page tables through the physical window, and a guest
+     * hypervisor issues this instruction in the hundreds while it starts.
+     */
+    if (ExitReason == KSW_VMX_EXIT_INVVPID && type == 0ULL) {
+        if (!NT_SUCCESS(KswordARKHvmNestedReadGuestQword(
+                Nested->PhysWindow,
+                operand.LinearAddress + 8ULL,
+                &linearAddress))) {
+            /* Return the invalid failure that carries no error number. */
+            return KSW_HVM_VMX_RESULT_FAIL_INVALID;
+        }
+    }
+    /*
+     * From here the two instructions stop being the same instruction.
+     *
+     * They share an encoding, an operand layout and this dispatch, and they
+     * invalidate two unrelated things: INVEPT retires EPT-derived translations,
+     * INVVPID retires linear ones.  Serving both with one action was safe only
+     * while INVVPID was refused outright.
+     */
+    if (ExitReason == KSW_VMX_EXIT_INVVPID) {
+        /*
+         * Accept the three types we advertise, and only those.
+         *
+         * Type 3 (single-context, retaining globals) is not advertised in
+         * KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED, so accepting it here would be a
+         * promise the capability MSR does not make.
+         */
+        if (type > 2ULL) {
+            *InstructionError = KSW_VMX_ERROR_INVALID_INVALIDATION_OPERAND;
+            /* Return the valid failure L1 can read an error number from. */
+            return KSW_HVM_VMX_RESULT_FAIL_VALID;
+        }
+        /*
+         * The architectural operand checks, which cost a shift and a compare.
+         *
+         * A VPID of zero is invalid for the two types that name a context, and
+         * an individual-address invalidation must name a canonical address.
+         * Accepting either would make this instruction succeed here and fail on
+         * real hardware - a difference L1 has no way to see coming.
+         */
+        {
+            const ULONGLONG vpid = descriptor & 0xFFFFULL;
+
+            if (vpid == 0ULL && type != 2ULL) {
+                *InstructionError = KSW_VMX_ERROR_INVALID_INVALIDATION_OPERAND;
+                /* Return the valid failure L1 can read an error number from. */
+                return KSW_HVM_VMX_RESULT_FAIL_VALID;
+            }
+            if (type == 0ULL &&
+                !KswordARKHvmNestedIsCanonicalAddress(linearAddress)) {
+                *InstructionError = KSW_VMX_ERROR_INVALID_INVALIDATION_OPERAND;
+                /* Return the valid failure L1 can read an error number from. */
+                return KSW_HVM_VMX_RESULT_FAIL_VALID;
+            }
+        }
+        /*
+         * Then do nothing, because nothing is what it takes.
+         *
+         * We never enable VPID, so L2 runs under VPID 0000H, and the processor
+         * invalidates linear and combined mappings for VPID 0000H on **every**
+         * VM entry and VM exit.  Whatever translation L1 is retiring is already
+         * gone before L2 next executes an instruction.
+         *
+         * The tempting wrong answer is to drop the shadow EPT the way INVEPT
+         * does.  It would be a no-op for correctness and a disaster for cost:
+         * this instruction arrives in the hundreds while a guest hypervisor
+         * starts, and each drop rebuilds a hierarchy fault by fault.
+         */
+        Nested->InvvpidServedCount += 1ULL;
+        /* Return the complete success. */
+        return KSW_HVM_VMX_RESULT_SUCCEED;
+    }
+    /*
+     * INVEPT accepts only the two context-wide types.
+     *
+     * There is no individual-address form, so the bound is architectural rather
+     * than a limit of ours.
      */
     if (type != 1ULL && type != 2ULL) {
         *InstructionError = KSW_VMX_ERROR_INVALID_INVALIDATION_OPERAND;
@@ -671,8 +766,7 @@ KswordARKHvmNestedDispatchInvalidate(
         return KSW_HVM_VMX_RESULT_FAIL_VALID;
     }
     /* INVEPT's single-context type must name an EPT pointer we could use. */
-    if (ExitReason == KSW_VMX_EXIT_INVEPT &&
-        type == 1ULL &&
+    if (type == 1ULL &&
         (descriptor & 0x000FFFFFFFFFF000ULL) == 0ULL) {
         *InstructionError = KSW_VMX_ERROR_INVALID_INVALIDATION_OPERAND;
         /* Return the valid failure L1 can read an error number from. */

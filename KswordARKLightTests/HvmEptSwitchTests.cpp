@@ -1966,7 +1966,7 @@ void TestVmxCapabilityMasks(KswordTests::Suite& s) {
 
     // --- EPT/VPID 能力 ---
     s.expect(KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED ==
-                 BitsOf({6, 8, 14, 16, 17, 20, 21, 25, 26}),
+                 BitsOf({6, 8, 14, 16, 17, 20, 21, 25, 26, 32, 40, 41, 42}),
              L"the EPT capability allow mask matches the bit list its comment names");
     // 这两位不是「可以留」，是**必须留**：驱动自己在来宾里读它们。
     s.expect((KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & (1ULL << 17)) != 0ULL,
@@ -1975,9 +1975,17 @@ void TestVmxCapabilityMasks(KswordTests::Suite& s) {
              L"accessed and dirty stays advertised: the nested EPT code reads it to decide whether to maintain A/D");
     s.expect((KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & (1ULL << 0)) == 0ULL,
              L"execute-only stays unadvertised: shadow synthesis has never been shown to preserve it");
-    s.expect((KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED &
-                  (BitsOf({32, 40, 41, 42, 43}))) == 0ULL,
-             L"every VPID bit stays clear: VPID is not enabled and INVVPID is not implemented");
+    // INVVPID 与 enable-VPID 是两件事：宣告前者不等于宣告后者，VMware 要的正是前者。
+    s.expect((KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & (1ULL << 32)) != 0ULL &&
+                 (KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & BitsOf({40, 41, 42})) ==
+                     BitsOf({40, 41, 42}),
+             L"INVVPID and its types zero, one and two stay advertised: a guest hypervisor names exactly these");
+    // 类型 3 不宣告，所以派发也必须拒绝它 —— 反过来也一样。两边只要有一边动了而
+    // 另一边没动，就是"宣告了却没实现"或"实现了却不敢用"，两种都不报错。
+    s.expect((KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & (1ULL << 43)) == 0ULL,
+             L"INVVPID type three stays unadvertised: nothing asked for that granularity");
+    s.expect((KSWORD_ARK_HVM_VMX_PROC2_ALLOWED & (1ULL << 5)) == 0ULL,
+             L"enable-VPID stays unadvertised even though INVVPID is: L2 runs under VPID zero");
     s.expect((KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & (1ULL << 6)) != 0ULL &&
                  (KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & (1ULL << 20)) != 0ULL,
              L"a four-level walk and INVEPT stay advertised: the shadow tables are four-level and are invalidated");
@@ -2061,8 +2069,11 @@ void TestVmxCapabilityFilter(KswordTests::Suite& s) {
             KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_EPT_VPID_CAP, host);
         s.expect(got == (host & KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED),
                  L"the EPT capability is a plain intersection with the allow list");
-        s.expect((got >> 32) == 0ULL,
-                 L"no VPID capability survives, including the ones the host really has");
+        // 高半区只剩 INVVPID 支持位与类型 0/1/2；主机有的类型 3 被丢掉。
+        s.expect((got >> 32) == 0x00000701ULL,
+                 L"exactly INVVPID and its three advertised types survive out of everything the host offers");
+        s.expect((got & (1ULL << 43)) == 0ULL,
+                 L"the host's INVVPID type three is dropped, because nothing promised it");
         s.expect((got & ~host) == 0ULL,
                  L"narrowing the EPT capability never adds a bit the host lacks");
     }

@@ -48,6 +48,15 @@ typedef struct _KSW_HVM_NESTED_VCPU
      * operand is refused; it is not fatal to residency.
      */
     struct _KSW_HVM_PHYS_WINDOW* PhysWindow;
+    /*
+     * INVVPID instructions served for L1, per processor.
+     *
+     * Worth counting on its own because serving it means doing **nothing** —
+     * L2 runs under VPID 0000H, which every VM entry and exit already flushes.
+     * Without a counter, "we handled hundreds of them correctly" and "the
+     * dispatch never saw one" produce identical evidence.
+     */
+    ULONGLONG InvvpidServedCount;
     /* Publish whether nested instruction dispatch is enabled. */
     BOOLEAN Enabled;
     /* Publish whether L1 executed a valid VMXON transition. */

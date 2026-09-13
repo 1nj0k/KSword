@@ -578,7 +578,19 @@ KswordArkHvmIsVmxCapabilityMsr(
  * 叶、INVEPT 及其两种上下文，外加 bit 21 accessed/dirty —— A/D 是这条线上唯一
  * 一个已经实测折回过 L1 表的能力位。
  *
- * 全部 VPID 位清零（bit 32 与 40-43）：我们没开 VPID，INVVPID 也没实现。
+ * VPID 那一族只宣告 **bit 32（支持 INVVPID）与 bit 40/41/42（类型 0/1/2）**，
+ * 恰好是 VMware Workstation 17.6 在自己日志里点名要的那四位。注意它要的是**指令
+ * 能力**，不是 secondary 里的 enable-VPID 控制位（那一位仍然不宣告，见
+ * KSWORD_ARK_HVM_VMX_PROC2_ALLOWED）—— 这两件事在架构上本来就是分开的。
+ *
+ * 我们**不开 VPID**，所以 vmcs02 里 L2 用的是 VPID 0000H，而处理器在每一次 VM entry
+ * 与 VM exit 上都会失效 VPID 0000H 的线性映射。也就是说 L1 想让 INVVPID 去掉的那些
+ * 翻译，到下一次进出之前必然已经没了 —— 服务这条指令的正确动作是**什么都不做**，
+ * 不是去刷影子 EPT（那是 INVEPT 的事，而且每次 INVVPID 重建一遍影子会很贵）。
+ *
+ * bit 43（类型 3，单上下文保留全局）不宣告：VMware 没要，我们也没有理由去承诺一个
+ * 更精细的粒度。
+ *
  * bit 0 execute-only 也清掉 —— 影子合成是否逐位保留 execute-only 没有验过，
  * 没验过的位不宣告。
  *
@@ -591,7 +603,7 @@ KswordArkHvmIsVmxCapabilityMsr(
  * bit 17 起初不在这份表里，那会让探针的 EPT12 装不起来、整行判 FAIL —— 故障现象
  * 跟"嵌套坏了"一模一样，而真因是我们把自己要用的能力给自己屏蔽了。
  */
-#define KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED 0x0000000006334140ULL
+#define KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED 0x0000070106334140ULL
 
 /* MISC 里 CR3-target 个数字段的位置；我们不拷 CR3-target 字段，所以必须报 0。 */
 #define KSWORD_ARK_HVM_VMX_MISC_CR3_TARGET_MASK 0x01FF0000ULL
