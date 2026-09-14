@@ -541,18 +541,53 @@ KswordARKHvmNestedDispatchVmcsPointer(
     }
     if (ExitReason == KSW_VMX_EXIT_VMCLEAR) {
         /*
-         * VMCLEAR forgets that vmcs12 whether or not it is the loaded one.
+         * VMCLEAR sets the launch state to clear.  It does **not** erase the
+         * VMCS.
          *
-         * Dropping only the loaded one would leave a stale copy in the pool
-         * that a later VMPTRLD would restore - handing L1 the fields of a VMCS
-         * it explicitly cleared, which is worse than the zeroes it expects.
+         * This used to drop the pooled copy and zero the cached fields, on the
+         * stated grounds that returning them afterwards would be "worse than
+         * the zeroes it expects".  L1 expects no zeroes: Intel specifies that
+         * VMCLEAR initializes the launch state and ensures the data is in
+         * memory, and a hypervisor may VMCLEAR, VMPTRLD again and read back
+         * every field it wrote.  Erasing them was our invention.
+         *
+         * It cost a real guest.  VMware VMCLEARs constantly - 574 times in one
+         * two-second run - so its VMCS was emptied over and over, and the
+         * VMLAUNCH it finally issued carried only the handful of fields written
+         * since the last VMCLEAR: guest state and primary controls present, pin
+         * and exit and entry controls, the secondary controls, the EPT pointer
+         * and the bitmaps all gone.  L2 entered on a VMCS we had silently
+         * hollowed out and triple-faulted on its first instruction, and nothing
+         * anywhere reported a problem.
+         *
+         * The launch state is the only thing that changes, so a later VMRESUME
+         * on this pointer is refused and a VMLAUNCH is required - which is the
+         * distinction VMCLEAR exists to make.
          */
-        KswordARKHvmNestedPoolDrop(Nested, pointer);
+        {
+            ULONG chosen = 0UL;
+            KSW_HVM_VMCS12_STATE* pooled =
+                KswordARKHvmNestedPoolFind(Nested, pointer, &chosen);
+
+            if (pooled != NULL) {
+                pooled->Launched = FALSE;
+            }
+        }
         /* Clear the current pointer only when VMCLEAR names it. */
         if (Nested->VmcsCurrent && Nested->CurrentVmcs == pointer) {
+            /*
+             * Spill the fields before letting go of them.
+             *
+             * The working copy is about to stop being current, and without this
+             * save the only copy of what L1 configured would be the one we are
+             * about to reinitialize - reintroducing the erasure through the
+             * back door.
+             */
+            Nested->Vmcs12.Launched = FALSE;
+            KswordARKHvmNestedPoolSave(Nested, Runtime);
             Nested->VmcsCurrent = FALSE;
             Nested->CurrentVmcs = 0ULL;
-            /* Drop the cached fields along with the pointer that owned them. */
+            /* Start the working copy empty; the pool holds the real contents. */
             KswordARKHvmNestedVmcsInitialize(
                 &Nested->Vmcs12,
                 &Nested->Vmcs02);
