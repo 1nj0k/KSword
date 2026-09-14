@@ -116,6 +116,37 @@ typedef struct _KSW_HVM_NESTED_VCPU
     /* Injection requests retired on L1's behalf after the entry delivered them. */
     ULONGLONG L2InjectionRetiredCount;
     /*
+     * Events this exit interrupted mid-delivery, and what became of them.
+     *
+     * An exit can happen while the processor is still delivering an event -
+     * reading the IDT, pushing the frame - and then the event was not
+     * delivered.  The processor reports that in the IDT-vectoring information
+     * field and expects whoever handles the exit to deliver it again.
+     *
+     * Two destinations, and only one of them used to work.  An exit reflected
+     * to L1 carries the field into vmcs12, so L1 re-injects.  An exit this
+     * driver answers and resumes from has no L1 in the loop: we are the only
+     * VMM that can re-deliver it, and we did not.
+     *
+     * Measured cost of that gap: the guest's master PIC sat at ISR = 0x03 with
+     * IRR = 0x41 for the whole run.  Two interrupts - IRQ 0 and IRQ 1 - had
+     * been taken off the controller by L1's acknowledge and then destroyed
+     * here, so no handler ever ran and no EOI was ever sent.  An 8259 will not
+     * assert INTR again while a same-or-lower priority interrupt is in
+     * service, and IRQ 0 is the highest, so that wedged every interrupt in the
+     * machine.  The guest's BIOS tick never moved again.  Nothing in this
+     * driver or in L1 reported an error: L1 had asked, we had "delivered",
+     * and both counters read healthy.
+     *
+     * Reflected is counted too, so the pair answers "did this even happen"
+     * before it answers "did we handle it".
+     */
+    ULONGLONG L2IdtVectoringSeenCount;
+    ULONGLONG L2IdtVectoringReinjectedCount;
+    ULONGLONG L2IdtVectoringReflectedCount;
+    /* The last one re-delivered, for when the counts alone are not enough. */
+    ULONG L2IdtVectoringLastInfo;
+    /*
      * Where L2 actually is, and whether it can take an interrupt there.
      *
      * Three times now a mechanism has been reasoned about, found genuinely
@@ -195,6 +226,30 @@ typedef struct _KSW_HVM_NESTED_VCPU
      */
     ULONG L2InjectRequests[8];
     ULONG L2InjectRequestIndex;
+    /*
+     * The guest's state at the instant an injection is actually delivered.
+     *
+     * Proven by keypress: L1 raises IRQ1, asks to inject vector 0x09, and we
+     * deliver it - nine asked, nine delivered - and the guest does not react.
+     * So the interrupt arrives and is then wasted, and the only thing that
+     * decides whether it lands on the right handler is the mode the guest is
+     * in when it arrives.
+     *
+     * Vector 0x09 is the BIOS keyboard service through the real-mode vector
+     * table, and exception 9 through a protected-mode IDT.  This guest spends
+     * its life bouncing between the two - 12,200 writes to CR0 a second - so
+     * which half of that bounce the delivery lands in is the whole question.
+     * CR0 bit 0 answers it, and the CS access rights say the same thing a
+     * second way.
+     *
+     * Captured at entry, where the processor is about to act on it, rather
+     * than at L1's request, which is a different instant.
+     */
+    ULONG L2InjectStateVector[8];
+    ULONG L2InjectStateCr0[8];
+    ULONG L2InjectStateRflags[8];
+    ULONG L2InjectStateCsAr[8];
+    ULONG L2InjectStateIndex;
     /*
      * Every write L2 makes to the interrupt controller, value included.
      *

@@ -67,6 +67,9 @@ Environment:
 #define KSW_L2_EXIT_INTR_INFO 0x4404UL
 /* VM-entry interruption information: the event L1 asks us to deliver. */
 #define KSW_L2_ENTRY_INTR_INFO 0x4016UL
+/* Its two companions, needed only when re-delivering an interrupted event. */
+#define KSW_L2_ENTRY_INTR_ERROR 0x4018UL
+#define KSW_L2_ENTRY_INSTRUCTION_LENGTH 0x401AUL
 #define KSW_L2_EXIT_INTR_ERROR 0x4406UL
 #define KSW_L2_IDT_VECTORING_INFO 0x4408UL
 #define KSW_L2_IDT_VECTORING_ERROR 0x440AUL
@@ -727,8 +730,28 @@ KswordARKHvmNestedL2Enter(
      * propagate is invisible everywhere else: L1 believes its guest took the
      * interrupt, the guest never did, and both keep running.
      */
-    if ((KswordARKHvmNestedL2Read(0x4016UL) & 0x80000000ULL) != 0ULL) {
-        nested->L2InjectionCount += 1ULL;
+    {
+        const ULONGLONG entryEvent = KswordARKHvmNestedL2Read(0x4016UL);
+
+        if ((entryEvent & 0x80000000ULL) != 0ULL) {
+            nested->L2InjectionCount += 1ULL;
+            /*
+             * And the mode it is landing in - see the field comment.  Taken
+             * from the fields captured just above, which were read out of
+             * vmcs02 and are therefore what the processor is about to use.
+             */
+            if (nested->L2InjectStateIndex < 8UL) {
+                const ULONG slot = nested->L2InjectStateIndex;
+
+                nested->L2InjectStateVector[slot] = (ULONG)entryEvent;
+                nested->L2InjectStateCr0[slot] =
+                    (ULONG)nested->LastEntryGuestCr0;
+                nested->L2InjectStateRflags[slot] =
+                    (ULONG)KswordARKHvmNestedL2Read(0x6820UL);
+                nested->L2InjectStateCsAr[slot] = nested->LastEntryGuestCsAr;
+                nested->L2InjectStateIndex += 1UL;
+            }
+        }
     }
     nested->LastEntryMsrBitmap =
         KswordARKHvmNestedL2Read(KSW_L2_MSR_BITMAP);
@@ -791,6 +814,82 @@ KswordARKHvmNestedL2Enter(
 #define KSW_L2_OWNER_L1 0UL
 #define KSW_L2_OWNER_US_RESOLVED 1UL
 #define KSW_L2_OWNER_US_NEEDS_SERVICE 2UL
+
+/*
+ * Deliver again the event whose delivery this exit interrupted.
+ *
+ * A VM exit can happen while the processor is still delivering an event - it
+ * is reading the IDT or pushing the fault frame when the access faults.  The
+ * event is then *not* delivered, and the processor says so in the
+ * IDT-vectoring information field.  Whoever handles the exit is the one that
+ * has to deliver it again; nothing else in the machine remembers it.
+ *
+ * Only the exits this driver answers itself need this.  A reflected exit
+ * carries the field into vmcs12 and L1 does the re-delivery, which is what
+ * real hardware would report to it.  An exit we resolve and resume from has no
+ * L1 in the loop at all - and that is the overwhelming majority: composing a
+ * shadow EPT leaf resolves 99% of L2's exits, and a cold shadow hierarchy
+ * faults exactly where event delivery touches memory.
+ *
+ * What it cost to not do this: L1 acknowledges its virtual interrupt
+ * controller *before* asking for the injection, so an event destroyed here is
+ * an interrupt already taken off the controller with no handler and therefore
+ * no EOI.  An 8259 will not assert INTR again while an interrupt of the same
+ * or lower priority is in service, and IRQ 0 is the highest priority there
+ * is.  Measured in the guest: ISR stuck at 0x03, IRR stuck at 0x41, BIOS tick
+ * frozen for the entire run, zero injections requested in a 40-second window
+ * because from L1's side there was nothing left to ask for.  Two lost
+ * interrupts, early, and the machine never took another one.
+ *
+ * Not done here: merging a fault that arrived during delivery into #DF.  That
+ * rule applies to an exception raised while delivering another exception, and
+ * exception exits are L1's - they never reach this path.  If that routing ever
+ * changes, this is the second half that has to come with it.
+ */
+static void
+KswordARKHvmNestedL2RedeliverInterruptedEvent(
+    _Inout_ KSW_HVM_NESTED_VCPU* Nested
+    )
+{
+    const ULONGLONG vectoring =
+        KswordARKHvmNestedL2Read(KSW_L2_IDT_VECTORING_INFO);
+    ULONGLONG entry = 0ULL;
+    ULONG type = 0UL;
+
+    if ((vectoring & 0x80000000ULL) == 0ULL) {
+        return;
+    }
+    Nested->L2IdtVectoringSeenCount += 1ULL;
+
+    /*
+     * Vector, type and the error-code flag carry over unchanged; that is bits
+     * 11:0.  Bit 12 is the NMI-unblocking report, which exists only on exit
+     * and is reserved on entry, and bits 30:13 are reserved in both.  Copying
+     * the field wholesale would set a reserved bit and fail the entry.
+     */
+    entry = (vectoring & 0x00000FFFULL) | 0x80000000ULL;
+    type = (ULONG)((vectoring >> 8) & 0x7ULL);
+
+    if ((entry & 0x00000800ULL) != 0ULL) {
+        KswordARKHvmNestedL2Write(
+            KSW_L2_ENTRY_INTR_ERROR,
+            KswordARKHvmNestedL2Read(KSW_L2_IDT_VECTORING_ERROR));
+    }
+    /*
+     * Types 4, 5 and 6 are the software-originated ones - INT n, INT1, INT3
+     * and INTO.  Re-delivering those needs the length of the instruction that
+     * raised them, so the processor can set the return address past it; a
+     * hardware interrupt or fault carries no length and must not have one.
+     */
+    if (type == 4UL || type == 5UL || type == 6UL) {
+        KswordARKHvmNestedL2Write(
+            KSW_L2_ENTRY_INSTRUCTION_LENGTH,
+            KswordARKHvmNestedL2Read(KSW_L2_EXIT_INSTRUCTION_LENGTH));
+    }
+    KswordARKHvmNestedL2Write(KSW_L2_ENTRY_INTR_INFO, entry);
+    Nested->L2IdtVectoringLastInfo = (ULONG)vectoring;
+    Nested->L2IdtVectoringReinjectedCount += 1ULL;
+}
 
 /*
  * Decide who owns one L2 exit, and if it is ours, whether anything remains.
@@ -1450,12 +1549,37 @@ KswordARKHvmNestedL2Reflect(
                 : KswordARKHvmNestedL2ExitOwner(Context, Frame, ExitReason);
 
         if (owner == KSW_L2_OWNER_US_RESOLVED) {
+            /*
+             * Ours to resume, so ours to finish delivering.
+             *
+             * Both of these returns lead back into L2 on vmcs02 without L1
+             * ever seeing the exit, which makes this driver the only VMM that
+             * can re-deliver an event the exit interrupted.  Written into
+             * vmcs02 here and consumed by the entry that follows - see the
+             * routine for what dropping it cost.
+             */
+            KswordARKHvmNestedL2RedeliverInterruptedEvent(nested);
             /* Report that the exit needs nothing further before resuming. */
             return KSW_HVM_L2_ROUTE_HANDLED;
         }
         if (owner == KSW_L2_OWNER_US_NEEDS_SERVICE) {
+            KswordARKHvmNestedL2RedeliverInterruptedEvent(nested);
             /* Report that the ordinary handling must run on vmcs02. */
             return KSW_HVM_L2_ROUTE_SERVICE_LOCALLY;
+        }
+        /*
+         * Reflected: L1 re-delivers, because the field reaches it in vmcs12
+         * below.  Counted anyway so the pair says whether an interrupted
+         * delivery happened at all before it says who dealt with it.
+         */
+        {
+            const ULONGLONG vectoring =
+                KswordARKHvmNestedL2Read(KSW_L2_IDT_VECTORING_INFO);
+
+            if ((vectoring & 0x80000000ULL) != 0ULL) {
+                nested->L2IdtVectoringSeenCount += 1ULL;
+                nested->L2IdtVectoringReflectedCount += 1ULL;
+            }
         }
     }
     /*

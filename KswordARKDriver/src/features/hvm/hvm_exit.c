@@ -995,6 +995,24 @@ KswordARKHvmExitPublishCost(
         }
     }
     {
+        /* And the mode the guest was in when each one was actually delivered. */
+        ULONG entry = 0UL;
+
+        for (entry = 0UL; entry < Context->Nested.L2InjectStateIndex &&
+                          entry < 8UL; ++entry) {
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = entry;
+            row.qualification = (ULONGLONG)Context->Nested.L2InjectStateVector[entry];
+            row.guestPhysicalAddress = (ULONGLONG)Context->Nested.L2InjectStateCr0[entry];
+            row.guestLinearAddress = (ULONGLONG)Context->Nested.L2InjectStateRflags[entry];
+            row.guestRip = (ULONGLONG)Context->Nested.L2InjectStateCsAr[entry];
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xE4u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
         /* And every byte L2 sent the interrupt controller, in order. */
         ULONG entry = 0UL;
 
@@ -1257,6 +1275,29 @@ KswordARKHvmExitPublishCost(
         row.status = (LONG)Context->Nested.LastEntrySecondaryControls;
         row.access = (ULONG)Context->ApicId;
         row.ruleId = 0xF7u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * And the interrupts that were taken off the controller but never
+         * delivered.
+         *
+         * Seen against re-injected against reflected.  This is the one number
+         * that separates "L1 never asked" from "L1 asked and the event died
+         * mid-delivery": the second destroys an interrupt L1 has already
+         * acknowledged, which wedges the guest's own interrupt controller and
+         * leaves both sides' counters reading healthy.  Reinjected plus
+         * reflected must equal seen; a gap is an event nobody delivered.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2IdtVectoringSeenCount;
+        row.guestPhysicalAddress = Context->Nested.L2IdtVectoringReinjectedCount;
+        row.guestLinearAddress = Context->Nested.L2IdtVectoringReflectedCount;
+        row.guestRip = Context->Nested.L2InjectionRetiredCount;
+        row.exitReason = Context->Nested.L2IdtVectoringLastInfo;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xE3u;
         KswordARKHvmEventPublish(&row);
     }
     {
