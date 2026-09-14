@@ -789,6 +789,23 @@ KswordARKHvmExitPublishCost(
             KswordARKHvmEventPublish(&row);
         }
     }
+    {
+        /* And which devices L2 has been talking to, one row per port range. */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 8UL; ++slot) {
+            if (Context->Nested.L2PortCounts[slot] == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification = Context->Nested.L2PortCounts[slot];
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xF5u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
     RtlZeroMemory(&row, sizeof(row));
     row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
     /* Averages, so a reader never has to know which million this row covers. */

@@ -136,6 +136,19 @@ typedef struct _KSW_HVM_NESTED_VCPU
     BOOLEAN RegionStoredLaunched;
     UCHAR RegionReserved[3];
     ULONGLONG RegionStoreSkippedCount;
+    /*
+     * Which devices L2 actually talked to, counted by port range.
+     *
+     * A guest hypervisor's BIOS reaches every device through port I/O, so this
+     * is the only place the conversation is visible to us at all.  The reason
+     * it is needed: the BIOS completes its whole power-on test and then says
+     * it found no operating system, on a CD whose boot catalog is verified
+     * good - and "it never asked the drive anything" and "it asked and did not
+     * like the answer" are the same picture from outside, while pointing at
+     * completely different defects.  One counts as evidence, the other as a
+     * device-detection failure that happened minutes earlier.
+     */
+    ULONGLONG L2PortCounts[8];
     ULONGLONG RegionLastLoadPhysical;
     ULONGLONG RegionLastLoadHeader;
     /*

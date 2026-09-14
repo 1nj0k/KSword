@@ -887,6 +887,19 @@ KswordARKHvmNestedL2ExitOwner(
         const ULONG port = (ULONG)((qualification >> 16) & 0xFFFFULL);
         const ULONG bytes = (ULONG)((qualification & 0x7ULL) + 1ULL);
 
+        /* Record which device this was, before deciding whose exit it is. */
+        {
+            const ULONG slot =
+                (port == 0x60UL || port == 0x64UL) ? 0UL :
+                ((port >= 0x170UL && port <= 0x177UL) || port == 0x376UL) ? 1UL :
+                ((port >= 0x1F0UL && port <= 0x1F7UL) || port == 0x3F6UL) ? 2UL :
+                (port >= 0x3B0UL && port <= 0x3DFUL) ? 3UL :
+                (port >= 0x3F8UL && port <= 0x3FFUL) ? 4UL :
+                (port >= 0x40UL && port <= 0x43UL) ? 5UL :
+                (port == 0x70UL || port == 0x71UL) ? 6UL : 7UL;
+
+            nested->L2PortCounts[slot] += 1ULL;
+        }
         if (KswordARKHvmNestedBitmapL1WantsPort(Context, port, bytes)) {
             nested->L2IoExitsReflected += 1ULL;
             /* Report the port access as L1's. */
