@@ -243,6 +243,28 @@ typedef struct _KSW_HVM_NESTED_VCPU
      */
     ULONG L2Vmcs12RegionLastEntryIntrInfo[4];
     /*
+     * Who wrote that event, and whether the guest could have taken it.
+     *
+     * Two different defects end in the same triple fault and nothing else
+     * separates them.  If L1 asked for the injection, the entry is doing what
+     * L1 requested and the question is why L1 thought its guest was ready.  If
+     * *we* wrote it - the re-delivery of an event an exit interrupted - then it
+     * is ours, and re-delivering into a guest that has moved on is a defect
+     * with our name on it.
+     *
+     * The flag is set where the re-delivery writes the field and cleared where
+     * a fresh merge overwrites it from vmcs12, so it always describes the
+     * event the next entry will actually carry.
+     *
+     * RFLAGS and the interruptibility state ride along because event injection
+     * through the VM-entry field **ignores RFLAGS.IF**: an interrupt handed to
+     * a guest that had interrupts masked is delivered anyway, into whatever
+     * the IDT holds at that moment.
+     */
+    BOOLEAN L2Vmcs12RegionEntryWasRedeliver[4];
+    ULONGLONG L2Vmcs12RegionLastEntryRflags[4];
+    ULONG L2Vmcs12RegionLastEntryIntbl[4];
+    /*
      * And the interrupt-command register writes, which is how one of L1's
      * processors wakes another.
      *
@@ -387,6 +409,10 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONG L2TripleFaultIdtVectoring;
     ULONGLONG L2TripleFaultRsp;
     ULONGLONG L2TripleFaultSsAr;
+    /* Whose injection it was, and what the guest's state was when it landed. */
+    ULONG L2TripleFaultEntryWasRedeliver;
+    ULONGLONG L2TripleFaultEntryRflags;
+    ULONG L2TripleFaultEntryIntbl;
     /*
      * Where L2 actually is, and whether it can take an interrupt there.
      *

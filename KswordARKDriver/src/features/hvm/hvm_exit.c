@@ -1592,7 +1592,10 @@ KswordARKHvmExitPublishCost(
             (ULONGLONG)Context->Nested.L2TripleFaultIdtVectoring;
         row.guestLinearAddress = Context->Nested.L2TripleFaultRsp;
         row.guestRip = Context->Nested.L2TripleFaultSsAr;
-        row.exitReason = Context->Nested.L2LastEntryIntrInfo;
+        row.exitReason =
+            (Context->Nested.L2TripleFaultEntryWasRedeliver << 16) |
+            (Context->Nested.L2TripleFaultEntryIntbl & 0xFFFFUL);
+        row.status = (LONG)(ULONG)Context->Nested.L2TripleFaultEntryRflags;
         row.access = (ULONG)Context->ApicId;
         row.ruleId = 0xD6u;
         KswordARKHvmEventPublish(&row);

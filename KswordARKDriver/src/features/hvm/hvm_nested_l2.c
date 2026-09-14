@@ -793,6 +793,15 @@ KswordARKHvmNestedL2Enter(
             if (nested->L2Vmcs12Regions[region] == nested->CurrentVmcs) {
                 nested->L2Vmcs12RegionLastEntryIntrInfo[region] =
                     (ULONG)entryEvent;
+                /*
+                 * This path is the merge from vmcs12, so whatever the field
+                 * holds now is L1's, not a re-delivery of ours.
+                 */
+                nested->L2Vmcs12RegionEntryWasRedeliver[region] = FALSE;
+                nested->L2Vmcs12RegionLastEntryRflags[region] =
+                    KswordARKHvmNestedL2Read(0x6820UL);
+                nested->L2Vmcs12RegionLastEntryIntbl[region] =
+                    (ULONG)KswordARKHvmNestedL2Read(0x4824UL);
                 break;
             }
         }
@@ -970,6 +979,22 @@ KswordARKHvmNestedL2RedeliverInterruptedEvent(
     Nested->L2IdtVectoringLastInfo = (ULONG)vectoring;
     Nested->L2IdtVectoringReinjectedCount += 1ULL;
     Nested->L2IdtVectoringLastExitOrdinal = Nested->L2ExitTotalCount;
+    /*
+     * Mark the field as ours for this region, so a fault on the next entry can
+     * say whether it was L1's injection or our re-delivery.  Cleared again by
+     * the next merge from vmcs12.
+     */
+    {
+        ULONG region = 0UL;
+
+        for (region = 0UL; region < 4UL; ++region) {
+            if (Nested->L2Vmcs12Regions[region] == Nested->CurrentVmcs) {
+                Nested->L2Vmcs12RegionEntryWasRedeliver[region] = TRUE;
+                Nested->L2Vmcs12RegionLastEntryIntrInfo[region] = (ULONG)entry;
+                break;
+            }
+        }
+    }
 }
 
 /*
@@ -1155,11 +1180,21 @@ KswordARKHvmNestedL2ExitOwner(
                 ULONG region = 0UL;
 
                 nested->L2TripleFaultEntryIntrInfo = 0UL;
+                nested->L2TripleFaultEntryWasRedeliver = 0UL;
+                nested->L2TripleFaultEntryRflags = 0ULL;
+                nested->L2TripleFaultEntryIntbl = 0UL;
                 for (region = 0UL; region < 4UL; ++region) {
                     if (nested->L2Vmcs12Regions[region] ==
                             nested->CurrentVmcs) {
                         nested->L2TripleFaultEntryIntrInfo =
                             nested->L2Vmcs12RegionLastEntryIntrInfo[region];
+                        nested->L2TripleFaultEntryWasRedeliver =
+                            nested->L2Vmcs12RegionEntryWasRedeliver[region]
+                                ? 1UL : 0UL;
+                        nested->L2TripleFaultEntryRflags =
+                            nested->L2Vmcs12RegionLastEntryRflags[region];
+                        nested->L2TripleFaultEntryIntbl =
+                            nested->L2Vmcs12RegionLastEntryIntbl[region];
                         break;
                     }
                 }
