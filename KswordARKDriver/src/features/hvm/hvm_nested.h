@@ -147,6 +147,54 @@ typedef struct _KSW_HVM_NESTED_VCPU
     /* The last one re-delivered, for when the counts alone are not enough. */
     ULONG L2IdtVectoringLastInfo;
     /*
+     * Which exit the last re-delivery rode on, counted in exits.
+     *
+     * Re-injecting writes an event into vmcs02 that the next entry will
+     * deliver, so if a guest dies right after an exit, "was an event put on
+     * that entry" is the first question - and a count of re-injections cannot
+     * answer it, only an ordinal can.  Compared against the exit total at the
+     * moment of death: equal means this exit, one less means the one before.
+     */
+    ULONGLONG L2IdtVectoringLastExitOrdinal;
+    /*
+     * L2's CR2 as it was when this exit happened.
+     *
+     * CR2 is not a VMCS field.  VM exit does not save it and VM entry does not
+     * load it, so between the two it is simply the processor's CR2 - shared
+     * with every line of this driver that runs in between.  A page fault taken
+     * in root mode, or the emulator arming its own #PF, overwrites it.
+     *
+     * That costs nothing until something re-delivers a #PF, because a #PF is
+     * the one event whose payload lives in CR2 rather than in the VMCS.  Then
+     * the guest's handler is handed an address that belongs to us, fixes the
+     * wrong page, returns, and faults again - or takes the wrong branch
+     * entirely and dies with no diagnosis anywhere.
+     *
+     * Saved at the top of the exit, before anything of ours has run.
+     */
+    ULONGLONG L2ExitCr2;
+    /*
+     * Which vmcs12 regions this processor has actually entered, and how often.
+     *
+     * One region is one virtual processor: L1 keeps a VMCS per vCPU, so the
+     * number of distinct regions seen here is the number of L1 guest CPUs that
+     * ever reached hardware virtualization under us.
+     *
+     * The question it exists to answer: L1 brings up a second processor, that
+     * processor never reports in, and its guest waits for it forever.  From
+     * outside there is no way to tell "L1 never launched it" from "we launched
+     * it and it died" - both are silence.  One region means the first, two
+     * regions with a stalled RIP in the second means the second, and the last
+     * guest RIP per region says where.
+     *
+     * Four slots, first-come: a two-processor guest needs two and this table
+     * is meant to answer how many, not to survive a machine that churns them.
+     */
+    ULONGLONG L2Vmcs12Regions[4];
+    ULONGLONG L2Vmcs12RegionEntries[4];
+    ULONGLONG L2Vmcs12RegionLastRip[4];
+    ULONGLONG L2Vmcs12RegionMissCount;
+    /*
      * The last EPT violation, in full, and what was decided about it.
      *
      * The exit ring answers "which instruction" and the histogram answers "how
@@ -182,6 +230,67 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONG L2MsrRingIndex;
     ULONGLONG L2LastMsrWriteValue;
     ULONG L2LastMsrWriteIndex;
+    /*
+     * The same, for guest-physical addresses above where this guest's RAM
+     * ends - which is to say for device registers.
+     *
+     * An MMIO access has to reach L1: only L1 has the device model.  If we
+     * compose a leaf for it instead, the access lands on whatever page EPT12
+     * happens to name and the device is never touched - the guest programs an
+     * interrupt controller that does not exist, then waits forever for the
+     * interrupt.  Measured symptom: the boot stops at the first device whose
+     * initialization needs an interrupt, and the stopping point *moves with
+     * the device* - EHCI at IRQ 17 with USB on, i8042 at IRQ 1 with USB off.
+     *
+     * Kept apart from the RAM case because the two have opposite correct
+     * answers: for RAM, composing is the fix; for MMIO, composing is the bug.
+     * Mixed together they are one counter that cannot say which happened.
+     *
+     * The threshold is a probe, not an architectural boundary - this guest has
+     * 768 MiB and its devices sit at 0xFD5EF000 and 0xFEC00000.  It exists to
+     * answer one question on one machine, and the counts say plainly if it is
+     * catching the wrong thing.
+     */
+    ULONGLONG L2LastMmioGuestPhysical;
+    ULONGLONG L2LastMmioQualification;
+    ULONG L2LastMmioDisposition;
+    ULONGLONG L2MmioComposedCount;
+    ULONGLONG L2MmioReflectedCount;
+    /*
+     * The scene at the first triple fault, kept whole.
+     *
+     * A triple fault is the one exit that says nothing about itself: no
+     * qualification, no vector, no address.  Everything that can be known
+     * about it is the state the guest was in and how it got there, and both
+     * are gone the moment the exit is reflected and L1 resets the processor.
+     *
+     * Measured need: L1 brings up its application processor, that processor
+     * triple-faults, L1 resets it and tries again - three times in the log -
+     * and the boot stops with the second CPU never started.  The bootstrap
+     * processor runs the same kernel image without trouble, so what differs is
+     * the state an AP starts from: it comes out of SIPI in real mode and
+     * climbs through protected mode to long mode in a few hundred
+     * instructions, touching CR0, CR4, EFER and its own page tables.
+     *
+     * The first one only.  A retry runs the same code from the same state, so
+     * later faults add nothing, and keeping the first avoids the scene being
+     * overwritten by a reset that has already destroyed the evidence.
+     */
+    ULONGLONG L2TripleFaultRip;
+    ULONGLONG L2TripleFaultCr0;
+    ULONGLONG L2TripleFaultCr3;
+    ULONGLONG L2TripleFaultCr4;
+    ULONGLONG L2TripleFaultEfer;
+    ULONG L2TripleFaultCsAr;
+    ULONG L2TripleFaultActivity;
+    ULONGLONG L2TripleFaultCount;
+    /* And the four exits before it, copied out of the ring at the moment. */
+    ULONGLONG L2TripleFaultPrevRip[4];
+    ULONG L2TripleFaultPrevReason[4];
+    /* Where this exit sits in the run, and where the last re-delivery sat. */
+    ULONGLONG L2TripleFaultExitOrdinal;
+    ULONGLONG L2TripleFaultReinjectOrdinal;
+    ULONG L2TripleFaultLastVectoringInfo;
     /*
      * Where L2 actually is, and whether it can take an interrupt there.
      *

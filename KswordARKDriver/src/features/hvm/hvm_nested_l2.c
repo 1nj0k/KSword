@@ -704,6 +704,32 @@ KswordARKHvmNestedL2Enter(
      * built wrongly from one L1 configured to die.
      */
     nested->LastEntryVmcs12Physical = nested->CurrentVmcs;
+    /* And which vCPU of L1's this entry belongs to - see the field comment. */
+    {
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 4UL; ++slot) {
+            if (nested->L2Vmcs12Regions[slot] == nested->CurrentVmcs) {
+                break;
+            }
+            if (nested->L2Vmcs12Regions[slot] == 0ULL) {
+                nested->L2Vmcs12Regions[slot] = nested->CurrentVmcs;
+                break;
+            }
+        }
+        if (slot < 4UL) {
+            nested->L2Vmcs12RegionEntries[slot] += 1ULL;
+            /*
+             * Read from vmcs02 rather than from LastEntryGuestRip: that field
+             * is assigned a few lines below, so using it here would record the
+             * *previous* entry's address against this region.
+             */
+            nested->L2Vmcs12RegionLastRip[slot] =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+        } else {
+            nested->L2Vmcs12RegionMissCount += 1ULL;
+        }
+    }
     nested->LastEntryPinControls =
         (ULONG)KswordARKHvmNestedL2Read(KSW_L2_PIN_CONTROLS);
     nested->LastEntryExitControls =
@@ -886,9 +912,24 @@ KswordARKHvmNestedL2RedeliverInterruptedEvent(
             KSW_L2_ENTRY_INSTRUCTION_LENGTH,
             KswordARKHvmNestedL2Read(KSW_L2_EXIT_INSTRUCTION_LENGTH));
     }
+    /*
+     * Put CR2 back before re-delivering.
+     *
+     * A page fault carries its address in CR2, not in the VMCS, so a
+     * re-delivered #PF is only as good as CR2 still being what it was when the
+     * delivery was interrupted.  Anything this driver did in between - a fault
+     * of its own in root mode, the emulator arming a #PF - has overwritten it,
+     * and the guest would be handed an address that is ours.
+     *
+     * Restored for every re-delivery rather than only for vector 14: writing
+     * back the value the processor already had is a no-op for every other
+     * event, and a condition here would be one more thing to get wrong.
+     */
+    __writecr2((ULONG_PTR)Nested->L2ExitCr2);
     KswordARKHvmNestedL2Write(KSW_L2_ENTRY_INTR_INFO, entry);
     Nested->L2IdtVectoringLastInfo = (ULONG)vectoring;
     Nested->L2IdtVectoringReinjectedCount += 1ULL;
+    Nested->L2IdtVectoringLastExitOrdinal = Nested->L2ExitTotalCount;
 }
 
 /*
@@ -956,9 +997,20 @@ KswordARKHvmNestedL2ExitOwner(
             KswordARKHvmNestedL2Read(KSW_L2_EXIT_QUALIFICATION);
         const ULONG access = (ULONG)(qualification & 0x7ULL);
 
+        /*
+         * Device registers start above where this guest's RAM ends.  See the
+         * field comment for why this is a probe threshold and not a boundary.
+         */
+        const BOOLEAN isDeviceSpace =
+            (guestPhysical >= 0xC0000000ULL) ? TRUE : FALSE;
+
         /* Keep the address and the access, whatever is decided below. */
         nested->L2LastEptGuestPhysical = guestPhysical;
         nested->L2LastEptQualification = qualification;
+        if (isDeviceSpace) {
+            nested->L2LastMmioGuestPhysical = guestPhysical;
+            nested->L2LastMmioQualification = qualification;
+        }
 
         if (!nested->ShadowEpt.Active) {
             /*
@@ -972,6 +1024,7 @@ KswordARKHvmNestedL2ExitOwner(
              * the processor faults again with no error and no progress.
              */
             nested->L2LastEptDisposition = 3UL;
+            if (isDeviceSpace) { nested->L2LastMmioDisposition = 3UL; }
             return KSW_L2_OWNER_US_NEEDS_SERVICE;
         }
         if (KswordARKHvmNestedEptFill(
@@ -982,10 +1035,65 @@ KswordARKHvmNestedL2ExitOwner(
                 access)) {
             /* Report the satisfied violation as needing nothing further. */
             nested->L2LastEptDisposition = 1UL;
+            if (isDeviceSpace) {
+                nested->L2LastMmioDisposition = 1UL;
+                nested->L2MmioComposedCount += 1ULL;
+            }
             return KSW_L2_OWNER_US_RESOLVED;
         }
         /* Report the refused violation as L1's. */
         nested->L2LastEptDisposition = 2UL;
+        if (isDeviceSpace) {
+            nested->L2LastMmioDisposition = 2UL;
+            nested->L2MmioReflectedCount += 1ULL;
+        }
+        return KSW_L2_OWNER_L1;
+    }
+    case 2UL: {
+        /*
+         * A triple fault is L1's - it is the one that resets the processor -
+         * but the scene has to be copied out first.
+         *
+         * Reflecting comes second because L1's response is to reset the vCPU,
+         * and after that nothing about how the guest got here exists anywhere.
+         * See the field comment for why the first one is the only one kept.
+         */
+        if (nested->L2TripleFaultCount == 0ULL) {
+            ULONG back = 0UL;
+
+            nested->L2TripleFaultRip =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+            nested->L2TripleFaultCr0 =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR0);
+            nested->L2TripleFaultCr3 = KswordARKHvmNestedL2Read(0x6802UL);
+            nested->L2TripleFaultCr4 =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR4);
+            nested->L2TripleFaultEfer = KswordARKHvmNestedL2Read(0x2806UL);
+            nested->L2TripleFaultCsAr =
+                (ULONG)KswordARKHvmNestedL2Read(0x4816UL);
+            nested->L2TripleFaultActivity =
+                (ULONG)KswordARKHvmNestedL2Read(KSW_L2_GUEST_ACTIVITY_STATE);
+            /*
+             * The four exits before this one, newest first.  The ring index
+             * already counts this exit, so step back from it.
+             */
+            for (back = 0UL; back < 4UL; ++back) {
+                const ULONG slot =
+                    (nested->L2ExitRingIndex - 1UL - back) & 0xFUL;
+
+                nested->L2TripleFaultPrevRip[back] =
+                    nested->L2ExitRipRing[slot];
+                nested->L2TripleFaultPrevReason[back] =
+                    nested->L2ExitReasonRing[slot];
+            }
+            nested->L2TripleFaultExitOrdinal = nested->L2ExitTotalCount;
+            nested->L2TripleFaultReinjectOrdinal =
+                nested->L2IdtVectoringLastExitOrdinal;
+            nested->L2TripleFaultLastVectoringInfo =
+                nested->L2IdtVectoringLastInfo;
+        }
+        nested->L2TripleFaultCount += 1ULL;
+        /* Report the triple fault as L1's. */
         return KSW_L2_OWNER_L1;
     }
     case 1UL:
@@ -1333,6 +1441,11 @@ KswordARKHvmNestedL2Reflect(
         nested->L2LastRflags = KswordARKHvmNestedL2Read(0x6820UL);
         nested->L2LastInterruptibility =
             KswordARKHvmNestedL2Read(0x4824UL);
+        /*
+         * And L2's CR2, which nothing else will keep - see the field comment.
+         * Here because this block is the first thing that runs after the exit.
+         */
+        nested->L2ExitCr2 = (ULONGLONG)__readcr2();
         /*
          * Has L2 ever run with interrupts enabled at all?
          *

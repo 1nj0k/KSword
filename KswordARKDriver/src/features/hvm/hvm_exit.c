@@ -1399,6 +1399,128 @@ KswordARKHvmExitPublishCost(
         KswordARKHvmEventPublish(&row);
     }
     {
+        /*
+         * Device-register accesses: did they reach L1, or did we answer them?
+         *
+         * Composed against reflected, plus the last one in full.  Only L1 has
+         * a device model, so a composed MMIO access is an access that touched
+         * memory instead of a device - and the guest then waits forever for an
+         * interrupt from a controller it never actually programmed.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2LastMmioQualification;
+        row.guestPhysicalAddress = Context->Nested.L2LastMmioGuestPhysical;
+        row.guestLinearAddress = Context->Nested.L2MmioComposedCount;
+        row.guestRip = Context->Nested.L2MmioReflectedCount;
+        row.exitReason = Context->Nested.L2LastMmioDisposition;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xDEu;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * What the last VM entry actually loaded: activity state, and both
+         * halves of the EPT-pointer question.
+         *
+         * Activity state, because an application processor starts in
+         * wait-for-SIPI (state 3) and this machine's VM entry has already been
+         * measured refusing the halt state (1) while its capability MSR said
+         * it was supported - so "which state did we ask for" is the first
+         * thing to know about an AP that never starts.
+         *
+         * Both EPT pointers side by side, because "the leaf was written into a
+         * hierarchy the processor is not loading" is a defect this driver has
+         * had before, and it is invisible from either pointer alone: every
+         * fill succeeds, every self-check passes, and the guest faults on the
+         * same address forever.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = (ULONGLONG)Context->Nested.LastEntryGuestActivity;
+        row.guestPhysicalAddress = Context->Nested.LastEntryEptPointer;
+        row.guestLinearAddress =
+            Context->Nested.ShadowEpt.ComposedEptPointer;
+        row.guestRip = Context->Nested.LastEntryGuestRip;
+        row.exitReason = Context->Nested.LastEntryGuestCsAr;
+        row.status = (LONG)Context->Nested.ShadowEpt.FillCount;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xDDu;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * One row per vmcs12 region this processor has entered - which is to
+         * say, per L1 virtual processor that ever reached hardware
+         * virtualization here.  See the field comment for what the count of
+         * rows means.
+         */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 4UL; ++slot) {
+            if (Context->Nested.L2Vmcs12Regions[slot] == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification = Context->Nested.L2Vmcs12Regions[slot];
+            row.guestPhysicalAddress =
+                Context->Nested.L2Vmcs12RegionEntries[slot];
+            row.guestLinearAddress =
+                Context->Nested.L2Vmcs12RegionLastRip[slot];
+            row.guestRip = Context->Nested.L2Vmcs12RegionMissCount;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xDAu;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    if (Context->Nested.L2TripleFaultCount != 0ULL) {
+        /*
+         * The first triple fault's scene, in two rows because it does not fit
+         * in one and splitting it by meaning is better than truncating it.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2TripleFaultRip;
+        row.guestPhysicalAddress = Context->Nested.L2TripleFaultCr0;
+        row.guestLinearAddress = Context->Nested.L2TripleFaultCr3;
+        row.guestRip = Context->Nested.L2TripleFaultCr4;
+        row.exitReason =
+            (Context->Nested.L2TripleFaultActivity << 24) |
+            (Context->Nested.L2TripleFaultCsAr & 0x00FFFFFFUL);
+        row.status = (LONG)Context->Nested.L2TripleFaultCount;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xDCu;
+        KswordARKHvmEventPublish(&row);
+        {
+            ULONG back = 0UL;
+
+            for (back = 0UL; back < 4UL; ++back) {
+                RtlZeroMemory(&row, sizeof(row));
+                row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+                row.exitReason = back;
+                row.qualification = Context->Nested.L2TripleFaultPrevRip[back];
+                row.guestPhysicalAddress =
+                    (ULONGLONG)Context->Nested.L2TripleFaultPrevReason[back];
+                row.guestLinearAddress = Context->Nested.L2TripleFaultEfer;
+                /*
+                 * How many exits back the last re-delivery was.  Zero means
+                 * this very exit carried one, one means the entry that led
+                 * straight here did - anything larger is unrelated history.
+                 */
+                row.guestRip =
+                    Context->Nested.L2TripleFaultExitOrdinal -
+                    Context->Nested.L2TripleFaultReinjectOrdinal;
+                row.status =
+                    (LONG)Context->Nested.L2TripleFaultLastVectoringInfo;
+                row.access = (ULONG)Context->ApicId;
+                row.ruleId = 0xDBu;
+                KswordARKHvmEventPublish(&row);
+            }
+        }
+    }
+    {
         /* Whether L1's invalidations are costing the shadow hierarchy. */
         RtlZeroMemory(&row, sizeof(row));
         row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;

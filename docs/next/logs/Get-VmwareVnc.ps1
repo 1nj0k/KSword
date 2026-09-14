@@ -21,7 +21,15 @@ param(
     [string] $OutFile,
     # X11 keysym 序列；送完再取图。空则只取图。
     [int[]]  $Keys = @(),
-    [int]    $KeyDelayMs = 120
+    [int]    $KeyDelayMs = 120,
+    # 在**同一条连接**上连取几帧，间隔 FrameGapMs。
+    #
+    # 为什么要有这个：连上取一帧就断开时，画面可能是陈旧的 —— VMware 只在有
+    # 客户端看着的时候才跟踪 VGA 文本缓冲的脏区。那会让"画面停在第 N 行"
+    # 变成一个假读数，而它和"来宾停在第 N 行"长得一模一样。
+    # 取两帧以上，第二帧才是"连接建立之后的现在"。
+    [int]    $Frames = 1,
+    [int]    $FrameGapMs = 4000
 )
 
 $ErrorActionPreference = 'Stop'
@@ -118,47 +126,64 @@ if ($Keys.Count -gt 0) {
 
 if (-not $OutFile) { $client.Close(); return }
 
-# --- 请求一整帧（非增量）并解码 ---
-$req = New-Object byte[] 10
-$req[0] = 3; $req[1] = 0
-Put16 $req 2 0; Put16 $req 4 0; Put16 $req 6 $w; Put16 $req 8 $h
-$ns.Write($req, 0, 10)
-
 Add-Type -AssemblyName System.Drawing
+
+# **一张位图跨帧复用。**
+#
+# 第一版每帧新建一张，只把服务器发来的矩形画进去 —— 而服务器从第二帧起只发变化
+# 区域（哪怕请求写的是非增量），于是第 2..N 帧全是黑的，看着就像"来宾把屏幕清空了"。
+# 又一次仪器故障长成了被测现象的样子。累积到同一张上，缺的部分就还是上一帧的内容。
 $bmp = New-Object System.Drawing.Bitmap($w, $h, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
 
-$hdr = Read-Exact $ns 4
-if ($hdr[0] -ne 0) { throw "期望 FramebufferUpdate(0)，收到消息类型 $($hdr[0])" }
-$rects = BE16 $hdr 2
-Write-Output ("矩形数 = $rects")
+for ($frame = 1; $frame -le $Frames; $frame++) {
+    if ($frame -gt 1) { Start-Sleep -Milliseconds $FrameGapMs }
 
-$rect = New-Object System.Drawing.Rectangle(0, 0, $w, $h)
-$data = $bmp.LockBits($rect, [System.Drawing.Imaging.ImageLockMode]::WriteOnly,
-    [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
-$stride = $data.Stride
-$buffer = New-Object byte[] ($stride * $h)
-try {
-    for ($r = 0; $r -lt $rects; $r++) {
-        $rh = Read-Exact $ns 12
-        $rx = BE16 $rh 0; $ry = BE16 $rh 2; $rw = BE16 $rh 4; $rht = BE16 $rh 6
-        $enc = BE32 $rh 8
-        if ($enc -ne 0) { throw "矩形 $r 用了编码 $enc，这里只实现了 Raw(0)" }
-        $px = Read-Exact $ns ($rw * $rht * 4)
-        for ($y = 0; $y -lt $rht; $y++) {
-            $src = $y * $rw * 4
-            $dst = ($ry + $y) * $stride + $rx * 3
-            for ($x = 0; $x -lt $rw; $x++) {
-                $buffer[$dst + $x*3]     = $px[$src + $x*4]      # B
-                $buffer[$dst + $x*3 + 1] = $px[$src + $x*4 + 1]  # G
-                $buffer[$dst + $x*3 + 2] = $px[$src + $x*4 + 2]  # R
+    # 非增量：要的是整帧，不是"自上次以来变了什么"
+    $req = New-Object byte[] 10
+    $req[0] = 3; $req[1] = 0
+    Put16 $req 2 0; Put16 $req 4 0; Put16 $req 6 $w; Put16 $req 8 $h
+    $ns.Write($req, 0, 10)
+
+    $hdr = Read-Exact $ns 4
+    if ($hdr[0] -ne 0) { throw "期望 FramebufferUpdate(0)，收到消息类型 $($hdr[0])" }
+    $rects = BE16 $hdr 2
+
+    $rect = New-Object System.Drawing.Rectangle(0, 0, $w, $h)
+    # ReadWrite，不是 WriteOnly：这一帧可能只覆盖屏幕的一小块，其余要保留
+    $data = $bmp.LockBits($rect, [System.Drawing.Imaging.ImageLockMode]::ReadWrite,
+        [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+    $stride = $data.Stride
+    $buffer = New-Object byte[] ($stride * $h)
+    [Runtime.InteropServices.Marshal]::Copy($data.Scan0, $buffer, 0, $buffer.Length)
+    try {
+        for ($r = 0; $r -lt $rects; $r++) {
+            $rh = Read-Exact $ns 12
+            $rx = BE16 $rh 0; $ry = BE16 $rh 2; $rw = BE16 $rh 4; $rht = BE16 $rh 6
+            $enc = BE32 $rh 8
+            if ($enc -ne 0) { throw "矩形 $r 用了编码 $enc，这里只实现了 Raw(0)" }
+            $px = Read-Exact $ns ($rw * $rht * 4)
+            for ($y = 0; $y -lt $rht; $y++) {
+                $src = $y * $rw * 4
+                $dst = ($ry + $y) * $stride + $rx * 3
+                for ($x = 0; $x -lt $rw; $x++) {
+                    $buffer[$dst + $x*3]     = $px[$src + $x*4]      # B
+                    $buffer[$dst + $x*3 + 1] = $px[$src + $x*4 + 1]  # G
+                    $buffer[$dst + $x*3 + 2] = $px[$src + $x*4 + 2]  # R
+                }
             }
         }
+        [Runtime.InteropServices.Marshal]::Copy($buffer, 0, $data.Scan0, $buffer.Length)
+    } finally {
+        $bmp.UnlockBits($data)
     }
-    [Runtime.InteropServices.Marshal]::Copy($buffer, 0, $data.Scan0, $buffer.Length)
-} finally {
-    $bmp.UnlockBits($data)
+    $name = if ($Frames -eq 1) { $OutFile }
+            else {
+                $dir = [IO.Path]::GetDirectoryName($OutFile)
+                $base = [IO.Path]::GetFileNameWithoutExtension($OutFile)
+                [IO.Path]::Combine($dir, "$base-f$frame.png")
+            }
+    $bmp.Save($name, [System.Drawing.Imaging.ImageFormat]::Png)
+    Write-Output ("saved=$name 矩形数=$rects bytes=" + (Get-Item $name).Length)
 }
-$bmp.Save($OutFile, [System.Drawing.Imaging.ImageFormat]::Png)
 $bmp.Dispose()
 $client.Close()
-Write-Output ("saved=$OutFile bytes=" + (Get-Item $OutFile).Length)

@@ -851,17 +851,39 @@ KswordARKHvmNestedEptFill(
             Shadow->AdRecordCount += 1UL;
         } else {
             /*
-             * Out of records.  Stop maintaining A/D rather than propagate part
-             * of it.
+             * Out of records.  Fold what we have, empty the table, and keep
+             * going.
              *
-             * A partial fold is worse than none: L1 reads its tables back and
-             * sees "these pages were written, those were not", and the second
-             * half is a lie it has no way to detect.  Turning the feature off
-             * at least makes every bit uniformly absent, which is the state L1
-             * would see from a processor that does not maintain them.
+             * This used to set AccessedDirtyActive to FALSE - "a partial fold
+             * is worse than none", which is true, but turning the feature off
+             * mid-run *is* the partial fold: every page composed before the
+             * overflow keeps its bits, every page after silently loses them,
+             * and L1 has no way to tell the difference.  Six hundred and forty
+             * records against a guest with a hundred and ninety thousand pages
+             * means the overflow is not an edge case; measured 127 of them in
+             * a single boot.
+             *
+             * What L1 loses by dirty tracking that stops is not an abstraction:
+             * VMware write-protects the guest's text framebuffer only until
+             * the writes get frequent, then maps it writable and finds the
+             * changed pages from the dirty bits.  With the bits gone the
+             * screen simply stops being repainted while the guest runs on -
+             * which is exactly the reading that sent this investigation after
+             * three different wrong devices, because "the console froze at
+             * line N" was taken for "the guest stopped at line N".
+             *
+             * Folding here is safe: the fold only ever *sets* bits in EPT12,
+             * and it reads them from shadow leaves this same hierarchy still
+             * describes.  Records that no longer resolve are skipped by the
+             * propagation itself.
              */
-            Shadow->AccessedDirtyActive = FALSE;
+            (void)KswordARKHvmNestedEptPropagateAccessedDirty(Shadow, Window);
+            Shadow->AdRecordCount = 0UL;
             Shadow->AdOverflowCount += 1UL;
+            Shadow->AdLeafGuestPhysical[0] =
+                GuestPhysicalAddress & KSW_HVM_NEPT_FRAME_MASK;
+            Shadow->AdL1EntryAddress[0] = l1EntryAddress;
+            Shadow->AdRecordCount = 1UL;
         }
     }
     Shadow->FillCount += 1UL;
