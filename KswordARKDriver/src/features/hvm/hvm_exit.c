@@ -987,6 +987,73 @@ KswordARKHvmExitPublishCost(
         KswordARKHvmEventPublish(&row);
     }
     {
+        /* And each injection request in full, vector and type included. */
+        ULONG entry = 0UL;
+
+        for (entry = 0UL; entry < Context->Nested.L2InjectRequestIndex &&
+                          entry < 8UL; ++entry) {
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = entry;
+            row.qualification = (ULONGLONG)Context->Nested.L2InjectRequests[entry];
+            row.guestPhysicalAddress = Context->Nested.L2InjectRequestCount;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xE9u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* And every byte L2 sent the interrupt controller, in order. */
+        ULONG entry = 0UL;
+
+        for (entry = 0UL; entry < Context->Nested.L2PicWriteIndex &&
+                          entry < 16UL; ++entry) {
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = entry;
+            row.qualification = (ULONGLONG)Context->Nested.L2PicWrites[entry];
+            row.guestPhysicalAddress = Context->Nested.L2PicWriteTotal;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xE8u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* And where the mask ended up, which is what actually gates the timer. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        /*
+         * The shared value first: it is the one that answers the question.
+         * The per-processor pair rides along only to show the split that made
+         * the shared one necessary.
+         */
+        row.qualification = (ULONGLONG)(ULONG)InterlockedCompareExchange(
+            &Context->Runtime->L2PicMaskMaster, 0L, 0L);
+        row.guestPhysicalAddress = (ULONGLONG)(ULONG)InterlockedCompareExchange(
+            &Context->Runtime->L2PicMaskSlave, 0L, 0L);
+        row.guestLinearAddress = (ULONGLONG)Context->Nested.L2PicLastMaster;
+        row.guestRip = Context->Nested.L2PicWriteTotal;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xE7u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /* And how the interval timer itself was programmed. */
+        ULONG entry = 0UL;
+
+        for (entry = 0UL; entry < Context->Nested.L2PitWriteIndex &&
+                          entry < 16UL; ++entry) {
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = entry;
+            row.qualification = (ULONGLONG)Context->Nested.L2PitWrites[entry];
+            row.guestPhysicalAddress = Context->Nested.L2PitWriteTotal;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xE6u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
         /*
          * What L2 actually spends its exits on, one row per reason.
          *

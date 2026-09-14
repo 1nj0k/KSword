@@ -181,6 +181,75 @@ typedef struct _KSW_HVM_NESTED_VCPU
      * "what is L2 doing now" - not "has it ever".
      */
     ULONGLONG L2InjectRequestCount;
+    /*
+     * What L1 actually asked to inject, not just how often.
+     *
+     * The count is three to eight across a whole run, which is nearly nothing
+     * - but "nearly nothing" reads the same whether L1 tried the timer a few
+     * times and gave up or never tried it at all.  The vector separates those:
+     * 0x08 is IRQ0 through the PIC, 0x21 is IRQ1, and an interruption type of
+     * 3 would mean these were exceptions and never device interrupts.
+     *
+     * Eight entries, oldest kept: there are only a handful of events in the
+     * whole run, so keeping the first ones is keeping all of them.
+     */
+    ULONG L2InjectRequests[8];
+    ULONG L2InjectRequestIndex;
+    /*
+     * Every write L2 makes to the interrupt controller, value included.
+     *
+     * The injection record shows several IRQ1s, then one IRQ0, then nothing
+     * ever again - which is the exact signature of an interrupt left in
+     * service.  IRQ0 is the highest priority line, so a PIC whose in-service
+     * bit for it is never cleared blocks every subsequent interrupt, not just
+     * that one.
+     *
+     * Clearing it is what the BIOS timer handler's end-of-interrupt does:
+     * `mov al, 0x20 ; out 0x20, al`.  The port counters already say the guest
+     * wrote to 0x20 twelve times - but ICW1 during initialisation goes to the
+     * same port, so a count cannot tell an EOI from a reset.  Only the value
+     * can, and nothing was recording it.
+     *
+     * Sixteen entries, oldest kept: the interesting writes are all in the
+     * first moments, and the question is whether a 0x20 ever appears at all.
+     */
+    ULONG L2PicWrites[16];
+    ULONG L2PicWriteIndex;
+    ULONGLONG L2PicWriteTotal;
+    /*
+     * The mask as it stands now, which is the value that decides everything.
+     *
+     * The table above keeps the first sixteen writes, and the first sixteen
+     * are the initialisation sequence - they show the master being programmed
+     * to base 0x08 and two end-of-interrupt writes, which is exactly what a
+     * healthy PIC looks like.  What they cannot show is where the mask ended
+     * up, because there are thirty-three writes and the table stopped at
+     * sixteen.  Same shape of mistake as the RIP table: a first-come record
+     * answers "did this ever happen", never "what is it now".
+     *
+     * In OCW1 a set bit masks its line, so bit 0 set means the timer is off.
+     * Steady-state port I/O is zero, so whatever was written last is what the
+     * guest is still living with - a mask is not re-asserted, it persists.
+     */
+    ULONG L2PicLastMaster;
+    ULONG L2PicLastSlave;
+    ULONGLONG L2PicMaskWrites;
+    /*
+     * Every byte L2 sends the interval timer, in order.
+     *
+     * The last device in the chain that has not been looked at.  The guest's
+     * controller is programmed correctly and its timer line is unmasked, and
+     * L1 still injected about a dozen interrupts and then stopped - which is
+     * also exactly what a timer programmed for a single shot would produce.
+     *
+     * Port 0x43 is the command register: bits 5:4 select the access pattern
+     * and bits 3:1 the mode, where mode 0 fires once and modes 2 and 3 are
+     * the periodic ones a tick needs.  0x40 is counter zero's data port, the
+     * divisor, written low byte then high.
+     */
+    ULONG L2PitWrites[16];
+    ULONG L2PitWriteIndex;
+    ULONGLONG L2PitWriteTotal;
     ULONGLONG L2ExitIfSetCount;
     ULONGLONG L2ExitIfClearCount;
     ULONG L2Vmcs12Exit;

@@ -943,6 +943,59 @@ KswordARKHvmNestedL2ExitOwner(
 
             nested->L2PortCounts[slot] += 1ULL;
             /*
+             * The interrupt controller specifically, with the byte written.
+             *
+             * 0x20/0x21 are the master PIC's command and data ports, 0xA0/0xA1
+             * the slave's.  An OUT carries its data in AL, which is the low
+             * byte of the frame's RAX - string forms carry it in memory
+             * instead, and are excluded rather than silently mis-read
+             * (qualification bit 4 marks a string instruction).
+             */
+            if (port >= 0x40UL && port <= 0x43UL &&
+                (qualification & 0x8ULL) == 0ULL &&
+                (qualification & 0x10ULL) == 0ULL &&
+                Frame != NULL) {
+                nested->L2PitWriteTotal += 1ULL;
+                if (nested->L2PitWriteIndex < 16UL) {
+                    nested->L2PitWrites[nested->L2PitWriteIndex] =
+                        (port << 16) | (ULONG)(Frame->Rax & 0xFFULL);
+                    nested->L2PitWriteIndex += 1UL;
+                }
+            }
+            if ((port == 0x20UL || port == 0x21UL ||
+                 port == 0xA0UL || port == 0xA1UL) &&
+                (qualification & 0x8ULL) == 0ULL &&
+                (qualification & 0x10ULL) == 0ULL &&
+                Frame != NULL) {
+                const ULONG datum = (ULONG)(Frame->Rax & 0xFFULL);
+
+                nested->L2PicWriteTotal += 1ULL;
+                if (nested->L2PicWriteIndex < 16UL) {
+                    nested->L2PicWrites[nested->L2PicWriteIndex] =
+                        (port << 16) | datum;
+                    nested->L2PicWriteIndex += 1UL;
+                }
+                /*
+                 * A write to the data port with no initialisation in progress
+                 * is OCW1, the mask.  Keeping the latest is the whole point -
+                 * see the field comment.  0x0100 marks the value as set so a
+                 * mask of zero is distinguishable from never having written.
+                 */
+                if (port == 0x21UL) {
+                    nested->L2PicLastMaster = datum | 0x0100UL;
+                    nested->L2PicMaskWrites += 1ULL;
+                    InterlockedExchange(
+                        &Context->Runtime->L2PicMaskMaster,
+                        (LONG)(datum | 0x0100UL));
+                } else if (port == 0xA1UL) {
+                    nested->L2PicLastSlave = datum | 0x0100UL;
+                    nested->L2PicMaskWrites += 1ULL;
+                    InterlockedExchange(
+                        &Context->Runtime->L2PicMaskSlave,
+                        (LONG)(datum | 0x0100UL));
+                }
+            }
+            /*
              * And the port itself - but only the ones no bucket names.
              *
              * The first version sampled every port and filled all sixteen

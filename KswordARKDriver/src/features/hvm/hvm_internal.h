@@ -822,6 +822,21 @@ typedef struct _KSW_HVM_RUNTIME
     volatile LONG LastExitInstructionLength;
     /* Preserve the last VM-instruction error. */
     volatile LONG LastVmInstructionError;
+    /*
+     * The interrupt-controller mask L2 currently has in force.
+     *
+     * Shared rather than per-processor, and that is the entire point: the PIC
+     * is one device, while L1's virtual processor thread migrates between
+     * physical ones.  Recording the mask per-processor produced two records
+     * that disagreed - one said the timer was masked, the other said it was
+     * open - with no way to tell which write came last, because each half had
+     * only seen the writes that happened to land on its own processor.
+     *
+     * One location, last writer wins, which is exactly what a device register
+     * is.  Bit 8 marks it written so a mask of zero is not read as absence.
+     */
+    volatile LONG L2PicMaskMaster;
+    volatile LONG L2PicMaskSlave;
     /* Preserve the group of the last one-shot launch. */
     USHORT LastLaunchProcessorGroup;
     /* Preserve the group-relative CPU of the last one-shot launch. */

@@ -1355,6 +1355,12 @@ KswordARKHvmNestedDispatchVmcsField(
         (ULONG)encoding == 0x4016UL &&
         (value & 0x80000000ULL) != 0ULL) {
         Nested->L2InjectRequestCount += 1ULL;
+        /* And what it was, while there are still few enough to keep them all. */
+        if (Nested->L2InjectRequestIndex < 8UL) {
+            Nested->L2InjectRequests[Nested->L2InjectRequestIndex] =
+                (ULONG)value;
+            Nested->L2InjectRequestIndex += 1UL;
+        }
     }
     /*
      * Record what L1 configured, when someone asked for the trace.
