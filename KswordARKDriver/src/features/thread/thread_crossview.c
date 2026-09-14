@@ -17,6 +17,7 @@ Environment:
 
 #include "thread_crossview.h"
 #include "..\kernel\hook_scan_support.h"
+#include "..\kernel\object_header_fallback.h"
 #include "..\..\dispatch\ioctl_validation.h"
 
 #include <ntstrsafe.h>
@@ -986,12 +987,15 @@ Arguments:
     CandidateObject - Decoded thread object body pointer.
     ExpectedObjectType - Required object type, such as PsThreadType.
     TypeMatchedOut - Receives whether ObGetObjectType matched ExpectedObjectType.
-    ReferencedOut - Receives whether ObReferenceObjectByPointer succeeded.
+    ReferencedOut - Receives whether the reference was taken.
 
 Return Value:
 
     STATUS_SUCCESS when a reference was taken; otherwise a validation or read
     status.
+
+    STATUS_DELETE_PENDING means the candidate is a real object that is already
+    being torn down rather than a read failure.
 
 --*/
 {
@@ -1021,20 +1025,35 @@ Return Value:
     }
     *TypeMatchedOut = TRUE;
 
-    __try {
-        status = ObReferenceObjectByPointer(
-            CandidateObject,
-            0,
-            ExpectedObjectType,
-            KernelMode);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        status = GetExceptionCode();
+    //
+    // Same hazard as the process cross-view: the candidate is a pointer decoded
+    // out of a kernel structure we hold no reference into, and a thread that has
+    // just exited keeps its links while its pointer count is already zero.  The
+    // Ob reference exports bugcheck 0x18 on such an object and no __except can
+    // catch that, so take the reference by hand.
+    //
+    status = KswordARKObjectHeaderReferenceObjectSafe(CandidateObject);
+    if (!NT_SUCCESS(status)) {
+        return status;
     }
 
-    if (NT_SUCCESS(status)) {
-        *ReferencedOut = TRUE;
+    //
+    // Re-read the type now that deletion is blocked, so a body recycled between
+    // the first read and the reference cannot be reported as a thread.
+    //
+    __try {
+        objectType = ObGetObjectType(CandidateObject);
     }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        objectType = NULL;
+    }
+    if (objectType != ExpectedObjectType) {
+        ObDereferenceObject(CandidateObject);
+        *TypeMatchedOut = FALSE;
+        return STATUS_OBJECT_TYPE_MISMATCH;
+    }
+
+    *ReferencedOut = TRUE;
     return status;
 }
 

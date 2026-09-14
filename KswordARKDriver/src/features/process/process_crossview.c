@@ -16,6 +16,7 @@ Environment:
 
 #include "process_crossview.h"
 #include "..\kernel\hook_scan_support.h"
+#include "..\kernel\object_header_fallback.h"
 #include "..\..\dispatch\ioctl_validation.h"
 
 #include <ntstrsafe.h>
@@ -1323,13 +1324,17 @@ Arguments:
     CandidateObject - Decoded object body pointer from a kernel-owned source.
     ExpectedObjectType - Required object type, such as PsProcessType.
     TypeMatchedOut - Receives whether ObGetObjectType matched ExpectedObjectType.
-    ReferencedOut - Receives whether ObReferenceObjectByPointer succeeded.
+    ReferencedOut - Receives whether the reference was taken.
 
 Return Value:
 
     STATUS_SUCCESS when a reference was taken; object-type or reference status
     otherwise. Caller must dereference CandidateObject only when ReferencedOut is
     TRUE.
+
+    STATUS_DELETE_PENDING means the candidate is a real object that is already
+    being torn down - the caller should report it as a dangling observation
+    rather than treat it as a read failure.
 
 --*/
 {
@@ -1359,20 +1364,37 @@ Return Value:
     }
     *TypeMatchedOut = TRUE;
 
-    __try {
-        status = ObReferenceObjectByPointer(
-            CandidateObject,
-            0,
-            ExpectedObjectType,
-            KernelMode);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        status = GetExceptionCode();
+    //
+    // CandidateObject came out of ActiveProcessLinks or PspCidTable, so we hold
+    // no reference on it and it may already be mid-deletion: a process that has
+    // exited keeps its list membership until PspProcessDelete runs, which is
+    // after its pointer count reaches zero.  ObReferenceObjectByPointer would
+    // bugcheck 0x18 on exactly that object, and the __try around it would never
+    // see anything, so take the reference by hand instead.
+    //
+    status = KswordARKObjectHeaderReferenceObjectSafe(CandidateObject);
+    if (!NT_SUCCESS(status)) {
+        return status;
     }
 
-    if (NT_SUCCESS(status)) {
-        *ReferencedOut = TRUE;
+    //
+    // The type was read before the reference existed.  Read it again now that
+    // the object cannot be deleted, so a body recycled between the two steps
+    // cannot be reported as a process.
+    //
+    __try {
+        objectType = ObGetObjectType(CandidateObject);
     }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        objectType = NULL;
+    }
+    if (objectType != ExpectedObjectType) {
+        ObDereferenceObject(CandidateObject);
+        *TypeMatchedOut = FALSE;
+        return STATUS_OBJECT_TYPE_MISMATCH;
+    }
+
+    *ReferencedOut = TRUE;
     return status;
 }
 
