@@ -790,6 +790,34 @@ KswordARKHvmExitPublishCost(
         }
     }
     {
+        /* Whether L1's invalidations are costing the shadow hierarchy. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.ShadowEpt.InvalidateKeptCount;
+        row.guestPhysicalAddress =
+            Context->Nested.ShadowEpt.InvalidateDroppedCount;
+        row.guestLinearAddress =
+            Context->Nested.ShadowEpt.InvalidateForeignCount;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.ShadowEpt.TrackedCount << 32) |
+            (ULONGLONG)Context->Nested.ShadowEpt.TrackedOverflowCount;
+        row.exitReason = Context->Nested.ShadowEpt.FillCount;
+        /*
+         * Table pages used against pages exhausted.
+         *
+         * The pair that says whether keeping the hierarchy across an
+         * invalidation has simply moved the failure: the pool used to be reset
+         * hundreds of times a second, so it could never fill, and a hierarchy
+         * that survives is a hierarchy that grows until it does.
+         */
+        row.status = (LONG)(
+            (Context->Nested.ShadowEpt.PageUsed << 16) |
+            (Context->Nested.ShadowEpt.ExhaustionCount & 0xFFFFUL));
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xF6u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
         /* And which devices L2 has been talking to, one row per port range. */
         ULONG slot = 0UL;
 

@@ -40,6 +40,25 @@ Environment:
  */
 #define KSW_HVM_NEPT_AD_RECORDS 640UL
 
+/*
+ * How many EPT12 table pages the shadow keeps a private copy of.
+ *
+ * These are the pages L1's own hierarchy is built out of - its PML4, its
+ * PDPTs, its page directories and whatever page tables it uses - not the pages
+ * it maps.  A guest of a few hundred megabytes needs a handful: one PML4, one
+ * or two PDPTs, a page directory per gigabyte, plus a page table wherever L1
+ * declines to use a large leaf.  Thirty-two covers that with room, and an
+ * overflow is counted rather than hidden, because the consequence of
+ * overflowing is losing the right to keep the shadow across an invalidation.
+ *
+ * Copies rather than checksums, deliberately.  The question these answer is
+ * "did L1 edit its tables", and the answer decides whether L2 keeps running on
+ * translations we composed earlier.  A checksum answers it with a probability;
+ * a copy answers it.  Thirty-two pages is 128 KiB per processor, which is less
+ * than this module already reserves for the shadow tables themselves.
+ */
+#define KSW_HVM_NEPT_TRACKED_PAGES 32UL
+
 /* Preserve one processor's shadow-EPT composition state. */
 typedef struct _KSW_HVM_SHADOW_EPT_STATE
 {
@@ -125,6 +144,32 @@ typedef struct _KSW_HVM_SHADOW_EPT_STATE
     ULONG AdPropagatedCount;
     /* Count records dropped because the table was full. */
     ULONG AdOverflowCount;
+    /*
+     * Every EPT12 table page this hierarchy was composed out of, with a copy.
+     *
+     * The shadow is a cache of L1's tables, so the only thing that can make it
+     * wrong is L1 editing them.  INVEPT is L1 saying "translations for this
+     * context may be stale" - which it issues as routine hygiene, not only
+     * after an edit.  Measured: VMware issues one per world switch, 319 times
+     * a second, and dropping the whole hierarchy each time left its guest able
+     * to fault in about 125 pages before losing them all again.  A BIOS
+     * loading a kernel needs thousands, so it never finished.
+     *
+     * With these, an invalidation compares each table page against its copy.
+     * Unchanged means the cache is still exactly what L1's tables say, and only
+     * the processor's own translation caches need flushing.  Changed - or
+     * overflowed, or never snapshotted - means the drop still happens.
+     */
+    ULONG TrackedCount;
+    ULONG TrackedOverflowCount;
+    ULONGLONG TrackedFrame[KSW_HVM_NEPT_TRACKED_PAGES];
+    /* One page of private copy per tracked frame, in walk order. */
+    PVOID TrackedCopyBlock;
+    /* Count invalidations that kept the hierarchy, and that dropped it. */
+    ULONG InvalidateKeptCount;
+    ULONG InvalidateDroppedCount;
+    /* Count invalidations that named a context that was not ours. */
+    ULONG InvalidateForeignCount;
 } KSW_HVM_SHADOW_EPT_STATE;
 
 EXTERN_C_START
@@ -187,6 +232,24 @@ KswordARKHvmNestedEptSetL1Pointer(
 VOID
 KswordARKHvmNestedEptInvalidate(
     _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow
+    );
+
+/*
+ * Serve one INVEPT from L1 without destroying a hierarchy that is still right.
+ *
+ * VM-exit safe.  Compares every EPT12 table page the hierarchy was composed
+ * out of against the copy taken when it was read.  All equal means L1 has not
+ * edited its tables since, so the composed mappings still say exactly what
+ * EPT12 says and only the processor's translation caches need flushing.  Any
+ * difference - or a hierarchy composed before tracking could keep up - falls
+ * back to dropping everything, which is what this used to do unconditionally.
+ *
+ * Returns TRUE when the hierarchy was kept.
+ */
+BOOLEAN
+KswordARKHvmNestedEptInvalidateChecked(
+    _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow,
+    _Inout_ KSW_HVM_PHYS_WINDOW* Window
     );
 
 /*

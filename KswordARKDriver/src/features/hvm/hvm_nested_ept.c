@@ -177,6 +177,25 @@ KswordARKHvmNestedEptPrepare(
         (SIZE_T)KSW_HVM_NEPT_TABLE_PAGES * (SIZE_T)PAGE_SIZE);
     Shadow->PageTotal = KSW_HVM_NEPT_TABLE_PAGES;
     Shadow->PageUsed = 0UL;
+    /*
+     * Room for a copy of every EPT12 table page the hierarchy depends on.
+     *
+     * A second allocation rather than a bigger first one: this block is read
+     * and compared, never handed out as a table, and keeping the two apart
+     * means a bug in one cannot hand the processor a page from the other.
+     * Failure is not fatal - it costs the right to keep the shadow across an
+     * invalidation, which is exactly what the code did before this existed.
+     */
+    Shadow->TrackedCopyBlock = KswordARKAllocateNonPagedPool(
+        (SIZE_T)KSW_HVM_NEPT_TRACKED_PAGES * (SIZE_T)PAGE_SIZE,
+        KSW_HVM_NEPT_POOL_TAG);
+    if (Shadow->TrackedCopyBlock != NULL) {
+        RtlZeroMemory(
+            Shadow->TrackedCopyBlock,
+            (SIZE_T)KSW_HVM_NEPT_TRACKED_PAGES * (SIZE_T)PAGE_SIZE);
+    }
+    Shadow->TrackedCount = 0UL;
+    Shadow->TrackedOverflowCount = 0UL;
     /* Take the root first so every fill below has somewhere to publish. */
     Shadow->RootVirtual = KswordARKHvmNestedEptTakePage(
         Shadow,
@@ -218,6 +237,12 @@ KswordARKHvmNestedEptRelease(
     }
     ExFreePool(Shadow->PageBlock);
     Shadow->PageBlock = NULL;
+    if (Shadow->TrackedCopyBlock != NULL) {
+        ExFreePool(Shadow->TrackedCopyBlock);
+        Shadow->TrackedCopyBlock = NULL;
+    }
+    Shadow->TrackedCount = 0UL;
+    Shadow->TrackedOverflowCount = 0UL;
     Shadow->PageTotal = 0UL;
     Shadow->PageUsed = 0UL;
     Shadow->RootVirtual = NULL;
@@ -335,6 +360,16 @@ KswordARKHvmNestedEptInvalidate(
     RtlZeroMemory(Shadow->RootVirtual, PAGE_SIZE);
     Shadow->PageUsed = 1UL;
     /*
+     * The copies describe a hierarchy that no longer exists.
+     *
+     * What gets composed next may walk a different set of EPT12 pages, and
+     * comparing the next invalidation against copies taken for the old one
+     * would vouch for pages the new mappings never read.  Forgetting them
+     * costs one snapshot per table page on the way back up.
+     */
+    Shadow->TrackedCount = 0UL;
+    Shadow->TrackedOverflowCount = 0UL;
+    /*
      * The A/D records describe leaves that no longer exist.
      *
      * Keeping them would have the next propagation read bits out of table
@@ -443,6 +478,132 @@ KswordARKHvmNestedEptSetL1Pointer(
 }
 
 /*
+ * Take a private copy of one EPT12 table page, once.
+ *
+ * Called from the walk, so it runs in VMX root and must map through the
+ * per-processor window like everything else here.  A frame already tracked is
+ * left alone: the copy has to be of what the hierarchy was *composed from*,
+ * and re-snapshotting on a later walk would quietly absorb an edit L1 made in
+ * between - which is exactly the edit this exists to catch.
+ */
+static VOID
+KswordARKHvmNestedEptTrackTablePage(
+    _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow,
+    _Inout_ KSW_HVM_PHYS_WINDOW* Window,
+    _In_ ULONGLONG TableFrame
+    )
+{
+    volatile VOID* mapped = NULL;
+    ULONG index = 0UL;
+
+    if (Shadow->TrackedCopyBlock == NULL || TableFrame == 0ULL) {
+        /* Report nothing; the invalidation path treats absent as unknown. */
+        return;
+    }
+    for (index = 0UL; index < Shadow->TrackedCount; ++index) {
+        if (Shadow->TrackedFrame[index] == TableFrame) {
+            /* Return; the copy that matters is the first one. */
+            return;
+        }
+    }
+    if (Shadow->TrackedCount >= KSW_HVM_NEPT_TRACKED_PAGES) {
+        Shadow->TrackedOverflowCount += 1UL;
+        /* Return; the count is what forfeits the right to keep the shadow. */
+        return;
+    }
+    if (KswordARKHvmPhysWindowMap(
+            Window,
+            TableFrame,
+            PAGE_SIZE,
+            &mapped) != KSW_HVM_PHYS_WINDOW_OK ||
+        mapped == NULL) {
+        Shadow->TrackedOverflowCount += 1UL;
+        /* Return; an untaken copy is counted the same as no room for one. */
+        return;
+    }
+    RtlCopyMemory(
+        (UCHAR*)Shadow->TrackedCopyBlock +
+            ((SIZE_T)Shadow->TrackedCount * (SIZE_T)PAGE_SIZE),
+        (const VOID*)mapped,
+        PAGE_SIZE);
+    KswordARKHvmPhysWindowUnmap(Window);
+    Shadow->TrackedFrame[Shadow->TrackedCount] = TableFrame;
+    Shadow->TrackedCount += 1UL;
+}
+
+BOOLEAN
+KswordARKHvmNestedEptInvalidateChecked(
+    _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow,
+    _Inout_ KSW_HVM_PHYS_WINDOW* Window
+    )
+{
+    ULONG index = 0UL;
+
+    if (Shadow == NULL || Window == NULL ||
+        Shadow->RootVirtual == NULL) {
+        /* Report that nothing was kept, because nothing was composed. */
+        return FALSE;
+    }
+    /*
+     * A hierarchy we could not fully snapshot has to be dropped.
+     *
+     * Overflow means at least one table page the mappings depend on has no
+     * copy, so "unchanged" cannot be established for it.  Keeping the shadow
+     * on the strength of the pages we did copy would be asserting something
+     * about the ones we did not.
+     */
+    if (Shadow->TrackedCopyBlock == NULL ||
+        Shadow->TrackedCount == 0UL ||
+        Shadow->TrackedOverflowCount != 0UL) {
+        KswordARKHvmNestedEptInvalidate(Shadow);
+        Shadow->InvalidateDroppedCount += 1UL;
+        /* Report the drop. */
+        return FALSE;
+    }
+    for (index = 0UL; index < Shadow->TrackedCount; ++index) {
+        volatile VOID* mapped = NULL;
+        BOOLEAN same = FALSE;
+
+        if (KswordARKHvmPhysWindowMap(
+                Window,
+                Shadow->TrackedFrame[index],
+                PAGE_SIZE,
+                &mapped) != KSW_HVM_PHYS_WINDOW_OK ||
+            mapped == NULL) {
+            /* A page we cannot re-read is a page we cannot vouch for. */
+            KswordARKHvmNestedEptInvalidate(Shadow);
+            Shadow->InvalidateDroppedCount += 1UL;
+            /* Report the drop. */
+            return FALSE;
+        }
+        same = (RtlCompareMemory(
+            (const VOID*)mapped,
+            (const UCHAR*)Shadow->TrackedCopyBlock +
+                ((SIZE_T)index * (SIZE_T)PAGE_SIZE),
+            PAGE_SIZE) == PAGE_SIZE) ? TRUE : FALSE;
+        KswordARKHvmPhysWindowUnmap(Window);
+        if (!same) {
+            KswordARKHvmNestedEptInvalidate(Shadow);
+            Shadow->InvalidateDroppedCount += 1UL;
+            /* Report the drop; L1 really did edit its tables. */
+            return FALSE;
+        }
+    }
+    /*
+     * Every table page is byte-identical, so the composed mappings still say
+     * exactly what EPT12 says.  What remains is the processor's own caches,
+     * which is the part INVEPT genuinely always means.
+     */
+    if (Shadow->ComposedEptPointer != 0ULL) {
+        (void)KswordARKHvmAsmInveptSingle(Shadow->ComposedEptPointer);
+    }
+    Shadow->InvalidationGeneration = Shadow->Generation;
+    Shadow->InvalidateKeptCount += 1UL;
+    /* Report that the hierarchy was kept. */
+    return TRUE;
+}
+
+/*
  * Walk EPT12 for one L2 guest physical address.
  *
  * Every level is read through the window because EPT12's tables live at L1
@@ -474,6 +635,15 @@ KswordARKHvmNestedEptWalkL1(
         const ULONGLONG entryAddress = table + (index << 3);
         ULONGLONG entry = 0ULL;
 
+        /*
+         * Copy this table page before reading anything out of it.
+         *
+         * Before, not after: the copy has to be of the bytes the mapping is
+         * about to be composed from, so that a later comparison answers "is
+         * the hierarchy still what L1's tables say" rather than "did anything
+         * change since some arbitrary moment".
+         */
+        KswordARKHvmNestedEptTrackTablePage(Shadow, Window, table);
         if (!NT_SUCCESS(KswordARKHvmPhysWindowReadQword(
                 Window,
                 entryAddress,
@@ -722,6 +892,18 @@ KswordARKHvmNestedEptInvalidate(
     )
 {
     UNREFERENCED_PARAMETER(Shadow);
+}
+
+BOOLEAN
+KswordARKHvmNestedEptInvalidateChecked(
+    _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow,
+    _Inout_ KSW_HVM_PHYS_WINDOW* Window
+    )
+{
+    UNREFERENCED_PARAMETER(Shadow);
+    UNREFERENCED_PARAMETER(Window);
+    /* Report the explicit unsupported-architecture boundary as "not kept". */
+    return FALSE;
 }
 
 BOOLEAN

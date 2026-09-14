@@ -1182,13 +1182,52 @@ KswordARKHvmNestedDispatchInvalidate(
         return KSW_HVM_VMX_RESULT_FAIL_VALID;
     }
     /*
-     * Drop everything regardless of which context was named.
+     * A single-context invalidation of somebody else's context is not ours.
      *
-     * Coarser than asked for, and deliberately so: over-invalidating costs
-     * refills, under-invalidating leaves L2 running on a translation L1 has
-     * retired - with no symptom until the memory underneath is reused.
+     * The architecture says this form retires translations derived from the
+     * EPT pointer in the descriptor.  Our hierarchy was composed from exactly
+     * one EPT12, so an invalidation naming a different one says nothing about
+     * it - and answering it by dropping ours would be inventing a relationship
+     * between two contexts the processor keeps apart.
      */
-    KswordARKHvmNestedEptInvalidate(&Nested->ShadowEpt);
+    if (type == 1ULL &&
+        Nested->ShadowEpt.L1PointerValid &&
+        (descriptor & 0x000FFFFFFFFFF000ULL) !=
+            (Nested->ShadowEpt.L1EptPointer & 0x000FFFFFFFFFF000ULL)) {
+        Nested->ShadowEpt.InvalidateForeignCount += 1UL;
+        /* Return the complete success, having correctly done nothing. */
+        return KSW_HVM_VMX_RESULT_SUCCEED;
+    }
+    /*
+     * Otherwise establish whether EPT12 actually changed, and only drop if so.
+     *
+     * This used to drop everything unconditionally, on the reasoning that
+     * over-invalidating merely costs refills.  It does not.  Measured with a
+     * real guest hypervisor underneath: VMware issues one INVEPT per world
+     * switch - 319 a second - so its guest could fault in about 125 pages
+     * before losing every one of them, and a BIOS loading a kernel never
+     * finished.  The refills *were* the failure.
+     *
+     * INVEPT means "translations for this context may be stale", which L1
+     * issues as hygiene and not only after an edit.  What can actually make
+     * our composed mappings wrong is L1 editing its own tables, and that is
+     * what the copies taken during composition detect - exactly, by
+     * comparison, not by inference.  When nothing changed, the processor's
+     * translation caches are flushed and the hierarchy stands.
+     */
+    if (Nested->PhysWindow == NULL ||
+        !KswordARKHvmNestedEptInvalidateChecked(
+            &Nested->ShadowEpt,
+            Nested->PhysWindow)) {
+        /*
+         * Not kept.  InvalidateChecked has already dropped the hierarchy when
+         * it could read the tables at all; this covers the one case it cannot
+         * reach, which is having no window to read them through.
+         */
+        if (Nested->PhysWindow == NULL) {
+            KswordARKHvmNestedEptInvalidate(&Nested->ShadowEpt);
+        }
+    }
     /* Return the complete success. */
     return KSW_HVM_VMX_RESULT_SUCCEED;
 }
