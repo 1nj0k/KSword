@@ -910,6 +910,45 @@ KswordARKHvmExitPublishCost(
         }
     }
     {
+        /* And the same ports counted, so the ring's sixteen are put in scale. */
+        ULONG entry = 0UL;
+
+        for (entry = 0UL; entry < 32UL; ++entry) {
+            if (Context->Nested.L2PortKeyCounts[entry] == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = Context->Nested.L2PortKeys[entry];
+            row.qualification = Context->Nested.L2PortKeyCounts[entry];
+            row.guestPhysicalAddress = Context->Nested.L2PortKeyMissCount;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xEEu;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* What the CR0 loop asks for, and what it can read back afterwards. */
+        ULONG entry = 0UL;
+
+        for (entry = 0UL; entry < 4UL; ++entry) {
+            if (Context->Nested.L2CrWriteCount[entry] == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = entry;
+            row.guestRip = Context->Nested.L2CrWriteRip[entry];
+            row.qualification = Context->Nested.L2CrWriteValue[entry];
+            row.guestPhysicalAddress = Context->Nested.L2CrWriteGuestCr0[entry];
+            row.guestLinearAddress = Context->Nested.L2CrWriteShadow[entry];
+            row.status = (LONG)(ULONG)Context->Nested.L2CrWriteCount[entry];
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xEDu;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
         /*
          * Whose port and MSR exits we actually delivered.
          *

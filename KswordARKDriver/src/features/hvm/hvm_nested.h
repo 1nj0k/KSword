@@ -218,6 +218,37 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONG L2PortRing[16];
     ULONG L2PortRingIndex;
     /*
+     * The unnamed ports again, counted rather than sampled.
+     *
+     * The ring named 0xCF8 but a ring cannot say whether that is all of the
+     * ninety-three thousand or merely the last sixteen of them - and the last
+     * time a ring was read as a distribution it produced three wrong
+     * diagnoses in a row.  Distinct unnamed ports are a handful, so a
+     * first-come table of thirty-two is exact for this, and the miss counter
+     * says so rather than leaving it assumed.
+     */
+    ULONG L2PortKeys[32];
+    ULONGLONG L2PortKeyCounts[32];
+    ULONGLONG L2PortKeyMissCount;
+    /*
+     * What the CR0 loop is actually writing, against what it gets back.
+     *
+     * The steady state is one instruction: 732,171 MOV-to-CR0 exits a minute
+     * across both processors, with zero port I/O, zero CPUID and zero EPT
+     * violations beside them.  A guest that writes a control register and does
+     * nothing else is a guest whose write is not taking - and the only way to
+     * say that is to record the value it asked for next to the value it can
+     * read afterwards.
+     *
+     * Four slots keyed by address: the loop alternates between two addresses,
+     * so four holds both halves and shows whether either changes over time.
+     */
+    ULONGLONG L2CrWriteRip[4];
+    ULONGLONG L2CrWriteValue[4];
+    ULONGLONG L2CrWriteGuestCr0[4];
+    ULONGLONG L2CrWriteShadow[4];
+    ULONGLONG L2CrWriteCount[4];
+    /*
      * Distinct L2 exit addresses, with how often each one exits.
      *
      * The sixteen-slot RIP ring holds the tail, and the tail showed the same

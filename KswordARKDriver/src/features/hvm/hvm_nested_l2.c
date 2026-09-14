@@ -17,6 +17,7 @@ Environment:
 #include "hvm_nested_l2.h"
 #include "driver/KswordArkHvmControls.h"
 #include "hvm_nested_bitmap.h"
+#include "hvm_nested_decode.h"
 #include "hvm_nested_ept.h"
 #include "hvm_resident.h"
 #include "hvm_exit.h"
@@ -958,11 +959,29 @@ KswordARKHvmNestedL2ExitOwner(
              * this is meant to be able to show.
              */
             if (slot == 7UL) {
-                nested->L2PortRing[nested->L2PortRingIndex & 0xFUL] =
+                const ULONG key =
                     port |
                     ((ULONG)bytes << 16) |
                     (((qualification & 0x8ULL) != 0ULL) ? 0x80000000UL : 0UL);
+                ULONG probe = 0UL;
+
+                nested->L2PortRing[nested->L2PortRingIndex & 0xFUL] = key;
                 nested->L2PortRingIndex += 1UL;
+                /* Port zero is the empty key; nothing here talks to it. */
+                for (probe = 0UL; probe < 32UL; ++probe) {
+                    if (nested->L2PortKeys[probe] == key) {
+                        nested->L2PortKeyCounts[probe] += 1ULL;
+                        break;
+                    }
+                    if (nested->L2PortKeys[probe] == 0UL) {
+                        nested->L2PortKeys[probe] = key;
+                        nested->L2PortKeyCounts[probe] = 1ULL;
+                        break;
+                    }
+                }
+                if (probe == 32UL) {
+                    nested->L2PortKeyMissCount += 1ULL;
+                }
             }
         }
         if (KswordARKHvmNestedBitmapL1WantsPort(Context, port, bytes)) {
@@ -1201,6 +1220,48 @@ KswordARKHvmNestedL2Reflect(
                     (number == 8UL) ? 3UL : 4UL;
 
                 nested->L2CrCounts[bucket][access] += 1ULL;
+                /*
+                 * For a MOV to CR0, keep the value beside the result.
+                 *
+                 * Read through the shared helper rather than indexing the
+                 * frame here: the register numbering has a hole where RSP
+                 * would be, and a second copy of that mapping is a second
+                 * chance to get it wrong.
+                 */
+                if (bucket == 0UL && access == 0UL && Frame != NULL) {
+                    const ULONG number2 =
+                        (ULONG)((nested->L2LastCrQualification >> 8) & 0xFULL);
+                    const ULONGLONG rip = nested->L2ExitRipRing[slot];
+                    ULONGLONG written = 0ULL;
+                    ULONG probe = 0UL;
+
+                    if (KswordARKHvmNestedReadGpr(Frame, number2, &written) == 0) {
+                        /*
+                         * Both companions are read here rather than taken from
+                         * the fields below, which are assigned after this block
+                         * and would therefore describe the previous exit - the
+                         * one difference that would make this row say the write
+                         * did take when it did not.
+                         */
+                        ULONGLONG shadow = 0ULL;
+
+                        (void)KswordARKHvmNestedVmcs12Read(
+                            vmcs12, 0x6004UL, &shadow);
+                        for (probe = 0UL; probe < 4UL; ++probe) {
+                            if (nested->L2CrWriteCount[probe] != 0ULL &&
+                                nested->L2CrWriteRip[probe] != rip) {
+                                continue;
+                            }
+                            nested->L2CrWriteRip[probe] = rip;
+                            nested->L2CrWriteValue[probe] = written;
+                            nested->L2CrWriteGuestCr0[probe] =
+                                KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR0);
+                            nested->L2CrWriteShadow[probe] = shadow;
+                            nested->L2CrWriteCount[probe] += 1ULL;
+                            break;
+                        }
+                    }
+                }
             }
             nested->L2Vmcs02Cr0Mask = KswordARKHvmNestedL2Read(0x6000UL);
             nested->L2Vmcs02Cr4Mask = KswordARKHvmNestedL2Read(0x6002UL);

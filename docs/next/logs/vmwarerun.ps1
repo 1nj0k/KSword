@@ -94,6 +94,26 @@ foreach ($svc in @('VMAuthdService')) {
     try { Start-Service -Name $svc -ErrorAction Stop; Note ('  起 ' + $svc) } catch { Note ('  起 ' + $svc + ' 失败: ' + $_.Exception.Message) }
 }
 
+# 清掉上一轮留下的锁目录，**但只在确认没有 vmware-vmx 在跑的时候**。
+#
+# 我们每轮都靠重启来宾来卸掉常驻，VMware 是被硬断电的，锁目录会留在虚拟机目录里，
+# 下一轮 vmrun 就只回一句 `Error: Unknown error`，而采样照跑、读数照出、
+# `vmx进程=0` 藏在一行里——整整一轮测量与 VMware 无关。
+#
+# 门必须在这儿：上次我打印了进程数却没有拿它做判断，直接删掉了一个**活着的**
+# vmware-vmx 正持有的锁。判断在前，删除在后。
+$live = @(Get-Process -Name 'vmware-vmx' -ErrorAction SilentlyContinue)
+if ($live.Count -ne 0) {
+    Note ('  有 ' + $live.Count + ' 个 vmware-vmx 在跑，不动锁目录')
+} else {
+    $locks = @(Get-ChildItem -LiteralPath $vmDir -Filter '*.lck' -Directory -ErrorAction SilentlyContinue)
+    foreach ($lock in $locks) {
+        try { [IO.Directory]::Delete($lock.FullName, $true); Note ('  删除残留锁 ' + $lock.Name) }
+        catch { Note ('  删除锁失败 ' + $lock.Name + ': ' + $_.Exception.Message) }
+    }
+    if ($locks.Count -eq 0) { Note '  没有残留锁目录' }
+}
+
 Note '>>> 启动 VMware 的虚拟机'
 # 交互会话不在的时候 Start-ScheduledTask 是**静默空操作** —— 上一轮整整 60 秒的
 # 采样都是在测一个没启动的 VMware。所以先把会话记下来，跑完再把任务的实际执行
@@ -145,6 +165,11 @@ Note '=== 采样结束 ==='
 $after = (Get-ScheduledTaskInfo -TaskName 'KswordVmStart')
 Note ('任务 LastRunTime ' + $before + ' -> ' + $after.LastRunTime + '  LastTaskResult=0x' + ('{0:X}' -f $after.LastTaskResult))
 if ($after.LastRunTime -eq $before) { Note '**任务没有执行 —— 本轮与 VMware 无关**' }
+# 任务跑过不等于虚拟机起来了：vmrun 可以返回 `Error: Unknown error` 而任务照样算
+# 执行过。判据是进程在不在，而且这一行要显眼，别埋在采样行的末尾。
+if (@(Get-Process -Name 'vmware-vmx' -ErrorAction SilentlyContinue).Count -eq 0) {
+    Note '**没有 vmware-vmx 进程 —— 本轮所有读数与 VMware 无关，不要据此下结论**'
+}
 
 DumpVmwareLogs '收尾'
 
