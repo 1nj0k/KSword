@@ -360,15 +360,30 @@ KswordARKHvmNestedL2Enter(
         return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
     }
     /*
-     * The same rule for the virtual-APIC page.
+     * The virtual-APIC page check, kept and switched off.
      *
-     * Only L1 can turn this control on - we never request it for ourselves -
-     * so the address is entirely L1's to supply, and a zero or misaligned one
-     * would have the processor treat physical page zero as a virtual APIC.
-     * The architecture would fail the entry for the alignment on its own, but
-     * it reports that as a bare error number against L1's launch; refusing here
-     * says which field, in a place that has not yet touched vmcs02.
+     * Added alongside the TPR-shadow advertisement, refusing a zero or
+     * misaligned address on the grounds that the processor would otherwise
+     * treat physical page zero as a virtual APIC.  It became the only thing
+     * standing between VMware and its first VM entry, and it is wrong on its
+     * own terms: zero is four-kilobyte aligned and inside the physical-address
+     * width, so the architecture accepts it.  The check invents a rule the
+     * processor does not have.
+     *
+     * Left in place rather than deleted because the observation behind it is
+     * still unexplained and still worth returning to: VMware sets the TPR
+     * shadow control (vmcs12 primary = 0xB5A07DFA, bit 21 on) and, in every
+     * VMWRITE we captured, never writes 0x2012.  Turn this on to stop at that
+     * moment again.
+     *
+     * Off by default, so the address travels into vmcs02 through the copied
+     * control table like every other field L1 owns, and VM entry validates it
+     * the way it validates the rest.  The processor's error number then reaches
+     * L1 unchanged, which is both more accurate than one we made up and the
+     * answer L1 is written to handle.
      */
+#define KSW_L2_ENFORCE_VIRTUAL_APIC_PAGE 0
+#if KSW_L2_ENFORCE_VIRTUAL_APIC_PAGE
     if ((primary & KSW_L2_PRIMARY_USE_TPR_SHADOW) != 0UL) {
         ULONGLONG virtualApic = 0ULL;
 
@@ -377,15 +392,11 @@ KswordARKHvmNestedL2Enter(
             KSW_L2_VIRTUAL_APIC_ADDRESS,
             &virtualApic);
         /*
-         * Zero and misaligned are split into two sites on purpose.
-         *
-         * They mean opposite things about where the fault is.  Zero is what a
-         * field reads when L1 never wrote it - the cache cannot distinguish
-         * "never written" from "written as zero", and a hypervisor writing zero
-         * here would be pointing its own TPR shadow at physical page zero, so
-         * zero in practice means the write did not reach us.  Misaligned means
-         * the write did reach us and we are reading something wrong.  One
-         * number for both would have left exactly that question open.
+         * Zero and misaligned are two sites on purpose: they mean opposite
+         * things about where the fault is.  Zero is also what a field reads
+         * when L1 never wrote it, because the cache has no never-written
+         * state; misaligned means the write did reach us and we are reading
+         * something wrong.
          */
         if (virtualApic == 0ULL) {
             /* Return the exact missing-virtual-APIC-page error. */
@@ -398,6 +409,7 @@ KswordARKHvmNestedL2Enter(
             return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
         }
     }
+#endif
     /* Capture our host state while vmcs01 is still the loaded VMCS. */
     for (index = 0UL;
          index < RTL_NUMBER_OF(g_KswordL2HostFields);

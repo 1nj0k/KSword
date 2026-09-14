@@ -998,9 +998,9 @@ static const char* RefusalSiteName(unsigned short site)
     case 3U: return "L1 的 EPT12 指针不可用（影子层次装不起来）";
     case 4U: return "没有可用的 EPT 指针";
     case 5U: return "位图页缺失（MSR / IO 位图合并没产出页）";
-    case 6U: return "TPR shadow 开着但 virtual-APIC 页地址读回来是零（L1 的写没到我们这里）";
+    case 6U: return "virtual-APIC 页地址读回来是零（该校验默认**关闭**，见 KSW_L2_ENFORCE_VIRTUAL_APIC_PAGE）";
     case 7U: return "vmcs02 的 VMPTRLD 失败";
-    case 8U: return "virtual-APIC 页地址非零但未页对齐（写到了，我们读错了）";
+    case 8U: return "virtual-APIC 页地址非零但未页对齐（同上，默认关闭）";
     default: return "未知编号";
     }
 }
