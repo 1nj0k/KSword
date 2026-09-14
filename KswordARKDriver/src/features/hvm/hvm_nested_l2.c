@@ -784,18 +784,22 @@ KswordARKHvmNestedL2Enter(
     {
         const ULONGLONG entryEvent = KswordARKHvmNestedL2Read(0x4016UL);
 
+        ULONG region = 0UL;
+
         /* Kept whether valid or not: "nothing was injected" is an answer. */
         nested->L2LastEntryIntrInfo = (ULONG)entryEvent;
+        /* And kept per region, because the per-processor copy cannot say whose. */
+        for (region = 0UL; region < 4UL; ++region) {
+            if (nested->L2Vmcs12Regions[region] == nested->CurrentVmcs) {
+                nested->L2Vmcs12RegionLastEntryIntrInfo[region] =
+                    (ULONG)entryEvent;
+                break;
+            }
+        }
         if ((entryEvent & 0x80000000ULL) != 0ULL) {
-            ULONG region = 0UL;
-
             nested->L2InjectionCount += 1ULL;
-            /* And to which of L1's processors it was handed. */
-            for (region = 0UL; region < 4UL; ++region) {
-                if (nested->L2Vmcs12Regions[region] == nested->CurrentVmcs) {
-                    nested->L2Vmcs12RegionInjections[region] += 1ULL;
-                    break;
-                }
+            if (region < 4UL) {
+                nested->L2Vmcs12RegionInjections[region] += 1ULL;
             }
             /*
              * And the mode it is landing in - see the field comment.  Taken
@@ -1142,8 +1146,24 @@ KswordARKHvmNestedL2ExitOwner(
                 nested->L2IdtVectoringLastExitOrdinal;
             nested->L2TripleFaultLastVectoringInfo =
                 nested->L2IdtVectoringLastInfo;
-            /* The delivery this fault is about - see the field comment. */
-            nested->L2TripleFaultEntryIntrInfo = nested->L2LastEntryIntrInfo;
+            /*
+             * The delivery this fault is about, taken from **this region's**
+             * record.  The per-processor one is whichever of L1's processors
+             * entered last, which is not necessarily the one that died.
+             */
+            {
+                ULONG region = 0UL;
+
+                nested->L2TripleFaultEntryIntrInfo = 0UL;
+                for (region = 0UL; region < 4UL; ++region) {
+                    if (nested->L2Vmcs12Regions[region] ==
+                            nested->CurrentVmcs) {
+                        nested->L2TripleFaultEntryIntrInfo =
+                            nested->L2Vmcs12RegionLastEntryIntrInfo[region];
+                        break;
+                    }
+                }
+            }
             nested->L2TripleFaultIdtVectoring =
                 (ULONG)KswordARKHvmNestedL2Read(KSW_L2_IDT_VECTORING_INFO);
             nested->L2TripleFaultRsp =

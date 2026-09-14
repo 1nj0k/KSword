@@ -233,6 +233,16 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONGLONG L2Vmcs12RegionLastCr0[4];
     ULONG L2Vmcs12RegionLastCsAr[4];
     /*
+     * And the event each region's last entry carried.
+     *
+     * The per-processor copy of this cannot answer the question it is needed
+     * for.  Both of L1's virtual processors run on the same physical one and
+     * interleave, so "the last entry on this processor" may belong to either -
+     * which is how a vector was once attributed to the wrong one, acted on,
+     * and cost a change that made VMware's monitor panic.
+     */
+    ULONG L2Vmcs12RegionLastEntryIntrInfo[4];
+    /*
      * And the interrupt-command register writes, which is how one of L1's
      * processors wakes another.
      *
