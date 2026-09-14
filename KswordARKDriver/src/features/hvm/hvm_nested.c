@@ -1340,6 +1340,23 @@ KswordARKHvmNestedDispatchVmcsField(
         (ULONG)encoding,
         value);
     /*
+     * Count the moment L1 asks for an event to be delivered.
+     *
+     * This is the only place the request exists.  The counter it pairs with is
+     * read back out of vmcs02 at entry, so the two together say whether a
+     * missing injection was never requested or requested and dropped - and
+     * those point at opposite halves of the code.  Counted after the write so
+     * a refused one is not counted as asked.
+     *
+     * 0x4016 is the VM-entry interruption-information field; bit 31 is its
+     * valid bit.
+     */
+    if (NT_SUCCESS(writeStatus) &&
+        (ULONG)encoding == 0x4016UL &&
+        (value & 0x80000000ULL) != 0ULL) {
+        Nested->L2InjectRequestCount += 1ULL;
+    }
+    /*
      * Record what L1 configured, when someone asked for the trace.
      *
      * The question this answers cannot be answered any other way: a field that

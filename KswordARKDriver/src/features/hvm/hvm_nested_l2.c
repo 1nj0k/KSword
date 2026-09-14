@@ -941,6 +941,29 @@ KswordARKHvmNestedL2ExitOwner(
                 (port == 0x70UL || port == 0x71UL) ? 6UL : 7UL;
 
             nested->L2PortCounts[slot] += 1ULL;
+            /*
+             * And the port itself - but only the ones no bucket names.
+             *
+             * The first version sampled every port and filled all sixteen
+             * slots with 0x3D4, a port whose own bucket had counted seventeen
+             * hundred accesses against ninety-three thousand in the catch-all.
+             * Sampling the tail of a stream tells you what happened last, not
+             * what happens most, and those differed by a factor of fifty here.
+             * Restricting the ring to the unnamed bucket makes it sample the
+             * thing it was built to identify.
+             *
+             * Direction and width ride along in the high half: the same port
+             * read and written are different events, and "the guest is reading
+             * a status register that never changes" is precisely the shape
+             * this is meant to be able to show.
+             */
+            if (slot == 7UL) {
+                nested->L2PortRing[nested->L2PortRingIndex & 0xFUL] =
+                    port |
+                    ((ULONG)bytes << 16) |
+                    (((qualification & 0x8ULL) != 0ULL) ? 0x80000000UL : 0UL);
+                nested->L2PortRingIndex += 1UL;
+            }
         }
         if (KswordARKHvmNestedBitmapL1WantsPort(Context, port, bytes)) {
             nested->L2IoExitsReflected += 1ULL;
@@ -1073,6 +1096,169 @@ KswordARKHvmNestedL2Reflect(
     if (!nested->InL2) {
         /* Report that the caller owns this exit. */
         return KSW_HVM_L2_ROUTE_NOT_L2;
+    }
+    /*
+     * Record where L2 stopped and whether it could have taken an interrupt.
+     *
+     * vmcs02 is the loaded VMCS here, so these describe L2 itself rather than
+     * anything about L1.  Taken before any routing decision, because the
+     * routing is what the next hypothesis would be about and this is meant to
+     * be evidence that does not depend on one.
+     */
+    {
+        const ULONG slot = nested->L2ExitRingIndex & 0xFUL;
+
+        nested->L2ExitRipRing[slot] =
+            KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+        nested->L2ExitReasonRing[slot] = ExitReason;
+        nested->L2ExitRingIndex += 1UL;
+        nested->L2LastRflags = KswordARKHvmNestedL2Read(0x6820UL);
+        nested->L2LastInterruptibility =
+            KswordARKHvmNestedL2Read(0x4824UL);
+        /*
+         * Has L2 ever run with interrupts enabled at all?
+         *
+         * The ring says what L2 is doing now and is dominated by whatever
+         * repeats; every sample in it showed RFLAGS.IF clear, which is exactly
+         * what a mode-switch stub looks like and says nothing about the rest
+         * of the run.  A running total does: if this stays at zero then no
+         * timer tick could ever have been delivered whatever L1 did, and if it
+         * does not, then the guest was interruptible and the injection is
+         * still the thing to explain.
+         */
+        if ((nested->L2LastRflags & 0x200ULL) != 0ULL) {
+            nested->L2ExitIfSetCount += 1ULL;
+        } else {
+            nested->L2ExitIfClearCount += 1ULL;
+        }
+        /* And the reason, so the ring's bias stops standing in for a total. */
+        nested->L2ExitReasonCounts[(ExitReason < 63UL) ? ExitReason : 63UL] +=
+            1ULL;
+        /*
+         * And how wide the loop is, keyed by address rather than sampled.
+         *
+         * A RIP of zero is used as the empty key, which costs nothing here: an
+         * L2 exiting at address zero has already gone wrong in a way this
+         * table is not needed to see.
+         */
+        {
+            const ULONGLONG rip = nested->L2ExitRipRing[slot];
+            ULONG probe = 0UL;
+
+            for (probe = 0UL; probe < 32UL; ++probe) {
+                if (nested->L2RipKeys[probe] == rip) {
+                    nested->L2RipCounts[probe] += 1ULL;
+                    break;
+                }
+                if (nested->L2RipKeys[probe] == 0ULL) {
+                    nested->L2RipKeys[probe] = rip;
+                    nested->L2RipCounts[probe] = 1ULL;
+                    break;
+                }
+            }
+            if (probe == 32UL) {
+                /* Full: count the misses so a spread loop is not read as narrow. */
+                nested->L2RipMissCount += 1ULL;
+            }
+        }
+        /*
+         * A control-register exit also records which register and whose mask.
+         *
+         * The ring above showed L2 alternating between two instructions that
+         * both take reason 28, forever, with interrupts disabled.  Which
+         * register that is decides what the fix is, and there is no way to
+         * infer it: CR3 accesses exit on a primary control we merge by union,
+         * CR0 and CR4 accesses exit on the guest-host masks we copy from
+         * vmcs12, and those two lead to opposite conclusions.  Both sides'
+         * masks are taken here so "whose exit is this" is answered from
+         * readings rather than from the merge code's intent.
+         */
+        if (ExitReason == 28UL) {
+            ULONGLONG mask = 0ULL;
+
+            nested->L2LastCrQualification =
+                KswordARKHvmNestedL2Read(KSW_L2_EXIT_QUALIFICATION);
+            /*
+             * Which register, and what kind of access, over the whole run.
+             *
+             * The single last qualification said CR0 / MOV-to / RAX, which is
+             * one sample out of a hundred and thirty thousand.  Bucketing says
+             * whether that is the whole story or whether the loop also touches
+             * CR4 or CR8 - and those route differently.
+             *
+             * Qualification bits 3:0 are the register number and bits 5:4 the
+             * access type (0 MOV to, 1 MOV from, 2 CLTS, 3 LMSW).
+             */
+            {
+                const ULONG number =
+                    (ULONG)(nested->L2LastCrQualification & 0xFULL);
+                const ULONG access =
+                    (ULONG)((nested->L2LastCrQualification >> 4) & 0x3ULL);
+                const ULONG bucket =
+                    (number == 0UL) ? 0UL :
+                    (number == 3UL) ? 1UL :
+                    (number == 4UL) ? 2UL :
+                    (number == 8UL) ? 3UL : 4UL;
+
+                nested->L2CrCounts[bucket][access] += 1ULL;
+            }
+            nested->L2Vmcs02Cr0Mask = KswordARKHvmNestedL2Read(0x6000UL);
+            nested->L2Vmcs02Cr4Mask = KswordARKHvmNestedL2Read(0x6002UL);
+            nested->L2LastGuestCr0 =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR0);
+            mask = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(vmcs12, 0x6000UL, &mask);
+            nested->L2Vmcs12Cr0Mask = mask;
+            mask = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(vmcs12, 0x6004UL, &mask);
+            nested->L2Vmcs12Cr0Shadow = mask;
+            mask = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(vmcs12, 0x6002UL, &mask);
+            nested->L2Vmcs12Cr4Mask = mask;
+            nested->L2Vmcs02Primary =
+                (ULONG)KswordARKHvmNestedL2Read(KSW_L2_PRIMARY_CONTROLS);
+            mask = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(
+                vmcs12,
+                KSW_L2_PRIMARY_CONTROLS,
+                &mask);
+            nested->L2Vmcs12Primary = (ULONG)mask;
+            /*
+             * Exit controls on both sides, for acknowledge-interrupt-on-exit.
+             *
+             * vmcs02 carries it - bit 15 of the merged value - and we never
+             * request it, so it should be L1's.  "Should be" is the problem:
+             * the merge is a union, and if that bit is ours by any route then
+             * every external interrupt taken during L2 is removed from the
+             * interrupt controller by the processor while L1, which did not
+             * ask for that, waits for a delivery that can no longer happen.
+             * Four hundred lost interrupts look exactly like a guest whose
+             * clock never ticks.
+             */
+            nested->L2Vmcs02Exit =
+                (ULONG)KswordARKHvmNestedL2Read(KSW_L2_EXIT_CONTROLS);
+            mask = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(
+                vmcs12,
+                KSW_L2_EXIT_CONTROLS,
+                &mask);
+            nested->L2Vmcs12Exit = (ULONG)mask;
+            /*
+             * Pin controls from L1, for the VMX-preemption timer.
+             *
+             * vmcs02 runs with pin = 0x3F, which has bit 6 clear.  A
+             * hypervisor that schedules its virtual timer on the preemption
+             * timer and does not get it will never be woken to deliver a tick,
+             * and the clamp can remove the bit without anything reporting it -
+             * the same shape as the VPID defect, in the other direction.
+             */
+            mask = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(
+                vmcs12,
+                KSW_L2_PIN_CONTROLS,
+                &mask);
+            nested->L2Vmcs12Pin = (ULONG)mask;
+        }
     }
     /*
      * The event L1 asked to inject has been delivered, so retire its request.

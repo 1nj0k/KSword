@@ -116,6 +116,127 @@ typedef struct _KSW_HVM_NESTED_VCPU
     /* Injection requests retired on L1's behalf after the entry delivered them. */
     ULONGLONG L2InjectionRetiredCount;
     /*
+     * Where L2 actually is, and whether it can take an interrupt there.
+     *
+     * Three times now a mechanism has been reasoned about, found genuinely
+     * broken, fixed, and the guest has gone on sitting at the same frozen boot
+     * menu.  That is a method failing, not a mechanism hiding: every one of
+     * those started from "what could stop a timer tick" instead of from what
+     * the guest is doing.  A ring of exit addresses says whether it is looping
+     * and where; RFLAGS says whether an interrupt could be delivered there at
+     * all, which no amount of correct injection can substitute for.
+     */
+    ULONGLONG L2ExitRipRing[16];
+    ULONG L2ExitReasonRing[16];
+    ULONG L2ExitRingIndex;
+    ULONGLONG L2LastRflags;
+    ULONGLONG L2LastInterruptibility;
+    /*
+     * The control-register exit itself, and both sides' masks.
+     *
+     * L2 turned out to be looping on two instructions that both take a
+     * control-register exit, with interrupts disabled - so the timer had
+     * nothing to do with it.  Whose exit it is decides everything: our own
+     * CR0/CR4 guest-host masks are unioned into vmcs02, so a bit only we care
+     * about produces an exit L1 never armed, and the routing reflects it to L1
+     * anyway.  L1 has no case for it, its guest reads the register back
+     * unchanged, and it tries again forever.  This is the same defect the MSR
+     * and port-I/O paths already route around by asking whose mask armed the
+     * exit; control registers were left on the default path.
+     *
+     * Recorded rather than assumed: the qualification says which register and
+     * which access, and the two masks say who armed it.
+     */
+    ULONGLONG L2LastCrQualification;
+    ULONGLONG L2Vmcs12Cr0Mask;
+    ULONGLONG L2Vmcs12Cr0Shadow;
+    ULONGLONG L2Vmcs02Cr0Mask;
+    ULONGLONG L2Vmcs12Cr4Mask;
+    ULONGLONG L2Vmcs02Cr4Mask;
+    ULONGLONG L2LastGuestCr0;
+    /*
+     * The primary controls on both sides, for the CR3 half of the same
+     * question: CR3-load and CR3-store exiting live here, not in a mask, and
+     * the merge takes the union - so a bit set in vmcs02 and clear in vmcs12
+     * names an exit L1 never asked for.
+     */
+    ULONG L2Vmcs12Primary;
+    ULONG L2Vmcs02Primary;
+    /*
+     * The injection question, from both ends.
+     *
+     * L2InjectionCount already says how many entries carried an event, read
+     * back out of vmcs02 - six, against five hundred and thirty-six external
+     * interrupts reflected to L1.  That number alone cannot say whose fault it
+     * is: L1 may never have asked, or it may have asked and we may have failed
+     * to carry the request across.  This counts the asking, at the only place
+     * it happens - L1's VMWRITE to the VM-entry interruption-information
+     * field - so the two numbers can be compared.
+     *
+     * The interruptibility pair is the other half.  A hypervisor will not
+     * inject into a guest that cannot take an interrupt, so "L1 never asked"
+     * has two very different explanations, and whether L2 ever runs with
+     * interrupts enabled separates them.  Sampled on every L2 exit rather than
+     * kept in the ring, because the ring holds sixteen entries and answers
+     * "what is L2 doing now" - not "has it ever".
+     */
+    ULONGLONG L2InjectRequestCount;
+    ULONGLONG L2ExitIfSetCount;
+    ULONGLONG L2ExitIfClearCount;
+    ULONG L2Vmcs12Exit;
+    ULONG L2Vmcs02Exit;
+    /*
+     * Every L2 exit, counted by reason.
+     *
+     * The sixteen-entry ring answers "where is L2 right now" and is dominated
+     * by whatever repeats fastest, so reading a diagnosis out of it is reading
+     * a sampling bias.  Three of this session's wrong turns started that way.
+     * A running histogram is the reading that separates "the guest is stuck in
+     * this loop" from "the guest is fine and this loop is merely the most
+     * frequent thing in it", and nothing else here can.
+     *
+     * Sixty-four buckets covers every basic exit reason the architecture
+     * defines; anything larger is folded into the last one rather than
+     * dropped, so the totals still add up.
+     */
+    ULONGLONG L2ExitReasonCounts[64];
+    ULONG L2Vmcs12Pin;
+    /*
+     * Which ports, and which control registers.
+     *
+     * The reason histogram says port I/O and control-register access are
+     * ninety percent of what L2 does, and neither of those names a device or a
+     * register.  Ninety-five thousand of the port accesses fall in the "some
+     * other port" bucket, which is the largest single unexplained reading on
+     * this line - a bucket that big is not a summary, it is a place things go
+     * to stop being measured.
+     *
+     * A ring rather than a histogram for the ports: sixty-four thousand
+     * counters is not worth it to identify what is plainly a handful of ports
+     * repeating, and sixteen consecutive samples name them.
+     */
+    ULONG L2PortRing[16];
+    ULONG L2PortRingIndex;
+    /*
+     * Distinct L2 exit addresses, with how often each one exits.
+     *
+     * The sixteen-slot RIP ring holds the tail, and the tail showed the same
+     * two addresses across three separate boots - which says the hang is
+     * deterministic but not how wide the loop is.  A small keyed table says
+     * both: if two entries carry nearly every exit the guest is going nowhere,
+     * and if the counts are spread over thirty-two addresses it is running and
+     * the ring was merely showing the busiest instruction.
+     *
+     * Thirty-two entries, linear probe, first-come and never evicted - a
+     * replacement policy would let the loop push out the evidence of anything
+     * rarer, which is the reading that says whether there *is* anything rarer.
+     */
+    ULONGLONG L2RipKeys[32];
+    ULONGLONG L2RipCounts[32];
+    ULONGLONG L2RipMissCount;
+    /* CR number (0,3,4,8 land at 0..3, anything else at 4) by access type. */
+    ULONGLONG L2CrCounts[5][4];
+    /*
      * Whether the VMCS region is actually working as the backing store.
      *
      * Storing into the region and reading it back are two steps that both

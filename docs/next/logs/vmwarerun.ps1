@@ -1,4 +1,4 @@
-# 在来宾里跑：起隐藏模式常驻 -> 取基线 -> 开 VMware 的虚拟机 -> 收读数。
+﻿# 在来宾里跑：起隐藏模式常驻 -> 取基线 -> 开 VMware 的虚拟机 -> 收读数。
 #
 # 每一步都立刻追加到 C:\ksword\vmwarerun.log 并关闭句柄。整机挂死时最后一条
 # 记录就是现场 —— 这条线上的失败方式是蓝屏，而蓝屏会把内存里的缓冲一起带走。
@@ -58,7 +58,16 @@ $b = $null
 try { $b = $r.Out | ConvertFrom-Json } catch { }
 Note ('基线 vmExits=' + $b.vmExitCount + ' 拒绝=' + $b.nestedL2LaunchRefusedCount + ' 熔断=' + $b.nestedFuseTripCount)
 
-foreach ($f in @('C:\vmware\tinycore\vmware.log','C:\vmware\vmrun_start.txt')) {
+# 被测的虚拟机是 VMware 自己的向导建出来的那一台。
+#
+# 之前跑的是一份手写 .vmx，光驱挂在 IDE、没有硬盘控制器、没有 USB HID 设备，
+# 结果是 `Operating System not found`——一个完全在虚拟化链路之外的故障，却被
+# 当成链路故障查了很久。向导生成的那台用同一个 ISO、同样在常驻底下，能进
+# isolinux 菜单，所以它才是这条线上的已知良品。
+$vmDir = 'C:\Users\felix\Documents\Virtual Machines\Other Linux 6.x kernel 64-bit'
+$vmLog = Join-Path $vmDir 'vmware.log'
+
+foreach ($f in @($vmLog, 'C:\vmware\vmrun_start.txt')) {
     if (Test-Path $f) { [IO.File]::Delete($f) }
 }
 Get-ChildItem 'C:\Users\felix\AppData\Local\Temp\vmware-felix' -File -ErrorAction SilentlyContinue | ForEach-Object { try { [IO.File]::Delete($_.FullName) } catch { } }
@@ -99,8 +108,8 @@ Start-ScheduledTask -TaskName 'KswordVmStart'
 function DumpVmwareLogs($tag) {
     Note ('--- VMware 日志 (' + $tag + ') ---')
     if (Test-Path 'C:\vmware\vmrun_start.txt') { Note ('  vmrun: ' + ([IO.File]::ReadAllText('C:\vmware\vmrun_start.txt')).Trim()) }
-    if (Test-Path 'C:\vmware\tinycore\vmware.log') {
-        (([IO.File]::ReadAllText('C:\vmware\tinycore\vmware.log')) -split "`r?`n" |
+    if (Test-Path $vmLog) {
+        (([IO.File]::ReadAllText($vmLog)) -split "`r?`n" |
             Select-String -Pattern 'Hyper-V|VT-x|VMX|MONITOR|Monitor Mode|msg\.|IOPL|not compatible|PowerOn|poweredOn|EPT|MMU|monitor|Failed|unsupported|Unsupported') |
             Select-Object -First 40 | ForEach-Object { Note ('  ' + $_) }
     } else { Note '  vmware.log 还不存在' }
@@ -138,4 +147,51 @@ Note ('任务 LastRunTime ' + $before + ' -> ' + $after.LastRunTime + '  LastTas
 if ($after.LastRunTime -eq $before) { Note '**任务没有执行 —— 本轮与 VMware 无关**' }
 
 DumpVmwareLogs '收尾'
+
+# 事件环的尾巴，两次调用读完。
+#
+# 上一版按 64 行一批、最多二百批地读，每批起一个进程——在一台慢五十倍的来宾里
+# 那是几分钟。要的只是最后一段：先问最新序号，再从"最新减 N"读一次。
+Note '--- 事件环尾部 ---'
+$r = Run @('--json','events','0')
+$head = $null
+try { $head = $r.Out | ConvertFrom-Json } catch { }
+if ($head -eq $null) {
+    Note ('events 头读失败 exit=' + $r.Exit)
+} else {
+    $newest = [int64]$head.newestSequence
+    $from = [Math]::Max(0, $newest - 400)
+    Note ('newestSequence=' + $newest + ' available=' + $head.availableRows + ' dropped=' + $head.droppedRows + ' 从 ' + $from + ' 读起')
+    $r = Run @('--json','events',"$from")
+    [IO.File]::WriteAllText('C:\ksword\events.json', $r.Out)
+    $ev = $null
+    try { $ev = $r.Out | ConvertFrom-Json } catch { }
+    if ($ev -ne $null) {
+        Note ('取回 ' + $ev.returnedRows + ' 行')
+        # 只把这一轮要看的几种行写进日志，其余留在 events.json 里。
+        foreach ($row in $ev.rows) {
+            $rid = $row.ruleId
+            if ($rid -eq $null) { continue }
+            # 这个 CLI 的数值字段有的带 0x 前缀有的不带，两种都得认：把带前缀的
+            # 当十六进制、不带的当十进制，是唯一不会把 243 读成 0x243 的写法。
+            $txt = ([string]$rid).Trim()
+            if ($txt -match '^0[xX]') {
+                $id = [Convert]::ToInt64($txt.Substring(2), 16)
+            } else {
+                $id = [int64]$txt
+            }
+            if ($id -lt 0xF3 -or $id -gt 0xF9) { continue }
+            Note ('  rule=0x' + ('{0:X2}' -f $id) +
+                ' reason=' + $row.exitReason +
+                ' qual=' + $row.qualification +
+                ' gpa=' + $row.guestPhysicalAddress +
+                ' gla=' + $row.guestLinearAddress +
+                ' rip=' + $row.guestRip +
+                ' status=' + $row.status +
+                ' cpu=' + $row.access)
+        }
+    } else {
+        Note ('events 尾读失败 exit=' + $r.Exit)
+    }
+}
 Note '=== 完 ==='
