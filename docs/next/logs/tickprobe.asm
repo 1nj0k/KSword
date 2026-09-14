@@ -33,6 +33,9 @@ _TEXT SEGMENT USE16 'CODE'
 VIDEO_SEG EQU 0B800h
 BDA_TICK  EQU 046Ch            ; BIOS 定时器计数（32 位），IRQ0 的 ISR 每滴答 +1
 SPIN_LO   EQU 0500h            ; 自旋计数放在 BIOS 数据区之后、引导扇区之前的空隙
+OWN_LO    EQU 0504h            ; 我们自己的 IRQ0 计数
+SAVED_V8  EQU 0508h            ; 原来的 8 号中断向量（seg:off）
+IVT_V8    EQU 0020h            ; 实模式中断向量表第 8 项
 ATTR      EQU 0Fh              ; 亮白
 
 ; --- BIOS 参数块 ---
@@ -111,8 +114,31 @@ start:
     mov di, 160
     mov si, OFFSET msg_tick
     call puts
+    mov di, 320
+    mov si, OFFSET msg_own
+    call puts
 
-    call serial_init
+    ; 装一个自己的 8 号中断处理程序，链到 BIOS 原来那个。
+    ;
+    ; 为什么需要它：读数显示 IRQ0 只被注入过**一次**，之后再没有。这有两种可能 ——
+    ; 中断根本不再来，或者来了但 BIOS 的 ISR 没跑（那样它既不会加 tick，也不会发
+    ; EOI，而 IRQ0 是最高优先级，服务中位不清就把后面所有中断都挡住了）。
+    ; TICK 不动这一个数字区分不了这两件事。
+    ;
+    ; 自己的计数器能：它在 BIOS 的 ISR 之前递增，所以 OWN 动而 TICK 不动就说明
+    ; 中断到了、BIOS 那一段出了问题；两个都不动就说明中断真的没来。
+    ; 递增完**链到**原处理程序而不是自己 iret，这样 EOI 与 tick 仍由 BIOS 负责，
+    ; 不改变被测行为。
+    cli
+    mov ax, ds:[IVT_V8]
+    mov ds:[SAVED_V8], ax
+    mov ax, ds:[IVT_V8+2]
+    mov ds:[SAVED_V8+2], ax
+    mov word ptr ds:[IVT_V8], OFFSET irq0
+    mov word ptr ds:[IVT_V8+2], 0
+    xor ax, ax
+    mov ds:[OWN_LO], ax
+    mov ds:[OWN_LO+2], ax
 
     sti                        ; 到这里才放行中断；IRQ0 只可能从这之后进来
 
@@ -141,28 +167,24 @@ main:
     mov ax, ds:[BDA_TICK]
     call hex16
 
-    ; 同一组数再从串口发一份。
-    ;
-    ; 屏幕这条路不可靠：来宾显示器超时之后 Hyper-V 的缩略图返回整帧零，而整帧零
-    ; 与"来宾屏幕就是黑的"在像素上无法区分，Windows 又**不接受合成输入唤醒显示器**，
-    ; 所以一旦睡着就没法自动救回来。串口写进宿主的一个文件，与显示状态无关，
-    ; 而且是机器可读的，不用我再去解 RGB565。
-    mov si, OFFSET msg_spin
-    call serial_puts
-    mov ax, ds:[SPIN_LO+2]
-    call serial_hex16
-    mov ax, ds:[SPIN_LO]
-    call serial_hex16
-    mov si, OFFSET msg_tick
-    call serial_puts
-    mov ax, ds:[BDA_TICK+2]
-    call serial_hex16
-    mov ax, ds:[BDA_TICK]
-    call serial_hex16
-    mov si, OFFSET msg_crlf
-    call serial_puts
+    mov di, 332                ; 第 2 行第 6 列
+    mov ax, ds:[OWN_LO+2]
+    call hex16
+    mov ax, ds:[OWN_LO]
+    call hex16
 
     jmp main
+
+; --- 我们自己的 IRQ0 处理程序，计数后链到 BIOS 原来那个 ---
+;
+; 不自己发 EOI、不自己 iret：EOI 与 tick 都留给原处理程序，这样除了多一个计数器
+; 之外什么都没变。用远间接跳转链过去，返回地址仍是被中断的那条指令。
+irq0:
+    push ax
+    add word ptr cs:[OWN_LO], 1
+    adc word ptr cs:[OWN_LO+2], 0
+    pop ax
+    jmp dword ptr cs:[SAVED_V8]
 
 ; --- AX 以四位十六进制写到 ES:DI，DI 前进 8 ---
 hex16:
@@ -193,74 +215,13 @@ puts:
 puts_done:
     ret
 
-; --- 16550 串口，COM1 ---
-;
-; 只用轮询，不开中断：这个探针的全部意义就是判断中断进不进得来，
-; 让输出本身依赖中断就成了循环论证。
-COM1     EQU 3F8h
-COM_LSR  EQU 3FDh               ; 线路状态，bit5 = 发送保持寄存器空
+; 串口输出曾经加过又去掉了：VMware 的 serial0 file 后端始终没把数据落到文件
+;（日志 0 字节），而轮询发送每秒制造约七千次 I/O 退出，反过来扰动被测对象。
+; 屏幕这条路在抓图颜色修好之后已经够用。
 
-serial_init:
-    mov dx, 3FBh                ; 线路控制
-    mov al, 80h                 ; DLAB = 1，下面两个口变成除数寄存器
-    out dx, al
-    mov dx, COM1
-    mov al, 1                   ; 除数 1 -> 115200
-    out dx, al
-    mov dx, 3F9h
-    xor al, al
-    out dx, al
-    mov dx, 3FBh
-    mov al, 3                   ; 8 位、无校验、1 停止位，DLAB = 0
-    out dx, al
-    mov dx, 3FCh                ; 调制解调器控制：DTR | RTS
-    mov al, 3
-    out dx, al
-    ret
-
-; AL 从串口发出去
-serial_putc:
-    push ax
-serial_wait:
-    mov dx, COM_LSR
-    in al, dx
-    test al, 20h
-    jz serial_wait
-    pop ax
-    mov dx, COM1
-    out dx, al
-    ret
-
-; DS:SI 的零结尾字符串发出去
-serial_puts:
-    lodsb
-    or al, al
-    jz serial_puts_done
-    call serial_putc
-    jmp serial_puts
-serial_puts_done:
-    ret
-
-; AX 以四位十六进制发出去
-serial_hex16:
-    mov cx, 4
-sh_next:
-    rol ax, 4
-    push ax
-    and al, 0Fh
-    add al, '0'
-    cmp al, '9'
-    jbe sh_ok
-    add al, 7
-sh_ok:
-    call serial_putc
-    pop ax
-    loop sh_next
-    ret
-
-msg_spin db 'SPIN ', 0
-msg_tick db ' TICK ', 0
-msg_crlf db 13, 10, 0
+msg_spin db 'SPIN', 0
+msg_tick db 'TICK', 0
+msg_own  db 'OWN ', 0
 
 _TEXT ENDS
 END
