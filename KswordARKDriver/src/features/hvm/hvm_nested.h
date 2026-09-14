@@ -100,6 +100,22 @@ typedef struct _KSW_HVM_NESTED_VCPU
      */
     ULONGLONG L2NmiClaimedCount;
     /*
+     * Whether interrupts reach L2 at all, counted at the two places they can
+     * stop.
+     *
+     * A guest hypervisor's BIOS sat at its boot menu with the countdown frozen
+     * and the keyboard dead while the processor stayed pegged - the shape of a
+     * guest polling a timer tick that never advances.  Both halves of that
+     * depend on interrupts: the tick on IRQ 0, the keystroke on IRQ 1, and
+     * neither reaches the guest without passing through here first.  From
+     * outside, "no interrupt ever exited L2", "it exited and L1 was not told"
+     * and "L1 injected and we dropped it" are one frozen screen.
+     */
+    ULONGLONG L2ExternalInterruptCount;
+    ULONGLONG L2InjectionCount;
+    /* Injection requests retired on L1's behalf after the entry delivered them. */
+    ULONGLONG L2InjectionRetiredCount;
+    /*
      * Whether the VMCS region is actually working as the backing store.
      *
      * Storing into the region and reading it back are two steps that both

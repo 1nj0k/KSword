@@ -790,6 +790,20 @@ KswordARKHvmExitPublishCost(
         }
     }
     {
+        /* Whether interrupts are reaching L1's guest, and through which gate. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2ExternalInterruptCount;
+        row.guestPhysicalAddress = Context->Nested.L2InjectionCount;
+        row.guestLinearAddress = (ULONGLONG)Context->Nested.LastEntryPinControls;
+        row.guestRip = (ULONGLONG)Context->Nested.LastEntryExitControls;
+        row.exitReason = Context->Nested.LastEntryPrimaryControls;
+        row.status = (LONG)Context->Nested.LastEntrySecondaryControls;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xF7u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
         /* Whether L1's invalidations are costing the shadow hierarchy. */
         RtlZeroMemory(&row, sizeof(row));
         row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;

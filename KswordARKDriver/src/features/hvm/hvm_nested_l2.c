@@ -15,6 +15,7 @@ Environment:
 --*/
 
 #include "hvm_nested_l2.h"
+#include "driver/KswordArkHvmControls.h"
 #include "hvm_nested_bitmap.h"
 #include "hvm_nested_ept.h"
 #include "hvm_resident.h"
@@ -63,6 +64,8 @@ Environment:
 #define KSW_L2_SECONDARY_CONTROLS 0x401EUL
 #define KSW_L2_EXIT_REASON 0x4402UL
 #define KSW_L2_EXIT_INTR_INFO 0x4404UL
+/* VM-entry interruption information: the event L1 asks us to deliver. */
+#define KSW_L2_ENTRY_INTR_INFO 0x4016UL
 #define KSW_L2_EXIT_INTR_ERROR 0x4406UL
 #define KSW_L2_IDT_VECTORING_INFO 0x4408UL
 #define KSW_L2_IDT_VECTORING_ERROR 0x440AUL
@@ -484,8 +487,31 @@ KswordARKHvmNestedL2Enter(
             primary | Context->Runtime->ActiveControls.Primary,
             Context->Runtime->ActiveControls.PrimaryCapability));
     {
+        /*
+         * L1 gets the secondary controls we advertised, and nothing else.
+         *
+         * The clamp below uses this processor's capability, which is what the
+         * hardware would allow - not what we told L1 it could have.  Those are
+         * different sets, and the gap is a control L1 may set and we never
+         * implemented.  "Advertised but not implemented" is a defect this code
+         * already guards against; this is the same defect mirrored, and it is
+         * worse, because nothing anywhere reports it.
+         *
+         * Measured: VMware asked for enable-VPID, which is not in
+         * KSWORD_ARK_HVM_VMX_PROC2_ALLOWED and which nothing here maintains.
+         * It survived the merge, and vmcs02 then carried enable-VPID with a
+         * VPID of zero - which the architecture forbids.  Every VM entry after
+         * that failed with "invalid control field", we handed the error back,
+         * and VMware died with "VM-entry failed; VMCS valid (error code 7)".
+         * Its guest had already drawn its boot menu, so the screen simply
+         * stopped: no countdown, no keystrokes, and a processor at full load.
+         *
+         * Our own bits are added after the mask, not before: they are what we
+         * need for the guest to run at all, and they are not L1's to ask for.
+         */
         ULONG mergedSecondary = KswordARKHvmNestedL2ClampControl(
-            secondary | Context->Runtime->ActiveControls.Secondary,
+            (secondary & KSWORD_ARK_HVM_VMX_PROC2_ALLOWED) |
+                Context->Runtime->ActiveControls.Secondary,
             Context->Runtime->ActiveControls.SecondaryCapability);
 
         /*
@@ -692,6 +718,17 @@ KswordARKHvmNestedL2Enter(
         (ULONG)KswordARKHvmNestedL2Read(0x4816UL);
     nested->LastEntryGuestActivity =
         (ULONG)KswordARKHvmNestedL2Read(KSW_L2_GUEST_ACTIVITY_STATE);
+    /*
+     * Whether this entry is carrying an event L1 asked to be delivered.
+     *
+     * Read back from vmcs02 rather than from vmcs12, so it counts what the
+     * processor will act on.  An injection L1 requested and we failed to
+     * propagate is invisible everywhere else: L1 believes its guest took the
+     * interrupt, the guest never did, and both keep running.
+     */
+    if ((KswordARKHvmNestedL2Read(0x4016UL) & 0x80000000ULL) != 0ULL) {
+        nested->L2InjectionCount += 1ULL;
+    }
     nested->LastEntryMsrBitmap =
         KswordARKHvmNestedL2Read(KSW_L2_MSR_BITMAP);
     nested->LastEntryIoBitmapA =
@@ -858,11 +895,16 @@ KswordARKHvmNestedL2ExitOwner(
          * such an exit ourselves does not cost L1 an exit, it destroys an
          * interrupt, and the symptom is a hang with nothing written down.
          *
+         * Counted, because this is the first of the two places an interrupt
+         * bound for L1's guest can go missing, and the other one cannot be
+         * read without knowing whether anything arrived here at all.
+         *
          * We never request external-interrupt exiting for ourselves, so a
          * reason of one can only exist because L1 asked for it.  Stating that
          * here rather than leaning on the default is the point: someone adding
          * a case for their own reasons should have to read this first.
          */
+        nested->L2ExternalInterruptCount += 1ULL;
         return KSW_L2_OWNER_L1;
     case 18UL:
         /*
@@ -1031,6 +1073,42 @@ KswordARKHvmNestedL2Reflect(
     if (!nested->InL2) {
         /* Report that the caller owns this exit. */
         return KSW_HVM_L2_ROUTE_NOT_L2;
+    }
+    /*
+     * The event L1 asked to inject has been delivered, so retire its request.
+     *
+     * The processor clears the valid bit of the VM-entry interruption
+     * information field in the VMCS it loaded - vmcs02 - and nothing clears
+     * L1's.  L1 reads its own, sees the request it made still standing, and
+     * concludes the injection has not happened yet.  Measured: VMware asked
+     * for four events across four minutes and then stopped asking, its guest's
+     * BIOS tick never advanced, and its boot menu sat at "60 seconds"
+     * indefinitely while the processor ran flat out.  Four thousand seven
+     * hundred interrupts had reached this routine in the same window.
+     *
+     * Cleared here rather than at the copy, because here the entry is a fact:
+     * reaching this routine at all means L2 ran.  Clearing at the copy would
+     * retire an event on an entry that then failed, which the architecture
+     * does not do.
+     *
+     * Same family as the rest of this module's defects - state L0 has to
+     * maintain on L1's behalf, left unmaintained, with every counter on both
+     * sides reading healthy.
+     */
+    {
+        ULONGLONG injected = 0ULL;
+
+        if (NT_SUCCESS(KswordARKHvmNestedVmcs12Read(
+                vmcs12,
+                KSW_L2_ENTRY_INTR_INFO,
+                &injected)) &&
+            (injected & 0x80000000ULL) != 0ULL) {
+            (void)KswordARKHvmNestedVmcs12Write(
+                vmcs12,
+                KSW_L2_ENTRY_INTR_INFO,
+                injected & ~0x80000000ULL);
+            nested->L2InjectionRetiredCount += 1ULL;
+        }
     }
     /*
      * Count it before deciding whose it is.
