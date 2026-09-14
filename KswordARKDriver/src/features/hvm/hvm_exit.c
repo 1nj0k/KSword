@@ -1469,9 +1469,38 @@ KswordARKHvmExitPublishCost(
                 Context->Nested.L2Vmcs12RegionEntries[slot];
             row.guestLinearAddress =
                 Context->Nested.L2Vmcs12RegionLastRip[slot];
-            row.guestRip = Context->Nested.L2Vmcs12RegionMissCount;
+            row.guestRip = Context->Nested.L2Vmcs12RegionInjections[slot];
+            row.status =
+                (LONG)Context->Nested.L2Vmcs12RegionLastExitReason[slot];
             row.access = (ULONG)Context->ApicId;
             row.ruleId = 0xDAu;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /*
+         * The flags at each region's last exit, and the last four IPIs.
+         *
+         * Split from the row above only because that row is full.  A halt with
+         * RFLAGS.IF set is a processor waiting to be woken; the same halt with
+         * IF clear is one that never will.
+         */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 4UL; ++slot) {
+            if (Context->Nested.L2Vmcs12Regions[slot] == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification =
+                Context->Nested.L2Vmcs12RegionLastRflags[slot];
+            row.guestPhysicalAddress = Context->Nested.L2IcrWriteCount;
+            row.guestLinearAddress = Context->Nested.L2IcrRing[slot & 0x3UL];
+            row.guestRip = (ULONGLONG)Context->Nested.L2IcrRingIndex;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xD9u;
             KswordARKHvmEventPublish(&row);
         }
     }

@@ -760,7 +760,16 @@ KswordARKHvmNestedL2Enter(
         const ULONGLONG entryEvent = KswordARKHvmNestedL2Read(0x4016UL);
 
         if ((entryEvent & 0x80000000ULL) != 0ULL) {
+            ULONG region = 0UL;
+
             nested->L2InjectionCount += 1ULL;
+            /* And to which of L1's processors it was handed. */
+            for (region = 0UL; region < 4UL; ++region) {
+                if (nested->L2Vmcs12Regions[region] == nested->CurrentVmcs) {
+                    nested->L2Vmcs12RegionInjections[region] += 1ULL;
+                    break;
+                }
+            }
             /*
              * And the mode it is landing in - see the field comment.  Taken
              * from the fields captured just above, which were read out of
@@ -1285,10 +1294,23 @@ KswordARKHvmNestedL2ExitOwner(
                 (msrIndex & 0x7FFFFFFFUL) | (isWrite ? 0x80000000UL : 0UL);
             nested->L2MsrRingIndex += 1UL;
             if (isWrite && Frame != NULL) {
-                nested->L2LastMsrWriteIndex = msrIndex;
-                nested->L2LastMsrWriteValue =
+                const ULONGLONG value =
                     ((Frame->Rdx & 0xFFFFFFFFULL) << 32) |
                     (Frame->Rax & 0xFFFFFFFFULL);
+
+                nested->L2LastMsrWriteIndex = msrIndex;
+                nested->L2LastMsrWriteValue = value;
+                /*
+                 * 0x830 is the x2APIC interrupt-command register: one write is
+                 * one inter-processor interrupt, destination and vector
+                 * included.  Kept separately because it is rare and the MSR
+                 * ring is saturated by the timer pair.
+                 */
+                if (msrIndex == 0x830UL) {
+                    nested->L2IcrRing[nested->L2IcrRingIndex & 0x3UL] = value;
+                    nested->L2IcrRingIndex += 1UL;
+                    nested->L2IcrWriteCount += 1ULL;
+                }
             }
         }
         if (KswordARKHvmNestedBitmapL1WantsMsr(Context, msrIndex, isWrite)) {
@@ -1446,6 +1468,22 @@ KswordARKHvmNestedL2Reflect(
          * Here because this block is the first thing that runs after the exit.
          */
         nested->L2ExitCr2 = (ULONGLONG)__readcr2();
+        /*
+         * Charge this exit to the vmcs12 it came out of - see the region
+         * fields for why a per-processor breakdown is what the question needs.
+         */
+        {
+            ULONG region = 0UL;
+
+            for (region = 0UL; region < 4UL; ++region) {
+                if (nested->L2Vmcs12Regions[region] == nested->CurrentVmcs) {
+                    nested->L2Vmcs12RegionLastExitReason[region] = ExitReason;
+                    nested->L2Vmcs12RegionLastRflags[region] =
+                        nested->L2LastRflags;
+                    break;
+                }
+            }
+        }
         /*
          * Has L2 ever run with interrupts enabled at all?
          *

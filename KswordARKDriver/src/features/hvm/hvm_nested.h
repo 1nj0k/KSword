@@ -195,6 +195,38 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONGLONG L2Vmcs12RegionLastRip[4];
     ULONGLONG L2Vmcs12RegionMissCount;
     /*
+     * Per region, the three numbers that say why one of L1's processors
+     * stopped while the other kept running.
+     *
+     * The bootstrap processor's region has been frozen for the whole
+     * observation while the application processor's climbs at five entries a
+     * second, and from outside that has three different explanations that look
+     * identical: it is waiting for an inter-processor interrupt that never
+     * arrives, it is waiting for its own timer that never fires, or it halted
+     * with interrupts disabled and is simply dead.
+     *
+     * Last exit reason and the flags at that exit separate them.  A halt
+     * (reason 12) with RFLAGS.IF set is a processor waiting to be woken; the
+     * same halt with IF clear is one that will never wake.  Injections say
+     * whether anything was ever handed to it.
+     */
+    ULONG L2Vmcs12RegionLastExitReason[4];
+    ULONGLONG L2Vmcs12RegionLastRflags[4];
+    ULONGLONG L2Vmcs12RegionInjections[4];
+    /*
+     * And the interrupt-command register writes, which is how one of L1's
+     * processors wakes another.
+     *
+     * A ring rather than a count: the value carries the destination, the
+     * delivery mode and the vector, and what matters is the last few - an IPI
+     * sent to wake the stalled processor looks different from the ones sent
+     * during bring-up.  x2APIC puts the whole thing in one MSR write, so one
+     * 64-bit value is the whole message.
+     */
+    ULONGLONG L2IcrRing[4];
+    ULONG L2IcrRingIndex;
+    ULONGLONG L2IcrWriteCount;
+    /*
      * The last EPT violation, in full, and what was decided about it.
      *
      * The exit ring answers "which instruction" and the histogram answers "how
@@ -561,6 +593,21 @@ typedef struct _KSW_HVM_NESTED_VCPU
      */
     ULONG RegionLoadRefusedFields;
     ULONGLONG RegionLastStorePhysical;
+    /*
+     * The same "did the shape change" test, kept per region.
+     *
+     * The single-region version compared against whatever was spilled last,
+     * which works only while there is one of them.  With two virtual
+     * processors L1 alternates regions on every spill, so "the physical
+     * address differs from last time" is true every single time and the row
+     * fires on every spill: measured 1,254 of 1,280 rows in one window, with
+     * 54,897 rows dropped off the back of the ring and every diagnostic row
+     * buried with them.  A guard that stops guarding as soon as the guest gets
+     * a second CPU is worse than no guard - it silently takes the instrument
+     * away exactly when the thing being investigated needs two processors.
+     */
+    ULONGLONG RegionStoreSlotPhysical[4];
+    ULONG RegionStoreSlotEntries[4];
     /*
      * What the region already holds, so an unchanged spill can be skipped.
      *

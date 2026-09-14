@@ -625,19 +625,48 @@ KswordARKHvmNestedRegionStore(
      * end-state readout because the end state only shows where it landed.
      * One row per change keeps the whole run inside the ring.
      */
-    if ((ULONG)written != Nested->RegionStoreEntries ||
-        RegionPhysical != Nested->RegionLastStorePhysical) {
-        KSWORD_ARK_HVM_EVENT_ROW row;
+    {
+        /*
+         * Per region, not against whatever was spilled last.
+         *
+         * With two virtual processors L1 alternates regions every spill, so
+         * the old "physical differs from last time" half of this test was true
+         * every time and this row flooded the ring - see the slot fields.
+         */
+        ULONG regionSlot = 0UL;
+        BOOLEAN changed = FALSE;
 
-        RtlZeroMemory(&row, sizeof(row));
-        row.type = KSWORD_ARK_HVM_EVENT_TYPE_NESTED_VMX;
-        row.guestPhysicalAddress = RegionPhysical;
-        /* What we just stored, and what the previous store held. */
-        row.guestLinearAddress = written;
-        row.guestRip = (ULONGLONG)Nested->RegionStoreEntries;
-        row.qualification = Nested->RegionLastStorePhysical;
-        row.ruleId = 0xF2u;
-        KswordARKHvmEventPublish(&row);
+        for (regionSlot = 0UL; regionSlot < 4UL; ++regionSlot) {
+            if (Nested->RegionStoreSlotPhysical[regionSlot] == RegionPhysical) {
+                break;
+            }
+            if (Nested->RegionStoreSlotPhysical[regionSlot] == 0ULL) {
+                Nested->RegionStoreSlotPhysical[regionSlot] = RegionPhysical;
+                Nested->RegionStoreSlotEntries[regionSlot] = 0UL;
+                break;
+            }
+        }
+        if (regionSlot >= 4UL) {
+            /* More regions than slots: report every spill rather than none. */
+            changed = TRUE;
+        } else if (Nested->RegionStoreSlotEntries[regionSlot] !=
+                       (ULONG)written) {
+            changed = TRUE;
+            Nested->RegionStoreSlotEntries[regionSlot] = (ULONG)written;
+        }
+        if (changed) {
+            KSWORD_ARK_HVM_EVENT_ROW row;
+
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_NESTED_VMX;
+            row.guestPhysicalAddress = RegionPhysical;
+            /* What we just stored, and what this region's previous store held. */
+            row.guestLinearAddress = written;
+            row.guestRip = (ULONGLONG)Nested->RegionStoreEntries;
+            row.qualification = Nested->RegionLastStorePhysical;
+            row.ruleId = 0xF2u;
+            KswordARKHvmEventPublish(&row);
+        }
     }
     Nested->RegionStoreEntries = (ULONG)written;
     Nested->RegionLastStorePhysical = RegionPhysical;

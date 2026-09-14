@@ -61,6 +61,12 @@ $client = New-Object Net.Sockets.TcpClient
 $client.Connect($VncHost, $Port)
 $client.NoDelay = $true
 $ns = $client.GetStream()
+# 必须有读超时。
+#
+# 请求整帧之后，画面**一点没变**时服务端可以什么都不回 —— 于是客户端就永远阻塞在
+# 那里，而"脚本挂住"和"来宾挂住"在外面看是一样的。超时到了就说没变化，
+# 这本身也是一个读数。
+$ns.ReadTimeout = 20000
 
 # --- 握手 ---
 $ver = [Text.Encoding]::ASCII.GetString((Read-Exact $ns 12))
@@ -144,7 +150,12 @@ for ($frame = 1; $frame -le $Frames; $frame++) {
     Put16 $req 2 0; Put16 $req 4 0; Put16 $req 6 $w; Put16 $req 8 $h
     $ns.Write($req, 0, 10)
 
-    $hdr = Read-Exact $ns 4
+    $hdr = $null
+    try { $hdr = Read-Exact $ns 4 }
+    catch [IO.IOException] {
+        Write-Output ("第 $frame 帧：{0} ms 内没有更新（画面没有变化）" -f $ns.ReadTimeout)
+        continue
+    }
     if ($hdr[0] -ne 0) { throw "期望 FramebufferUpdate(0)，收到消息类型 $($hdr[0])" }
     $rects = BE16 $hdr 2
 
