@@ -147,6 +147,42 @@ typedef struct _KSW_HVM_NESTED_VCPU
     /* The last one re-delivered, for when the counts alone are not enough. */
     ULONG L2IdtVectoringLastInfo;
     /*
+     * The last EPT violation, in full, and what was decided about it.
+     *
+     * The exit ring answers "which instruction" and the histogram answers "how
+     * often".  Neither answers the question an unresolvable violation raises:
+     * *which address*, *which access*, and *who was supposed to fix it*.
+     * Measured need: L2 stopped with sixteen identical reason-48 exits at one
+     * kernel RIP and the fuse tripped, while the shadow pool reported no
+     * exhaustion and a hundred thousand successful fills - three readings that
+     * together say only "something loops".
+     *
+     * Disposition is a small number rather than a flag because there are three
+     * different outcomes and two of them look alike from outside:
+     *   1 composed and resumed   2 refused, reflected to L1
+     *   3 no shadow armed, our own hierarchy   0 nothing recorded yet
+     */
+    ULONGLONG L2LastEptGuestPhysical;
+    ULONGLONG L2LastEptQualification;
+    ULONG L2LastEptDisposition;
+    /*
+     * The last eight MSRs L2 touched, and the last value it wrote.
+     *
+     * A ring, deliberately, and this is the case a ring is actually for: L2 sat
+     * alternating RDMSR and WRMSR between two kernel addresses with interrupts
+     * disabled, and the question is "which MSR is it spinning on *now*", not
+     * "which MSR has it used most since power-on".  The fuse cannot answer it
+     * either - alternating reasons reset its consecutive count every exit, so
+     * a two-instruction loop is invisible to it by construction.
+     *
+     * High bit marks a write, so one slot carries both which MSR and which
+     * direction.
+     */
+    ULONG L2MsrRing[8];
+    ULONG L2MsrRingIndex;
+    ULONGLONG L2LastMsrWriteValue;
+    ULONG L2LastMsrWriteIndex;
+    /*
      * Where L2 actually is, and whether it can take an interrupt there.
      *
      * Three times now a mechanism has been reasoned about, found genuinely
@@ -497,6 +533,15 @@ typedef struct _KSW_HVM_NESTED_VCPU
      */
     ULONGLONG L2ProgressRip;
     ULONGLONG L2ProgressRcx;
+    /*
+     * And which address faulted, for the exits where that is what moves.
+     *
+     * One instruction faulting its way across hundreds of thousands of pages
+     * has one RIP and one RCX; only the guest-physical address says it is
+     * getting somewhere.  Zero for every exit reason that does not define
+     * that field.
+     */
+    ULONGLONG L2ProgressFaultAddress;
     ULONG L2ProgressReason;
     ULONG L2NoProgressCount;
     /* Latch the trip, so the next entry is refused rather than re-looping. */

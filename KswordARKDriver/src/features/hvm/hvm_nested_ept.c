@@ -669,6 +669,19 @@ KswordARKHvmNestedEptWalkL1(
         permissions &= entry;
         /* A wholly unreadable entry terminates the walk with no mapping. */
         if ((entry & KSW_HVM_NEPT_PERMISSIONS) == 0ULL) {
+            /*
+             * Keep which level stopped and what it read.
+             *
+             * "The walk found nothing" is not actionable on its own: stopping
+             * at the PML4 means L1 has not built this half of the address
+             * space at all, stopping at the PT means one page is absent, and
+             * an entry that is nonzero but permissionless means L1 deliberately
+             * revoked it.  Those are three different defects and one count.
+             */
+            Shadow->LastDenySite = 1UL;
+            Shadow->LastDenyLevel = level;
+            Shadow->LastDenyEntry = entry;
+            Shadow->LastDenyGuestPhysical = GuestPhysicalAddress;
             /* Report that EPT12 maps nothing here. */
             return FALSE;
         }
@@ -742,6 +755,10 @@ KswordARKHvmNestedEptFill(
         ((ULONGLONG)Access & permissions) !=
             ((ULONGLONG)Access & KSW_HVM_NEPT_PERMISSIONS)) {
         Shadow->DenyCount += 1UL;
+        Shadow->LastDenySite = 2UL;
+        Shadow->LastDenyAccess = Access;
+        Shadow->LastDenyPermissions = permissions;
+        Shadow->LastDenyGuestPhysical = GuestPhysicalAddress;
         /* Report the violation as L1's to handle. */
         return FALSE;
     }
@@ -759,6 +776,11 @@ KswordARKHvmNestedEptFill(
         if (((ULONGLONG)Access & permissions) !=
                 ((ULONGLONG)Access & KSW_HVM_NEPT_PERMISSIONS)) {
             Shadow->DenyCount += 1UL;
+            Shadow->LastDenySite = 3UL;
+            Shadow->LastDenyAccess = Access;
+            Shadow->LastDenyPermissions = permissions;
+            Shadow->LastDenyGuestPhysical = GuestPhysicalAddress;
+            Shadow->LastDenyEntry = *hostLeaf;
             /* Report a violation our own hierarchy refuses. */
             return FALSE;
         }
@@ -780,6 +802,9 @@ KswordARKHvmNestedEptFill(
             if (child == NULL) {
                 Shadow->ExhaustionCount += 1UL;
                 Shadow->LastStatus = STATUS_INSUFFICIENT_RESOURCES;
+                Shadow->LastDenySite = 4UL;
+                Shadow->LastDenyLevel = level;
+                Shadow->LastDenyGuestPhysical = GuestPhysicalAddress;
                 /* Report that no mapping could be composed. */
                 return FALSE;
             }
@@ -798,6 +823,10 @@ KswordARKHvmNestedEptFill(
         /* Refuse when an interior entry names a page we did not hand out. */
         if (table == NULL) {
             Shadow->LastStatus = STATUS_DATA_ERROR;
+            Shadow->LastDenySite = 5UL;
+            Shadow->LastDenyLevel = level;
+            Shadow->LastDenyEntry = entry;
+            Shadow->LastDenyGuestPhysical = GuestPhysicalAddress;
             /* Report that the hierarchy could not be navigated. */
             return FALSE;
         }

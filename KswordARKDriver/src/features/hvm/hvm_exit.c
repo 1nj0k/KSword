@@ -1301,6 +1301,104 @@ KswordARKHvmExitPublishCost(
         KswordARKHvmEventPublish(&row);
     }
     {
+        /*
+         * The last EPT violation in full, and the fuse's verdict beside it.
+         *
+         * These belong on one row because the question they answer is one
+         * question.  A tripped fuse says "the same exit repeated a thousand
+         * times"; the address, the access and the disposition say which
+         * mapping could not be made and who was supposed to make it.  The deny
+         * count separates "EPT12 itself refuses this" from "we composed a leaf
+         * and the access faulted anyway", which look identical from the exit
+         * ring and have nothing in common as defects.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.guestPhysicalAddress = Context->Nested.L2LastEptGuestPhysical;
+        row.qualification = Context->Nested.L2LastEptQualification;
+        row.guestLinearAddress = Context->Nested.L2FuseRip;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.L2FuseCount << 32) |
+            (ULONGLONG)Context->Nested.ShadowEpt.DenyCount;
+        row.exitReason =
+            (Context->Nested.L2LastEptDisposition << 8) |
+            (Context->Nested.L2FuseTripped ? 1UL : 0UL);
+        row.status = (LONG)Context->Nested.L2FuseReason;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xE2u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * And why the last composition was refused.
+         *
+         * Separate row from the violation itself because the two answer
+         * different halves: that one says which access could not be made,
+         * this one says which step said no and what it read when it did.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.exitReason =
+            (Context->Nested.ShadowEpt.LastDenySite << 8) |
+            (Context->Nested.ShadowEpt.LastDenyLevel & 0xFFUL);
+        row.qualification = Context->Nested.ShadowEpt.LastDenyEntry;
+        row.guestPhysicalAddress =
+            Context->Nested.ShadowEpt.LastDenyGuestPhysical;
+        row.guestLinearAddress =
+            Context->Nested.ShadowEpt.LastDenyPermissions;
+        row.guestRip = Context->Nested.ShadowEpt.L1EptPointer;
+        row.status = (LONG)Context->Nested.ShadowEpt.LastDenyAccess;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xE1u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /* The last eight MSRs L2 touched, one row each, newest last. */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 8UL; ++slot) {
+            if (Context->Nested.L2MsrRing[slot] == 0UL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification = (ULONGLONG)Context->Nested.L2MsrRing[slot];
+            row.guestPhysicalAddress = Context->Nested.L2LastMsrWriteValue;
+            row.guestLinearAddress =
+                (ULONGLONG)Context->Nested.L2LastMsrWriteIndex;
+            row.guestRip = (ULONGLONG)Context->Nested.L2MsrRingIndex;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xE0u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /*
+         * Whether accessed/dirty is still being maintained for L1.
+         *
+         * L1 asked for it in its EPT pointer; we record one leaf address per
+         * composed page so the bits can be folded back, and that table holds
+         * six hundred and forty entries against a guest with a hundred and
+         * ninety thousand pages.  Overflow turns the feature off and keeps
+         * running - so "L1 asked" and "we are still doing it" are two
+         * different facts and this row carries both.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification =
+            (ULONGLONG)Context->Nested.ShadowEpt.AdRecordCount;
+        row.guestPhysicalAddress =
+            (ULONGLONG)Context->Nested.ShadowEpt.AdOverflowCount;
+        row.guestLinearAddress =
+            (Context->Nested.ShadowEpt.L1RequestedAccessedDirty ? 2ULL : 0ULL) |
+            (Context->Nested.ShadowEpt.AccessedDirtyActive ? 1ULL : 0ULL);
+        row.guestRip = Context->Nested.ShadowEpt.L1EptPointer;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xDFu;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
         /* Whether L1's invalidations are costing the shadow hierarchy. */
         RtlZeroMemory(&row, sizeof(row));
         row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;

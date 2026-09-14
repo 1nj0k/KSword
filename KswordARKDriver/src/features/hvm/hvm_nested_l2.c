@@ -952,9 +952,13 @@ KswordARKHvmNestedL2ExitOwner(
          */
         const ULONGLONG guestPhysical =
             KswordARKHvmNestedL2Read(KSW_L2_GUEST_PHYSICAL_ADDRESS);
-        const ULONG access =
-            (ULONG)(KswordARKHvmNestedL2Read(KSW_L2_EXIT_QUALIFICATION) &
-                0x7ULL);
+        const ULONGLONG qualification =
+            KswordARKHvmNestedL2Read(KSW_L2_EXIT_QUALIFICATION);
+        const ULONG access = (ULONG)(qualification & 0x7ULL);
+
+        /* Keep the address and the access, whatever is decided below. */
+        nested->L2LastEptGuestPhysical = guestPhysical;
+        nested->L2LastEptQualification = qualification;
 
         if (!nested->ShadowEpt.Active) {
             /*
@@ -967,6 +971,7 @@ KswordARKHvmNestedL2ExitOwner(
              * resuming re-executes the same access against the same leaf, and
              * the processor faults again with no error and no progress.
              */
+            nested->L2LastEptDisposition = 3UL;
             return KSW_L2_OWNER_US_NEEDS_SERVICE;
         }
         if (KswordARKHvmNestedEptFill(
@@ -976,9 +981,11 @@ KswordARKHvmNestedL2ExitOwner(
                 guestPhysical,
                 access)) {
             /* Report the satisfied violation as needing nothing further. */
+            nested->L2LastEptDisposition = 1UL;
             return KSW_L2_OWNER_US_RESOLVED;
         }
         /* Report the refused violation as L1's. */
+        nested->L2LastEptDisposition = 2UL;
         return KSW_L2_OWNER_L1;
     }
     case 1UL:
@@ -1162,6 +1169,20 @@ KswordARKHvmNestedL2ExitOwner(
             : 0ULL);
         const BOOLEAN isWrite = (ExitReason == 32UL);
 
+        /* Which MSR, and for a write the value, before deciding whose it is. */
+        {
+            const ULONG slot = nested->L2MsrRingIndex & 0x7UL;
+
+            nested->L2MsrRing[slot] =
+                (msrIndex & 0x7FFFFFFFUL) | (isWrite ? 0x80000000UL : 0UL);
+            nested->L2MsrRingIndex += 1UL;
+            if (isWrite && Frame != NULL) {
+                nested->L2LastMsrWriteIndex = msrIndex;
+                nested->L2LastMsrWriteValue =
+                    ((Frame->Rdx & 0xFFFFFFFFULL) << 32) |
+                    (Frame->Rax & 0xFFFFFFFFULL);
+            }
+        }
         if (KswordARKHvmNestedBitmapL1WantsMsr(Context, msrIndex, isWrite)) {
             nested->L2MsrExitsReflected += 1ULL;
             /* Report the MSR access as L1's. */
@@ -1211,6 +1232,30 @@ KswordARKHvmNestedL2FuseTrips(
 {
     const ULONGLONG rip = KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
     const ULONGLONG rcx = (Frame != NULL) ? Frame->Rcx : 0ULL;
+    /*
+     * For a memory fault, which address faulted is part of "did anything
+     * move".
+     *
+     * Without it this fuse cannot tell a loop from a loop that is working.  A
+     * kernel bringing up its memory runs one instruction over hundreds of
+     * thousands of pages, faulting once per page: same RIP, same RCX, same
+     * reason 48, and a different address every time.  That tripped the fuse
+     * after a thousand pages, and from then on every entry was refused with
+     * "invalid control field" - VMware's monitor panicked with error 7 and the
+     * guest went away, a hundred and ninety thousand pages short of booting.
+     *
+     * Measured: three consecutive samples of the refused violation gave
+     * 0x2CFE0000, 0x2F8F8000 and 0x02D57FF8.  Three different pages is
+     * progress; the fuse saw one RIP repeated.
+     *
+     * Only for reasons 48 and 49, because the guest-physical address field is
+     * only defined for those - reading it after any other exit would key the
+     * fuse on a stale value and stop it tripping at all.
+     */
+    const ULONGLONG faultAddress =
+        (ExitReason == 48UL || ExitReason == 49UL)
+            ? KswordARKHvmNestedL2Read(KSW_L2_GUEST_PHYSICAL_ADDRESS)
+            : 0ULL;
 
     if (Nested->L2FuseTripped) {
         /* Report the latched trip without re-measuring anything. */
@@ -1218,11 +1263,13 @@ KswordARKHvmNestedL2FuseTrips(
     }
     if (rip == Nested->L2ProgressRip &&
         rcx == Nested->L2ProgressRcx &&
+        faultAddress == Nested->L2ProgressFaultAddress &&
         ExitReason == Nested->L2ProgressReason) {
         Nested->L2NoProgressCount += 1UL;
     } else {
         Nested->L2ProgressRip = rip;
         Nested->L2ProgressRcx = rcx;
+        Nested->L2ProgressFaultAddress = faultAddress;
         Nested->L2ProgressReason = ExitReason;
         Nested->L2NoProgressCount = 1UL;
         /* Report that something moved. */

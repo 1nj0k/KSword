@@ -103,6 +103,27 @@ typedef struct _KSW_HVM_SHADOW_EPT_STATE
     ULONG DenyCount;
     /* Count violations refused because no table page remained. */
     ULONG ExhaustionCount;
+    /*
+     * Why the last refusal happened, in enough detail to act on.
+     *
+     * A refusal count alone cannot be acted on: "EPT12 maps nothing at this
+     * address" and "EPT12 maps it read-only" are the same number and opposite
+     * defects.  Measured need - L2 looped on a write to a guest-physical
+     * address inside RAM that this code refused thirty-five thousand times,
+     * and the reading said only "refused".
+     *
+     *   Site  1 the EPT12 walk found no mapping (Level and Entry say where)
+     *         2 EPT12 maps it, but grants less than the access needs
+     *         3 our own EPT01 leaf narrows it below the access
+     *         4 no table page left to compose with
+     *         5 an interior entry named a page we never handed out
+     */
+    ULONG LastDenySite;
+    ULONG LastDenyLevel;
+    ULONG LastDenyAccess;
+    ULONGLONG LastDenyGuestPhysical;
+    ULONGLONG LastDenyEntry;
+    ULONGLONG LastDenyPermissions;
     /* Retain the one nonpaged block every table page is carved from. */
     PVOID PageBlock;
     /* Retain how many pages the block holds. */
