@@ -721,39 +721,31 @@ KswordARKHvmExitHandleHlt(
              * here.  That is worth stating plainly at the one place someone
              * will come looking.
              */
-            /*
-             * The halt state is not reachable on this target.  Measured twice.
-             *
-             * Every idle HLT arrives in the state the architecture permits a
-             * halt from: interruptibility exactly 0x1 - blocking by STI alone -
-             * RFLAGS.IF set, no event waiting to be injected, and the STI
-             * shadow belonging to the HLT that was just retired.  Clearing bit
-             * zero and selecting the halt activity state should therefore be
-             * legal, and it is not: residency faults with exit reason 33,
-             * VM-entry failure due to invalid guest state.
-             *
-             *   unconditional clear of both blocking bits : faulted at 1,068 exits
-             *   guarded on IF, no pending event, STI only : faulted at 5,177 exits
-             *
-             * The second run had VMware stopped and nothing nested running, so
-             * the fault belongs to this path and not to anything below it.
-             *
-             * IA32_VMX_MISC bit 6 reports the HLT activity state as supported
-             * on this processor, and the branch above trusts that bit - which
-             * is why the halt was attempted at all.  Either the hypervisor
-             * beneath us reports a state its VM entry will not accept, or some
-             * further entry check is unsatisfied that neither of these two runs
-             * isolated.  Both are worth knowing before anyone tries again; what
-             * is not worth doing is a third variation of the same guess.
-             *
-             * The cost of staying conservative is recorded rather than hidden:
-             * L1's idle loop spins instead of sleeping, 60,686 HLT exits a
-             * second, one thread at 97% of a core, and the other threads of
-             * that process - its device models, and therefore its virtual
-             * timer - given no CPU at all.  That is a real defect with a known
-             * consequence; it is simply not fixed by this branch.
-             */
         }
+        /*
+         * Waiting here by hand was tried, and it took the machine down.
+         *
+         * The idea was sound and the first half of it worked: hold the
+         * processor in the exit handler until the local APIC actually has a
+         * request pending, so that L1's HLT returns on an interrupt the way
+         * the instruction promises.  Bounded at roughly twenty microseconds,
+         * reading IA32_X2APIC_IRR0..7, resuming either way.  With residency up
+         * and nothing nested, idle exits fell from seven to ten thousand a
+         * second to 1,760 - the guest's own idle really did start sleeping.
+         *
+         * Then, with VMware running, the guest bugchecked 0xA at IRQL 2.  The
+         * attribution is not proven: this target bugchecks 0xA on its own (see
+         * the CR0.WP note), the criterion for telling them apart needs the
+         * dump, and that was not done.  What is certain is that this was the
+         * only variable changed, and a second crash on an unattended machine
+         * is not worth the reading.
+         *
+         * If it is picked up again: spinning in VMX root holds interrupts off
+         * for the whole bound, so the bound is the risk and twenty microseconds
+         * at eighty thousand halts a second is most of a processor spent with
+         * interrupts disabled.  Establish the attribution from the dump first,
+         * then make the bound small enough that the arithmetic is comfortable.
+         */
         /* Resume without halting while STI or MOV SS still blocks. */
         return TRUE;
     }
