@@ -691,6 +691,37 @@ KswordARKHvmExitHandleHlt(
             UNREFERENCED_PARAMETER(ifSet);
             UNREFERENCED_PARAMETER(eventPending);
             /*
+             * Bisected, and the result is recorded rather than kept.
+             *
+             * The attempt that faulted changed two things at once - it cleared
+             * the interrupt shadow and it selected the HLT activity state - so
+             * the single number a VM-entry failure reports named neither.  A
+             * run that cleared the shadow and stopped there kept residency up
+             * through 193,536 exits and climbing, so:
+             *
+             *   clearing blocking-by-STI here   legal on this target
+             *   selecting the HLT activity state refused, exit reason 33
+             *
+             * The clear is therefore safe but pointless on its own - the guest
+             * resumes immediately either way - and nothing asks for it, so it
+             * is not kept.  What it bought is the attribution.
+             *
+             * Two further doors were closed by reading the capability MSRs
+             * rather than by trying things:
+             *
+             *   IA32_VMX_TRUE_PROCBASED allowed-0 = 0x240065F2, bit 7 set
+             *     -> HLT exiting is mandatory here; "just do not intercept
+             *        HLT" is not available.
+             *   IA32_VMX_TRUE_PINBASED allowed-1 = 0x3F, bit 6 clear
+             *     -> the VMX-preemption timer does not exist on this target,
+             *        so it cannot be offered to L1 either, whatever fields we
+             *        were willing to start copying.
+             *
+             * Which leaves L1 with no timed wakeup of any kind while it runs
+             * here.  That is worth stating plainly at the one place someone
+             * will come looking.
+             */
+            /*
              * The halt state is not reachable on this target.  Measured twice.
              *
              * Every idle HLT arrives in the state the architecture permits a
@@ -1039,6 +1070,34 @@ KswordARKHvmExitPublishCost(
             row.ruleId = 0xEDu;
             KswordARKHvmEventPublish(&row);
         }
+    }
+    {
+        /*
+         * What the capability MSRs force on us, next to what we ended up with.
+         *
+         * Resident mode asks for HLT exiting explicitly nowhere - the request
+         * site passes zero for it - and yet L1 takes 60,686 HLT exits a
+         * second.  Only one thing can put a control bit into the VMCS that the
+         * request did not ask for: the must-be-one half of the capability MSR.
+         * This row is the difference between "the hypervisor beneath us forces
+         * HLT exiting and there is nothing to be done here" and "we are asking
+         * for it somewhere we did not look" - two conclusions that lead to
+         * completely different files, and which nothing currently reports.
+         *
+         * Low half of each capability is allowed-0 (must be one), high half is
+         * allowed-1 (may be one).
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Runtime->ActiveControls.PrimaryCapability;
+        row.guestPhysicalAddress = Context->Runtime->ActiveControls.PinCapability;
+        row.guestLinearAddress = Context->Runtime->ActiveControls.ExitCapability;
+        row.guestRip = Context->Runtime->ActiveControls.EntryCapability;
+        row.exitReason = Context->Runtime->ActiveControls.Primary;
+        row.status = (LONG)Context->Runtime->ActiveControls.Pin;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xEBu;
+        KswordARKHvmEventPublish(&row);
     }
     {
         /*
