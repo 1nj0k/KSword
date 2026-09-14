@@ -124,6 +124,18 @@ typedef struct _KSW_HVM_NESTED_VCPU
      */
     ULONG RegionLoadRefusedFields;
     ULONGLONG RegionLastStorePhysical;
+    /*
+     * What the region already holds, so an unchanged spill can be skipped.
+     *
+     * Both halves are needed.  The serial says whether any field moved; the
+     * launch flag lives in the region header and moves on its own, and a stale
+     * one would make a VMCS that was copied to a new page and relaunched come
+     * back reading "already launched".
+     */
+    ULONG RegionStoredSerial;
+    BOOLEAN RegionStoredLaunched;
+    UCHAR RegionReserved[3];
+    ULONGLONG RegionStoreSkippedCount;
     ULONGLONG RegionLastLoadPhysical;
     ULONGLONG RegionLastLoadHeader;
     /*

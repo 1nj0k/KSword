@@ -553,6 +553,23 @@ KswordARKHvmNestedRegionStore(
         /* Return without pretending a region we cannot reach was written. */
         return;
     }
+    /*
+     * Skip a spill that would write back exactly what is already there.
+     *
+     * Measured: a guest hypervisor's steady state is VMPTRLD, invalidate,
+     * VMCLEAR, with no field write anywhere in between, and this function ran
+     * on every one of those - mapping a page, walking two thousand slots and
+     * storing several hundred cache-cold quadwords to rewrite identical bytes.
+     * Those exits averaged ninety thousand cycles against nine hundred for an
+     * ordinary one, and were about a third of all the time spent.
+     */
+    if (RegionPhysical == Nested->RegionLastStorePhysical &&
+        Nested->Vmcs12.WriteSerial == Nested->RegionStoredSerial &&
+        Nested->Vmcs12.Launched == Nested->RegionStoredLaunched) {
+        Nested->RegionStoreSkippedCount += 1ULL;
+        /* Return; the region already holds this vmcs12 exactly. */
+        return;
+    }
     if (KswordARKHvmPhysWindowMap(
             Nested->PhysWindow,
             RegionPhysical,
@@ -624,6 +641,9 @@ KswordARKHvmNestedRegionStore(
     }
     Nested->RegionStoreEntries = (ULONG)written;
     Nested->RegionLastStorePhysical = RegionPhysical;
+    /* Record exactly what the region now holds, so the next spill can skip. */
+    Nested->RegionStoredSerial = Nested->Vmcs12.WriteSerial;
+    Nested->RegionStoredLaunched = Nested->Vmcs12.Launched;
 }
 
 /*
@@ -696,6 +716,15 @@ KswordARKHvmNestedRegionLoad(
             ((words[2] & KSW_HVM_VMCS12_REGION_FLAG_LAUNCHED) != 0ULL)
                 ? TRUE
                 : FALSE;
+        /*
+         * The region and the working copy now agree by construction, which is
+         * exactly the condition the spill skips on.  Recording it here means a
+         * VMCS that is loaded and then immediately spilled back - the common
+         * shape - costs one page walk instead of two.
+         */
+        Nested->RegionLastStorePhysical = RegionPhysical;
+        Nested->RegionStoredSerial = Nested->Vmcs12.WriteSerial;
+        Nested->RegionStoredLaunched = Nested->Vmcs12.Launched;
         restored = TRUE;
     }
     KswordARKHvmPhysWindowUnmap(Nested->PhysWindow);
@@ -847,7 +876,10 @@ KswordARKHvmNestedDispatchVmcsPointer(
      * thousand times without ever saying between which, and the field writes
      * either side of a switch could not be attributed to a VMCS at all.
      */
-    {
+    if (InterlockedCompareExchange(
+            &Runtime->TraceRoutineExits,
+            0L,
+            0L) != 0L) {
         KSWORD_ARK_HVM_EVENT_ROW row;
 
         RtlZeroMemory(&row, sizeof(row));
@@ -1165,6 +1197,7 @@ KswordARKHvmNestedDispatchInvalidate(
 static UCHAR
 KswordARKHvmNestedDispatchVmcsField(
     _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _Inout_ KSW_HVM_RUNTIME* Runtime,
     _Inout_ struct _KSW_HVM_GPR_FRAME* Frame,
     _In_ ULONG ExitReason,
     _Out_ ULONG* InstructionError
@@ -1285,7 +1318,20 @@ KswordARKHvmNestedDispatchVmcsField(
      * to retain; a hypervisor's VMWRITEs number in the hundreds while it starts,
      * against tens of thousands of routine exits per second.
      */
-    {
+    /*
+     * A refusal is always recorded; a successful write only when asked for.
+     *
+     * The two differ by four orders of magnitude.  Refusals are rare and each
+     * one is a field L1 configured and we threw away - the thing worth waking
+     * someone up for.  Successful writes number about five per exit of L1's,
+     * which over one guest boot is tens of millions of rows, and publishing
+     * them costs a timestamp and two contended atomics apiece.
+     */
+    if (!NT_SUCCESS(writeStatus) ||
+        InterlockedCompareExchange(
+            &Runtime->TraceRoutineExits,
+            0L,
+            0L) != 0L) {
         KSWORD_ARK_HVM_EVENT_ROW row;
 
         RtlZeroMemory(&row, sizeof(row));
@@ -1481,6 +1527,7 @@ KswordARKHvmNestedHandleExit(
                ExitReason == KSW_VMX_EXIT_VMWRITE) {
         instructionResult = KswordARKHvmNestedDispatchVmcsField(
             Nested,
+            Runtime,
             Frame,
             ExitReason,
             &instructionError);

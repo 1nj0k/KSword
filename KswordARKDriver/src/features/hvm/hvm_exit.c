@@ -376,6 +376,13 @@ KswordARKHvmExitReadAddresses(
 }
 
 /* Publish one fixed VM-exit event and runtime snapshot. */
+/* Dispatch one VM exit; the wrapper below it only measures what this costs. */
+static ULONG
+KswordARKHvmResidentVmExitDispatchBody(
+    _Inout_ KSW_HVM_GPR_FRAME* Frame,
+    _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context
+    );
+
 static VOID
 KswordARKHvmExitPublishTelemetry(
     _Inout_ KSW_HVM_RESIDENT_VCPU* Context,
@@ -390,6 +397,7 @@ KswordARKHvmExitPublishTelemetry(
 {
     KSWORD_ARK_HVM_EVENT_ROW eventRow = { 0 };
     ULONG basicReason = 0UL;
+    ULONGLONG costStart = 0ULL;
 
     /* Reject incomplete fixed telemetry state. */
     if (Context == NULL ||
@@ -399,6 +407,7 @@ KswordARKHvmExitPublishTelemetry(
         /* Return without publishing partial evidence. */
         return;
     }
+    costStart = __rdtsc();
     /* Decode the Intel basic reason for protocol state. */
     basicReason =
         Telemetry->Reason &
@@ -479,6 +488,16 @@ KswordARKHvmExitPublishTelemetry(
      * exactly as before.  What changes is only which rows occupy the 1024 ring
      * slots.
      *
+     * Nested-VMX rows are now gated by the same switch, and for the same
+     * reason at a different scale.  They were published unconditionally while
+     * a guest hypervisor's VMCS handling was being diagnosed, which is over:
+     * one such hypervisor issues about twenty VMCS accesses per exit of its
+     * own, so a single boot published on the order of a hundred million rows -
+     * each one a timestamp plus two lock-prefixed operations on the one cache
+     * line both processors share.  The rows that survive without the switch
+     * are the rare, load-bearing ones: a refused write, a VMCS region first
+     * seen, a change in what gets spilled into one.
+     *
      * Measured 2026-09-07 on 2 vCPU over 30 s of residency: 682829 published,
      * 0 that failed to claim a slot, 681805 pushed out by wrap.  The ring never
      * had a write problem - it turns over about twenty-two times a second, and
@@ -490,7 +509,8 @@ KswordARKHvmExitPublishTelemetry(
      *
      * The four evidence classes are rare by construction and are always kept.
      */
-    if (eventRow.type != KSWORD_ARK_HVM_EVENT_TYPE_VMEXIT ||
+    if ((eventRow.type != KSWORD_ARK_HVM_EVENT_TYPE_VMEXIT &&
+         eventRow.type != KSWORD_ARK_HVM_EVENT_TYPE_NESTED_VMX) ||
         InterlockedCompareExchange(
             &Context->Runtime->TraceRoutineExits,
             0L,
@@ -502,6 +522,8 @@ KswordARKHvmExitPublishTelemetry(
     InterlockedOr(
         (volatile LONG*)&Context->Runtime->StateFlags,
         (LONG)KSWORD_ARK_HVM_STATE_EVENTS_AVAILABLE);
+    /* Charge this exit's telemetry to this processor's own account. */
+    Context->CostTelemetryCycles += (__rdtsc() - costStart);
 }
 
 /*
@@ -725,8 +747,93 @@ KswordARKHvmExitIsNestedInstruction(
         ExitReason == KSW_VMX_EXIT_INVVPID;
 }
 
+/*
+ * Publish where this processor's exit cycles went, once per million exits.
+ *
+ * Through the event ring rather than the query protocol: this measurement
+ * exists to be read a few times and then deleted, and moving protocol fields
+ * for it would outlive it.  One row per 1,048,576 exits is about ninety rows
+ * across a guest hypervisor's whole boot - invisible against the traffic it
+ * is measuring.
+ */
+static VOID
+KswordARKHvmExitPublishCost(
+    _Inout_ KSW_HVM_RESIDENT_VCPU* Context
+    )
+{
+    KSWORD_ARK_HVM_EVENT_ROW row;
+    const ULONGLONG exits = Context->CostExits;
+
+    if (exits == 0ULL) {
+        /* Return rather than divide by an exit count that cannot be right. */
+        return;
+    }
+    {
+        /* One row per bucket: which exits are expensive, and how many there are. */
+        static const ULONG names[6] = { 23UL, 25UL, 48UL, 30UL, 12UL, 0xFFFFUL };
+        ULONG bucket = 0UL;
+
+        for (bucket = 0UL; bucket < 6UL; ++bucket) {
+            const ULONGLONG hits = Context->CostReasonCount[bucket];
+
+            if (hits == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = names[bucket];
+            row.qualification = Context->CostReasonCycles[bucket] / hits;
+            row.guestPhysicalAddress = hits;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xF4u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    RtlZeroMemory(&row, sizeof(row));
+    row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+    /* Averages, so a reader never has to know which million this row covers. */
+    row.qualification = Context->CostTotalCycles / exits;
+    row.guestPhysicalAddress = Context->CostTelemetryCycles / exits;
+    row.guestLinearAddress = Context->CostNestedCycles / exits;
+    row.guestRip = Context->CostReflectCycles / exits;
+    /* The VMCS reads every exit begins with, and the EPT work some end with. */
+    row.exitReason = (ULONG)(Context->CostVmcsReadCycles / exits);
+    row.status = (LONG)(Context->CostEptCycles / exits);
+    row.access = (ULONG)Context->ApicId;
+    /* Mark the row so a reader cannot mistake it for a lifecycle event. */
+    row.ruleId = 0xF3u;
+    KswordARKHvmEventPublish(&row);
+}
+
 ULONG
 KswordARKHvmResidentVmExitDispatch(
+    _Inout_ KSW_HVM_GPR_FRAME* Frame,
+    _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context
+    )
+{
+    const ULONGLONG costStart = __rdtsc();
+    const ULONG action = KswordARKHvmResidentVmExitDispatchBody(Frame, Context);
+
+    if (Context != NULL) {
+        const ULONGLONG spent = __rdtsc() - costStart;
+        const ULONG bucket = (Context->CostLastBucket < 6UL)
+            ? Context->CostLastBucket
+            : 5UL;
+
+        Context->CostTotalCycles += spent;
+        Context->CostReasonCycles[bucket] += spent;
+        Context->CostReasonCount[bucket] += 1ULL;
+        Context->CostExits += 1ULL;
+        if ((Context->CostExits & 0xFFFFFULL) == 0ULL) {
+            KswordARKHvmExitPublishCost(Context);
+        }
+    }
+    /* Return the action the dispatcher itself decided on. */
+    return action;
+}
+
+static ULONG
+KswordARKHvmResidentVmExitDispatchBody(
     _Inout_ KSW_HVM_GPR_FRAME* Frame,
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context
     )
@@ -759,9 +866,42 @@ KswordARKHvmResidentVmExitDispatch(
         /* Request a bounded fatal trap with no unsafe continuation. */
         return KSW_HVM_EXIT_ACTION_FATAL;
     }
-    /* Capture protocol-visible VMCS exit telemetry. */
-    status = KswordARKHvmReadVmExitTelemetry(
-        &telemetry);
+    {
+        const ULONGLONG readStart = __rdtsc();
+
+        /* Capture protocol-visible VMCS exit telemetry. */
+        status = KswordARKHvmReadVmExitTelemetry(
+            &telemetry);
+        Context->CostVmcsReadCycles += (__rdtsc() - readStart);
+    }
+    /* Name the bucket this exit belongs to, for the wrapper to charge. */
+    {
+        const ULONG reason =
+            telemetry.Reason & KSW_HVM_VMEXIT_REASON_BASIC_MASK;
+
+        Context->CostLastBucket =
+            (reason == 23UL) ? 0UL :
+            (reason == 25UL) ? 1UL :
+            (reason == 48UL) ? 2UL :
+            (reason == 30UL) ? 3UL :
+            (reason == 12UL) ? 4UL : 5UL;
+    }
+    /*
+     * What an empty measurement costs, measured the same way as the rest.
+     *
+     * The control every one of these numbers depends on.  This processor is
+     * itself somebody's guest, and if the outer hypervisor intercepts RDTSC
+     * then each of the ten timestamps an exit now takes is a VM exit of its
+     * own - and the "unexplained" nine tenths of the total would be the
+     * instrument, not the code.  Two back-to-back reads answer that directly:
+     * tens of cycles means the readings stand, hundreds means they are
+     * measuring themselves and every number above has to be thrown away.
+     */
+    {
+        const ULONGLONG emptyStart = __rdtsc();
+
+        Context->CostEptCycles += (__rdtsc() - emptyStart);
+    }
     /* Stop when the current VMCS cannot be inspected safely. */
     if (!NT_SUCCESS(status)) {
         /* Attempt devirtualization without advancing an unknown instruction. */
@@ -786,10 +926,13 @@ KswordARKHvmResidentVmExitDispatch(
     nestedBasicReason =
         telemetry.Reason & KSW_HVM_VMEXIT_REASON_BASIC_MASK;
     if (Context->Nested.InL2) {
+        const ULONGLONG reflectStart = __rdtsc();
         const ULONG route = KswordARKHvmNestedL2Reflect(
             Context,
             Frame,
             nestedBasicReason);
+
+        Context->CostReflectCycles += (__rdtsc() - reflectStart);
 
         /*
          * Two of the four outcomes end the exit here.
@@ -1656,12 +1799,15 @@ KswordARKHvmResidentVmExitDispatch(
     /* Dispatch bounded VMX instruction semantics without claiming L2 active. */
     } else if (KswordARKHvmExitIsNestedInstruction(
         basicReason)) {
+        const ULONGLONG nestedStart = __rdtsc();
+
         /* Execute the explicit partial vmcs12 state machine. */
         handled = KswordARKHvmNestedHandleExit(
             Context,
             Frame,
             basicReason,
             telemetry.InstructionLength);
+        Context->CostNestedCycles += (__rdtsc() - nestedStart);
         /* Publish the latest nested state to the processor row. */
         Context->Resource->Row.nestedState =
             Context->Nested.State;
