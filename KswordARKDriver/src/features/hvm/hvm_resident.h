@@ -240,6 +240,36 @@ typedef struct _KSW_HVM_RESIDENT_VCPU
     ULONGLONG CostReasonCycles[6];
     ULONGLONG CostReasonCount[6];
     ULONG CostLastBucket;
+    /*
+     * Which way each HLT exit went.
+     *
+     * The halt path has three conservative branches that resume without ever
+     * entering the halt state, and until now nothing told them apart - the
+     * handler's own comment says so and asks for exactly these counters before
+     * anyone tunes it.  The reading that made them necessary: L1 takes 60,686
+     * HLT exits a second.  A halt that is actually entered sleeps until the
+     * next interrupt, so that rate should be in the tens; sixty thousand means
+     * the guest asked to idle and we handed it a no-op, turning its idle loop
+     * into a spin that pins a core and starves every other thread in the
+     * process - which is where its device models, and therefore its timer,
+     * live.
+     */
+    ULONGLONG HltEnteredCount;
+    ULONGLONG HltSkipNoActivitySupport;
+    ULONGLONG HltSkipReadFailed;
+    ULONGLONG HltSkipBlockedCount;
+    /*
+     * The two fields the architecture checks the halt state against.
+     *
+     * Clearing the interrupt shadow and halting anyway was tried and faulted
+     * VM entry with reason 33 after 1,068 exits, so the shadow is not the only
+     * condition in play.  These say which of the others hold at the moment the
+     * guest asks to idle, so the next attempt is designed from a reading
+     * instead of from an argument about what ought to be legal.
+     */
+    ULONGLONG HltBlockedWithIfSet;
+    ULONGLONG HltBlockedWithPendingEvent;
+    ULONG HltLastInterruptibility;
 } KSW_HVM_RESIDENT_VCPU;
 
 EXTERN_C_START

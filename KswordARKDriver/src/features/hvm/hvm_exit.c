@@ -59,6 +59,8 @@ Environment:
 #define KSW_VMX_MISC_ACTIVITY_HLT (1ULL << 6)
 /* Blocking by STI and by MOV SS both forbid a non-active activity state. */
 #define KSW_VMX_INTERRUPTIBILITY_BLOCKING 3ULL
+/* Blocking by STI alone - bit 0 of the same field, without the MOV SS bit. */
+#define KSW_VMX_INTERRUPTIBILITY_STI 1ULL
 /*
  * Guest SS access rights.  Bits 6:5 carry the descriptor privilege level, which
  * is the architectural definition of the current privilege level.  This is SS,
@@ -96,6 +98,8 @@ Environment:
 #define KSW_VMCS_EXIT_INTERRUPTION_INFO 0x4404UL
 /* VM-entry interruption information; writing it delivers an event on entry. */
 #define KSW_VMCS_ENTRY_INTERRUPTION_INFO 0x4016UL
+/* Name the guest RFLAGS field, read on the halt path to see whether IF is set. */
+#define KSW_VMCS_GUEST_RFLAGS 0x6820UL
 /* Bit 31 of either field marks the descriptor valid. */
 #define KSW_VMX_INTERRUPTION_VALID (1ULL << 31)
 /* Bits 10:8 carry the interruption type; type 2 is NMI. */
@@ -604,12 +608,13 @@ KswordARKHvmExitGuestCpl(
  * each other.  That does not happen today because every injection path returns
  * on its own and never shares an exit with this one.
  *
- * One honest limit on all of the above: the VMWRITE below is the only one on
- * this path whose result is discarded, and no counter distinguishes a halt that
- * was entered from one skipped by the three conservative branches.  The soak
- * criterion counts unexpected devirtualizations and reads identically either
- * way, so there is no positive evidence here that the halt state was ever
- * actually entered.  Anyone tuning this path should add those counters first.
+ * The limit this comment used to end with - that no counter distinguished a
+ * halt actually entered from one skipped by the conservative branches, so
+ * there was no positive evidence the halt state was ever reached - has been
+ * answered rather than repeated.  The counters exist now, the VMWRITEs on this
+ * path are checked, and what they were asked to settle is settled: the
+ * interrupt-shadow branch was firing on every idle HLT, because `sti; hlt`
+ * puts the HLT inside the shadow by construction.
  */
 static BOOLEAN
 KswordARKHvmExitHandleHlt(
@@ -626,6 +631,7 @@ KswordARKHvmExitHandleHlt(
     }
     /* A processor that does not advertise the halt state cannot enter it. */
     if ((Context->Runtime->VmxMisc & KSW_VMX_MISC_ACTIVITY_HLT) == 0ULL) {
+        Context->HltSkipNoActivitySupport += 1ULL;
         /* Resume without halting rather than risk a VM-entry failure. */
         return TRUE;
     }
@@ -633,11 +639,90 @@ KswordARKHvmExitHandleHlt(
     if (KswordARKHvmVmcsFieldLoad(
             KSW_VMCS_GUEST_INTERRUPTIBILITY,
             &interruptibility) != 0) {
+        Context->HltSkipReadFailed += 1ULL;
         /* Resume without halting when the state cannot be verified. */
         return TRUE;
     }
     if (((ULONGLONG)interruptibility &
             KSW_VMX_INTERRUPTIBILITY_BLOCKING) != 0ULL) {
+        /*
+         * Record what the state looked like, and still resume without halting.
+         *
+         * This branch was measured to fire on essentially every idle HLT -
+         * `sti; hlt` puts the HLT inside the shadow by construction - and the
+         * consequence is real: L1 took 60,686 HLT exits a second, one thread
+         * pinned at 97% of a core, and every other thread in its process,
+         * including the ones driving its virtual timer, given exactly zero
+         * milliseconds over fifteen seconds.  A guest that asks to sleep and
+         * is handed an immediate return has an idle loop that spins.
+         *
+         * Clearing the two blocking bits and halting anyway is NOT the fix.
+         * It was tried: residency faulted after 1,068 exits with reason 33,
+         * VM-entry failure due to invalid guest state - which is the second
+         * hazard the comment above this function already names.  Clearing the
+         * shadow satisfies one entry check and leaves others unsatisfied, and
+         * the architecture constrains the activity state against RFLAGS.IF and
+         * the pending-event fields as well.
+         *
+         * So this stays conservative until a reading says which condition
+         * actually blocks the halt.  RFLAGS and the entry-interruption field
+         * are captured below for exactly that, and nothing here acts on them.
+         */
+        Context->HltSkipBlockedCount += 1ULL;
+        {
+            SIZE_T rflags = 0;
+            SIZE_T entryEvent = 0;
+            BOOLEAN ifSet = FALSE;
+            BOOLEAN eventPending = FALSE;
+
+            if (KswordARKHvmVmcsFieldLoad(KSW_VMCS_GUEST_RFLAGS, &rflags) == 0 &&
+                (((ULONGLONG)rflags) & 0x200ULL) != 0ULL) {
+                ifSet = TRUE;
+                Context->HltBlockedWithIfSet += 1ULL;
+            }
+            if (KswordARKHvmVmcsFieldLoad(
+                    KSW_VMCS_ENTRY_INTERRUPTION_INFO,
+                    &entryEvent) == 0 &&
+                (((ULONGLONG)entryEvent) & 0x80000000ULL) != 0ULL) {
+                eventPending = TRUE;
+                Context->HltBlockedWithPendingEvent += 1ULL;
+            }
+            Context->HltLastInterruptibility = (ULONG)interruptibility;
+            UNREFERENCED_PARAMETER(ifSet);
+            UNREFERENCED_PARAMETER(eventPending);
+            /*
+             * The halt state is not reachable on this target.  Measured twice.
+             *
+             * Every idle HLT arrives in the state the architecture permits a
+             * halt from: interruptibility exactly 0x1 - blocking by STI alone -
+             * RFLAGS.IF set, no event waiting to be injected, and the STI
+             * shadow belonging to the HLT that was just retired.  Clearing bit
+             * zero and selecting the halt activity state should therefore be
+             * legal, and it is not: residency faults with exit reason 33,
+             * VM-entry failure due to invalid guest state.
+             *
+             *   unconditional clear of both blocking bits : faulted at 1,068 exits
+             *   guarded on IF, no pending event, STI only : faulted at 5,177 exits
+             *
+             * The second run had VMware stopped and nothing nested running, so
+             * the fault belongs to this path and not to anything below it.
+             *
+             * IA32_VMX_MISC bit 6 reports the HLT activity state as supported
+             * on this processor, and the branch above trusts that bit - which
+             * is why the halt was attempted at all.  Either the hypervisor
+             * beneath us reports a state its VM entry will not accept, or some
+             * further entry check is unsatisfied that neither of these two runs
+             * isolated.  Both are worth knowing before anyone tries again; what
+             * is not worth doing is a third variation of the same guess.
+             *
+             * The cost of staying conservative is recorded rather than hidden:
+             * L1's idle loop spins instead of sleeping, 60,686 HLT exits a
+             * second, one thread at 97% of a core, and the other threads of
+             * that process - its device models, and therefore its virtual
+             * timer - given no CPU at all.  That is a real defect with a known
+             * consequence; it is simply not fixed by this branch.
+             */
+        }
         /* Resume without halting while STI or MOV SS still blocks. */
         return TRUE;
     }
@@ -646,7 +731,14 @@ KswordARKHvmExitHandleHlt(
      * exit, so this selection lasts exactly one entry and does not have to be
      * cleared on the paths that resume for other reasons.
      */
-    (void)KswordARKHvmVmcsFieldStore(KSW_VMCS_GUEST_ACTIVITY, KSW_VMX_ACTIVITY_HLT);
+    if (KswordARKHvmVmcsFieldStore(
+            KSW_VMCS_GUEST_ACTIVITY,
+            KSW_VMX_ACTIVITY_HLT) != 0) {
+        Context->HltSkipReadFailed += 1ULL;
+        /* Resume without halting when the selection itself was refused. */
+        return TRUE;
+    }
+    Context->HltEnteredCount += 1ULL;
     /* Report a completely handled halt. */
     return TRUE;
 }
@@ -947,6 +1039,29 @@ KswordARKHvmExitPublishCost(
             row.ruleId = 0xEDu;
             KswordARKHvmEventPublish(&row);
         }
+    }
+    {
+        /*
+         * Whether L1's idle actually idles.
+         *
+         * Four ways a HLT exit can end, and the difference between them is the
+         * difference between a guest that sleeps and a guest that spins.  The
+         * rate matters more than the split: a halt that is entered wakes on an
+         * interrupt, so tens per second is healthy and tens of thousands means
+         * the halt is not happening whatever the split says.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->HltEnteredCount;
+        row.guestPhysicalAddress = Context->HltSkipBlockedCount;
+        row.guestLinearAddress = Context->HltBlockedWithIfSet;
+        row.guestRip = Context->HltBlockedWithPendingEvent;
+        row.exitReason = Context->HltLastInterruptibility;
+        row.status = (LONG)(ULONG)(Context->HltSkipNoActivitySupport +
+            Context->HltSkipReadFailed);
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xECu;
+        KswordARKHvmEventPublish(&row);
     }
     {
         /*
