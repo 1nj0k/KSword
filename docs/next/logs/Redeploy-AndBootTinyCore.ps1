@@ -31,14 +31,36 @@ Invoke-Command -Session $s -ScriptBlock {
 }
 
 if (-not $SkipDriver) {
-    Invoke-Command -Session $s -ScriptBlock {
+    # 停不下来就重启来宾。
+    #
+    # 实测这个卸载会卡在 StopPending 不动（常驻停不掉时驱动拒绝卸载），之后
+    # 覆盖 System32\drivers 下那份必然报"文件被占用"，而脚本在那里抛出，
+    # 留下一个半完成的部署。重启一分钟，比每次人工介入便宜，也比带着一份
+    # 旧驱动往下跑安全 —— 后者会得到一份看着正常、实际测的是上一版的读数。
+    $stopped = Invoke-Command -Session $s -ScriptBlock {
         Start-Process 'C:\ksword\hvm_ctl.exe' -ArgumentList 'stop' -NoNewWindow -Wait | Out-Null
         & sc.exe stop KswordARK | Out-Null
         $n = 0
-        while ((Get-Service KswordARK).Status -ne 'Stopped' -and $n -lt 20) {
+        while ((Get-Service KswordARK).Status -ne 'Stopped' -and $n -lt 30) {
             Start-Sleep -Milliseconds 500; $n++
         }
-        "驱动已停：" + (Get-Service KswordARK).Status
+        Write-Output ("驱动停止状态：" + (Get-Service KswordARK).Status)
+        return ((Get-Service KswordARK).Status -eq 'Stopped')
+    }
+    if (-not ($stopped | Select-Object -Last 1)) {
+        Write-Output '卸载没完成，重启来宾'
+        Remove-PSSession $s
+        Restart-VM -Name $VMName -Force -Confirm:$false
+        Start-Sleep -Seconds 45
+        $tries = 0
+        while ($tries -lt 24) {
+            $s = New-PSSession -VMName $VMName -Credential $cred -ErrorAction SilentlyContinue
+            if ($s) { break }
+            Start-Sleep -Seconds 10
+            $tries++
+        }
+        if (-not $s) { throw '来宾重启后连不上 PowerShell Direct' }
+        Write-Output '来宾已重启并重新连上'
     }
     Copy-Item -ToSession $s -Path $DriverPath -Destination 'C:\ksword\KswordARK.sys' -Force
     Invoke-Command -Session $s -ArgumentList $built -ScriptBlock {

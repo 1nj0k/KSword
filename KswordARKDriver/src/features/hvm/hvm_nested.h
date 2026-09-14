@@ -227,6 +227,25 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONG L2IcrRingIndex;
     ULONGLONG L2IcrWriteCount;
     /*
+     * The last eight exceptions L2 took, with where they happened.
+     *
+     * L1 traps exceptions on purpose - without unrestricted guest it runs real
+     * mode by trapping - so a count of them says nothing.  Which vector, at
+     * which address, in which segment does: L1's application processor sits in
+     * its real-mode startup stub taking these, having never reached 64-bit
+     * code and having been handed zero injections, while the bootstrap
+     * processor waits for it in the kernel.
+     *
+     * Interruption information as the processor reported it (vector in 7:0,
+     * type in 10:8, error-code-valid at 11), the error code beside it, and
+     * CS:RIP so the stub can be located.
+     */
+    ULONG L2ExceptionInfoRing[8];
+    ULONG L2ExceptionErrorRing[8];
+    ULONGLONG L2ExceptionRipRing[8];
+    ULONG L2ExceptionCsRing[8];
+    ULONG L2ExceptionRingIndex;
+    /*
      * The last EPT violation, in full, and what was decided about it.
      *
      * The exit ring answers "which instruction" and the histogram answers "how

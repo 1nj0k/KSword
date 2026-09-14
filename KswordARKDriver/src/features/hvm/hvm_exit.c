@@ -1504,6 +1504,29 @@ KswordARKHvmExitPublishCost(
             KswordARKHvmEventPublish(&row);
         }
     }
+    {
+        /* The last eight exceptions L2 took, newest last. */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 8UL; ++slot) {
+            if (Context->Nested.L2ExceptionInfoRing[slot] == 0UL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification =
+                (ULONGLONG)Context->Nested.L2ExceptionInfoRing[slot];
+            row.guestPhysicalAddress =
+                (ULONGLONG)Context->Nested.L2ExceptionErrorRing[slot];
+            row.guestLinearAddress = Context->Nested.L2ExceptionRipRing[slot];
+            row.guestRip = (ULONGLONG)Context->Nested.L2ExceptionCsRing[slot];
+            row.status = (LONG)Context->Nested.L2ExceptionRingIndex;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xD8u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
     if (Context->Nested.L2TripleFaultCount != 0ULL) {
         /*
          * The first triple fault's scene, in two rows because it does not fit

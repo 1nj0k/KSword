@@ -80,6 +80,7 @@ O_PIT     EQU 010h             ; dw 本轮读到的 PIT 通道 0 计数
 O_IRR     EQU 012h             ; db 本轮 IRR
 O_ISR     EQU 013h             ; db 本轮 ISR
 O_RTC     EQU 014h             ; db 本轮 CMOS 秒
+O_TSC     EQU 016h             ; dw 本轮 RDTSC 的 EDX 低 16 位
 
 ; 中断处理程序里用得着的绝对地址（那里不能借用被中断代码的 BX）
 OWN_ABS   EQU SCRATCH + O_OWN
@@ -154,7 +155,7 @@ start:
     ; 要 126 字节，这样只要 58 字节，而引导扇区里差的正是这几十字节。
     mov si, OFFSET labels
     xor di, di
-    mov dx, 9
+    mov dx, 10
 lab_row:
     push di
     mov cx, 4
@@ -278,6 +279,20 @@ main:
     in  al, 71h
     mov [bx+O_RTC], al
 
+    ; 来宾自己的时间戳计数器。
+    ;
+    ; PIT 与 CMOS 秒证明的是 **VMware 的设备时间**在走；TSC 是**来宾处理器自己的**
+    ; 计数器，经 vmcs 的 TSC offset 偏移过。两者是不同的东西，而 Linux 的
+    ; TSC-deadline 定时器、udelay、时钟源全部建立在后者上 —— TSC 不走，
+    ; 定时器就永远不会到期，而外面看到的只是"停住了"。
+    ;
+    ; 只取 EDX 的低 16 位：在 2.1GHz 上它大约每 2 秒加一，一分钟涨三十，
+    ; 既看得出动没动，又不会快到读不出来。
+    ; rdtsc。按字节写而不是换 .586：改 CPU 指令会连带影响别处的编码，
+    ; 而这整段代码能塞进 512 字节靠的正是当前那套 16 位编码。
+    db 0Fh, 31h
+    mov [bx+O_TSC], dx
+
     ; --- 显示，各行第 6 列 ---
     mov di, 12
     mov ax, [bx+O_SPIN+2]
@@ -320,6 +335,10 @@ main:
     mov di, 1292
     mov al, [bx+O_RTC]
     call hex8
+
+    mov di, 1452
+    mov ax, [bx+O_TSC]
+    call hex16
 
     ; 一行结束。串口上每行是定宽的 38 个十六进制字符，按偏移就能切开，
     ; 所以只需要这一个分隔符。
@@ -415,7 +434,7 @@ so_ok:
     out dx, al
     ret
 
-labels db 'SPINTICKOWN PIT IRR ISR SIRRSISRRTC '
+labels db 'SPINTICKOWN PIT IRR ISR SIRRSISRRTC TSC '
 
 _TEXT ENDS
 END

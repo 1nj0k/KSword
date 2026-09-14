@@ -984,6 +984,21 @@ KswordARKHvmNestedL2ExitOwner(
         const ULONGLONG interruptionInfo =
             KswordARKHvmNestedL2Read(KSW_L2_EXIT_INTR_INFO);
 
+        /* Which exception, and where - see the ring's field comment. */
+        {
+            const ULONG slot = nested->L2ExceptionRingIndex & 0x7UL;
+
+            nested->L2ExceptionInfoRing[slot] = (ULONG)interruptionInfo;
+            nested->L2ExceptionErrorRing[slot] =
+                (ULONG)KswordARKHvmNestedL2Read(KSW_L2_EXIT_INTR_ERROR);
+            nested->L2ExceptionRipRing[slot] =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+            /* 0x802 is the guest CS selector. */
+            nested->L2ExceptionCsRing[slot] =
+                (ULONG)KswordARKHvmNestedL2Read(0x802UL);
+            nested->L2ExceptionRingIndex += 1UL;
+        }
+
         if ((interruptionInfo & 0x80000000ULL) != 0ULL &&
             ((interruptionInfo >> 8) & 0x7ULL) == 2ULL &&
             KswordARKHvmResidentClaimTlbNmi(Context->ApicId)) {
