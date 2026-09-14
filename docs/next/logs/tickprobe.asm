@@ -35,6 +35,43 @@ BDA_TICK  EQU 046Ch            ; BIOS 定时器计数（32 位），IRQ0 的 ISR
 SPIN_LO   EQU 0500h            ; 自旋计数放在 BIOS 数据区之后、引导扇区之前的空隙
 ATTR      EQU 0Fh              ; 亮白
 
+; --- BIOS 参数块 ---
+;
+; 光有 55AA 签名不够。VMware 的软盘库会把引导扇区当成带 BPB 的 FAT 引导扇区来
+; 校验，第一版没有 BPB，它把代码字节读成了字段并拒绝引导：
+;
+;   FLOPPYLIB-IMAGE: Invalid boot sector: signature aa55, sector size 952, sectors 49294
+;   FLOPPYLIB-IMAGE: Expected:            signature aa55, sector size 512, sectors 2880
+;
+; 然后它安静地跳过软盘去引导了光盘 —— 屏幕上出现的是 TinyCore 菜单，看起来像
+; "我的程序跑了但什么都没显示"。**夹具被拒绝和被测现象长得一模一样**，判据只在日志里。
+;
+; 这里的数值就是一张 1.44MB 软盘：2880 个 512 字节扇区、80 磁道 2 面 18 扇区。
+; 文件系统字段是做给校验看的，我们不放 FAT，也没人会去读它。
+entry:
+    jmp SHORT start
+    nop
+    db 'KSWTICK '              ; OEM 名，8 字节
+    dw 512                     ; 每扇区字节数
+    db 1                       ; 每簇扇区数
+    dw 1                       ; 保留扇区
+    db 2                       ; FAT 个数
+    dw 224                     ; 根目录项
+    dw 2880                    ; 总扇区数
+    db 0F0h                    ; 介质描述符：1.44MB 软盘
+    dw 9                       ; 每 FAT 扇区数
+    dw 18                      ; 每磁道扇区数
+    dw 2                       ; 磁头数
+    dd 0                       ; 隐藏扇区
+    dd 0                       ; 大容量总扇区数
+    db 0                       ; 驱动器号
+    db 0                       ; 保留
+    db 29h                     ; 扩展引导签名
+    dd 4B535754h               ; 卷序列号
+    db 'KSWORDTICK'            ; 卷标，11 字节
+    db ' '
+    db 'FAT12   '              ; 文件系统类型，8 字节
+
 start:
     cli
     xor ax, ax
@@ -75,11 +112,22 @@ start:
     mov si, OFFSET msg_tick
     call puts
 
+    call serial_init
+
     sti                        ; 到这里才放行中断；IRQ0 只可能从这之后进来
 
 main:
     add word ptr ds:[SPIN_LO], 1
     adc word ptr ds:[SPIN_LO+2], 0
+
+    ; 每 4000h 轮才输出一次。
+    ;
+    ; 第一版每轮都刷屏，结果自旋只有约 640 轮/秒 —— 因为写 0B800h 显存被当成
+    ; MMIO 陷出去了（那一轮量到 76 万次 EPT 违规、14 万次 I/O 退出）。
+    ; 循环本身应该只有一条加法，节流之后它才真的是"纯执行"的参照。
+    mov ax, ds:[SPIN_LO]
+    and ax, 3FFFh
+    jnz main
 
     mov di, 12                 ; 第 0 行第 6 列
     mov ax, ds:[SPIN_LO+2]
@@ -92,6 +140,27 @@ main:
     call hex16
     mov ax, ds:[BDA_TICK]
     call hex16
+
+    ; 同一组数再从串口发一份。
+    ;
+    ; 屏幕这条路不可靠：来宾显示器超时之后 Hyper-V 的缩略图返回整帧零，而整帧零
+    ; 与"来宾屏幕就是黑的"在像素上无法区分，Windows 又**不接受合成输入唤醒显示器**，
+    ; 所以一旦睡着就没法自动救回来。串口写进宿主的一个文件，与显示状态无关，
+    ; 而且是机器可读的，不用我再去解 RGB565。
+    mov si, OFFSET msg_spin
+    call serial_puts
+    mov ax, ds:[SPIN_LO+2]
+    call serial_hex16
+    mov ax, ds:[SPIN_LO]
+    call serial_hex16
+    mov si, OFFSET msg_tick
+    call serial_puts
+    mov ax, ds:[BDA_TICK+2]
+    call serial_hex16
+    mov ax, ds:[BDA_TICK]
+    call serial_hex16
+    mov si, OFFSET msg_crlf
+    call serial_puts
 
     jmp main
 
@@ -124,8 +193,74 @@ puts:
 puts_done:
     ret
 
-msg_spin db 'SPIN', 0
-msg_tick db 'TICK', 0
+; --- 16550 串口，COM1 ---
+;
+; 只用轮询，不开中断：这个探针的全部意义就是判断中断进不进得来，
+; 让输出本身依赖中断就成了循环论证。
+COM1     EQU 3F8h
+COM_LSR  EQU 3FDh               ; 线路状态，bit5 = 发送保持寄存器空
+
+serial_init:
+    mov dx, 3FBh                ; 线路控制
+    mov al, 80h                 ; DLAB = 1，下面两个口变成除数寄存器
+    out dx, al
+    mov dx, COM1
+    mov al, 1                   ; 除数 1 -> 115200
+    out dx, al
+    mov dx, 3F9h
+    xor al, al
+    out dx, al
+    mov dx, 3FBh
+    mov al, 3                   ; 8 位、无校验、1 停止位，DLAB = 0
+    out dx, al
+    mov dx, 3FCh                ; 调制解调器控制：DTR | RTS
+    mov al, 3
+    out dx, al
+    ret
+
+; AL 从串口发出去
+serial_putc:
+    push ax
+serial_wait:
+    mov dx, COM_LSR
+    in al, dx
+    test al, 20h
+    jz serial_wait
+    pop ax
+    mov dx, COM1
+    out dx, al
+    ret
+
+; DS:SI 的零结尾字符串发出去
+serial_puts:
+    lodsb
+    or al, al
+    jz serial_puts_done
+    call serial_putc
+    jmp serial_puts
+serial_puts_done:
+    ret
+
+; AX 以四位十六进制发出去
+serial_hex16:
+    mov cx, 4
+sh_next:
+    rol ax, 4
+    push ax
+    and al, 0Fh
+    add al, '0'
+    cmp al, '9'
+    jbe sh_ok
+    add al, 7
+sh_ok:
+    call serial_putc
+    pop ax
+    loop sh_next
+    ret
+
+msg_spin db 'SPIN ', 0
+msg_tick db ' TICK ', 0
+msg_crlf db 13, 10, 0
 
 _TEXT ENDS
 END
