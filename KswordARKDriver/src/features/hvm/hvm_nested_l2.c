@@ -61,6 +61,8 @@ Environment:
 #define KSW_L2_PRIMARY_CONTROLS 0x4002UL
 #define KSW_L2_EXCEPTION_BITMAP 0x4004UL
 #define KSW_L2_EXIT_CONTROLS 0x400CUL
+/* Exit control 15: let the processor answer the physical interrupt controller. */
+#define KSW_L2_EXIT_ACK_INTERRUPT 0x00008000UL
 #define KSW_L2_ENTRY_CONTROLS 0x4012UL
 #define KSW_L2_SECONDARY_CONTROLS 0x401EUL
 #define KSW_L2_EXIT_REASON 0x4402UL
@@ -570,6 +572,29 @@ KswordARKHvmNestedL2Enter(
     }
     value = 0ULL;
     (void)KswordARKHvmNestedVmcs12Read(vmcs12, KSW_L2_EXIT_CONTROLS, &value);
+    /*
+     * Acknowledge-interrupt-on-exit (bit 15) passes through, and **must**.
+     *
+     * It was stripped here once, on the theory that the vector it reports is a
+     * host vector being handed to L1 as if it were L1's guest's.  VMware's
+     * monitor stopped dead:
+     *
+     *   MONITOR PANIC: VERIFY vmcore/monitor/common/platform/common/x86/irq.c:111
+     *
+     * Once L1 has asked for this control it reads the vector unconditionally,
+     * and an invalid one trips its own assertion.  A control L1 set cannot be
+     * quietly withheld - if it ever has to go, it has to go from what L1 is
+     * allowed to ask for, and that is not reachable either: the capability
+     * filter can only narrow within what the host offers and re-adds every
+     * must-be-one bit, of which this is one.
+     *
+     * The reading that prompted the attempt was misread.  The injected vector
+     * came from L2LastEntryIntrInfo, which is kept **per physical processor**
+     * while both of L1's virtual processors run on the same one - so it could
+     * not say which of them the injection belonged to.  Same mistake as the
+     * PIC mask and the region guard: a per-processor record answering a
+     * per-virtual-processor question.
+     */
     KswordARKHvmNestedL2Write(
         KSW_L2_EXIT_CONTROLS,
         KswordARKHvmNestedL2ClampControl(
@@ -759,6 +784,8 @@ KswordARKHvmNestedL2Enter(
     {
         const ULONGLONG entryEvent = KswordARKHvmNestedL2Read(0x4016UL);
 
+        /* Kept whether valid or not: "nothing was injected" is an answer. */
+        nested->L2LastEntryIntrInfo = (ULONG)entryEvent;
         if ((entryEvent & 0x80000000ULL) != 0ULL) {
             ULONG region = 0UL;
 
@@ -1115,6 +1142,15 @@ KswordARKHvmNestedL2ExitOwner(
                 nested->L2IdtVectoringLastExitOrdinal;
             nested->L2TripleFaultLastVectoringInfo =
                 nested->L2IdtVectoringLastInfo;
+            /* The delivery this fault is about - see the field comment. */
+            nested->L2TripleFaultEntryIntrInfo = nested->L2LastEntryIntrInfo;
+            nested->L2TripleFaultIdtVectoring =
+                (ULONG)KswordARKHvmNestedL2Read(KSW_L2_IDT_VECTORING_INFO);
+            nested->L2TripleFaultRsp =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_RSP);
+            /* 0x4818 is the guest SS access rights. */
+            nested->L2TripleFaultSsAr =
+                KswordARKHvmNestedL2Read(0x4818UL);
         }
         nested->L2TripleFaultCount += 1ULL;
         /* Report the triple fault as L1's. */
@@ -1492,9 +1528,21 @@ KswordARKHvmNestedL2Reflect(
 
             for (region = 0UL; region < 4UL; ++region) {
                 if (nested->L2Vmcs12Regions[region] == nested->CurrentVmcs) {
+                    const ULONG trail =
+                        nested->L2Vmcs12RegionTrailIndex[region] & 0x3UL;
+
                     nested->L2Vmcs12RegionLastExitReason[region] = ExitReason;
                     nested->L2Vmcs12RegionLastRflags[region] =
                         nested->L2LastRflags;
+                    nested->L2Vmcs12RegionTrailRip[region][trail] =
+                        nested->L2ExitRipRing[slot];
+                    nested->L2Vmcs12RegionTrailReason[region][trail] =
+                        ExitReason;
+                    nested->L2Vmcs12RegionTrailIndex[region] += 1UL;
+                    nested->L2Vmcs12RegionLastCr0[region] =
+                        KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR0);
+                    nested->L2Vmcs12RegionLastCsAr[region] =
+                        (ULONG)KswordARKHvmNestedL2Read(0x4816UL);
                     break;
                 }
             }

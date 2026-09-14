@@ -1957,10 +1957,11 @@ void TestVmxCapabilityMasks(KswordTests::Suite& s) {
              L"the exit-control allow mask matches the bit list its comment names");
     s.expect((KSWORD_ARK_HVM_VMX_EXIT_ALLOWED & BitsOf({12, 22})) == 0ULL,
              L"PERF_GLOBAL_CTRL and the preemption timer stay unadvertised: neither field is copied");
-    // 应答中断退出的安全性靠"reason 1 必定到达 L1"，而那是运行期路由的事。这里能钉死
-    // 的是它的前提之一：我们**自己**绝不能请求这一位，否则我们会吞掉一个没人再投递的中断。
+    // 这一位既扣不下也不能在合并时剥掉，两次都是实机验证过的：去掉宣告是空操作
+    //（必须为一的位会被过滤器加回来），而在合并里剥掉会让 VMware 的监控器在
+    // irq.c:111 的 VERIFY 上当场倒下 —— L1 要了这一位就会无条件去读那个向量。
     s.expect((KSWORD_ARK_HVM_VMX_EXIT_ALLOWED & (1ULL << 15)) != 0ULL,
-             L"acknowledge interrupt on exit is advertised: the vector already travels to L1 in 0x4404");
+             L"acknowledge interrupt on exit is advertised: L1 reads the vector unconditionally once it asks");
 
     // --- VM-entry 控制 ---
     s.expect(KSWORD_ARK_HVM_VMX_ENTRY_ALLOWED == BitsOf({2, 9, 14, 15}),

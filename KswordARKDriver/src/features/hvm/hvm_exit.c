@@ -1527,6 +1527,44 @@ KswordARKHvmExitPublishCost(
             KswordARKHvmEventPublish(&row);
         }
     }
+    {
+        /*
+         * Each region's four-deep trail, one row per step, with the mode that
+         * region was last running in.  See the trail fields for why the
+         * per-processor exit ring cannot answer this.
+         */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 4UL; ++slot) {
+            ULONG step = 0UL;
+
+            if (Context->Nested.L2Vmcs12Regions[slot] == 0ULL) {
+                continue;
+            }
+            for (step = 0UL; step < 4UL; ++step) {
+                if (Context->Nested.L2Vmcs12RegionTrailRip[slot][step] ==
+                        0ULL) {
+                    continue;
+                }
+                RtlZeroMemory(&row, sizeof(row));
+                row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+                row.exitReason = (slot << 8) | step;
+                row.qualification =
+                    Context->Nested.L2Vmcs12RegionTrailRip[slot][step];
+                row.guestPhysicalAddress = (ULONGLONG)
+                    Context->Nested.L2Vmcs12RegionTrailReason[slot][step];
+                row.guestLinearAddress =
+                    Context->Nested.L2Vmcs12RegionLastCr0[slot];
+                row.guestRip = (ULONGLONG)
+                    Context->Nested.L2Vmcs12RegionLastCsAr[slot];
+                row.status =
+                    (LONG)Context->Nested.L2Vmcs12RegionTrailIndex[slot];
+                row.access = (ULONG)Context->ApicId;
+                row.ruleId = 0xD7u;
+                KswordARKHvmEventPublish(&row);
+            }
+        }
+    }
     if (Context->Nested.L2TripleFaultCount != 0ULL) {
         /*
          * The first triple fault's scene, in two rows because it does not fit
@@ -1544,6 +1582,19 @@ KswordARKHvmExitPublishCost(
         row.status = (LONG)Context->Nested.L2TripleFaultCount;
         row.access = (ULONG)Context->ApicId;
         row.ruleId = 0xDCu;
+        KswordARKHvmEventPublish(&row);
+        /* The delivery half of the same scene; it did not fit in one row. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification =
+            (ULONGLONG)Context->Nested.L2TripleFaultEntryIntrInfo;
+        row.guestPhysicalAddress =
+            (ULONGLONG)Context->Nested.L2TripleFaultIdtVectoring;
+        row.guestLinearAddress = Context->Nested.L2TripleFaultRsp;
+        row.guestRip = Context->Nested.L2TripleFaultSsAr;
+        row.exitReason = Context->Nested.L2LastEntryIntrInfo;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xD6u;
         KswordARKHvmEventPublish(&row);
         {
             ULONG back = 0UL;

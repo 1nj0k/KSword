@@ -214,6 +214,25 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONGLONG L2Vmcs12RegionLastRflags[4];
     ULONGLONG L2Vmcs12RegionInjections[4];
     /*
+     * A four-deep trail per region, and the mode each one last ran in.
+     *
+     * The exit ring this driver already had is per *physical* processor, so
+     * with two L1 virtual processors migrating across two cores it interleaves
+     * them and cannot say where either one stopped.  Per region it can.
+     *
+     * Needed because "the application processor stops" has two very different
+     * shapes and the last address alone has shown both across runs: a
+     * real-mode address means it never left its startup stub, a 64-bit kernel
+     * address means it got all the way to long mode and stopped there.  CR0
+     * and the CS access rights say which without having to guess from the
+     * value of the address.
+     */
+    ULONGLONG L2Vmcs12RegionTrailRip[4][4];
+    ULONG L2Vmcs12RegionTrailReason[4][4];
+    ULONG L2Vmcs12RegionTrailIndex[4];
+    ULONGLONG L2Vmcs12RegionLastCr0[4];
+    ULONG L2Vmcs12RegionLastCsAr[4];
+    /*
      * And the interrupt-command register writes, which is how one of L1's
      * processors wakes another.
      *
@@ -342,6 +361,22 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONGLONG L2TripleFaultExitOrdinal;
     ULONGLONG L2TripleFaultReinjectOrdinal;
     ULONG L2TripleFaultLastVectoringInfo;
+    /*
+     * What the entry before the fault carried, and what the fault itself says.
+     *
+     * The measured scene is a guest that halts, is woken, and triple-faults on
+     * the instruction after the HLT - which is where an interrupt is delivered,
+     * not where code runs.  So the question is entirely about that delivery:
+     * which event was put on the entry (L2LastEntryIntrInfo), whether the
+     * processor was still delivering something when it gave up
+     * (IdtVectoring), and whether the stack it was pushing onto was usable
+     * (Rsp).  None of the three survives the reflection that follows.
+     */
+    ULONG L2LastEntryIntrInfo;
+    ULONG L2TripleFaultEntryIntrInfo;
+    ULONG L2TripleFaultIdtVectoring;
+    ULONGLONG L2TripleFaultRsp;
+    ULONGLONG L2TripleFaultSsAr;
     /*
      * Where L2 actually is, and whether it can take an interrupt there.
      *

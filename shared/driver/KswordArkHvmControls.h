@@ -570,9 +570,8 @@ KswordArkHvmIsVmxCapabilityMsr(
  * 清掉的：12 PERF_GLOBAL_CTRL（0x2808 **不在**任何表里）、22 抢占计时器
  * （0x482E 同样不在）。
  *
- * bit 15（退出时应答中断）曾以"改变退出语义，我们不模拟"为由清掉。实际不需要模拟：
- * 置位时处理器**自己**去应答中断控制器并把向量写进 0x4404，而 0x4404 与 0x4406 在
- * 反射时本来就逐字段写进 vmcs12 —— 向量一直是带给 L1 的，缺的只是这个宣告。
+ * bit 15（退出时应答中断）：置位时处理器**自己**去应答中断控制器并把向量写进
+ * 0x4404，而 0x4404 与 0x4406 在反射时本来就逐字段写进 vmcs12。
  * VMware Workstation 17.6 点名要它（`True VM-Exit Controls: Acknowledge interrupt
  * on exit`），是它四项缺件里的最后一项。
  *
@@ -583,6 +582,15 @@ KswordArkHvmIsVmxCapabilityMsr(
  *   3. 退出归属里 reason 1 被**显式**判给 L1（不是靠 default 兜底）——
  *      见 hvm_nested_l2.c，那里写明了为什么这一条不能跟着默认走。
  * 三条里任何一条被后来的改动破坏，症状都是丢中断导致的静默挂死。
+ *
+ * **两次实测确认这一位既扣不下、也不能在合并时剥掉**（2026-09-14）：
+ *   - 从这张表里去掉它是空操作。过滤器只能在宿主给的范围内收窄，而且
+ *     `high |= low` 会把每个"必须为一"的位加回来，bit 15 正是其中之一 ——
+ *     去掉之后来宾读到的 vmcs12 里它照旧置位。
+ *   - 在合并进 vmcs02 时剥掉它，VMware 的监控器当场倒下：
+ *     `MONITOR PANIC: VERIFY vmcore/monitor/common/platform/common/x86/irq.c:111`。
+ *     L1 一旦要了这一位就会无条件去读那个向量，读到无效值就触发它自己的断言。
+ * **L1 设了的控制位不能悄悄扣下**，要么它根本不该能设，要么就得如实兑现。
  */
 #define KSWORD_ARK_HVM_VMX_EXIT_ALLOWED 0x003C8204UL
 
