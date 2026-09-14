@@ -831,10 +831,102 @@ KswordARKHvmNestedEptFill(
             return FALSE;
         }
     }
-    table[(GuestPhysicalAddress >> shifts[3]) & 0x1FFULL] =
-        (l1Physical & KSW_HVM_NEPT_FRAME_MASK) |
-        (permissions & KSW_HVM_NEPT_PERMISSIONS) |
-        KSW_HVM_NEPT_MEMORY_TYPE_WB;
+    {
+        const ULONGLONG leaf =
+            (l1Physical & KSW_HVM_NEPT_FRAME_MASK) |
+            (permissions & KSW_HVM_NEPT_PERMISSIONS) |
+            KSW_HVM_NEPT_MEMORY_TYPE_WB;
+        const ULONGLONG leafIndex =
+            (GuestPhysicalAddress >> shifts[3]) & 0x1FFULL;
+
+        table[leafIndex] = leaf;
+        /*
+         * Read the assignment back.  One load, and it separates "we composed
+         * the wrong mapping" from "we composed the right one somewhere else" -
+         * two failures that look identical from every counter downstream.
+         */
+        if (table[leafIndex] != leaf) {
+            Shadow->LeafWriteMismatchCount += 1UL;
+        }
+    }
+    /*
+     * Every so often, re-ask EPT12 about a mapping composed earlier.
+     *
+     * The address verified is the one held back from the previous sample, not
+     * this one: a leaf checked against the walk that just produced it proves
+     * only that the assignment worked, which the read-back above already says.
+     * What matters is whether a mapping that has been in use still agrees with
+     * L1's tables.  See the field comment for why this is the one failure that
+     * leaves no exit behind.
+     */
+    if ((Shadow->FillCount & 0xFFFUL) == 0UL) {
+        const ULONGLONG pending = Shadow->VerifyPendingGuestPhysical;
+
+        if (pending != 0ULL &&
+            Shadow->VerifyPendingGeneration != Shadow->Generation) {
+            /*
+             * The hierarchy was dropped and rebuilt since this address was
+             * held back, so the leaf now present was composed from a different
+             * EPT12.  Comparing it proves nothing either way.
+             */
+            Shadow->VerifySkippedGenerationCount += 1UL;
+        } else if (pending != 0ULL) {
+            volatile ULONGLONG* verifyTable =
+                (volatile ULONGLONG*)Shadow->RootVirtual;
+            ULONG verifyLevel = 0UL;
+
+            Shadow->VerifySampleCount += 1UL;
+            for (verifyLevel = 0UL; verifyLevel < 3UL; ++verifyLevel) {
+                const ULONGLONG entry =
+                    verifyTable[(pending >> shifts[verifyLevel]) & 0x1FFULL];
+
+                if ((entry & KSW_HVM_NEPT_PERMISSIONS) == 0ULL) {
+                    verifyTable = NULL;
+                    break;
+                }
+                verifyTable =
+                    KswordARKHvmNestedEptPageVirtual(Shadow, entry);
+                if (verifyTable == NULL) { break; }
+            }
+            if (verifyTable == NULL) {
+                /* Dropped by an invalidation: correct, not a mismatch. */
+                Shadow->VerifyUnresolvedCount += 1UL;
+            } else {
+                ULONGLONG freshPhysical = 0ULL;
+                ULONGLONG freshPermissions = 0ULL;
+                const ULONGLONG shadowLeaf =
+                    verifyTable[(pending >> shifts[3]) & 0x1FFULL];
+
+                if (!KswordARKHvmNestedEptWalkL1(
+                        Shadow,
+                        Window,
+                        pending,
+                        &freshPhysical,
+                        &freshPermissions,
+                        NULL)) {
+                    Shadow->VerifyUnresolvedCount += 1UL;
+                } else if ((shadowLeaf & KSW_HVM_NEPT_FRAME_MASK) !=
+                               (freshPhysical & KSW_HVM_NEPT_FRAME_MASK)) {
+                    /*
+                     * Recorded only on a mismatch.  Recording every sample
+                     * overwrites the one case worth looking at with the
+                     * ordinary one that follows it - measured: the counter
+                     * said three mismatches while the retained scene showed a
+                     * matching pair.
+                     */
+                    Shadow->VerifyLastGuestPhysical = pending;
+                    Shadow->VerifyLastShadowFrame =
+                        shadowLeaf & KSW_HVM_NEPT_FRAME_MASK;
+                    Shadow->VerifyLastL1Frame =
+                        freshPhysical & KSW_HVM_NEPT_FRAME_MASK;
+                    Shadow->VerifyMismatchCount += 1UL;
+                }
+            }
+        }
+        Shadow->VerifyPendingGuestPhysical =
+            GuestPhysicalAddress & KSW_HVM_NEPT_FRAME_MASK;
+        Shadow->VerifyPendingGeneration = Shadow->Generation;
+    }
     /*
      * Pair this leaf with EPT12's, so the bits the processor is about to set
      * here can be folded back into L1's table when L2 stops.

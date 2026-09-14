@@ -118,6 +118,49 @@ typedef struct _KSW_HVM_SHADOW_EPT_STATE
      *         4 no table page left to compose with
      *         5 an interior entry named a page we never handed out
      */
+    /*
+     * Whether a composed mapping still says what EPT12 says.
+     *
+     * This is the one failure that can end in a triple fault while leaving no
+     * exit behind.  A shadow leaf naming a frame EPT12 did not means the
+     * guest's own page-table walk reads another page's bytes, and every fault
+     * after that - #PF, #DF, the shutdown - happens inside the guest, where
+     * nothing here can see it.  Measured symptom it exists to explain: L1's
+     * processor triple-faults while delivering its own local-timer vector into
+     * an interruptible 64-bit guest, with no exception exit anywhere near.
+     *
+     * Sampled rather than checked on every fill, because the check is a second
+     * EPT12 walk through the physical window and fills run into six figures per
+     * boot.  One GPA is held back from each sample and verified at the next
+     * one, so what is being tested is a mapping that has had time to go stale -
+     * checking a leaf against the walk that just produced it would prove only
+     * that the assignment worked.
+     *
+     * Unresolved is kept apart from mismatched: a hierarchy that no longer
+     * describes the address was dropped by an invalidation, which is correct
+     * behaviour and not a defect.
+     */
+    ULONGLONG VerifyPendingGuestPhysical;
+    /*
+     * The hierarchy generation when the address was held back.
+     *
+     * Without it the check has a false positive it cannot distinguish from the
+     * defect: an invalidation between the sample and the verify drops and
+     * rebuilds the hierarchy, and comparing a leaf composed from one EPT12
+     * against a walk of a later one proves nothing. Generation changed means
+     * skip, not mismatch.
+     */
+    ULONGLONG VerifyPendingGeneration;
+    ULONG VerifySampleCount;
+    ULONG VerifyMismatchCount;
+    ULONG VerifyUnresolvedCount;
+    ULONG VerifySkippedGenerationCount;
+    /* The scene of a mismatch, kept because the last *sample* is usually fine. */
+    ULONGLONG VerifyLastGuestPhysical;
+    ULONGLONG VerifyLastShadowFrame;
+    ULONGLONG VerifyLastL1Frame;
+    /* And whether the leaf assignment itself landed where it was aimed. */
+    ULONG LeafWriteMismatchCount;
     ULONG LastDenySite;
     ULONG LastDenyLevel;
     ULONG LastDenyAccess;

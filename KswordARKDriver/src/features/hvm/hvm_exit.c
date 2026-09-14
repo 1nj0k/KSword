@@ -1400,6 +1400,43 @@ KswordARKHvmExitPublishCost(
     }
     {
         /*
+         * Whether the composed mappings still agree with EPT12.
+         *
+         * Mismatched is the number that matters; unresolved counts the
+         * hierarchies an invalidation legitimately dropped, and is kept beside
+         * it so a large unresolved count cannot be read as a clean result.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification =
+            ((ULONGLONG)Context->Nested.ShadowEpt.VerifySampleCount << 32) |
+            (ULONGLONG)Context->Nested.ShadowEpt.VerifyMismatchCount;
+        row.guestPhysicalAddress =
+            ((ULONGLONG)Context->Nested.ShadowEpt.VerifyUnresolvedCount << 32) |
+            (ULONGLONG)Context->Nested.ShadowEpt.LeafWriteMismatchCount;
+        row.guestLinearAddress =
+            Context->Nested.ShadowEpt.VerifyLastGuestPhysical;
+        row.guestRip = Context->Nested.ShadowEpt.VerifyLastShadowFrame;
+        row.exitReason =
+            Context->Nested.ShadowEpt.VerifySkippedGenerationCount;
+        row.status = 0L;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xD5u;
+        KswordARKHvmEventPublish(&row);
+        /* The frame EPT12 named at the same address, in its own row. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.ShadowEpt.VerifyLastL1Frame;
+        row.guestPhysicalAddress =
+            Context->Nested.ShadowEpt.VerifyLastShadowFrame;
+        row.guestLinearAddress =
+            Context->Nested.ShadowEpt.VerifyLastGuestPhysical;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xD4u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
          * Device-register accesses: did they reach L1, or did we answer them?
          *
          * Composed against reflected, plus the last one in full.  Only L1 has
