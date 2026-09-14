@@ -92,6 +92,14 @@ typedef struct _KSW_HVM_NESTED_VCPU
      */
     ULONGLONG InvvpidServedCount;
     /*
+     * NMIs of our own that arrived while this processor was running L2.
+     *
+     * Worth its own number because the alternative to claiming them is not a
+     * missing optimization but a bugcheck in the machine above: they used to
+     * be reflected, and L1 forwards a physical NMI to its host.
+     */
+    ULONGLONG L2NmiClaimedCount;
+    /*
      * Whether the VMCS region is actually working as the backing store.
      *
      * Storing into the region and reading it back are two steps that both

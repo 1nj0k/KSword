@@ -775,6 +775,38 @@ KswordARKHvmNestedL2ExitOwner(
     KSW_HVM_NESTED_VCPU* nested = &Context->Nested;
 
     switch (ExitReason) {
+    case 0UL: {
+        /*
+         * An NMI we sent ourselves is ours, wherever it lands.
+         *
+         * We broadcast an NMI to pull sibling processors out of non-root so
+         * their stale translations go with the VM entry that follows.  A
+         * sibling running L2 takes that NMI as an ordinary exception-or-NMI
+         * exit, and reflecting it hands L1 a physical NMI that never happened
+         * to its guest.  VMware's answer to one is to pass it to the host, so
+         * the interrupt we created for our own bookkeeping arrives at Windows
+         * with nothing to attribute it to - bugcheck 0x80, reproduced twice,
+         * about twenty seconds into a guest boot and never before L2 actually
+         * ran.  The ledger entry is also left unclaimed, so the next genuine
+         * NMI on that processor is swallowed in its place.
+         *
+         * Only NMIs, and only credited ones.  An exception - L1 sets an
+         * exception bitmap and its guest faults constantly - stays L1's, and
+         * so does an NMI nobody in this driver asked for.
+         */
+        const ULONGLONG interruptionInfo =
+            KswordARKHvmNestedL2Read(KSW_L2_EXIT_INTR_INFO);
+
+        if ((interruptionInfo & 0x80000000ULL) != 0ULL &&
+            ((interruptionInfo >> 8) & 0x7ULL) == 2ULL &&
+            KswordARKHvmResidentClaimTlbNmi(Context->ApicId)) {
+            nested->L2NmiClaimedCount += 1ULL;
+            /* Report it as ours; the VM entry that follows is the flush. */
+            return KSW_L2_OWNER_US_RESOLVED;
+        }
+        /* Report every other exception or NMI as L1's. */
+        return KSW_L2_OWNER_L1;
+    }
     case 48UL: {
         /*
          * An EPT violation is ours exactly when composing the leaf resolves
