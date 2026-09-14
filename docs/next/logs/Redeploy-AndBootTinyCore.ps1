@@ -65,11 +65,27 @@ if (-not $SkipDriver) {
     Copy-Item -ToSession $s -Path $DriverPath -Destination 'C:\ksword\KswordARK.sys' -Force
     Invoke-Command -Session $s -ArgumentList $built -ScriptBlock {
         param($built)
-        [IO.File]::Copy('C:\ksword\KswordARK.sys',
-            'C:\Windows\System32\drivers\KswordARK.sys', $true)
-        $h = (Get-FileHash 'C:\Windows\System32\drivers\KswordARK.sys' -Algorithm SHA256).Hash
-        if ($h -ne $built) { throw "服务实际加载的那一份哈希是 $h，与构建产出不符" }
-        "来宾 drivers 下 = $h（与构建产出一致）"
+        # 覆盖**服务 ImagePath 指着的那一份**，不是某个假定的路径。
+        #
+        # 实测踩过：GUI 起来之后会把服务重新注册到它自带的那份
+        # （C:\ksword\gui\KswordARK.sys，日期比当天的构建早六天）。部署脚本
+        # 照旧往 System32\drivers 写、照旧核对那里的哈希、照旧两端一致 ——
+        # 而加载的是另一份。之后所有读数描述的都是六天前的驱动，
+        # 而且没有任何一处会报错。
+        $imagePath = (Get-ItemProperty `
+            'HKLM:\SYSTEM\CurrentControlSet\Services\KswordARK' -Name ImagePath).ImagePath
+        $target = $imagePath -replace '^\\\?\?\\', ''
+        if ($target -notmatch '^[A-Za-z]:\\') {
+            $target = Join-Path $env:SystemRoot ($target -replace '^\\?SystemRoot\\?', '')
+        }
+        [IO.File]::Copy('C:\ksword\KswordARK.sys', $target, $true)
+        # 另一份也一并同步，免得下次别人把 ImagePath 指回去时又加载到旧的
+        $other = 'C:\Windows\System32\drivers\KswordARK.sys'
+        if ($target -ne $other) { [IO.File]::Copy('C:\ksword\KswordARK.sys', $other, $true) }
+        $h = (Get-FileHash $target -Algorithm SHA256).Hash
+        if ($h -ne $built) { throw "ImagePath 指向的 $target 哈希是 $h，与构建产出不符" }
+        "服务 ImagePath = $target"
+        "该文件 sha256 = $h（与构建产出一致）"
         & sc.exe start KswordARK | Out-Null
         Start-Sleep -Seconds 2
         "驱动已起：" + (Get-Service KswordARK).Status
@@ -83,15 +99,43 @@ Invoke-Command -Session $s -ScriptBlock {
                 -Wait -PassThru -RedirectStandardOutput $o
         return @{ Exit = $p.ExitCode; Out = [IO.File]::ReadAllText($o) }
     }
+    # 判据是 cpuid-view 的 hidden，不是状态位。
+    #
+    # `resident-nested` 与 `resident-nested-hidehv` 的**状态位完全一样**，两者都是
+    # INITIALIZED … RESIDENT_ACTIVE RESIDENT_NESTED。按 RESIDENT_ACTIVE 判断
+    # "已经在跑就跳过"，会在别人（比如 GUI 菜单）起了不隐藏的那一版时沿用它 ——
+    # 而 VMware 的身份门排在能力门前面：CPUID 一看见 Microsoft Hv 就弹
+    # "VMware Workstation and Hyper-V are not compatible"，连能力 MSR 都不会读。
+    # 实测踩过：状态位一切正常，VMware 就是不启动。
+    $needStart = $true
     $st = (Run @('--json', 'status')).Out | ConvertFrom-Json
-    if ($st.stateNames -notcontains 'RESIDENT_ACTIVE') {
+    if ($st.stateNames -contains 'RESIDENT_ACTIVE') {
+        $view = $null
+        try { $view = (Run @('--json', 'cpuid-view')).Out | ConvertFrom-Json } catch { }
+        if ($view -and $view.hidden) {
+            $needStart = $false
+        } else {
+            Write-Output '常驻在跑但没有隐藏 hypervisor，停掉重起'
+            $r = Run @('stop')
+            if ($r.Exit -ne 0) { throw "stop 退出码 $($r.Exit)" }
+        }
+    }
+    if ($needStart) {
+        $st = (Run @('--json', 'status')).Out | ConvertFrom-Json
         foreach ($cmd in 'prepare', 'self-test', 'resident-nested-hidehv') {
+            if ($cmd -eq 'prepare' -and
+                ($st.stateNames -contains 'RESOURCES_READY')) { continue }
             $r = Run @($cmd)
             if ($r.Exit -ne 0) { throw "$cmd 退出码 $($r.Exit)" }
         }
     }
     $st = (Run @('--json', 'status')).Out | ConvertFrom-Json
+    $view = (Run @('--json', 'cpuid-view')).Out | ConvertFrom-Json
+    if (-not $view.hidden) {
+        throw "常驻起来了但 cpuid-view 的 hidden 仍为假，VMware 会拒绝启动"
+    }
     "状态位 = " + ($st.stateNames -join ' ')
+    "cpuid-view hidden = " + $view.hidden + "（VMware 的身份门看的就是这个）"
     # vmx86 重启：VMware 只在这个驱动起来时问一次能力 MSR
     & sc.exe stop vmx86 | Out-Null
     Start-Sleep -Seconds 1
