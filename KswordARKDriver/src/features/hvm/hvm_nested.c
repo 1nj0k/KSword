@@ -19,6 +19,7 @@ Environment:
 #include "hvm_nested.h"
 #include "hvm_nested_decode.h"
 #include "hvm_nested_l2.h"
+#include "hvm_phys_window.h"
 /*
  * The full resident context is needed, not just its forward declaration: L2
  * entry reaches through it for the VMCS pages and the mapping window.
@@ -335,6 +336,18 @@ KswordARKHvmNestedDispatchVmxon(
 }
 
 /*
+ * Spill one vmcs12's fields into the region L1 gave it.
+ *
+ * Declared here because the spill happens inside the pool save, which runs
+ * earlier in this file than the region code it belongs with.
+ */
+static VOID
+KswordARKHvmNestedRegionStore(
+    _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _In_ ULONGLONG RegionPhysical
+    );
+
+/*
  * Find the pool slot holding one vmcs12, or none.
  *
  * A slot is in use exactly when its PhysicalAddress is non-zero; that field is
@@ -354,11 +367,11 @@ KswordARKHvmNestedPoolFind(
         /* Report that no slot holds it. */
         return NULL;
     }
-    for (index = 0UL; index < Nested->Vmcs12PoolCount; ++index) {
-        if (Nested->Vmcs12Pool[index].PhysicalAddress == Pointer) {
+    for (index = 0UL; index < Nested->Vmcs12Pool->Count; ++index) {
+        if (Nested->Vmcs12Pool->Slots[index].PhysicalAddress == Pointer) {
             if (SlotIndex != NULL) { *SlotIndex = index; }
             /* Return the slot that already holds this vmcs12. */
-            return &Nested->Vmcs12Pool[index];
+            return &Nested->Vmcs12Pool->Slots[index];
         }
     }
     /* Report that no slot holds it. */
@@ -379,35 +392,56 @@ KswordARKHvmNestedPoolSave(
     _Inout_ KSW_HVM_RUNTIME* Runtime
     )
 {
+    KSW_HVM_VMCS12_POOL* pool = Nested->Vmcs12Pool;
     KSW_HVM_VMCS12_STATE* slot = NULL;
     ULONG index = 0UL;
     ULONG chosen = 0UL;
-    ULONGLONG coldest = ~0ULL;
+    LONG64 coldest = MAXLONG64;
 
-    if (Nested->Vmcs12Pool == NULL ||
-        Nested->Vmcs12PoolCount == 0UL ||
-        !Nested->VmcsCurrent ||
-        Nested->CurrentVmcs == 0ULL) {
-        /* Return without saving what has no home or no identity. */
+    if (!Nested->VmcsCurrent || Nested->CurrentVmcs == 0ULL) {
+        /* Return without saving what has no identity. */
+        return;
+    }
+    /*
+     * The region first, and unconditionally.
+     *
+     * It is the backing store, not an optimization, so it must not be skipped
+     * because the cache in front of it happens to be missing.
+     */
+    KswordARKHvmNestedRegionStore(Nested, Nested->CurrentVmcs);
+    if (pool == NULL || pool->Count == 0UL) {
+        /* Return; the region above already holds these fields. */
         return;
     }
     slot = KswordARKHvmNestedPoolFind(Nested, Nested->CurrentVmcs, &chosen);
     if (slot == NULL) {
-        for (index = 0UL; index < Nested->Vmcs12PoolCount; ++index) {
-            if (Nested->Vmcs12Pool[index].PhysicalAddress == 0ULL) {
+        for (index = 0UL; index < pool->Count; ++index) {
+            /*
+             * Claim a free slot atomically, because the pool is shared.
+             *
+             * Two processors that VMPTRLD two vmcs12 they have never seen can
+             * reach this loop at the same time, and a plain store would give
+             * both the same slot - one configuration silently landing on top
+             * of the other.  The exchange makes the key and the claim the same
+             * operation, so the loser simply moves on to the next slot.
+             */
+            if (InterlockedCompareExchange64(
+                    (volatile LONG64*)&pool->Slots[index].PhysicalAddress,
+                    (LONG64)Nested->CurrentVmcs,
+                    0) == 0) {
                 chosen = index;
-                slot = &Nested->Vmcs12Pool[index];
+                slot = &pool->Slots[index];
                 break;
             }
-            if (Nested->Vmcs12PoolStamp[index] < coldest) {
-                coldest = Nested->Vmcs12PoolStamp[index];
+            if (pool->Stamp[index] < coldest) {
+                coldest = pool->Stamp[index];
                 chosen = index;
             }
         }
         if (slot == NULL) {
-            slot = &Nested->Vmcs12Pool[chosen];
+            slot = &pool->Slots[chosen];
             /*
-             * Record the eviction where it outlives this processor's pool.
+             * Record the eviction where it outlives the pool.
              *
              * The pool is freed at devirtualization; the fact that an L1 kept
              * more VMCSs than we hold is exactly the kind of thing that is
@@ -420,8 +454,7 @@ KswordARKHvmNestedPoolSave(
     }
     RtlCopyMemory(slot, &Nested->Vmcs12, sizeof(*slot));
     slot->PhysicalAddress = Nested->CurrentVmcs;
-    Nested->Vmcs12PoolClock += 1ULL;
-    Nested->Vmcs12PoolStamp[chosen] = Nested->Vmcs12PoolClock;
+    pool->Stamp[chosen] = InterlockedIncrement64(&pool->Clock);
 }
 
 /*
@@ -446,8 +479,8 @@ KswordARKHvmNestedPoolLoad(
         return FALSE;
     }
     RtlCopyMemory(&Nested->Vmcs12, slot, sizeof(Nested->Vmcs12));
-    Nested->Vmcs12PoolClock += 1ULL;
-    Nested->Vmcs12PoolStamp[chosen] = Nested->Vmcs12PoolClock;
+    Nested->Vmcs12Pool->Stamp[chosen] =
+        InterlockedIncrement64(&Nested->Vmcs12Pool->Clock);
     /* Report that this vmcs12's fields came back. */
     return TRUE;
 }
@@ -468,7 +501,273 @@ KswordARKHvmNestedPoolDrop(
         return;
     }
     RtlZeroMemory(slot, sizeof(*slot));
-    Nested->Vmcs12PoolStamp[chosen] = 0ULL;
+    Nested->Vmcs12Pool->Stamp[chosen] = 0;
+}
+
+/*
+ * Keep the vmcs12 contents in the VMCS region L1 named, not only beside it.
+ *
+ * On real hardware a VMCS *is* the region: the fields live in those 4 KiB in
+ * an opaque format, so everything that happens to the page happens to the
+ * VMCS.  We intercept every VMWRITE and keep the fields in our own storage
+ * instead, which is correct for every operation that names the VMCS - and
+ * wrong for every operation that names the *page*.
+ *
+ * Measured need: VMware configures a VMCS at one physical address, and then
+ * switches to a second one and launches it after writing nothing but guest
+ * state into it - the same VMPTRLD instruction, the same operand slot, a
+ * different pointer.  Its controls, host state and EPT pointer never arrive,
+ * so L2 enters with our own identity EPT and a real-mode guest fetches from
+ * the wrong memory.  A hypervisor may legitimately move a VMCS's backing page
+ * and expect the contents to move with it; ours stayed behind because they
+ * were keyed to an address rather than stored in the page.
+ *
+ * So the region becomes the backing store and the pool stays a cache: spilled
+ * whenever the working copy stops being current, reloaded when a pointer is
+ * new to the pool.  Written as (encoding, value) pairs rather than a fixed
+ * field map, so no per-field capacity table has to stay in step with the
+ * architecture, and only fields L1 actually set take space.
+ *
+ * The first eight bytes are never touched: they are L1's VMCS revision
+ * identifier and its VMX-abort indicator, and both belong to L1.
+ */
+#define KSW_HVM_VMCS12_REGION_MAGIC 0x5657534BUL
+#define KSW_HVM_VMCS12_REGION_HEADER 24ULL
+#define KSW_HVM_VMCS12_REGION_ENTRIES \
+    ((4096ULL - KSW_HVM_VMCS12_REGION_HEADER) / 16ULL)
+#define KSW_HVM_VMCS12_REGION_FLAG_LAUNCHED 0x1ULL
+
+/* Spill one vmcs12's fields into the region L1 gave it. */
+static VOID
+KswordARKHvmNestedRegionStore(
+    _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _In_ ULONGLONG RegionPhysical
+    )
+{
+    volatile VOID* mapped = NULL;
+    volatile ULONGLONG* words = NULL;
+    ULONG slot = 0UL;
+    ULONGLONG written = 0ULL;
+
+    if (Nested->PhysWindow == NULL || RegionPhysical == 0ULL) {
+        /* Return without pretending a region we cannot reach was written. */
+        return;
+    }
+    if (KswordARKHvmPhysWindowMap(
+            Nested->PhysWindow,
+            RegionPhysical,
+            4096UL,
+            &mapped) != KSW_HVM_PHYS_WINDOW_OK ||
+        mapped == NULL) {
+        Nested->RegionStoreFailCount += 1UL;
+        /* Return; the pool still holds these fields for this processor. */
+        return;
+    }
+    words = (volatile ULONGLONG*)mapped;
+    for (slot = 0UL;
+         slot < KSW_HVM_VMCS12_SLOT_COUNT &&
+             written < KSW_HVM_VMCS12_REGION_ENTRIES;
+         ++slot) {
+        const ULONGLONG value = Nested->Vmcs12.Fields[slot];
+        ULONG width = 0UL;
+        ULONG type = 0UL;
+        ULONG index = 0UL;
+        ULONGLONG base = 0ULL;
+
+        if (value == 0ULL) {
+            continue;
+        }
+        /* Rebuild the encoding this slot stands for, without a second table. */
+        width = slot / 512UL;
+        type = (slot % 512UL) / 128UL;
+        index = slot % 128UL;
+        base = (KSW_HVM_VMCS12_REGION_HEADER + written * 16ULL) / 8ULL;
+        words[base] =
+            ((ULONGLONG)width << 13) |
+            ((ULONGLONG)type << 10) |
+            ((ULONGLONG)index << 1);
+        words[base + 1ULL] = value;
+        written += 1ULL;
+    }
+    /* Publish the header last, so a torn region never reads as complete. */
+    words[2] =
+        (Nested->Vmcs12.Launched != FALSE)
+            ? KSW_HVM_VMCS12_REGION_FLAG_LAUNCHED
+            : 0ULL;
+    words[1] =
+        (ULONGLONG)KSW_HVM_VMCS12_REGION_MAGIC |
+        (written << 32);
+    KswordARKHvmPhysWindowUnmap(Nested->PhysWindow);
+    Nested->RegionStoreOkCount += 1UL;
+    /*
+     * Report only when the shape of what we store changes.
+     *
+     * A hypervisor spills the same VMCS hundreds of times a second and the
+     * count is identical almost every time; what matters is the moment it
+     * drops - that is a vmcs12 losing fields, and it is invisible in any
+     * end-state readout because the end state only shows where it landed.
+     * One row per change keeps the whole run inside the ring.
+     */
+    if ((ULONG)written != Nested->RegionStoreEntries ||
+        RegionPhysical != Nested->RegionLastStorePhysical) {
+        KSWORD_ARK_HVM_EVENT_ROW row;
+
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_NESTED_VMX;
+        row.guestPhysicalAddress = RegionPhysical;
+        /* What we just stored, and what the previous store held. */
+        row.guestLinearAddress = written;
+        row.guestRip = (ULONGLONG)Nested->RegionStoreEntries;
+        row.qualification = Nested->RegionLastStorePhysical;
+        row.ruleId = 0xF2u;
+        KswordARKHvmEventPublish(&row);
+    }
+    Nested->RegionStoreEntries = (ULONG)written;
+    Nested->RegionLastStorePhysical = RegionPhysical;
+}
+
+/*
+ * Restore one vmcs12's fields from the region, when the region carries ours.
+ *
+ * Returns TRUE only when the magic was found: a region holding anything else
+ * is L1's own business, and reading fields out of it would be inventing them.
+ */
+static BOOLEAN
+KswordARKHvmNestedRegionLoad(
+    _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _In_ ULONGLONG RegionPhysical
+    )
+{
+    volatile VOID* mapped = NULL;
+    volatile ULONGLONG* words = NULL;
+    ULONGLONG header = 0ULL;
+    ULONGLONG count = 0ULL;
+    ULONGLONG entry = 0ULL;
+    BOOLEAN restored = FALSE;
+
+    if (Nested->PhysWindow == NULL || RegionPhysical == 0ULL) {
+        /* Report that nothing was restored. */
+        return FALSE;
+    }
+    if (KswordARKHvmPhysWindowMap(
+            Nested->PhysWindow,
+            RegionPhysical,
+            4096UL,
+            &mapped) != KSW_HVM_PHYS_WINDOW_OK ||
+        mapped == NULL) {
+        /* Report that nothing was restored. */
+        return FALSE;
+    }
+    words = (volatile ULONGLONG*)mapped;
+    header = words[1];
+    count = header >> 32;
+    Nested->RegionLastLoadPhysical = RegionPhysical;
+    Nested->RegionLastLoadHeader = header;
+    if ((ULONG)(header & 0xFFFFFFFFULL) == KSW_HVM_VMCS12_REGION_MAGIC &&
+        count <= KSW_HVM_VMCS12_REGION_ENTRIES) {
+        KswordARKHvmNestedVmcsInitialize(
+            &Nested->Vmcs12,
+            &Nested->Vmcs02);
+        /*
+         * Make it current before writing into it.
+         *
+         * KswordARKHvmNestedVmcs12Write refuses every field unless the vmcs12
+         * says it is current, and the initialize above clears exactly that
+         * flag.  Without these two lines all thirty-eight restored fields were
+         * refused one by one while this function still reported success - the
+         * region carried the data, the magic matched, the count was right, and
+         * the vmcs12 came up empty anyway.
+         */
+        Nested->Vmcs12.Current = TRUE;
+        Nested->Vmcs12.PhysicalAddress = RegionPhysical;
+        for (entry = 0ULL; entry < count; ++entry) {
+            const ULONGLONG base =
+                (KSW_HVM_VMCS12_REGION_HEADER + entry * 16ULL) / 8ULL;
+
+            if (!NT_SUCCESS(KswordARKHvmNestedVmcs12Write(
+                    &Nested->Vmcs12,
+                    (ULONG)words[base],
+                    words[base + 1ULL]))) {
+                /* Count what the region held and we could not take back. */
+                Nested->RegionLoadRefusedFields += 1UL;
+            }
+        }
+        Nested->Vmcs12.Launched =
+            ((words[2] & KSW_HVM_VMCS12_REGION_FLAG_LAUNCHED) != 0ULL)
+                ? TRUE
+                : FALSE;
+        restored = TRUE;
+    }
+    KswordARKHvmPhysWindowUnmap(Nested->PhysWindow);
+    if (restored) {
+        Nested->RegionLoadOkCount += 1UL;
+    } else {
+        Nested->RegionLoadMissCount += 1UL;
+    }
+    /* Report whether this region carried a vmcs12 of ours. */
+    return restored;
+}
+
+/*
+ * Describe what L1 left in a VMCS region itself, once, when it is first seen.
+ *
+ * We never write a VMCS region: every VMWRITE is intercepted and kept in the
+ * shadow copy, so on this machine a region holds only whatever L1 put there
+ * directly.  That makes the region's contents a direct test of one specific
+ * suspicion - that a hypervisor produced a second VMCS by copying the first
+ * one's page rather than by writing its fields again, which is invisible to us
+ * and leaves the new VMCS looking empty no matter how correct our caching is.
+ *
+ * Published rather than returned: the answer is wanted from a dump long after
+ * the run, and it is one row per VMCS ever loaded, not one per instruction.
+ */
+static VOID
+KswordARKHvmNestedPublishRegionShape(
+    _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _In_ ULONGLONG RegionPhysical,
+    _In_ ULONG ExitReason
+    )
+{
+    volatile VOID* mapped = NULL;
+    KSWORD_ARK_HVM_EVENT_ROW row;
+    ULONGLONG fold = 0ULL;
+    ULONGLONG head = 0ULL;
+    ULONG nonZero = 0UL;
+    ULONG index = 0UL;
+
+    if (Nested->PhysWindow == NULL || RegionPhysical == 0ULL) {
+        /* Return without inventing a shape for a region we cannot read. */
+        return;
+    }
+    if (KswordARKHvmPhysWindowMap(
+            Nested->PhysWindow,
+            RegionPhysical,
+            4096UL,
+            &mapped) != KSW_HVM_PHYS_WINDOW_OK ||
+        mapped == NULL) {
+        /* Return rather than report a shape derived from no mapping. */
+        return;
+    }
+    for (index = 0UL; index < 512UL; ++index) {
+        const ULONGLONG word = ((volatile ULONGLONG*)mapped)[index];
+
+        if (index == 0UL) { head = word; }
+        if (word != 0ULL) { nonZero += 1UL; }
+        fold = (fold * 1000003ULL) ^ word;
+    }
+    KswordARKHvmPhysWindowUnmap(Nested->PhysWindow);
+    RtlZeroMemory(&row, sizeof(row));
+    row.type = KSWORD_ARK_HVM_EVENT_TYPE_NESTED_VMX;
+    row.exitReason = ExitReason;
+    row.guestPhysicalAddress = RegionPhysical;
+    /* The fold identifies the bytes; the count says whether there are any. */
+    row.qualification = fold;
+    row.guestLinearAddress = (ULONGLONG)nonZero;
+    /* The first eight bytes are the revision identifier and abort indicator. */
+    row.guestRip = head;
+    /* Mark the row so a reader cannot mistake it for an instruction trace. */
+    row.ruleId = 0xF1u;
+    KswordARKHvmEventPublish(&row);
 }
 
 /* Dispatch VMCLEAR, VMPTRLD and VMPTRST against the current vmcs12. */
@@ -538,6 +837,28 @@ KswordARKHvmNestedDispatchVmcsPointer(
             : KSW_VMX_ERROR_VMPTRLD_VMXON_POINTER;
         /* Return the valid failure L1 can read an error number from. */
         return KSW_HVM_VMX_RESULT_FAIL_VALID;
+    }
+    /*
+     * Record which vmcs12 this instruction names.
+     *
+     * The generic exit row carries the exit qualification, which for these
+     * instructions is the operand's displacement - a stack offset, not the
+     * pointer.  So the trace could show a hypervisor switching VMCSs a
+     * thousand times without ever saying between which, and the field writes
+     * either side of a switch could not be attributed to a VMCS at all.
+     */
+    {
+        KSWORD_ARK_HVM_EVENT_ROW row;
+
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_NESTED_VMX;
+        row.exitReason = ExitReason;
+        /* The vmcs12 named, and the one that was current before it. */
+        row.guestPhysicalAddress = pointer;
+        row.guestLinearAddress = Nested->VmcsCurrent
+            ? Nested->CurrentVmcs
+            : 0ULL;
+        KswordARKHvmEventPublish(&row);
     }
     if (ExitReason == KSW_VMX_EXIT_VMCLEAR) {
         /*
@@ -612,11 +933,30 @@ KswordARKHvmNestedDispatchVmcsPointer(
      * what the architecture says a freshly VMCLEARed region holds.
      */
     if (!Nested->VmcsCurrent || Nested->CurrentVmcs != pointer) {
+        const ULONGLONG outgoing = Nested->VmcsCurrent
+            ? Nested->CurrentVmcs
+            : 0ULL;
+
         KswordARKHvmNestedPoolSave(Nested, Runtime);
         if (!KswordARKHvmNestedPoolLoad(Nested, pointer)) {
-            KswordARKHvmNestedVmcsInitialize(
-                &Nested->Vmcs12,
-                &Nested->Vmcs02);
+            /*
+             * First sight of this VMCS: record both regions before deciding
+             * anything, and record the one being left at the same instant so
+             * the two can be compared rather than described separately.
+             */
+            KswordARKHvmNestedPublishRegionShape(Nested, pointer, ExitReason);
+            KswordARKHvmNestedPublishRegionShape(Nested, outgoing, ExitReason);
+            /*
+             * The pool has never seen this pointer, which is not the same as
+             * the VMCS being empty: L1 may have moved it to a new page, and
+             * the contents travel in the page.  Ask the region before falling
+             * back to the architectural "a fresh region holds nothing".
+             */
+            if (!KswordARKHvmNestedRegionLoad(Nested, pointer)) {
+                KswordARKHvmNestedVmcsInitialize(
+                    &Nested->Vmcs12,
+                    &Nested->Vmcs02);
+            }
         }
     }
     Nested->CurrentVmcs = pointer;
@@ -833,6 +1173,7 @@ KswordARKHvmNestedDispatchVmcsField(
     KSW_HVM_VMX_OPERAND operand = { 0 };
     ULONGLONG encoding = 0ULL;
     ULONGLONG value = 0ULL;
+    NTSTATUS writeStatus = STATUS_SUCCESS;
 
     *InstructionError = 0UL;
     /* Refuse every field access without a current vmcs12. */
@@ -922,14 +1263,10 @@ KswordARKHvmNestedDispatchVmcsField(
      * one answer it already knows how to act on - far better than succeeding
      * and silently discarding a control it will later rely on.
      */
-    if (!NT_SUCCESS(KswordARKHvmNestedVmcs12Write(
-            &Nested->Vmcs12,
-            (ULONG)encoding,
-            value))) {
-        *InstructionError = KSW_VMX_ERROR_UNSUPPORTED_COMPONENT;
-        /* Return the valid failure L1 can read an error number from. */
-        return KSW_HVM_VMX_RESULT_FAIL_VALID;
-    }
+    writeStatus = KswordARKHvmNestedVmcs12Write(
+        &Nested->Vmcs12,
+        (ULONG)encoding,
+        value);
     /*
      * Record what L1 configured, when someone asked for the trace.
      *
@@ -957,6 +1294,25 @@ KswordARKHvmNestedDispatchVmcsField(
         /* The field L1 named, and the value it put there. */
         row.qualification = encoding;
         row.guestPhysicalAddress = value;
+        /*
+         * Which vmcs12 this write landed in.
+         *
+         * Without it the trace says a field was written and cannot say to
+         * what, and "L1 never wrote the control" and "L1 wrote it to a
+         * different VMCS than the one it launched" look identical - while
+         * pointing at completely different defects.
+         */
+        row.guestLinearAddress = Nested->CurrentVmcs;
+        /*
+         * Whether the field was actually kept.
+         *
+         * Published for refusals too, which is the change that matters: a
+         * refused VMWRITE used to return before this point and leave nothing
+         * behind, so "L1 never configured the control" and "L1 configured it
+         * and we threw it away" produced identical traces.  One of those is
+         * L1's problem and the other is ours.
+         */
+        row.status = writeStatus;
         {
             SIZE_T rip = 0U;
 
@@ -965,6 +1321,11 @@ KswordARKHvmNestedDispatchVmcsField(
             }
         }
         KswordARKHvmEventPublish(&row);
+    }
+    if (!NT_SUCCESS(writeStatus)) {
+        *InstructionError = KSW_VMX_ERROR_UNSUPPORTED_COMPONENT;
+        /* Return the valid failure L1 can read an error number from. */
+        return KSW_HVM_VMX_RESULT_FAIL_VALID;
     }
     /* Return the complete success. */
     return KSW_HVM_VMX_RESULT_SUCCEED;
@@ -1000,10 +1361,40 @@ KswordARKHvmNestedHandleExit(
             /* Select VMfailInvalid for an absent VMX operation. */
             instructionResult = 2U;
         } else {
+            /*
+             * Spill the loaded vmcs12 before VMX operation ends.
+             *
+             * VMXOFF ends VMX operation; it does not modify any VMCS.  L1 may
+             * VMXON again, VMPTRLD the same region and read back every field
+             * it wrote - including fields written since the last VMCLEAR,
+             * which until now lived only in the working copy and were dropped
+             * here without a trace.
+             *
+             * Measured cost: VMware leaves and re-enters VMX operation on
+             * every world switch - 126 times in one retained window - and the
+             * round that configures a VMCS ends this way rather than with a
+             * VMCLEAR.  Its pin, exit, entry and secondary controls and its
+             * EPT pointer were therefore never in the vmcs12 it finally
+             * launched, and the entry failed on guest state built from our
+             * own controls merged over nothing.
+             */
+            KswordARKHvmNestedPoolSave(Nested, Runtime);
             /* Leave the local L1 VMX operation. */
             Nested->Vmxon = FALSE;
             /* Clear the current vmcs12 pointer. */
             Nested->VmcsCurrent = FALSE;
+            /*
+             * And forget which one it was, so nothing can alias it later.
+             *
+             * A stale pointer here is not inert: the next VMPTRLD compares
+             * against it, and a pointer that happens to match would skip the
+             * restore and run on whatever the working copy holds.
+             */
+            Nested->CurrentVmcs = 0ULL;
+            /* Start the working copy empty; the pool holds the real contents. */
+            KswordARKHvmNestedVmcsInitialize(
+                &Nested->Vmcs12,
+                &Nested->Vmcs02);
             /* Clear any prior L2 launch attempt. */
             Nested->L2LaunchAttempted = FALSE;
             /*

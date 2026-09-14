@@ -105,6 +105,15 @@ typedef struct _KSW_HVM_RESIDENT_STATE
     ULONG EptLocalCount;
     /* Keep the tail deterministic for crash-dump inspection. */
     ULONG Reserved1;
+    /*
+     * Own the one vmcs12 spill pool every processor shares.
+     *
+     * Appended after the existing members so no offset moves.  Shared rather
+     * than per-processor because a VMCS is memory: a hypervisor VMCLEARs on
+     * one processor and VMPTRLDs on another to move a vCPU, and a per-
+     * processor store loses everything it configured at that moment.
+     */
+    PVOID Vmcs12PoolBlock;
 } KSW_HVM_RESIDENT_STATE;
 
 /* Share one fixed operation across an IPI rendezvous. */
@@ -613,17 +622,19 @@ KswordARKHvmResidentReleaseContexts(
          */
         KswordARKHvmNestedEptRelease(
             &g_KswordHvmResident.Processors[index].Nested.ShadowEpt);
-        /* The vmcs12 spill pool has that same lifetime, and the same origin. */
-        if (g_KswordHvmResident.Processors[index].Nested.Vmcs12PoolBlock !=
-                NULL) {
-            ExFreePool(
-                g_KswordHvmResident.Processors[index]
-                    .Nested.Vmcs12PoolBlock);
-            g_KswordHvmResident.Processors[index]
-                .Nested.Vmcs12PoolBlock = NULL;
-            g_KswordHvmResident.Processors[index].Nested.Vmcs12Pool = NULL;
-            g_KswordHvmResident.Processors[index].Nested.Vmcs12PoolCount = 0UL;
-        }
+        /*
+         * Drop this processor's reference to the shared vmcs12 pool.
+         *
+         * The block itself is freed once, after the loop: every processor
+         * points at the same allocation, so freeing it here would free it as
+         * many times as there are processors.
+         */
+        g_KswordHvmResident.Processors[index].Nested.Vmcs12Pool = NULL;
+    }
+    /* The vmcs12 spill pool has that same lifetime, and the same origin. */
+    if (g_KswordHvmResident.Vmcs12PoolBlock != NULL) {
+        ExFreePool(g_KswordHvmResident.Vmcs12PoolBlock);
+        g_KswordHvmResident.Vmcs12PoolBlock = NULL;
     }
     /*
      * Release every private EPT hierarchy alongside the host stacks.  Their
@@ -839,23 +850,29 @@ KswordARKHvmResidentPrepareContexts(
          * before - worse for an L1 that keeps several, and still correct for
          * one that keeps a single VMCS.
          */
-        if (context->Nested.Vmcs12PoolBlock == NULL) {
-            context->Nested.Vmcs12PoolBlock =
+        if (g_KswordHvmResident.Vmcs12PoolBlock == NULL) {
+            g_KswordHvmResident.Vmcs12PoolBlock =
                 KswordARKAllocateNonPagedPool(
-                    (SIZE_T)KSW_HVM_VMCS12_POOL_SLOTS *
-                        sizeof(KSW_HVM_VMCS12_STATE),
+                    sizeof(KSW_HVM_VMCS12_POOL),
                     'PvHK');
-            if (context->Nested.Vmcs12PoolBlock != NULL) {
-                RtlZeroMemory(
-                    context->Nested.Vmcs12PoolBlock,
-                    (SIZE_T)KSW_HVM_VMCS12_POOL_SLOTS *
-                        sizeof(KSW_HVM_VMCS12_STATE));
-                context->Nested.Vmcs12Pool =
-                    (KSW_HVM_VMCS12_STATE*)context->Nested.Vmcs12PoolBlock;
-                context->Nested.Vmcs12PoolCount =
-                    KSW_HVM_VMCS12_POOL_SLOTS;
+            if (g_KswordHvmResident.Vmcs12PoolBlock != NULL) {
+                KSW_HVM_VMCS12_POOL* pool =
+                    (KSW_HVM_VMCS12_POOL*)
+                        g_KswordHvmResident.Vmcs12PoolBlock;
+
+                RtlZeroMemory(pool, sizeof(*pool));
+                pool->Count = KSW_HVM_VMCS12_POOL_SLOTS;
             }
         }
+        /*
+         * Point this processor at the shared pool, allocated or not.
+         *
+         * Assigned after KswordARKHvmNestedInitializeVcpu above, which zeroes
+         * the whole record; a NULL here is the documented fallback to one
+         * vmcs12 per processor rather than a failure of residency.
+         */
+        context->Nested.Vmcs12Pool =
+            (KSW_HVM_VMCS12_POOL*)g_KswordHvmResident.Vmcs12PoolBlock;
     }
     /* Publish that every processor has a complete host-stack context. */
     g_KswordHvmResident.Prepared = TRUE;

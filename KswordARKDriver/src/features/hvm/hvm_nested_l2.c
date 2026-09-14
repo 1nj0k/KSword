@@ -502,6 +502,38 @@ KswordARKHvmNestedL2Enter(
         if ((mergedSecondary & KSW_L2_SECONDARY_ENABLE_EPT) == 0UL) {
             mergedSecondary &= ~(ULONG)KSW_L2_SECONDARY_UNRESTRICTED_GUEST;
         }
+        /*
+         * A guest with paging or protection off cannot be entered without it.
+         *
+         * The processor requires CR0.PE and CR0.PG to be one unless this
+         * control is set, so a vmcs02 carrying a real-mode guest without it is
+         * not a VMCS the hardware will accept - and the guest state is L1's,
+         * copied field by field from vmcs12, so this is about making the VMCS
+         * self-consistent rather than granting L1 anything.
+         *
+         * Measured need: VMware's launch arrived with guest CR0 = 0x30 (PE and
+         * PG both clear, the architectural reset state, CS:RIP = F000:FFF0) and
+         * a vmcs12 whose secondary controls were entirely zero - the merged
+         * value equalled our own set exactly.  Its guest is a BIOS starting in
+         * real mode; without this bit there is no legal way to run it.
+         *
+         * Conditional on the guest state rather than always on, because the bit
+         * changes what the processor accepts and nothing should change for the
+         * paged guests that make up every other entry.
+         */
+        {
+            ULONGLONG guestCr0 = 0ULL;
+
+            (void)KswordARKHvmNestedVmcs12Read(
+                vmcs12,
+                KSW_L2_GUEST_CR0,
+                &guestCr0);
+            if (((guestCr0 & 0x1ULL) == 0ULL ||
+                 (guestCr0 & 0x80000000ULL) == 0ULL) &&
+                (mergedSecondary & KSW_L2_SECONDARY_ENABLE_EPT) != 0UL) {
+                mergedSecondary |= KSW_L2_SECONDARY_UNRESTRICTED_GUEST;
+            }
+        }
         KswordARKHvmNestedL2Write(
             KSW_L2_SECONDARY_CONTROLS,
             mergedSecondary);
@@ -513,12 +545,36 @@ KswordARKHvmNestedL2Enter(
         KswordARKHvmNestedL2ClampControl(
             (ULONG)value | Context->Runtime->ActiveControls.Exit,
             Context->Runtime->ActiveControls.ExitCapability));
+    /*
+     * Entry controls are L1's alone - the union that is right everywhere else
+     * is wrong here.
+     *
+     * Pin, primary, secondary and exit controls decide who intercepts what and
+     * what host state an exit restores, so our bits have to survive.  Entry
+     * controls decide nothing of ours: every one of them describes the guest
+     * being entered, and that guest is L1's, copied field by field from
+     * vmcs12.  Carrying ours across states something about L1's guest that L1
+     * never said.
+     *
+     * "IA-32e mode guest" is where that turns fatal.  It is a description, not
+     * a permission: the processor requires CR0.PG and CR4.PAE when it is set.
+     * Ours is set because the guest we run is 64-bit Windows, so the union put
+     * it on a vmcs02 whose guest CR0 was 0x30 - VMware's BIOS at the reset
+     * vector, protection and paging both off - and VM entry failed with
+     * "invalid guest state" (exit reason 0x80000021, read back out of vmcs02).
+     * Every other bit is a load-this-guest-MSR request, and honouring one L1
+     * did not make loads a guest register out of a vmcs02 field L1 never
+     * wrote.
+     *
+     * The clamp still applies, so the architectural reserved bits are set and
+     * nothing L1 asked for outruns this processor.
+     */
     value = 0ULL;
     (void)KswordARKHvmNestedVmcs12Read(vmcs12, KSW_L2_ENTRY_CONTROLS, &value);
     KswordARKHvmNestedL2Write(
         KSW_L2_ENTRY_CONTROLS,
         KswordARKHvmNestedL2ClampControl(
-            (ULONG)value | Context->Runtime->ActiveControls.Entry,
+            (ULONG)value,
             Context->Runtime->ActiveControls.EntryCapability));
     /*
      * Point vmcs02 at bitmaps that actually exist.
@@ -609,6 +665,33 @@ KswordARKHvmNestedL2Enter(
         (ULONG)KswordARKHvmNestedL2Read(KSW_L2_PRIMARY_CONTROLS);
     nested->LastEntrySecondaryControls =
         (ULONG)KswordARKHvmNestedL2Read(KSW_L2_SECONDARY_CONTROLS);
+    /*
+     * Which vmcs12 this entry came from, and the guest state it carries.
+     *
+     * Without the physical address there is no way to tell afterwards which of
+     * the pooled vmcs12 structures the entry used, and the pool keeps changing
+     * underneath.  Without the guest state there is no way to tell an entry we
+     * built wrongly from one L1 configured to die.
+     */
+    nested->LastEntryVmcs12Physical = nested->CurrentVmcs;
+    nested->LastEntryPinControls =
+        (ULONG)KswordARKHvmNestedL2Read(KSW_L2_PIN_CONTROLS);
+    nested->LastEntryExitControls =
+        (ULONG)KswordARKHvmNestedL2Read(KSW_L2_EXIT_CONTROLS);
+    nested->LastEntryEntryControls =
+        (ULONG)KswordARKHvmNestedL2Read(KSW_L2_ENTRY_CONTROLS);
+    nested->LastEntryEptPointer =
+        KswordARKHvmNestedL2Read(KSW_L2_EPT_POINTER);
+    nested->LastEntryGuestCr0 =
+        KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR0);
+    nested->LastEntryGuestCr4 =
+        KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR4);
+    nested->LastEntryGuestRip =
+        KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+    nested->LastEntryGuestCsAr =
+        (ULONG)KswordARKHvmNestedL2Read(0x4816UL);
+    nested->LastEntryGuestActivity =
+        (ULONG)KswordARKHvmNestedL2Read(KSW_L2_GUEST_ACTIVITY_STATE);
     nested->LastEntryMsrBitmap =
         KswordARKHvmNestedL2Read(KSW_L2_MSR_BITMAP);
     nested->LastEntryIoBitmapA =

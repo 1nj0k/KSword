@@ -31,6 +31,40 @@ Environment:
  */
 #define KSW_HVM_VMCS12_POOL_SLOTS 8UL
 
+/*
+ * Hold vmcs12 contents where they outlive one processor's VMX operation.
+ *
+ * Shared by every processor, because a VMCS is a region of memory and not a
+ * per-processor object.  Intel requires VMCLEAR on the processor that holds a
+ * VMCS current before VMPTRLD of the same region elsewhere, and that pair is
+ * exactly how a hypervisor moves a vCPU between host processors - so a
+ * per-processor store loses the whole configuration on the first migration
+ * while every counter still reads healthy.
+ *
+ * Measured, not reasoned about: VMware's VMCS at 0x7e6f000 held thirty-six
+ * fields in processor 1's store and six in processor 0's at the same instant.
+ * The launch it eventually issued ran on processor 0 and carried none of the
+ * controls it had configured, and the entry failed on guest state.
+ *
+ * A slot may be accessed concurrently only while two processors race to claim
+ * a free one; the fields themselves cannot be, because the architecture lets
+ * one VMCS be current on one processor at a time.  So the claim is interlocked
+ * and the copies are plain.
+ */
+typedef struct _KSW_HVM_VMCS12_POOL
+{
+    /* Order slots by last use, so eviction drops the coldest. */
+    volatile LONG64 Stamp[KSW_HVM_VMCS12_POOL_SLOTS];
+    /* Hand out monotonic use stamps across every processor. */
+    volatile LONG64 Clock;
+    /* Retain how many slots this allocation actually holds. */
+    ULONG Count;
+    /* Keep the structure explicitly initialized across architectures. */
+    ULONG Reserved0;
+    /* Retain the slots themselves, keyed by vmcs12 physical address. */
+    KSW_HVM_VMCS12_STATE Slots[KSW_HVM_VMCS12_POOL_SLOTS];
+} KSW_HVM_VMCS12_POOL;
+
 /* Forward declaration; the definition lives in hvm_phys_window.h. */
 struct _KSW_HVM_PHYS_WINDOW;
 
@@ -57,6 +91,33 @@ typedef struct _KSW_HVM_NESTED_VCPU
      * dispatch never saw one" produce identical evidence.
      */
     ULONGLONG InvvpidServedCount;
+    /*
+     * Whether the VMCS region is actually working as the backing store.
+     *
+     * Storing into the region and reading it back are two steps that both
+     * fail silently: a window that will not map, a region that never carried
+     * our header, a header that did but with a count we refuse.  Without these
+     * "L1 did not move the VMCS", "we never wrote the page" and "we wrote it
+     * and the page did not travel" are one indistinguishable outcome - the
+     * vmcs12 simply comes up empty, exactly as it did before the region
+     * existed.  LastLoadHeader is the raw eight bytes that decided it.
+     */
+    ULONG RegionStoreOkCount;
+    ULONG RegionStoreFailCount;
+    ULONG RegionStoreEntries;
+    ULONG RegionLoadOkCount;
+    ULONG RegionLoadMissCount;
+    /*
+     * Fields the region held that the vmcs12 would not take.
+     *
+     * Separate from the miss count on purpose: a miss means the region was not
+     * ours, this means it was ours and the restore still lost data.  The first
+     * version of this path produced zero misses and lost every field.
+     */
+    ULONG RegionLoadRefusedFields;
+    ULONGLONG RegionLastStorePhysical;
+    ULONGLONG RegionLastLoadPhysical;
+    ULONGLONG RegionLastLoadHeader;
     /*
      * Which refusal stopped the last L2 entry, one to seven.
      *
@@ -175,6 +236,27 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONG LastEntryMsrLoadCount;
     ULONG LastEntryMsrStoreCount;
     /*
+     * The rest of what vmcs02 ran with, read back from the loaded VMCS.
+     *
+     * The controls above were enough while the question was "did we propagate
+     * the field".  It stopped being enough the moment a guest hypervisor got an
+     * entry to succeed and its guest died on the first instruction: from
+     * outside, "we built the wrong vmcs02" and "L1 asked for something that
+     * cannot run" are the same picture.  These are the fields that separate
+     * them, and they are read back rather than copied for the same reason the
+     * ones above are.
+     */
+    ULONGLONG LastEntryVmcs12Physical;
+    ULONG LastEntryPinControls;
+    ULONG LastEntryExitControls;
+    ULONG LastEntryEntryControls;
+    ULONGLONG LastEntryEptPointer;
+    ULONGLONG LastEntryGuestCr0;
+    ULONGLONG LastEntryGuestCr4;
+    ULONGLONG LastEntryGuestRip;
+    ULONG LastEntryGuestCsAr;
+    ULONG LastEntryGuestActivity;
+    /*
      * Preserve what L1 itself asked for, as of the last merge.
      *
      * The exit path cannot recover these from vmcs02: its controls are the
@@ -239,16 +321,12 @@ typedef struct _KSW_HVM_NESTED_VCPU
      * reader of `Vmcs12` keeps working unchanged, and all of the new logic
      * sits in the one place that switches pointers.
      *
-     * Allocated at residency prepare because a slot is 16 KiB and the
-     * per-processor contexts are a static array - embedding these would put
-     * megabytes in BSS for processors that never run an L2.
+     * One allocation shared by every processor, made at residency prepare:
+     * a slot is 16 KiB, the per-processor contexts are a static array, and the
+     * contents have to follow the VMCS rather than the processor.  NULL is
+     * legal and falls back to modelling one vmcs12 per processor.
      */
-    PVOID Vmcs12PoolBlock;
-    KSW_HVM_VMCS12_STATE* Vmcs12Pool;
-    ULONG Vmcs12PoolCount;
-    /* Order slots by last use, so eviction drops the coldest. */
-    ULONGLONG Vmcs12PoolStamp[KSW_HVM_VMCS12_POOL_SLOTS];
-    ULONGLONG Vmcs12PoolClock;
+    KSW_HVM_VMCS12_POOL* Vmcs12Pool;
     /*
      * Evictions on this processor alone.
      *

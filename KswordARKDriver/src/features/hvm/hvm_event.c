@@ -16,8 +16,22 @@ Environment:
 
 #include "hvm_event.h"
 
-/* Bound retained VM-exit evidence without allocation in VMX root. */
-#define KSW_HVM_EVENT_RING_CAPACITY 1024UL
+/*
+ * Bound retained VM-exit evidence without allocation in VMX root.
+ *
+ * Sized from a measurement rather than a round number: a guest hypervisor
+ * starting a virtual machine underneath us produced 6,960 nested-VMX events
+ * before the run ended, and at 1,024 slots the whole configuration phase -
+ * the part that says which fields it wrote into which VMCS - had already been
+ * evicted by its own idle retry loop, leaving only the loop.  Eight thousand
+ * holds that run whole.
+ *
+ * The cost is static: this is one nonpaged array in the image, 88 bytes a slot,
+ * about 704 KiB.  Bought deliberately, because the alternative is a ring that
+ * is present, healthy, never drops a write, and cannot answer the one question
+ * being asked of it.
+ */
+#define KSW_HVM_EVENT_RING_CAPACITY 8192UL
 /* Reserve the high state bit for one nonblocking writer ownership claim. */
 #define KSW_HVM_EVENT_SLOT_BUSY 0x8000000000000000ULL
 /* Keep completed public sequences separate from the writer ownership bit. */
