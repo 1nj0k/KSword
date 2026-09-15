@@ -1632,6 +1632,8 @@
     "process.strategy.toolhelp": "Toolhelp Snapshot / Process32First / Process32Next",
     "process.strategy.ntquery": "NtQuerySystemInformation",
     "process.tooltip.strategy": "Select the process enumeration strategy",
+    "process.dialog.settings.title": "Process List Settings",
+    "process.tooltip.settings": "Open process list settings",
     "process.tooltip.tree": "Switch to tree view",
     "process.toolbar.friendly": "Friendly view for processes",
     "process.tooltip.friendly": "Checked: friendly view (default). Unchecked: tree view. Search and historical activity snapshots use flat results.",
@@ -5933,6 +5935,8 @@
     "settings.background.translucency_material.acrylic": "Frosted glass"
   },
   "source_translations": {
+    "进程列表设置": "Process List Settings",
+    "打开进程列表设置": "Open process list settings",
     "可移除": "Removable",
     "以下项查询失败/当前不支持": "The following items failed to query / are currently unsupported",
     "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=": "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=",

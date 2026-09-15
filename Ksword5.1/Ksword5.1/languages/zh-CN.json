@@ -1632,6 +1632,8 @@
     "process.strategy.toolhelp": "Toolhelp Snapshot / Process32First / Process32Next",
     "process.strategy.ntquery": "NtQuerySystemInformation",
     "process.tooltip.strategy": "指定进程遍历方案",
+    "process.dialog.settings.title": "进程列表设置",
+    "process.tooltip.settings": "打开进程列表设置",
     "process.tooltip.tree": "切换为树状视图",
     "process.toolbar.friendly": "进程友好视图",
     "process.tooltip.friendly": "勾选：友好视图（默认）；取消勾选：树状视图。搜索或查看历史活动快照时自动使用扁平结果。",
@@ -5933,6 +5935,8 @@
     "settings.background.translucency_material.acrylic": "磨砂玻璃"
   },
   "source_translations": {
+    "进程列表设置": "进程列表设置",
+    "打开进程列表设置": "打开进程列表设置",
     "可移除": "可移除",
     "以下项查询失败/当前不支持": "以下项查询失败/当前不支持",
     "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=": "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=",
