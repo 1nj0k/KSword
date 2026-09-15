@@ -1,0 +1,20 @@
+{
+  "recordedUtc": "2026-09-15T21:11:46.2630515Z",
+  "kind": "blocked-linux-benchmark-transfer",
+  "binarySha256": "0A8550B4E24094357681308BBBE34FF2F6E2061406D595FDA345CF7400001DC8",
+  "compiler": "Ubuntu GCC 13.3.0",
+  "compileResult": "success",
+  "attempts": [
+    {
+      "operation": "Temporary VMnet8 transfer server with a scoped firewall rule",
+      "result": "automatic approval review rejected before execution",
+      "reason": "blocked by policy"
+    },
+    {
+      "operation": "Temporary VMnet8 transfer server using existing firewall rules",
+      "result": "automatic approval review rejected before execution",
+      "reason": "blocked by policy"
+    }
+  ],
+  "guestExecution": false
+}

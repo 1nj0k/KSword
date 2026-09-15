@@ -1,5 +1,6 @@
 param([bool]$Guest=$false)
 $ErrorActionPreference='Stop'
+$env:COMPUTERNAME=[Environment]::MachineName
 $capturedUtc=[DateTime]::UtcNow.ToString('o')
 $watch=[Diagnostics.Stopwatch]::StartNew()
 $os=Get-CimInstance Win32_OperatingSystem

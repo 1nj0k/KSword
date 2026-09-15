@@ -1,0 +1,2 @@
+# Keep raw evidence byte-for-byte across platforms.
+* -text -eol -whitespace

@@ -1,0 +1,75 @@
+[
+  {
+    "source": "stability-20260915T210242Z.jsonl",
+    "result": "pass",
+    "sampleCount": 21,
+    "sampleSpanSeconds": 599.4290964,
+    "issues": [],
+    "driverSha256": "667D21B398B7C6A6FA9D00BAC203576C05E32B6F33F0536573C99011D3EFC407",
+    "windowsBootUtc": "2026-09-15T20:34:57.6847200Z",
+    "guestBootIds": [
+      "13391ee4-65c6-4dd3-b3f7-17d181422f30"
+    ],
+    "cpuIdentity": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        1
+      ]
+    ],
+    "vmExitDelta": 94876125,
+    "vmExitsPerSecond": 158277.47696900085,
+    "exitReasonDelta": {
+      "0": 3658,
+      "1": 501820,
+      "10": 855065,
+      "12": 23945003,
+      "16": 0,
+      "18": 16907,
+      "19": 794897,
+      "20": 731901,
+      "21": 794898,
+      "23": 16861269,
+      "24": 692912,
+      "25": 7216553,
+      "26": 794897,
+      "27": 794898,
+      "28": 0,
+      "29": 0,
+      "30": 102872,
+      "31": 232272,
+      "32": 522009,
+      "48": 38405188,
+      "50": 794916,
+      "51": 0,
+      "53": 794905,
+      "55": 0,
+      "7": 19285
+    },
+    "inveptAttemptDelta": 794960,
+    "inveptFailureDelta": 0,
+    "nonpagedPoolGrowthBytes": -888832,
+    "vmwarePrivateGrowthBytes": 28672,
+    "sampleIntervalExitsPerSecond": {
+      "n": 20,
+      "median": 158772.91462432116,
+      "mean": 158674.07696071325,
+      "min": 140638.42643905396,
+      "max": 171017.83493224767,
+      "sampleSd": 8542.08886475144
+    },
+    "observerDurationMs": {
+      "n": 21,
+      "median": 383.9496,
+      "mean": 645.1641952380952,
+      "min": 341.7146,
+      "max": 5576.5882,
+      "sampleSd": 1131.2917848335462
+    },
+    "counterScope": "All KSword resident dispatch entries, including early-return nested handling/reflection; not all exits in outer Hyper-V. Actual INVEPT calls include background work. VPID is disabled by this monitor; exit reason 53 is an intercepted nested INVVPID instruction.",
+    "limits": "One boot, two vCPUs, empty page-control slot, periodic active readback observers. Point samples cannot exclude every intervening failure. Flat page-control allocations do not prove no other driver/VMware leak."
+  }
+]

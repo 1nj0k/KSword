@@ -1,5 +1,9 @@
 # TinyCore 单页 EPT 替换
 
+后续双核正常启动、整页校验、提交失败回滚和实际资源计数已追加至
+[论文缺口处理记录](hvm-paper-gap-closure.md)。下文原始单核记录保持其历史二进制
+与引导参数；新的事务接口及 5 种故障模式见 [事务契约](hvm-page-transactions.md)。
+
 已在 `Hyper-V → KSword VMX → Windows 1 → VMware → TinyCore` 链路完成真实
 来宾读写验证，Windows 1 位于 `KSword-HVM-Target`，外层 root Windows 保持 HVCI。
 部署按标准流程重启 HVM TARGET；随后安装、使用、撤销 EPT 替换的整个过程没有

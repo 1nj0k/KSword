@@ -4,6 +4,7 @@ param(
     [string]$VMName='KSword-HVM-Target',
     [ValidateRange(1,50)][int]$Repetitions=10,
     [ValidateSet('idle','guest-cpu-load')][string]$Condition='idle',
+    [ValidateRange(1,30)][int]$ObserveSeconds=3,
     [string]$GuestPhysicalPage='7000000',
     [switch]$RejectionsOnly
 )
@@ -34,6 +35,20 @@ try {
             $reader=[IO.StreamReader]::new($fs)
             try {$reader.ReadToEnd()} finally {$reader.Dispose();$fs.Dispose()}
         }
+        function global:Paper-Events([string]$After) {
+            $pages=@();$rows=@();$cursor=[uint64]$After;$last=$cursor
+            do {
+                $page=Paper-Control @('events',[string]$cursor,'256');$pages+=@($page)
+                if($page.exitCode -ne 0){throw 'Event read failed.'}
+                if($pages.Count -eq 1){$last=[uint64]$page.parsed.newestSequence}
+                $batch=@($page.parsed.rows | Where-Object {[uint64]$_.sequence -le $last})
+                $rows+=@($batch)
+                if(!$batch.Count){break}
+                $cursor=[uint64]$batch[-1].sequence
+                if($pages.Count -gt 64){throw 'Event evidence exceeded bounded page budget.'}
+            }while($cursor -lt $last)
+            [ordered]@{pages=$pages;parsed=[ordered]@{rows=$rows;newestSequence=$last;afterSequence=$After}}
+        }
         function global:Paper-State {
             $os=Get-CimInstance Win32_OperatingSystem
             [ordered]@{capturedUtc=[DateTime]::UtcNow.ToString('o');bootUtc=$os.LastBootUpTime.ToUniversalTime().ToString('o');processes=@(Get-Process -Name vmware-vmx,services,wininit,lsass -ErrorAction SilentlyContinue | ForEach-Object {[ordered]@{name=$_.ProcessName;pid=$_.Id;createdUtc=$_.StartTime.ToUniversalTime().ToString('o');privateBytes=$_.PrivateMemorySize64}});status=(Paper-Control @('status'));page=(Paper-Control @('nested-page-query'));metrics=(Paper-Control @('metrics'));serialOffset=(Paper-Serial).Length}
@@ -59,21 +74,21 @@ try {
         try {
             if($RejectionsOnly) {
                 $record.action=Invoke-Command -Session $session -ArgumentList (,$case.arguments) -ScriptBlock {param($a) Paper-Control $a}
-                Start-Sleep -Seconds 3
+                Start-Sleep -Seconds $ObserveSeconds
             }else{
                 $record.map=Invoke-Command -Session $session -ArgumentList $root,$GuestPhysicalPage,$case.fill -ScriptBlock {param($r,$g,$f) Paper-Control @('nested-page-map',$r,$g,$f)}
                 Save-Record $record $path
                 if($record.map.exitCode -ne 0 -or $record.map.parsed.active -ne 1) {throw 'Mapping was not accepted.'}
-                $record.mapEvents=Invoke-Command -Session $session -ArgumentList ([string]$record.eventAnchor) -ScriptBlock {param($anchor) Paper-Control @('events',$anchor,'256')}
-                Start-Sleep -Seconds 3
+                $record.mapEvents=Invoke-Command -Session $session -ArgumentList ([string]$record.eventAnchor) -ScriptBlock {param($anchor) Paper-Events $anchor}
+                Start-Sleep -Seconds $ObserveSeconds
                 $record.mapped=Invoke-Command -Session $session -ScriptBlock {Paper-State}
                 $record.mappedSerial=Invoke-Command -Session $session -ArgumentList $record.before.serialOffset -ScriptBlock {param($offset) (Paper-Serial).Substring($offset)}
                 $record.removeEventAnchor=Invoke-Command -Session $session -ScriptBlock {(Paper-Control @('events','0','1')).parsed.newestSequence}
                 $record.remove=Invoke-Command -Session $session -ScriptBlock {Paper-Control @('nested-page-remove')}
                 Save-Record $record $path
                 if($record.remove.exitCode -ne 0) {throw 'Restore failed; retained resources need investigation.'}
-                $record.removeEvents=Invoke-Command -Session $session -ArgumentList ([string]$record.removeEventAnchor) -ScriptBlock {param($anchor) Paper-Control @('events',$anchor,'256')}
-                Start-Sleep -Seconds 3
+                $record.removeEvents=Invoke-Command -Session $session -ArgumentList ([string]$record.removeEventAnchor) -ScriptBlock {param($anchor) Paper-Events $anchor}
+                Start-Sleep -Seconds $ObserveSeconds
             }
             $record.after=Invoke-Command -Session $session -ScriptBlock {Paper-State}
             $record.serial=Invoke-Command -Session $session -ArgumentList $record.before.serialOffset -ScriptBlock {param($offset) $all=Paper-Serial; if($all.Length -lt $offset){throw 'Serial log truncated'};$all.Substring($offset)}

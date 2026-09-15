@@ -1,0 +1,98 @@
+{
+  "utc": "2026-09-15T19:39:36.7117076Z",
+  "locks": [
+    {
+      "FullName": "C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\564d624a-97bb-4408-b002-7f0c7e77a280.vmem.lck",
+      "Name": "564d624a-97bb-4408-b002-7f0c7e77a280.vmem.lck",
+      "LastWriteTimeUtc": "2026-09-15T18:52:37.3369439Z"
+    },
+    {
+      "FullName": "C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmrest.lck",
+      "Name": "Other Linux 6.x kernel 64-bit.vmrest.lck",
+      "LastWriteTimeUtc": "2026-09-15T02:29:28.195245Z"
+    }
+  ],
+  "services": [
+    {
+      "Name": "VMAuthdService",
+      "Status": {
+        "value": 4,
+        "Value": "Running"
+      }
+    },
+    {
+      "Name": "vmx86",
+      "Status": {
+        "value": 4,
+        "Value": "Running"
+      }
+    }
+  ],
+  "logs": [
+    {
+      "name": "vmware-vix-10012.log",
+      "utc": "2026-09-15T19:38:36.5765081Z",
+      "tail": [
+        "2026-09-15T19:38:35.294Z In(05) vix [msg.dictionary.load.openFailed] Cannot open file \"C:\\Users\\felix\\AppData\\Roaming\\VMware\\config.ini\": The system cannot find the file specified.",
+        "2026-09-15T19:38:35.841Z In(05) vix-poll Win32U_GetFileAttributes: GetFileAttributesExW(\"C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmpl\", ...) failed, error: 2",
+        "2026-09-15T19:38:35.966Z In(05) vix-async-pipe Cnx_Connect: Error message: Failed to read vmware-authd port number: Cannot connect to VMX: C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmx",
+        "2026-09-15T19:38:35.966Z In(05) vix-async-pipe Vix: [foundryVMPowerOps.c:6028]: Error VIX_E_HOST_TCP_SOCKET_ERROR in FoundryVMOpenSocketToVMXThroughAuthd(): unable to contact authd: Failed to read vmware-authd port number: Cannot connect to VMX: C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmx",
+        "2026-09-15T19:38:35.966Z In(05) vix Vix: [foundryHandleProperties.c:3360]: Error VIX_E_NOT_FOUND in Vix_GetPropertiesImpl(): Unable to get bool property 107.",
+        "2026-09-15T19:38:35.966Z In(05) vix-poll FILE: FileLockScanDirectory discarding M51588.lck from C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmx.lck': invalid executionID 2936-134339719552442364(vmware.exe).",
+        "2026-09-15T19:38:35.982Z In(05) vix-poll Win32U_GetFileAttributes: GetFileAttributesExW(\"C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmpl\", ...) failed, error: 2",
+        "2026-09-15T19:38:35.982Z In(05) vix-poll Win32U_GetFileAttributes: GetFileAttributesExW(\"C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmpl\", ...) failed, error: 2",
+        "2026-09-15T19:38:35.982Z In(05) vix-poll Win32U_GetFileAttributes: GetFileAttributesExW(\"C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmpl\", ...) failed, error: 2",
+        "2026-09-15T19:38:36.560Z In(05) vix-poll VmdbPipeStreamsOvlError Couldn't read: (109) The pipe has been ended.",
+        "2026-09-15T19:38:36.560Z In(05)+ vix-poll Transport (VMDB) error -32: Pipe: Read failed.",
+        "2026-09-15T19:38:36.560Z In(05) vix-poll Win32U_GetFileAttributes: GetFileAttributesExW(\"C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmpl\", ...) failed, error: 2",
+        "2026-09-15T19:38:36.576Z In(05) vix-poll FoundryVMDBPowerOpCallback: VMDB reports power op failed for VM C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmx with error msg = \"Message has already been displayed\" and error code -57.",
+        "2026-09-15T19:38:36.576Z In(05) vix-poll Vix: [foundryVMMsgPost.c:1359]: Error VIX_E_FAIL in FoundryVMGetMsgPostError(): Unknown error",
+        "2026-09-15T19:38:36.576Z In(05) vix-poll Vix_TranslateMsgPostError: No translation found for error message \"Message has already been displayed\"."
+      ]
+    },
+    {
+      "name": "vmware-vmx-10104.log",
+      "utc": "2026-09-15T19:38:36.5608811Z",
+      "tail": [
+        "2026-09-15T19:38:36.357Z In(05) vmx [msg.dictionary.load.openFailed] Cannot open file \"C:\\Users\\felix\\AppData\\Roaming\\VMware\\config.ini\": The system cannot find the file specified.",
+        "2026-09-15T19:38:36.357Z In(05) vmx Win32U_GetFileAttributes: GetFileAttributesExW(\"C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmpl\", ...) failed, error: 2",
+        "2026-09-15T19:38:36.357Z In(05) vmx [msg.dictionary.load.openFailed] Cannot open file \"C:\\Users\\felix\\AppData\\Roaming\\VMware\\config.ini\": The system cannot find the file specified.",
+        "2026-09-15T19:38:36.529Z In(05) vmx Vix: [mainDispatch.c:4213]: VMAutomation_ReportPowerOpFinished: statevar=0, newAppState=1870, success=1 additionalError=0",
+        "2026-09-15T19:38:36.529Z In(05) vmx Vix: [mainDispatch.c:4213]: VMAutomation_ReportPowerOpFinished: statevar=1, newAppState=1873, success=1 additionalError=0",
+        "2026-09-15T19:38:36.529Z In(05) vmx Vix: [mainDispatch.c:4213]: VMAutomation_ReportPowerOpFinished: statevar=2, newAppState=1877, success=1 additionalError=0",
+        "2026-09-15T19:38:36.529Z In(05) vmx Vix: [mainDispatch.c:4213]: VMAutomation_ReportPowerOpFinished: statevar=3, newAppState=1881, success=1 additionalError=0",
+        "2026-09-15T19:38:36.529Z In(05) vmx IOPL_Init: Hyper-V detected by CPUID",
+        "2026-09-15T19:38:36.529Z Wa(03) vmx WHP_CanBeInstalled: Hyper-V is not present, function should not be called.",
+        "2026-09-15T19:38:36.529Z In(05) vmx Msg_Post: Error",
+        "2026-09-15T19:38:36.529Z In(05) vmx [msg.vmx.nestedHyperV] VMware Workstation and Hyper-V are not compatible. Remove the Hyper-V role from the system before running VMware Workstation."
+      ]
+    },
+    {
+      "name": "vmware-vix-7460.log",
+      "utc": "2026-09-15T18:52:37.2431935Z",
+      "tail": [
+        "2026-09-15T18:52:34.914Z In(05) vix [msg.dictionary.load.openFailed] Cannot open file \"C:\\Users\\felix\\AppData\\Roaming\\VMware\\config.ini\": The system cannot find the file specified.",
+        "2026-09-15T18:52:35.133Z In(05) vix-poll Win32U_GetFileAttributes: GetFileAttributesExW(\"C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmpl\", ...) failed, error: 2",
+        "2026-09-15T18:52:35.242Z In(05) vix-async-pipe Cnx_Connect: Error message: Failed to read vmware-authd port number: Cannot connect to VMX: C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmx",
+        "2026-09-15T18:52:35.242Z In(05) vix-async-pipe Vix: [foundryVMPowerOps.c:6028]: Error VIX_E_HOST_TCP_SOCKET_ERROR in FoundryVMOpenSocketToVMXThroughAuthd(): unable to contact authd: Failed to read vmware-authd port number: Cannot connect to VMX: C:\\Users\\felix\\Documents\\Virtual Machines\\Other Linux 6.x kernel 64-bit\\Other Linux 6.x kernel 64-bit.vmx",
+        "2026-09-15T18:52:35.242Z In(05) vix Vix: [foundryHandleProperties.c:3360]: Error VIX_E_NOT_FOUND in Vix_GetPropertiesImpl(): Unable to get bool property 107.",
+        "2026-09-15T18:52:37.224Z In(05) vix-poll PollSocketPairConnect: Blocking socket 1424 connected immediately!",
+        "2026-09-15T18:52:37.224Z In(05) vix-poll PollSocketPairConnect: Blocking socket 1404 connected immediately!"
+      ]
+    },
+    {
+      "name": "vmware-vmx-9952.log",
+      "utc": "2026-09-15T18:52:37.1960348Z",
+      "tail": [
+        "2026-09-15T18:52:37.164Z In(05) vmx PTSC: RefClockToPTSC 0 @ 10000000Hz -> 0 @ 2112010000Hz",
+        "2026-09-15T18:52:37.164Z In(05) vmx PTSC: RefClockToPTSC ((x * 3543364796) >> 24) + -3468760435032",
+        "2026-09-15T18:52:37.196Z In(05) vmx Vix: [mainDispatch.c:4213]: VMAutomation_ReportPowerOpFinished: statevar=1, newAppState=1873, success=1 additionalError=0",
+        "2026-09-15T18:52:37.196Z In(05) vmx Vix: [mainDispatch.c:4213]: VMAutomation_ReportPowerOpFinished: statevar=2, newAppState=1878, success=1 additionalError=0"
+      ]
+    }
+  ],
+  "vmwareCount": 0,
+  "PSComputerName": "KSword-HVM-Target",
+  "RunspaceId": "9f976640-ab7c-42d8-b595-301e5c8577ec",
+  "PSShowComputerName": true
+}

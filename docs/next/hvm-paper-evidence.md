@@ -1,5 +1,8 @@
 # HVM 性能与论文证据：2026-09-15 单机试验
 
+更新入口：[追加的双核、事务回滚与测量证据](hvm-paper-gap-closure.md)。
+本页是早期 pilot，数值及失败记录保留原样，不代表后续驱动版本。
+
 数据目录：[20260915-pilot](paper-data/20260915-pilot/README.md)。
 机器可读汇总：[summary.json](paper-data/20260915-pilot/derived/summary.json)。
 原始文件校验：[raw-index.json](paper-data/20260915-pilot/raw-index.json)。

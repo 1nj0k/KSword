@@ -1,7 +1,7 @@
 """Guard against accepting stale, partial, cross-boot or incomplete evidence."""
 import hashlib
 import unittest
-from analyze_smp import both, fresh, trace, ledger
+from analyze_smp import both, fresh, trace, ledger, load_periods
 
 
 def line(cpu, uptime=1, boot='11111111-1111-1111-1111-111111111111', fill=0xa5):
@@ -36,6 +36,28 @@ class EvidenceTests(unittest.TestCase):
         old=dict.fromkeys(names,'0');new=dict(old,ruleAllocations='1')
         self.assertFalse(ledger(old,new)[0])
         self.assertFalse(ledger(dict(old,inveptAttempts='2'),old)[0])
+
+    def test_load_ignores_echoed_commands_and_guest_double_count(self):
+        serial=('echo paper-load-start\n'
+                'paper-load-start\ncpu0 10 0 10 80 0 0 0 0 5 0\n'
+                'cpu1 10 0 10 80 0 0 0 0 5 0\n'
+                'paper-load-end\ncpu0 60 0 10 130 0 0 0 0 55 0\n'
+                'cpu1 60 0 10 130 0 0 0 0 55 0\n')
+        periods=load_periods(serial)
+        self.assertEqual(len(periods),1)
+        self.assertEqual(periods[0]['busyPercent'],{0:50.0,1:50.0})
+
+    def test_missing_start_counters_cannot_borrow_end_or_next_period(self):
+        serial=('paper-load-start\npaper-load-end\n'
+                'cpu0 10 0 10 80 0 0 0 0\n'
+                'paper-load-start\ncpu0 20 0 20 90 0 0 0 0\n'
+                'paper-load-end\ncpu0 30 0 30 100 0 0 0 0\n')
+        self.assertEqual(load_periods(serial)[0]['busyPercent'],{})
+
+    def test_reset_load_counters_are_not_utilization(self):
+        serial=('paper-load-start\ncpu0 100 0 10 0 0 0 0 0\n'
+                'paper-load-end\ncpu0 10 0 10 200 0 0 0 0\n')
+        self.assertEqual(load_periods(serial)[0]['busyPercent'],{})
 
 
 if __name__=='__main__':unittest.main()

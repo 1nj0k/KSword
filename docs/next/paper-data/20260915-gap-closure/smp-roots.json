@@ -1,0 +1,1 @@
+{"kind":"nested-page","operationId":0,"faultMode":0,"status":0,"lastStatus":"0x00000000","generation":1,"active":0,"retired":0,"residentProcessors":2,"ept12Pointer":"0x0000000000000000","guestPhysicalPage":"0x0000000000000000","shadowPhysicalPage":"0x0000000000000000","originalPhysicalPage":"0x0000000000000000","composedCount":0,"roots":["0x000000001270805E"]}

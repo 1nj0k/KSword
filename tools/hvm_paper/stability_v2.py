@@ -63,7 +63,7 @@ def summarize_samples(samples, source):
             'sampleCount':len(samples),'sampleSpanSeconds':duration,'issues':issues,
             'driverSha256':first['driverSha256'],'windowsBootUtc':first['bootUtc'],'guestBootIds':sorted(boots),
             'cpuIdentity':initial_ids,'vmExitDelta':delta,'vmExitsPerSecond':delta/duration,
-            'exitReasonDelta':{k:cn['exitReasonCount'].get(k,0)-c0['exitReasonCount'].get(k,0) for k in set(cn['exitReasonCount'])|set(c0['exitReasonCount'])},
+            'exitReasonDelta':{k:cn['exitReasonCount'].get(k,0)-c0['exitReasonCount'].get(k,0) for k in sorted(set(cn['exitReasonCount'])|set(c0['exitReasonCount']))},
             'inveptAttemptDelta':int(mn['inveptAttempts'])-int(m0['inveptAttempts']),
             'inveptFailureDelta':int(mn['inveptFailed'])-int(m0['inveptFailed']),
             'nonpagedPoolGrowthBytes':last['memory']['PoolNonpagedBytes']-first['memory']['PoolNonpagedBytes'],

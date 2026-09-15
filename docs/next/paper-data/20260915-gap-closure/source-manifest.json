@@ -1,0 +1,2138 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "a7e1842f2d4a9bb3d3e77c8c5e98a53c8b2f3263",
+  "createdUtc": "2026-09-15T21:10:53.9544931Z",
+  "compiledBeforeCommit": true,
+  "sourceNote": "Driver and command-engine sources did not change between the recorded final build and this commit; the unrelated theme.h modification is excluded.",
+  "variantSigning": false,
+  "buildProperties": [
+    "KswordArkSkipAutoVariantSign=true",
+    "KswordArkSkipAutoTestSign=true"
+  ],
+  "signing": "Existing ordinary test certificate, direct signtool",
+  "driver": "667D21B398B7C6A6FA9D00BAC203576C05E32B6F33F0536573C99011D3EFC407",
+  "control": "DEDD4598BD918B09C263D287195B307CC1BBD38998D0BF5DE7CA8DE37C1B2FF1",
+  "mainProgram": "00E29769B74AAEF940AE96E5B2174608B139D933A4C9752E6230D0A79EFBF2F5",
+  "sourceFiles": [
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverAlpc.cpp",
+      "sha256": "E0A3762A491D5293287130AB22865CE2AE8549A5B6C3A819C5B3872AC4F417BD"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverAudit.cpp",
+      "sha256": "438636437509A877D82D0CF14867CC0A3E1BF2C12132261214FC4A5D1385161D"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverBlind.cpp",
+      "sha256": "ED2B8C144704C2132BBC8F76BC1F11C4A2113DC5A417B10D763E250BCA712F30"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverBugcheck.cpp",
+      "sha256": "5FFDBB942C9ECD76DFA778DEDDA456A6C12FE5B13B3C6595F40CFC14B92C4DB3"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverCallback.cpp",
+      "sha256": "BFAE0BCE21D71E969D9308717F52F3BD13F5679D4F08A5D4C812EC4CDF71F5BD"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverCallbackMonitor.cpp",
+      "sha256": "7A0CD647631CD52D08F85BBC785F6836FE24F3A27E57543DA0A53BB81B5642FB"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverCapabilities.cpp",
+      "sha256": "D9DC1EE373EE228D4327B628F9A60816AE4E414C997C1F1139936D6B06E191F7"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverCapabilities.h",
+      "sha256": "5065E5A3F1AB1C410F4ECFE1A740CFA2D03D687218CEC2DD208E81873AC5A442"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverCapability.cpp",
+      "sha256": "AB8968997C7EEC8A6A11B71554ABE87E599E4FDD11DDA3F207117AB9A62324E1"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverClient.cpp",
+      "sha256": "7A075B586A59A5AB02E896DBD2BB5AD6A6CBB883273C6AB845AC464CA06EB89B"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverClient.h",
+      "sha256": "52666900D9D1EF696B33E4F81298D48A644DF736902F8719F3C79CF725090664"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverDebugOutput.cpp",
+      "sha256": "839F2865429EF7564F3279B3CE42F5007145475DBCC96A0F48EBEE9A6607380D"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverDispatch.cpp",
+      "sha256": "A95BE8F056498A9CBE666F597D549C0A6A901898821C16D07A113967F57EAF24"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverDynData.cpp",
+      "sha256": "11B7DB087497E94A71DDD84EF0BE95875B7A0BFBD6328E6F2CD73AE119B1436A"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverError.cpp",
+      "sha256": "60C88E96B7C87492CD95CCFF50163B99300BC76B8EDC868B8F20D9D1B10246F5"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverError.h",
+      "sha256": "F118F253C710F0FFF270E647A7C12AD891AB960FC888CE40434D15B43F4A5E49"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverEvidence.h",
+      "sha256": "2399AC470274657C40903CD0040E7C6574445817C65607C56C45081A6F54F318"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverFile.cpp",
+      "sha256": "8698B21FD2DE0CF9C20A83CEC84C3F2ABC044FA12A248F4CC286631E03C1EE40"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverFileIrp.cpp",
+      "sha256": "F1710A4FF3D57C7DDBECF7DC9133EA6421CB8322B0DEB9387E5D07E242D10225"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverHandle.cpp",
+      "sha256": "FFAE05C6628F24507E526D105DE2E955CBB6F1CA51CE517EE2702EA18D9BDED6"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverHvm.cpp",
+      "sha256": "2E1C817F1B66FCBE8E9153D3356B960904AAFBB055E1A7D70F182CC78B477847"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverHwid.cpp",
+      "sha256": "A8AB875D99E25617501D84F35E4D59CA132AD5A32EFBE998E0C4585C1111FCC7"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverImage.cpp",
+      "sha256": "6DC4C089A4B60E8B18CDCC6EC0A04E96EDFA78446B123BEA8C02505216B3505C"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverInjectionScan.cpp",
+      "sha256": "EED002B4D5AB7EDDE954EC7BC27939949B0C31451E3DA843E6F16F2249F7BB20"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverIoctlRegistry.cpp",
+      "sha256": "0694573782D6BB527B53BA113345A50BB9330426AF883F45578B376AA25D789D"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverKernel.cpp",
+      "sha256": "0381D941B2624D0F3319F55A3ACE8A8D10EAA98997C689F8CCDB399A2AC3B183"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverKernelBaseline.cpp",
+      "sha256": "69FF397888F0743248289F9D27094D35379D32770052DB1734168F7A7E0E6AED"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverKeyboard.cpp",
+      "sha256": "D272381F23F4F7C93B10CFC7D2B55C96C0938AD3D6024CD414B096833458D46B"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverMemory.cpp",
+      "sha256": "3FCBAB8BF3F0AAAD9D885D0A9C4E31B857EF008540B2615F3AE60953FBE97A47"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverMutation.cpp",
+      "sha256": "78B00A5973ADB496875272FB943E2A2F2466A80912E134B860FB4E2C0E599711"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverNetworkTraffic.cpp",
+      "sha256": "F10B0ABC4D5659B0B09D1482AE072C72A8C7A669EFAB77EA92160A681355D961"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverPiDdb.cpp",
+      "sha256": "B49E6D7EF0084657466F4BD0F59807AE722D83A5D8A8B6109BB8E2B81996704A"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverPower.cpp",
+      "sha256": "86F5C1FD73374BB41DDF84968A6ECFF4489386C071A24E445535728E2346DDCD"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverProcess.cpp",
+      "sha256": "869AF8057A67E7781582B8E8A5FD462F558213CC71301F307897F362F994EA24"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverProcessProtect.cpp",
+      "sha256": "3E910E6EBEB67B237DF5922A52D7EA77821E50E7B673B6BF9814DCDBE8E0CAFF"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverRegistry.cpp",
+      "sha256": "DFDB4C72F43AEA621078CF5664E95383FB62D505AB27DCB1925673830CB1A349"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverResearch.cpp",
+      "sha256": "8C066A3E77D21EECFBE7D0924C7CB851627DF301531BF64A5406B691865A04E9"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverSection.cpp",
+      "sha256": "0140754C0858AAD7F93A09BFEB9F0520AAD14850CF0656B62E5A42834933C233"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverStorageForensics.cpp",
+      "sha256": "8FE029149789E25FD3242C96D8B2CE13504DAC2A5A9C5EA2C1515CDACB614B9C"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverSystemTime.cpp",
+      "sha256": "D18D2B43A8B15E5C39800F1A05F144237FA5FAB0A6FDBFF439ED20EF4A8C8FD1"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverTypes.h",
+      "sha256": "FB9F90C4E2E8B5DF36448DB8D95C63C7D1439353C0B67BAA8707BB483DE8C6C4"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverVirtualization.cpp",
+      "sha256": "407DF5E43DB8479F8CAFCE2630797273E57A473D960781B720457DE5682C70E4"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverWindowBand.cpp",
+      "sha256": "2F7484A9B94B79A10A635CCF6EF8E9E71A8CD0B0045BDEE0067086124942AA44"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkDriverWorkQueue.cpp",
+      "sha256": "C49C0F7C4A690FC66C9AB4EE44DDB64DDC6D732BC604D68E44C8AB0CA5B9BF3A"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkRuntimeDynData.cpp",
+      "sha256": "C82CC56933FD61E32A44491B2B3036998254623392A988C7CC149C5C81E9DA62"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/ArkRuntimeDynData.h",
+      "sha256": "78B3342D3677E07C5F1A5A4609D829545B59A95A0C9D08AB3934C444CEDD0117"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/HvmCommandCatalog.c",
+      "sha256": "D24A74547A0EE95045A9695345CFA9E43D0BFF46DBDD4DA25970C7895294646B"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/HvmCommandCatalog.h",
+      "sha256": "4CEB0A41F5C369B4C77BE8D7126333A70F84EC7A932FDC0CB6C425F54FD2EC2B"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/HvmCommandEngine.c",
+      "sha256": "E1C771B4739160621CD2CC350A7490C425BB90392CE9F751097CB784BBE0A1FB"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/HvmCommandProcess.cpp",
+      "sha256": "67296FE16E55B5F52F16E9FA39BB0A0EADCEE32CA350DFCA4355DF66B23CDF40"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/HvmCommandProcess.h",
+      "sha256": "1504304BCB1829E1C2668FE1850ACCCB409BC9D00B97FCE3502257C8AB274462"
+    },
+    {
+      "path": "KswordARKDriver/Device.h",
+      "sha256": "0FD079C8D755DB372C996BBA338717018C4DD5D129E6DC8E2A1C791E0A7DA1A5"
+    },
+    {
+      "path": "KswordARKDriver/Driver.h",
+      "sha256": "7640A4C7692DB79129A18C3CB4EB82F5EA4B755DB1F8B70738A195935F5F41CA"
+    },
+    {
+      "path": "KswordARKDriver/KswordARKDriver.vcxproj",
+      "sha256": "AD07CAF102FAAF1FDFBF938D851119A68287D942640ABB6510C7C4E0D2B2DA97"
+    },
+    {
+      "path": "KswordARKDriver/KswordARKDriver.vcxproj.filters",
+      "sha256": "C10FFE82F20F4C1451C94B02D282DE9A5404D3EA3C7ADD0B8C200FF00C6C107A"
+    },
+    {
+      "path": "KswordARKDriver/Public.h",
+      "sha256": "7E2069FAB79C7676196086B8D3D026BCBA9B943F986A717099A3F6B3F3235E54"
+    },
+    {
+      "path": "KswordARKDriver/Queue.h",
+      "sha256": "CBF7FD48AD3C370F154FDC7B920E2B92664E23A7EDB4E9A896E740CBE996E43F"
+    },
+    {
+      "path": "KswordARKDriver/Trace.h",
+      "sha256": "6F275967F3111726DE19BA2864591A0680C31C92FF1E4E78836E86FB09E68F1E"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_alpc.h",
+      "sha256": "5CA36E967921C57A89D11546A3771252A0C531C005C1C492B6DDEF08A19F0648"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_bugcheck.h",
+      "sha256": "BF43A289981A63C669D86F29B393BE58A615F58E152CC1855ACC491897C16121"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_callback.h",
+      "sha256": "02D51BB42FCAE07B2D72CEC032F629EC9A45EDCC7EB4D2A21AA901EBA5AA687B"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_capability.h",
+      "sha256": "3D0FAFFD974A9BCBF62F93573ABE3F823904E3AA1243E666A833075727E09A14"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_debug_output.h",
+      "sha256": "A1A3AA7A74C2CA997B7DD8D9B0EF73879DAA1FED9E300EE1AD7DDAB29B17F2BE"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_device.h",
+      "sha256": "37ADB44AF311AC1BF4CD910F1EA327C2D5292354A41DFF20DFA837E335623404"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_driver.h",
+      "sha256": "DA93C08E529E86C09D2B4F6FE87AF1A6140325F21CBA241601C78E85DE11D017"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_dyndata.h",
+      "sha256": "90F8109A5FD52CF5C3AD80A7099DA78594AFE16F11C77F778240751F7F8E088F"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_dyndata_fields.h",
+      "sha256": "5A433D136E5CB7DAA38993A43BA5B439A4EA8963EB23E61C2B4955F16F2B7AF4"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_file.h",
+      "sha256": "862E52FEED4473C631C26F90FACC1FB1CB31771B4263A82CB59CEA8F2BE6308C"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_file_irp.h",
+      "sha256": "3AF6B6F768C3880DA2ED2677CAB1D56CC8EF3DC1C8F2684F9F4BD4C2F7930189"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_file_monitor.h",
+      "sha256": "54F898F78BAD4B76C50539E4000A3ADDFB91099F539355B2EF9C51F54985255E"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_handle.h",
+      "sha256": "A9AA0935D393F073D370B46C3C53098F208691A001C77ED77D20F74A8890ACDE"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_injection_scan.h",
+      "sha256": "740882910A64D53886666EB574ECFE99F4A7E36BDE4F62BFB58D564051313789"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_ioctl.h",
+      "sha256": "C064FCE55F232F1A4713D6FC2E53756840A97663B5435A2215BF7B2F0199522A"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_kernel.h",
+      "sha256": "A6C286225A634CDFE60559A7901EF5D4DAC156129AB7AF040DB3BCFEF68355D9"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_keyboard.h",
+      "sha256": "6417575FF7B629B37E9143E4FC14050C067E31BE2B62D03A33A7F4196135A23F"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_log.h",
+      "sha256": "229DFCCB5AB7558246143D04580CC9639EB0720FED219F8797F3C521F0D3DA66"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_memory.h",
+      "sha256": "87BF03CC711FFDA8A45640BBA2B18511FE97C4972CB7AA4B40B8B3916EBCDD34"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_memory_evidence.h",
+      "sha256": "A3A0E0DA444D136C3BF0C002C29FD0CF43A986361F434E0247344EBB9CBA2EC5"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_mutation.h",
+      "sha256": "75A89B49E23CD45F9406742748DC109ABE03412EF2D55D534525601B666D454F"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_network.h",
+      "sha256": "175AFF5A238D6D7922984C3C1AE5D37BF8C0946B001C752E7AEE4B1229837643"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_preflight.h",
+      "sha256": "A8393CE942A33F1208BA82CDD841E6701881C44C43B20EE1043E0638B7ECF799"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_process.h",
+      "sha256": "C6F1BBFB5CE003B94F972D7F8848CCE97826A0C2B9B7E1925094E9A90C7DD903"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_process_protect.h",
+      "sha256": "A0335835F897512F34F8A19176AFCD524568338858B87ACC5B8E2DCD4049128D"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_push_lock.h",
+      "sha256": "3DD8F1BC688170A055C428991A97FAD8779FE0422AE9FC9705AE6508A5C6A0BB"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_queue.h",
+      "sha256": "65FDA7C627820B608DB059A896AD4B7BF5EBC5884D2FEAC7E5FB2BAD058039BC"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_redirect.h",
+      "sha256": "4589B25620C66B5B3FB55C08FA2E7DFD8E9652644235F8629463CB668AD55116"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_registry.h",
+      "sha256": "3FC2457342F44935B8CD159FF87AAB758C8F27527554C6B5E9AD22CDF052BC64"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_safety.h",
+      "sha256": "A2A5C57E2CAFADE731E75A342CB06462AF825B371CC06F00B905712E56739ED4"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_section.h",
+      "sha256": "F627F04BBB85BA7F9A1BAC0D6C00D1DB00C2DE4A564BFB2C5A4EF62313B32F7B"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_startup.h",
+      "sha256": "09442D20443A76A9ABFFBBF12012332F1244E85A5412CD43A8743CB0FE628A9D"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_storage.h",
+      "sha256": "F6B1EF4A40FBDD506DBEBD7B1884B4AB71CE6AE0AB07376224443A5187E9072F"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_system_time.h",
+      "sha256": "C3D74C8120D0C2E210F7696989976C6EE193D3E886B4FA00A85A016AA16492A3"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_thread.h",
+      "sha256": "E91E283E4D2CA4B66949CEDE5231F5E63D07FA6A9EDC92733D00725F28EBF79B"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_thread_crossview.h",
+      "sha256": "9FC6A78BA7107043C3BBFB8956266D0EB94A656776F5C8A3B39137E2DB09C222"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_trust.h",
+      "sha256": "B4529FB6CD74858F695689040A2BB8B4E8C675C42A31A02F808D7C6F75BC7055"
+    },
+    {
+      "path": "KswordARKDriver/include/ark/ark_wsl_silo.h",
+      "sha256": "1BBF5195121B3F9571714E09A4A48011B281F2EED23034ABE21D9317C4273829"
+    },
+    {
+      "path": "KswordARKDriver/src/dispatch/ioctl_dispatch.c",
+      "sha256": "C6262014C75ED33DB75385FD5FF1BB9F5789E2EB4EA23A190A386008EB6628F4"
+    },
+    {
+      "path": "KswordARKDriver/src/dispatch/ioctl_registry.c",
+      "sha256": "BA4551021E1FEAB63C31F38A82004EC29F1A1FF44409F85A4E0B051EDC3DE017"
+    },
+    {
+      "path": "KswordARKDriver/src/dispatch/ioctl_registry.h",
+      "sha256": "3037D567A040D7BC4BC8A1ED4D7D0D11AA0F96066C773E71DD30EA7D55DF6995"
+    },
+    {
+      "path": "KswordARKDriver/src/dispatch/ioctl_validation.c",
+      "sha256": "BB7CC624752ED828353005FAFF3185E42D8DB5D8F0A4F9C6A6CEA492FB09AEAF"
+    },
+    {
+      "path": "KswordARKDriver/src/dispatch/ioctl_validation.h",
+      "sha256": "EB0C677E7276681D55431B32BDCE063B5B6F74454302B6C1AB22D0E2A6B1CDEF"
+    },
+    {
+      "path": "KswordARKDriver/src/features/alpc/alpc_ioctl.c",
+      "sha256": "DB644F4D096D40A609621153CD09645D034FE0E286B135879754A92CF695D1B1"
+    },
+    {
+      "path": "KswordARKDriver/src/features/alpc/alpc_query.c",
+      "sha256": "336FA79D2E2993ADE4E63B7A999FC0549388F4C222A8E3485A212111CB74B9C2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/alpc/alpc_runtime_fallback.c",
+      "sha256": "9A33AE8422BD993D40947336643303E376922CB7741280F5070A9C545580D2E6"
+    },
+    {
+      "path": "KswordARKDriver/src/features/alpc/alpc_runtime_fallback.h",
+      "sha256": "FAB8B6BF4935A2026D06252ABB96CCC5990DD59E77556BDF6D51BDCD7428186E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/alpc/alpc_support.c",
+      "sha256": "E164D4287BC86E16007D9D01ED211211A20DB61282A0BC982D7AEFB263D71794"
+    },
+    {
+      "path": "KswordARKDriver/src/features/alpc/alpc_support.h",
+      "sha256": "42E11D2582D068CF52B36548728D9B38DF5B6D3CD102ABCC81FBAC9AE591387C"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/Generated/AsciiFont8x12.h",
+      "sha256": "9195DB5D12469562265F2D93AED690589A4D57DC3AF25B87DA159E0B83A92342"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/Generated/BgpSignatures.h",
+      "sha256": "96BD916BE141F33BB2B610E0D2E8D5D6C0AADE415A3D2106828F2F41716A9BEB"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/Generated/MainLogoBitmap.h",
+      "sha256": "91BD0F5C6297EFDE2E13609D20F193B384BFFA8A5B68C52A20F325BF62DB07BA"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_bgp.c",
+      "sha256": "123F1FA7D432DF74AEFAC55D1674BC8D41CF62D6849F6FAC29EC5039CCC4ED76"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_bgp.h",
+      "sha256": "99A8D6DBFF0DFFDD6DE49AB63AB134E27DED744044B0739E05396BCD9ECF9939"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_bgp_internal.h",
+      "sha256": "A37A3E8A437F5AC9FA89DE3E6F0880AC36787E724931CFDD124440B8358D40A6"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_bgp_lifecycle.c",
+      "sha256": "B8EA07979CD84BE1DD9B813B4AD4AF99457A7D42C027A3147114FA303A169252"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_control.c",
+      "sha256": "8FCC8E8F28F3AE2E85708F9FF45933E94A3E29D612F34D236714BD0FDFA30AF2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_decode.c",
+      "sha256": "14E3B6173C2A38F6BE4C77CEC74AF794E5159FEB6FCF8FC1630D214F106A1816"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_decode.h",
+      "sha256": "7930DCA2336C77F61D8F034263995EC60D6EDB84A25BDEBAEC65789CEFDD6D52"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_font.h",
+      "sha256": "66848DF0BA72203DC16B6F0412271611D89B0CB973498EE686AB830F586A835F"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_guard.c",
+      "sha256": "E4C51873DFE6ECD001654AEFAFEFF709F4BEE9DB877BE9FB59FC2E3F87E0A8AC"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_internal.h",
+      "sha256": "1E046376B35449FA35CE35471D8DD701145C1B3D45E588B2F641A6BDC0915ACA"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_ioctl.c",
+      "sha256": "4EFE0F4BE9CA995FE3CA2DCD8CF785AA721A7CD2BD8796ED932E3594C6B2E0D0"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_layout.c",
+      "sha256": "E4C947230A0F03F0D786571732F4FB6FE8A30AAC9AA89E5CCCCE592BD56CA901"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_layout.h",
+      "sha256": "4369692639F9B7628504299C1FEF1073573B40A594385588A11831FB674B6080"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_layout_detailed.c",
+      "sha256": "1A68ECD66F5E2F7F8E6000B12797D941608723CD3C9EA9B606FE9E96325707C8"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_layout_detailed.h",
+      "sha256": "816D0FC03110043DD7451B5DB6A1016687009E3C65CF3B1E0A2E075030635A26"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_panel.c",
+      "sha256": "FB8C051B0F98C4B0081626CD74BA951E6B8A7CC306E5956D602FE14EEF855313"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_panel.h",
+      "sha256": "2F5540B5060AD4449DAD98DE87BDC9E281A647144154AEEF9D38C044E32882B7"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_preparation_log.c",
+      "sha256": "4D17AF1FF5A6291885B16AC21E7598BF16E12D5DB2058DBADD278EA3B293CCB6"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_preparation_log.h",
+      "sha256": "8FE670C5D29BECDAFAF11D4028F3633E8DC31AE656A79BFB314218A55655E715"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_runtime.c",
+      "sha256": "D973F8B8174889E277A8728A23BE2BC8D7CD1D0A309416354EF06FA3CDD7E045"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_shield.c",
+      "sha256": "B0C7CA5238373A7CBD7AAF619CBED881301ADB47D4A269C60FA4E1FD7C1E9ED8"
+    },
+    {
+      "path": "KswordARKDriver/src/features/bugcheck/bugcheck_svga.c",
+      "sha256": "231F3629BA0A0C4A8ED3F466273159C9EE321B3834B9F2D8DA1F37F16FF6E543"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_enum.c",
+      "sha256": "506A3DA67DEED5700AFD7908831BC96763C9A5EDD577A5DF88280892EB26C3A9"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_extended_bugcheck.c",
+      "sha256": "DD95699BC331E420E2899CAFF3BF0991E9AD944645C6B007F54484F5E7C52275"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_extended_internal.h",
+      "sha256": "FB6BB519DFE347D86F38BBD2DFF88ED7753C29C562B7F43559B612F0CC02E207"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_extended_kernel.h",
+      "sha256": "F4EAFCFE6F89FFF5F5EEA9E6B807795DFCD15C67797D50DF661E42EC17247776"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_extended_nmi.c",
+      "sha256": "AA8034E7AAA0E9A8ABB399244707896E8AC173B9D205D0279E6A983FB8E80A60"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_extended_object.c",
+      "sha256": "546D169ABA2A3C5DE74D9E1D11F388E797D10DA78E7756DCA0FAF80ED9B785D0"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_extended_special.c",
+      "sha256": "A7435E39352BF84973BD477AF6C5825FCF4ACBB6E8BCA83C9226911EE1BC8C70"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_extended_support.c",
+      "sha256": "CB40B6A9DBC2E4E7FF256B406C69FFA44CD860C4863EB674F500E8A66CEA561E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_extended_system.c",
+      "sha256": "30283C9F2C5038E869611842E050967B24B723A2F6F9423604EFD05CF5BD8CCE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_external_core.h",
+      "sha256": "AD39EA95246C2077590203DADD9B4A2477DF782E41AB65AB9D516FDFE3718C73"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_external_minifilter.c",
+      "sha256": "8EA24FC2D10BDB4BD3B5E46CD0AB51A1AD348737FE0C1856ED5985FA362A54E2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_external_minifilter.h",
+      "sha256": "EDD5329FD12EACDB1CD00C01D1329C61094891775AD3554A9C18BBC0AEDCB9BE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_external_safe.c",
+      "sha256": "39B91B6FA2316D0B39D513EF149ADAB2ED851EE0872671C8957623D53BC66529"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_external_safe.h",
+      "sha256": "4747563AC252EA82B33F2220E470A2271C3F48EE90CA14C2168A03A96B6729A4"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_external_wfp.c",
+      "sha256": "A3478E770A548605B489A9469A1CE49C7618A55C34C07C625AAC2FDDA908BA11"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_external_wfp.h",
+      "sha256": "EA31EE8D6E9B637FC3A3AAD12B51D238DEC0140923C65BC1D520B1C24BAF9861"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_internal.h",
+      "sha256": "E9615E9A624079ABB8FCDDAABAC29AC6CD1281FE7C8C3F76D7C5C09390BFC3BF"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_ioctl.c",
+      "sha256": "E866D346A89BAE19548C47C165CF7F480A30F745771DA0567062387F82A5A8E4"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_minifilter_enum.c",
+      "sha256": "339D6E615AC05CA0EC89FD595967CDFFC53A3AFB848E7AD0C3C70B592DCCE4B4"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_monitor.c",
+      "sha256": "E6C72396954449152368F15B15503F5A5BF525639A9D999B394673D1F89951F2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_monitor_ioctl.c",
+      "sha256": "73B1AC76CB16CCFBEF98534022BB198180F21394A435016FB1E068B8B5A16703"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_remove_external.c",
+      "sha256": "41F6EA2FF0507B41650B08137F6974D7D1C1649B300308178A21A1153E9DC026"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_rules.c",
+      "sha256": "5FDCE1242FFD8E72528D9F2043478FED057D0B182607FBBBE1C4356B7E8519CE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_runtime.c",
+      "sha256": "E80D4522854A5E7FF1AC408D7825893D6C551E4AE54FBADE0BCC0184FDA5D406"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_snapshot.c",
+      "sha256": "5BBE510E3C2E2A1E36F2521203C9E50CC927739CE1BFF425DDE565259A8527EB"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/callback_waiter.c",
+      "sha256": "42D9E3C93261998901374A6957CAD6F959E392FA234A8E94B257FF9DFC716544"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/image_callback.c",
+      "sha256": "E459FAEC8E0BA44AAA99B19F5BB6F11F2BC9114ADA43C17BE659D5125349870A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/minifilter_callback.c",
+      "sha256": "83BEC7CA4C39D22A1A061878E0CAF30AC016E69726A4FFAC0A5B3BA36704710E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/minifilter_inventory.c",
+      "sha256": "4B49834136047701A2AE85C39264442D00DC6B7169360B943EB55B998E6E1EBA"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/minifilter_runtime_link.c",
+      "sha256": "01CEA3B73C3DC8FFACA7F067000F6735C0E2D53BA29070BC1425226F5B251458"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/object_callback.c",
+      "sha256": "EFFA32B44E8367B9183D3B5AB172E53EB6C3DC7C799D907955D17E3422BFE369"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/process_callback.c",
+      "sha256": "69503B334F0E8A642A1825F68DDA229461F1BF5C4845C4D344DFC158A78DA390"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/registry_callback.c",
+      "sha256": "C1FE734DF3DCCB49ED781A4E7166AD8A7DB3D09FAA8E84BBB5B46A7BBFDEBCEE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/callback/thread_callback.c",
+      "sha256": "1C5BF15B781E817C0BC6F781D2EF350991A4410A204EB53A32E37E0DDD5D9CD0"
+    },
+    {
+      "path": "KswordARKDriver/src/features/capability/capability_ioctl.c",
+      "sha256": "CFE745A68460F2E97609B33E43AD55E0C9A345D567282AD0496C658E35E1BEAD"
+    },
+    {
+      "path": "KswordARKDriver/src/features/capability/capability_query.c",
+      "sha256": "84CE3492400BBBCDEBFE6C1D89BC602B9EDE7A9DC0C59D5E985E066F3CD74590"
+    },
+    {
+      "path": "KswordARKDriver/src/features/cpu_power/cpu_power_ioctl.c",
+      "sha256": "6BA835CEE3B51A91B9F9E1908E3CCEA5049CF1AEF0873CD9FC5A60F87C961A28"
+    },
+    {
+      "path": "KswordARKDriver/src/features/cpu_power/cpu_power_runtime.c",
+      "sha256": "EA79A1856DED5A30C95BA57E8A3A4EBBC3814714672769964333989589D6D8BE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/cpu_power/cpu_power_runtime.h",
+      "sha256": "8F8E6E1DB076AEF8C37520A44BE4A7FBE071360EFF698720BEC1F36593A0E6EC"
+    },
+    {
+      "path": "KswordARKDriver/src/features/debug_output/debug_output_capture.c",
+      "sha256": "77BCD34790C8B8A2ABA73DD4022D01C952DE9B5C6D48D672C6F3D2B04EAF2010"
+    },
+    {
+      "path": "KswordARKDriver/src/features/debug_output/debug_output_ioctl.c",
+      "sha256": "4E5613D1EB9346650F6D0F85F885BE9A0C199BDEE5D9E3B1374BA0DDE0540A58"
+    },
+    {
+      "path": "KswordARKDriver/src/features/device_audit/device_audit_internal.h",
+      "sha256": "009B4C0663D593C7D9D671D0C954E93A5ABDDC0E07428DD1D29715DEEE189CAC"
+    },
+    {
+      "path": "KswordARKDriver/src/features/device_audit/device_audit_ioctl.c",
+      "sha256": "EE507C288FB7A40420F37827468C5A831C3CE1535424A134E3C53139B858CD74"
+    },
+    {
+      "path": "KswordARKDriver/src/features/device_audit/device_audit_query.c",
+      "sha256": "E88A8DFC4D2A97381C54BB3DEDAB53DFBDDA7F7FD69D3BBE7FA4C473C4B7B64D"
+    },
+    {
+      "path": "KswordARKDriver/src/features/device_audit/device_audit_support.c",
+      "sha256": "B0779EDBF80930C07ABE1B0D3928065727496349CAC2F26BF12DCC3D91963085"
+    },
+    {
+      "path": "KswordARKDriver/src/features/device_audit/device_audit_targets.c",
+      "sha256": "76B38F42A6CA617C9586F0CB20F9AFFB1252E99EBDD2332B0E1183423232C8E7"
+    },
+    {
+      "path": "KswordARKDriver/src/features/dyndata/dyndata_loader.c",
+      "sha256": "A353D0464909345CA15AA25B50546B2566A96D60E5C2266331961F35E88E5E02"
+    },
+    {
+      "path": "KswordARKDriver/src/features/dyndata/dyndata_query.c",
+      "sha256": "3E416F0176BAD8D329BE994C7BD57FF36100519E30D81C452C6F96FE00D69457"
+    },
+    {
+      "path": "KswordARKDriver/src/features/dyndata/dyndata_v4.c",
+      "sha256": "0E665BEBA273D0915B2FF630F6585D835B7E168809916224FE4001BD9A6F34F9"
+    },
+    {
+      "path": "KswordARKDriver/src/features/dyndata/dyndata_v4_internal.h",
+      "sha256": "8925D60D781ACD1227312393C54FE503F3E9BDC2949511EE1FEA8FF8C94EB1BA"
+    },
+    {
+      "path": "KswordARKDriver/src/features/dyndata/dyndata_v4_query.c",
+      "sha256": "BF437FAF09EEAB57D244540AB5B6340953EC2AFC2CCABB1EE459F49E20EBA958"
+    },
+    {
+      "path": "KswordARKDriver/src/features/dyndata/dyndata_validate.c",
+      "sha256": "1A7699C24EC1EEEECF5B20FC693F2F4236C1AE614E9583E20329BF26A8691F9C"
+    },
+    {
+      "path": "KswordARKDriver/src/features/file/file_actions.c",
+      "sha256": "267E0D561189F152BD7EA36AE6BED1C5A503BF1233E0CA228BDB13BAEAB2D020"
+    },
+    {
+      "path": "KswordARKDriver/src/features/file/file_delete_recursive.c",
+      "sha256": "62684E75E59FA69B956CEBAE48FF1FF6CC1BA3C13B5EBF6BA683DF65464B935F"
+    },
+    {
+      "path": "KswordARKDriver/src/features/file/file_directory_query.c",
+      "sha256": "3BE1C1248360B34909CDDD45C06D5790D8627423C858AA0C51BA80FF08EA306E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/file/file_ioctl.c",
+      "sha256": "25AB871C729995C7D010F7FBF1A3ADD30E1701B90A84A6679C8B8A55AAF4621A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/file/file_irp_ioctl.c",
+      "sha256": "296AEF4A7570B1620B2605BF4FD421120C3DADCE831BF96443FA917C05840D36"
+    },
+    {
+      "path": "KswordARKDriver/src/features/file/file_irp_request.c",
+      "sha256": "452CB954D3BFCB029E192A2BF6493136C5AED8CFAF53BA9464CA6074576BB80E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/file_monitor/file_monitor_internal.h",
+      "sha256": "FF9759436479893125BF65EDE8CACA987A07C146407482C44030F1F6DC114EFC"
+    },
+    {
+      "path": "KswordARKDriver/src/features/file_monitor/file_monitor_ioctl.c",
+      "sha256": "4BF4888676EC20D6D5F1BEC649AEB25FF6D6443E809EA5750601E2FFA9AAB924"
+    },
+    {
+      "path": "KswordARKDriver/src/features/file_monitor/file_monitor_operation_map.c",
+      "sha256": "CA39A907FBA6FBBDAAF340CB0957F4807F0DF0701725F7F5AEBAFF908EACDF20"
+    },
+    {
+      "path": "KswordARKDriver/src/features/file_monitor/file_monitor_runtime.c",
+      "sha256": "FF236D3E8323D4BE7927DEF97AB36CB116EECD28B44D5C7AEDCD36C986B59447"
+    },
+    {
+      "path": "KswordARKDriver/src/features/handle/handle_ioctl.c",
+      "sha256": "99B88E9D25FFE37865AFF154E20ADE5668D04CDCC7E960595B66E07C113D84F2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/handle/handle_object_query.c",
+      "sha256": "469526D3565B230526989F4190255D78B0B2784BCDE71FAD86A788674B16198C"
+    },
+    {
+      "path": "KswordARKDriver/src/features/handle/handle_query.c",
+      "sha256": "001D320A31E62811B5533769C5BF3175592AA3A3C49CF7F9CB29FBE5D39B62AE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/handle/handle_support.c",
+      "sha256": "EC124C790A63F633FE1A63D789E15028DFA76DF0E29B692A8EEBC9F6D598A030"
+    },
+    {
+      "path": "KswordARKDriver/src/features/handle/handle_support.h",
+      "sha256": "AB74125876F4D3AB4EB30B48AF7704D94C1E1484DF815AF3C65CAEFD22E09732"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_cr_policy.c",
+      "sha256": "AF388094BF3F804333328DF48BB32F89C28BF68F8B8B0E741CF5D5DAB8D73A0E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_cr_policy.h",
+      "sha256": "75035A9654FFD4381A79941BCCD32E8172730DA181DF0A8C4AD12244A5440665"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_descriptor.c",
+      "sha256": "79ED62F7E3E64FB336085D3F07F5589A29204B26EB888256261990EA0166891D"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_descriptor.h",
+      "sha256": "01F532D6B4AD10B8D6F8FE02A69299900C3389DB419BBC564CE755F04F34D41D"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_entry.asm",
+      "sha256": "C2C6FF329D2985037614DB3C5844D313442535E0345260ACCEB11E1FCB855FF8"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept.c",
+      "sha256": "4B17E0EACB540BE7AF65AC45AADDE223AC31CAF0802F006E8E7067B5F05C58B2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept.h",
+      "sha256": "34D99115AE60A1F53F0283FFB8D4EDDFA71E78DF3649FC507D3CDB5AC0689BF5"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_builder.c",
+      "sha256": "B6191116D19B5EA74F40D24D05A4B18DE9838371C028E4C039B7086E078B683A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_domain.c",
+      "sha256": "1DD0FA739C57C4603D009375D7D137D8913482450C5A01D2410C64699C65AC0B"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_domain.h",
+      "sha256": "E5C4F31DAEBD896313B45976EC447F8192EB17C6D9AD62AC0E5125C6D1150A6F"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_local.c",
+      "sha256": "9AA9B4A6AC2D6F6C5A5CAF1DDBA4E4A97B48FE0F3C37D7B73C14DEE1ED46350F"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_local.h",
+      "sha256": "2CB5D75527FF06DFAF75AA20C40B5BE86972148E4D4A4EC1EC86645D9998C6D2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_switch.c",
+      "sha256": "B574C154F0346F836AA09AE245F34D26392DF37B6C48C3259251591B421B8F9E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_switch.h",
+      "sha256": "F9A92016CC0F515739D81B51E33C0061DD1CE0B33D0B6B4969ADA17746592735"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_view.c",
+      "sha256": "BE4325FD826081A3BFAB2A4C0E0B07F3CC5D531D3457F0C05A512235A33AF67C"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_view.h",
+      "sha256": "73764898C4917A4BCFA482155EF3B541DCA008570028CAAFEFD86646E3D07835"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_event.c",
+      "sha256": "F97891815596108C9C329F1DFA5500CDC09F6E8E12356D6FD267686642BAF153"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_event.h",
+      "sha256": "2818270E111B380099D0A7C1A111CF5CF8DA8F089ABAAD34C9B522FD63E7A1E7"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_evmcs.c",
+      "sha256": "D3B39344DAEE3C122ED6EADA7D3A8CC86C162631DD9471BBA4ED2D41B9EC8C87"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_evmcs.h",
+      "sha256": "9ADBE71C7CC5D032F1171CEB894A750E40DD28E28568CB18E3B797FFEB258B94"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_exit.c",
+      "sha256": "55D12884DBBDF558CA4E8322B6D20630489FC80977CE98B2142881D51DF315CF"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_exit.h",
+      "sha256": "E48B6575A892F47E7BBB8239AE8C4E147C986D914C2B808868B9D121E282A2AF"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_exit_emulate.c",
+      "sha256": "553719A655F87EE3A701FB6BC82B522A75665F69C3E85B338B7C09A6185367FB"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_exit_emulate.h",
+      "sha256": "0B7DDD3C823CB2C33A3C51C1072023A191F754DA1FBAF69116C97EECBEB55BF4"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_guest.c",
+      "sha256": "28CF0E163E7CAA81137AA1AAB77672F378D47C571EF183C24C5996B316C701B7"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_guest.h",
+      "sha256": "7D6C256AFF6BDE1047B4B0A745319A27EB95F67663B4172BD41AA82FE8DA999A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_inject.c",
+      "sha256": "8D1F6161E2772325F21C7E5B33F9EFDCD432F0812A8829A83537FFA3AF50DF33"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_inject.h",
+      "sha256": "2A4B83F3B781F0AD5F3B594BCF987E3D7F62C7EBBFCDA418AD0A8BE37F2F94C4"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_internal.h",
+      "sha256": "11923D6D9BD6CD8FB7638FDBCBCECA86DD57E55A3093D2C7BD9818847591B088"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ioctl.c",
+      "sha256": "A1036D29EDAAE5B0419002B5DC1519914F3532A3D3FE0084055ADF68E1AD93B0"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_memory.c",
+      "sha256": "F752CA6DB9B4DD3A428B896725D92CEABDAB67BF9C8854D10FF22B68F1E19804"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_memory.h",
+      "sha256": "99C4977AC21B404909295803228087D215A9F53BA7699AFD44E6DF059FEE07E4"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_metrics.c",
+      "sha256": "A983ABC3C454822AC4A1071DDE794207DD0177E53BCE934933F1131912C206D9"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_metrics.h",
+      "sha256": "FC9350BDE8B90E5AF898A4BDB23160768AF5D049F9CDA1EA2D66CA121364E3C2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_msr_policy.c",
+      "sha256": "C00DAE198B431797F78BADD9976C293E365F9897EA24D72739D8EE4D832292FD"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_msr_policy.h",
+      "sha256": "47D2CEFEDF73905249BA280D1E17E1D061BF0F41B69E26B4BA3F47A28A08153A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_mtrr.c",
+      "sha256": "46F10841B477A5C10F148C722486240D316EB077CC5CA7A7C477239F04AEB5E8"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_mtrr.h",
+      "sha256": "B32867D71AAE2E8B21F4F919A62645E82EBC4962A0140EED53A7EA9D22CB5D44"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested.c",
+      "sha256": "FA14708B0B223FFF46CC19176E7CD3A1FC74F5283896AACFB36F300EC7CB11A5"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested.h",
+      "sha256": "3C8D7F9D9456B9EACA1BC13FC4F1ACD3D70EA423AFA245BD4E0CB0A078A50DBF"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_bitmap.c",
+      "sha256": "BBA57EBA00EB013888A2833CA205EEA16CB4AC3C9C973ED8C7DA820EBAA5B81D"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_bitmap.h",
+      "sha256": "8562A9543947C601FCBA4F48CBBFF31007D555125364C97B8664B85CFB23927D"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_decode.c",
+      "sha256": "712C77C41E1B3A40A696FA4EC8C4AE6CB787D5B43C17AD790CD6898AF83DED82"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_decode.h",
+      "sha256": "0818B98586F7FA0914571D527D0960CEAFB1E904AB43E3288E9EA015E64A4073"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_ept.c",
+      "sha256": "CADEA01222F5FDB3831F5949B6F5C0FFB6AD021D68E87620EAACF086C0186C7E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_ept.h",
+      "sha256": "390F957B9006C5D98DF0A3DFDC488B2970A0F100300A898414AAAE342641ADCC"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_l2.c",
+      "sha256": "E13181AEF403989A790BD429EBB777D13839893DE3026F0906795C91055BF263"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_l2.h",
+      "sha256": "CB6D40A0AE9A0AEA8529A371DF781FC491EA8B717CA4EC83C731E69DAD5702DB"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_page.c",
+      "sha256": "8CF312B5B8456979E691F2CB4192AB0C5A5968311CEF76D16966CDB7105CC79A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_probe.c",
+      "sha256": "41EFCA7190FDC9D16BC8F0879204411A5D243D8FB4B5A5F911C447E1F4FD8348"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_probe.h",
+      "sha256": "5A8778975CB570B7C81B0DCB3ABC99862D9D2BDAB2CC17727F81DD487B85D672"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_vmcs.c",
+      "sha256": "76FC64672CC872FA7E41D9070735F6EC7F1DA181B004F2B9DEA6AFF109223A2C"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_vmcs.h",
+      "sha256": "5273ED200249B7B20DD724B4354867C8F06CFF90B6DA21744233BFE30554B114"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_phys_window.c",
+      "sha256": "2A90EA26BF6828A5A90A029DE525FEA69CBE3EDB48B0E05B44072AB26D09CB9C"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_phys_window.h",
+      "sha256": "A4156DD8A794A42EF2A2FA5CD655651C381D6946EE07E24A226DAF391AB53B2A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_process.c",
+      "sha256": "2E91E21053AF77E327F9ACFD3DA4B64668BB238EABC29092D04CF7D7DF124FD8"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_process.h",
+      "sha256": "F35B6B3EAC1C999F2C6394ADC53365A08E02041A66AA76A19863871208D395D8"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_resident.c",
+      "sha256": "52650AEFD2F1E6E77DBE956D42FAB0DEC5AA3D69B37D3EE41CA7EA9A98B26F70"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_resident.h",
+      "sha256": "1EA035C977241CD02E60690BDBA39CF1A6D44EE8FDA3D3D887005770E8A4B5B3"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_runtime.c",
+      "sha256": "B23276DCB76604769FFB343896809DB549537EB60EA5017297E9620579B4EEAE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_runtime.h",
+      "sha256": "694E3677196C9597C3F8797B46127158C4E6F97262CCC2EBDC41A143AC31B0D8"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_vmcs.c",
+      "sha256": "907838B4275D14BAC225786F84F2BF1B4A3ED547893AA2745E26354F4694B5E3"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_vmcs.h",
+      "sha256": "D915B5DC1300250FC55E6BFCEE60B68A6DBCE747AFB1EF17FA8B065FB39774E6"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/slat_iommu_audit.c",
+      "sha256": "08B50982171830B4050D05D2310990C205A81AEC3E0062B565367B7B63E895A3"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/slat_iommu_audit_ioctl.c",
+      "sha256": "F9EA7E1BE172CE715ECCFC971A47DA82C7E1A9CFE69FACC85A300B22F277B547"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hwid/hwid_dispatch_hooks.c",
+      "sha256": "6F26ED96FE5E8D85B5EAB490B13DEB778BA51187FD563920851457A30E4D77E0"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hwid/hwid_dispatch_hooks.h",
+      "sha256": "771D0F7973FBF5C4A3DB4824CB5D81D48E94970D8E6D3F3AC6EB8D970C29918D"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hwid/hwid_dispatch_ioctl.c",
+      "sha256": "F353639B3A156C843878AC10F6E13084007366EE78179B072EB3DD082CA1F47E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/i8042_audit/i8042_audit.c",
+      "sha256": "C03838E49354436B855727E15720D7943FBBFA16A18C4C0097C34CECC96FC46C"
+    },
+    {
+      "path": "KswordARKDriver/src/features/injection/injection_ioctl.c",
+      "sha256": "8E5BD4E61CBFA378AA3E5ABB026C25F787A712331AB38052CC4ADF88FBE7B138"
+    },
+    {
+      "path": "KswordARKDriver/src/features/injection/injection_pte_scan.c",
+      "sha256": "C4B505BD94E77C355920F4978B63F2CE3BB7E518D50FB07A84F052B4B5FAB324"
+    },
+    {
+      "path": "KswordARKDriver/src/features/injection/injection_section.c",
+      "sha256": "A8BAB04A120B2F3C3E0B879C4D327DCAC8B2205B12E2A9EFF620E9E84B00AF17"
+    },
+    {
+      "path": "KswordARKDriver/src/features/injection/injection_vad.c",
+      "sha256": "69C797EB881D306E6568F08CF406288B210141DC42FC75031ED187100EE50B94"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/ci_hash_fallback.c",
+      "sha256": "9E9A757FBC6A6D209E864FF8FC1BE09C20A69E4E7E052A795D8A68CF7C957026"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/ci_hash_fallback.h",
+      "sha256": "F749D861A9AD3A8FE62CF5D1C2ECC5F2797B8E99BAD0C8E60371647191A5D65C"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/cpu_hardware_query.c",
+      "sha256": "5029BE09F8ED4B9F4A6FF10832C5306C74C34B8D3F02CF64C5D4BDFAC4AE65A2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_blind.c",
+      "sha256": "2385BE8176F92769E7FA56B4C6A7AFA62451B00D028A6E174DD904143F73F04B"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_blind_actions.c",
+      "sha256": "94D8A305AAB3D5CD96A66D9FDD67E80BB24AFCAD72FA56B9E4F2337567F59B32"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_blind_gate.c",
+      "sha256": "B9C427C60D6E9E8E907BC3E001E8E61FDD11EF4C64EB8B3D58C2036B1C0A3D16"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_blind_internal.h",
+      "sha256": "8620DFAD62F97F779A1CFD0AFE07DFF794B47C7932588BA2BAFDEC7E8C8C567F"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_blind_ioctl.c",
+      "sha256": "89464A2596C13B55CA73F44F85D8D781EA21C759D84DDF46BEACF2297BBC14D4"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_dispatch_editor.c",
+      "sha256": "BD3EA226A3BB3A11C510880DD3BEA834E09176E069B5D6BFF3247516731C0342"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_dispatch_editor_ioctl.c",
+      "sha256": "05785E0C84CA220D5C5EC3085CCBBA500599931A17E4EA4DB94FBB0198988443"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_image_editor.c",
+      "sha256": "5526860EA9222983EE63982700AFD45FDBE41357EEAEEBEBDDEA6DADC8F39BC2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_image_editor_fields.c",
+      "sha256": "F1AE8437FD44FF5238E019D18CD4913C8EB120C8EB28F194AF85E0EA2B994891"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_image_editor_internal.h",
+      "sha256": "F3FD78D9A8A5F55B112DCCAEA59E350A5ABC83A405BA159295DE3E6ED16C0865"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_image_editor_ioctl.c",
+      "sha256": "B0C684C660544F16574343B9C73B14E0C81CDCEE80D006251BC7FEF6D6C75423"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_image_editor_list.c",
+      "sha256": "55D2592AA9ECAB6557CD851FA0C9270503FF95B41F74F32B8FB2DF202891FF80"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_image_editor_state.c",
+      "sha256": "221C417B527A9D54E03566041298C0E9933D7EE5B83D21E06C56A87867EF177E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_integrity.c",
+      "sha256": "4E06055FDEC86456BD55E973AC2462D7BADB463E6162A209840BA6241C8121F5"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_integrity.h",
+      "sha256": "DA4F3597FF0AC52CD37599F86C14E474D47FF4160A1DA50DF95DA332243180D5"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_object_query.c",
+      "sha256": "4C5699DF259F92A1D80CC9021A1A663F95A5D9418AA92AD8DAAB8BA6500A1428"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/driver_unload.c",
+      "sha256": "85B96DC0644FCEF881370813F716CC6C8436D732873C850C16F7C4AF8658539A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/hook_scan.c",
+      "sha256": "63757CAF5F6F0FD458028F1EED5149105EB0156D224338F5BACC0D535B6211F0"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/hook_scan_support.c",
+      "sha256": "4C208AA833D87918667C533046C3903B48C7188877EAF2EF57857139B9609E37"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/hook_scan_support.h",
+      "sha256": "318CFBC0A3AD9B12E43D3B9D08521C9B7A58F2B470E7183D0ACF43DEF9C50158"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/io_timer_ioctl.c",
+      "sha256": "26D8CC87836D08C2E3285CF946570680C20AA4576357923B5FC888E40EF4103D"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/ioctl_registry_query.c",
+      "sha256": "8456AB91C92AD7C6E98B15BAC4F5520A4B4713375ABB542ADE593FAE43629DC3"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_cpu_integrity.c",
+      "sha256": "87E33817E6716AC90EDE0E13C36A31E28716D5329BC63B5949E34AD7C426C590"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_cpu_integrity.h",
+      "sha256": "9EB0860A713C027699FF09C45E7C8B803CC3B50F6A93AB8BC5AB26FE92E96737"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_idt_baseline.c",
+      "sha256": "AC9EB837DA9D5E83438ADBB111FBA4BFC416E05D309ADD6249A14D4FFC6BF877"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_idt_baseline.h",
+      "sha256": "1A2349CF249F4C6D3914BA4C561378B6AC8523C061331224C37C9582AE20E450"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_idt_baseline_ioctl.c",
+      "sha256": "13F0921870C533F3BCE29F8208A6841F102FC0313FE012BEFE6291879FE256F1"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_idt_consistency.c",
+      "sha256": "16BDF6932FE94EB19223A39A2EAFC49D92740C9A18C9F8F4FEC75652A2798243"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_idt_consistency.h",
+      "sha256": "05328CD1DC8589B380BA331EEC08A565642FEB6C802E91B9985823B4CA11270E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_image_section_map.c",
+      "sha256": "FF04757AB984CC1996A4FD2407D0B7C38FA17A99F8104C3F3DEEA65669EE3928"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_image_section_map.h",
+      "sha256": "00116317B546585A9288799280071AEC49B98A3666247598EFA606AAF5A48F2A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_ioctl.c",
+      "sha256": "F7783448E220C97249891B4B270BF4F5C8E65EC243A024E3FB7022AABFF6C6DD"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_ipc_summary.c",
+      "sha256": "FC64A21050C8D60B6CCD25B7507649BFE4A51DA25A7DE9AB069CCA02CA76A9E7"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_ipc_summary.h",
+      "sha256": "6A804C3F09D5535FFBC2314D6D36048CCC3692A24346C66CAB511BB1BBB40643"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_object_audit.c",
+      "sha256": "CA65181326DF79FC6ED84B1744C15ABF50D680DFA932A825FB9E193A74F861EB"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_object_audit.h",
+      "sha256": "1224A4554FB4588F30D81C54BE4BDE1EFC8E00C1FAD7781ACA49A3BA82937DD6"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_object_type_table.c",
+      "sha256": "E1BC21E78D1458412AA9DF1BA1C8371B47CCA3AF7C1976E3CD90319B057A6790"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_object_type_table.h",
+      "sha256": "D14582FE6FB52E1C36A7514E70B120C32ED051E2B6A7BC28A10DDDAF432121EA"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_piddb.c",
+      "sha256": "4F666DAB7C555624C58DA305B0005729E0365ADA17A25FC1291DA763D5FA36D7"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_piddb.h",
+      "sha256": "3F9A3C74DAB729B496E19C07B1534A427D6D39388034F50B1F36F6B62650BCA5"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_piddb_ioctl.c",
+      "sha256": "2551D7B0B0DDC4827E469B7CDF5EEF2DBD4593551223566854A53D442E80AEB4"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_unloaded_drivers.c",
+      "sha256": "BB53702C99F2343B648507ED964CDF1072A4A30FC7B4D102D5A6E3B9E9ADA127"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_unloaded_drivers.h",
+      "sha256": "5E5C177BA498D7744D741771BE3D7105299F1F2E377B163D28D1092EA735893B"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/kernel_unloaded_drivers_ioctl.c",
+      "sha256": "2C3FEB72B84F4C2A0ED7AEA2FD3E1CAA5220D92CB5E290F105464C08CE3D96E4"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/object_header_fallback.c",
+      "sha256": "D5594B59DF6D4ABE78864C0A650E3640CAAF167A705349D3E46ABEEEEBCDD370"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/object_header_fallback.h",
+      "sha256": "48FBC9D1CE4089343819B2244B307EAE4EB61DE6735FFF6BCC1DE9FB64E74EAE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/ssdt_fallback.c",
+      "sha256": "6C3171CCC2AF75DB5FF49A331458C3F9129AFA9286823F266A04016CE51E448A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/ssdt_fallback.h",
+      "sha256": "81A2D075640EC29A22D7FD2387DB98BE877E5002C99C86DFA9F6C580DAA65C45"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/ssdt_query.c",
+      "sha256": "B1979B5EB6AAE3EA4808365E6FD78DBD55995AE4F25F5187E400F8BDD09F6504"
+    },
+    {
+      "path": "KswordARKDriver/src/features/kernel/timer_dpc_query.c",
+      "sha256": "FCE2C042A47BC810DD76FC2EAC7C4C1E5A629DE2C325780E343E86907247F2EB"
+    },
+    {
+      "path": "KswordARKDriver/src/features/keyboard/keyboard_internal.h",
+      "sha256": "AD8A9B0D21E77265BD451F7B32E204429B7496C7925FA9D4EBC2923C05E25795"
+    },
+    {
+      "path": "KswordARKDriver/src/features/keyboard/keyboard_ioctl.c",
+      "sha256": "767F0E8AA31C2AAB4F42D821841530B31D087B2BA1AC154E980A65594732A573"
+    },
+    {
+      "path": "KswordARKDriver/src/features/keyboard/keyboard_mutation.c",
+      "sha256": "3C801248A8C36ACA0B4B324643634376D0A4141885E3B1E5CFCDF2D3373E1B62"
+    },
+    {
+      "path": "KswordARKDriver/src/features/keyboard/keyboard_query.c",
+      "sha256": "96A3F4ADE3D723B634E219A742022C1AEF4161EDD4406DE73E2328DE60BEBDB6"
+    },
+    {
+      "path": "KswordARKDriver/src/features/log/log_channel.c",
+      "sha256": "E02ACC93313E4C27D8E4004C958E62B92D8F567358E86FA29D822EDFAAE32BD1"
+    },
+    {
+      "path": "KswordARKDriver/src/features/memory/memory_evidence_enrichment.c",
+      "sha256": "758EB619B6D3F7C03A3DACB4E39EBAEA2CF183C45F0DCD5F79A19FC8202E9EAD"
+    },
+    {
+      "path": "KswordARKDriver/src/features/memory/memory_evidence_enrichment.h",
+      "sha256": "1A1490C103C551938627BBC1B8F04FC7138C37F8F390AF2238B7C1DA156E5CFB"
+    },
+    {
+      "path": "KswordARKDriver/src/features/memory/memory_ioctl.c",
+      "sha256": "A4FC6B3B759B2D38397B1D6CE9AEC4F825F5097D2DC2C17AA084B00ABDFA824B"
+    },
+    {
+      "path": "KswordARKDriver/src/features/memory/memory_kernel_evidence.c",
+      "sha256": "61D050823846AFA0907E1354A676B0E03BFB078D0D5779C582BC1DF682CE1DC7"
+    },
+    {
+      "path": "KswordARKDriver/src/features/memory/memory_kernel_exec_scan.c",
+      "sha256": "B9757190B2AA5177C3C5C5267FC6007738832A7461FB178979563DFA8F451F0E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/memory/memory_kernel_exec_scan_helpers.c",
+      "sha256": "F74F58FDF7B62A44E87167D0AB5A61D8E7BB5EB9E93AB4A17577656FC5535A97"
+    },
+    {
+      "path": "KswordARKDriver/src/features/memory/memory_kernel_exec_scan_internal.h",
+      "sha256": "CEC95CE136D9545E758ED0F05782D9BB0F44043CD0CDB3B9C79475F3C83241BB"
+    },
+    {
+      "path": "KswordARKDriver/src/features/memory/memory_pagetable.c",
+      "sha256": "6EBF5C9724E2258DB3FD6B8EDB407E1242C656B81E3F95A43E02AD946DA882A6"
+    },
+    {
+      "path": "KswordARKDriver/src/features/memory/memory_physical.c",
+      "sha256": "1F533EF7B5F428601B595C4627BB7162406033B3BA9F9C93F79A691EDD1AADD9"
+    },
+    {
+      "path": "KswordARKDriver/src/features/memory/memory_physical_layout.c",
+      "sha256": "6F7EE18CCB73B7E8DEDD4FB34FF5B6EB47B849719D15E9C6F105FE7BFC0A1CB2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/mutation/mutation_ioctl.c",
+      "sha256": "E66B252B67A21D0EC1EEA8763D228BDBCEBA8ACEB3F28D2A02B105CE4419427E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/mutation/mutation_transaction.c",
+      "sha256": "363830CC8F394DE7DABE5A048BD35C264E7D88E190F2B39184DD6982C69B65EB"
+    },
+    {
+      "path": "KswordARKDriver/src/features/mutation/mutation_transaction.h",
+      "sha256": "2546B0F5E4163B61DBAF3BDE5F5805F5777656978EA4A9182E8B0C21A78B51BF"
+    },
+    {
+      "path": "KswordARKDriver/src/features/network/network_audit.c",
+      "sha256": "EFD2AB7A018312C03FD1864819C9E2D1DCF5A651C14B144B35C330A8F2A10796"
+    },
+    {
+      "path": "KswordARKDriver/src/features/network/network_internal.h",
+      "sha256": "E53E49B9FC7346EC262CBD4DFE1E74991C62B4C1406913557DEA456C734AD4BE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/network/network_inventory.c",
+      "sha256": "132017EE786851F8EF87F5DB3A97F93C3912DCA1C19038D5FF3C4E3D1F9A38A9"
+    },
+    {
+      "path": "KswordARKDriver/src/features/network/network_inventory.h",
+      "sha256": "DEB55D5F281A997CDC3A641DF4AEF1AA91BA653F7B53753C9998013539451314"
+    },
+    {
+      "path": "KswordARKDriver/src/features/network/network_inventory_internal.h",
+      "sha256": "1139BE49389EE0C90338A4CB95238B0A1D60761730E18F14ABBEF4B3E75FD2E3"
+    },
+    {
+      "path": "KswordARKDriver/src/features/network/network_inventory_ndis.c",
+      "sha256": "FA599CA32A41E7B177C1677A851D8FE617FBB9B470288C0CA01CB3E86737276A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/network/network_inventory_nsi.c",
+      "sha256": "B892D62B7C6046918254A5769318E0DE10B85D5F235AA261CDE26FC703B0825C"
+    },
+    {
+      "path": "KswordARKDriver/src/features/network/network_inventory_wfp.c",
+      "sha256": "980607DEF901A5A36A0AB316AAF0A9ECE99A8BA4CA3D4BD55A5054A8349268F8"
+    },
+    {
+      "path": "KswordARKDriver/src/features/network/network_ioctl.c",
+      "sha256": "A9B93E2A83159EFDA6AFB196044106A22EABD4F07C7576B29C110EA83ECFB997"
+    },
+    {
+      "path": "KswordARKDriver/src/features/network/network_runtime.c",
+      "sha256": "FC4FE8C31E5625F64A986C02D4944385F7602AD54A5E28845B24A6E0441B0DBD"
+    },
+    {
+      "path": "KswordARKDriver/src/features/network/network_traffic.c",
+      "sha256": "B2F1C1F2CBD2D496F84F27E0C7EBD86C91C6CDDF2A2B718AA9FAD4165E811869"
+    },
+    {
+      "path": "KswordARKDriver/src/features/network/network_wfp.c",
+      "sha256": "2FD28E0E493E848E685925D131643FABD3567E543AF5E825A7827515D2D8722E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/platform_audit/platform_audit.c",
+      "sha256": "10E858BBE1B995F94687B90AFDC592790823B8368FD1D9158EA0EED30ABF46CA"
+    },
+    {
+      "path": "KswordARKDriver/src/features/preflight/preflight_ioctl.c",
+      "sha256": "C2B6DD813E879FAFF01771F978A124C307BAEC82A90C8B1B2AC78F98D03D3E6A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/preflight/preflight_query.c",
+      "sha256": "9972FD792892C28CF2C8762939F10914C5CA7637622CA9FB851F3B5CFDCF215E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_actions.c",
+      "sha256": "3075993304E2EC626BD2BFD87A2B3C33C12BFF57D77D14F855795310AA773F3D"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_crossview.c",
+      "sha256": "187D4A66E6D5A72E98C048F4CD7BE4CDE4B7ADA132214009C3AE4D958EEFB4B3"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_crossview.h",
+      "sha256": "A96F3B1B04699A0A4E5768DD7B95ADCA4E2EFE2CB23B8E51C9F7C08258E952A5"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_detail.c",
+      "sha256": "4E6E521A62C82094E0C18187F62EBC635911F49074A838AC4DD937F443209D80"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_dkom.c",
+      "sha256": "C09AF749E120F051D33D874B74565D963377FB0AFBF9F9913CB8379C1714EB07"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_extended.c",
+      "sha256": "325828E2653507FC106D165046BE8F559902717DE26EAC363C197CEB7855CF74"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_extended.h",
+      "sha256": "436BB70ED00CEDFF09EDFE73DBAB6E839900FECD3E09DF7D60A2D4708DA3694A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_flags.c",
+      "sha256": "2EDDFBA7F8D9B3609EE401DF55CE3FDC0EAD2E09B6E7713CCE6DA5F43C09DBFF"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_inject.c",
+      "sha256": "0E359E88C6FDC5454589083F5C1E5B7E9BE511C9D6F0405D3D59DDE9D940E458"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_ioctl.c",
+      "sha256": "D5175FC2CA04EEE0C68999F034E3F8D20DEE4D6BAA7421649605CA4DAD3D31E2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_memory.c",
+      "sha256": "A39085AC97D1E883D8711031EABA67D0B0949C4EB369EAF3A51A122DDFD6F321"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_memory_ioctl.c",
+      "sha256": "D061451078B76860369CEB07CD714C751F0F4D7DF0688952D1AC828E9E74B76F"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_privilege.c",
+      "sha256": "8E1EEA2111E164DD8C2EB1FD24F5EF7FDE05BAA1508660110DF01921BF26B171"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_privilege_ioctl.c",
+      "sha256": "9D9FBA769CB4C7A89821609C403F57379654F6173802F6249A074D32EB06FB67"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_terminate.c",
+      "sha256": "C3752C02494DEC036D094DA27F6244B588D4EBE72EB3CF351EA9FF3E31F3BFD6"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_terminate_memory.c",
+      "sha256": "90C5F39BCAF8FD960E1C71E73621D368F0BF26153791478F1184A446A0BC8906"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process/process_token_privilege.c",
+      "sha256": "43CD869057F221D31A27D879948ED0342EBC4F8BE80A56B06E41C6515C3F5918"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process_protect/process_protect_internal.h",
+      "sha256": "796DADE957B752D3FF24503495D0BA3F45A6BD7BEABF9A13B61EC0592454D5B6"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process_protect/process_protect_ioctl.c",
+      "sha256": "A65C1AB3323DFFAC8510C5B21BD673B64081F5EB793E69262A57FD07E251BF45"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process_protect/process_protect_kernel.c",
+      "sha256": "63C3BEBDEF6566AF767F19D42660F536488614E960D4FE4297D5F44C5E821555"
+    },
+    {
+      "path": "KswordARKDriver/src/features/process_protect/process_protect_runtime.c",
+      "sha256": "276AE808939A1E1FE667511D0E00E2C575800A22FB7BB55AA83B4693752238CE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/redirect/redirect_file.c",
+      "sha256": "5D63964657CF9AA8D73BE3DD966A9D49E0389B68F007F1F63BB7BD766E93C81C"
+    },
+    {
+      "path": "KswordARKDriver/src/features/redirect/redirect_internal.h",
+      "sha256": "C1340518DECB80B08F48B7C27AE79FA0DE8ABEF9AA0EABA5C49FDB5B7F4846C4"
+    },
+    {
+      "path": "KswordARKDriver/src/features/redirect/redirect_ioctl.c",
+      "sha256": "81F460D6C6CF986AD814BB0B13540988D7D0DA149012FDF67191BDED21B5B8D8"
+    },
+    {
+      "path": "KswordARKDriver/src/features/redirect/redirect_registry.c",
+      "sha256": "35F1198957C85F6680EA77A4A0223BC0CB0E071D4592293DC4C17058D8CA5D8A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/redirect/redirect_runtime.c",
+      "sha256": "4BF7F078566E4D1E45363278F6402AF8C70603CF87ECB6750C7D8C91F4334836"
+    },
+    {
+      "path": "KswordARKDriver/src/features/registry/registry_ioctl.c",
+      "sha256": "25F4393C927EFA22D16664F3C3699598C4CFB49ACFB1BFEFFC90A7D7E5A183E6"
+    },
+    {
+      "path": "KswordARKDriver/src/features/registry/registry_query.c",
+      "sha256": "0B84AA7882186DD73D159FF9FFCB4721E3F36B9F0F6C396AF00CC0E1FD0EEBC7"
+    },
+    {
+      "path": "KswordARKDriver/src/features/research/research_topic_ioctl.c",
+      "sha256": "E8814C4A16A6B7FD709526FCB6E1859D52123C38CAFF612BF262F932A09100B0"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/image_protection_manager.c",
+      "sha256": "BA872DDF40755F38E70EE88766F31F55771D8F0C2AFAEAC1CCFB4FA38B69E9DF"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/image_protection_manager.h",
+      "sha256": "5D6E33945A11B1E43462589B76410AE418B076267AFD602DBCA0CE849679AD3E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/page_fault_manager.c",
+      "sha256": "B0788DED4D548968BF9E5B6DAE9B9EE5CF8509BE71254A934043BFE030A62095"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/page_fault_manager.h",
+      "sha256": "3AB347BCF401AF6A308F5BC167ABED78CA9C971D001F914EEA8CB321B91ED16D"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/page_fault_stub.asm",
+      "sha256": "AD5634929C9EE71FC62FE8952D7C3778C2FA6AA241BDB61E0ADA98F0B4AA549D"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/page_state_table.c",
+      "sha256": "C0974E486D84A6EAA7E5018816A5E3DEF9A46607640F3FE8A064586D5061FAAE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/page_state_table.h",
+      "sha256": "C968564318F7C9712DFBF4262FF897DBAFA9EA8ED7BA8EE3A4481BE1567CEFA3"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/rxpf_diagnostics.c",
+      "sha256": "602E2E9BE751F6EB34C57C7F364C0206CBC4CA67543994C5F52DC4F3ADC265CC"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/rxpf_diagnostics.h",
+      "sha256": "71601B627A84F66486B474B8AC6D7DB351AC939C6CFC44074FE86625A1E42A06"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/rxpf_ioctl.c",
+      "sha256": "6BCD5B46DAEBF20C6747907B186C80EEFFF95723892B06B1C8AAB34AD2A9DE52"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/rxpf_runtime.c",
+      "sha256": "2F8421D0599C88A2F3ACEBF529429EEBB64A968F8DC65E6FAD5ABAEDD5EDD889"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/rxpf_runtime.h",
+      "sha256": "752E46067AAD124E89DF7832ED6B64B31A50B8DD12E642B2F8CE507DCF3309EC"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/rxpf_self_test.c",
+      "sha256": "F3B70DBC2304B5F029D12AD533F63F8401F8856F728E12A1C522A513B5128728"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/rxpf_self_test.h",
+      "sha256": "1232A474A227FA629D68EB5E6C1E2149C17DD30B7CB22DCBA7C8F2A61785E921"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/x64_instruction_emulator.c",
+      "sha256": "750DAC5AA2D6E55D4A3942A46571E3D115002B502AB0E57AF1A3F7DBAC538D67"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/x64_instruction_emulator.h",
+      "sha256": "29D474C77755E621198D59F8C98930931BDD78034589CD4681B118E58467A533"
+    },
+    {
+      "path": "KswordARKDriver/src/features/rxpf/x64_instruction_emulator_tests.c",
+      "sha256": "477B8DA4F9F95C1BFE8DC51BA273FD5434F6FDB11B33A2EA2F1B07F25F8714E0"
+    },
+    {
+      "path": "KswordARKDriver/src/features/safety/safety_ioctl.c",
+      "sha256": "694C92E7C32B8C1D5F8DDBA04AACDEB62FE83EB1D76665AE937D18ED174B9680"
+    },
+    {
+      "path": "KswordARKDriver/src/features/safety/safety_policy.c",
+      "sha256": "397E537E24187ABDDA8F4DD0E8D0356AE34174661FFAA8E1D31DBDEE2C24E59F"
+    },
+    {
+      "path": "KswordARKDriver/src/features/section/section_ioctl.c",
+      "sha256": "2F21025562BAD3357F1C4117A3CCD6DFE89553C93824C74CC74FC07969486738"
+    },
+    {
+      "path": "KswordARKDriver/src/features/section/section_query.c",
+      "sha256": "F8DDF206B8F0518CBEEF0126C419A3E6E0E89153FF243521A8DC3184F87EC3FE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/section/section_support.c",
+      "sha256": "5EA07AB8C460BAD9144FAEABC0DFB291D0A11611CE50764A627AA45E2E3C1079"
+    },
+    {
+      "path": "KswordARKDriver/src/features/section/section_support.h",
+      "sha256": "4E9306BD32E80D200B65383FFD7BEB0CB97A9E75F4B9E72AE02AF1A4E0B698B2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/security_audit/security_audit_internal.h",
+      "sha256": "83EB7B225F2A1222BEE7EC435A45EF072CE697C3B5097BCE9F00EB93A68F7592"
+    },
+    {
+      "path": "KswordARKDriver/src/features/security_audit/security_audit_ioctl.c",
+      "sha256": "5708EEBB31383BB2FBA4B4E12640679A7FF11675CAE7570189942EF5976A653A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/security_audit/security_audit_query.c",
+      "sha256": "E9AB3CCAC1EB3D498C7E55E3D780A7EDA7824EF8C7AC626B13E119CD8D43C6BA"
+    },
+    {
+      "path": "KswordARKDriver/src/features/storage/storage_audit.c",
+      "sha256": "78C5B6908B2DCCCD4772B1D5E27CE6E90A903B35830E5294F695A0F8AA80CAA2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/storage/storage_forensics.c",
+      "sha256": "4CFE41B14344D46A49EFEDBDA5F0DE7626DBF2600F5854BF5EA50014C8542F5C"
+    },
+    {
+      "path": "KswordARKDriver/src/features/storage/storage_forensics_ioctl.c",
+      "sha256": "9D504EE01B55C87A537C4AD00E8EA5E06A7BFEB3D2B6521768737EB68C430359"
+    },
+    {
+      "path": "KswordARKDriver/src/features/storage/storage_ioctl.c",
+      "sha256": "167C0ADE3C04E9EE9A19A901321AABFC6C3E8DA066D3A83839071A9D970323CB"
+    },
+    {
+      "path": "KswordARKDriver/src/features/system_time/system_time_counter.c",
+      "sha256": "639211AF6C52A143617E574218FC548750487A8482A8C3465B31EFDDE3E3263F"
+    },
+    {
+      "path": "KswordARKDriver/src/features/system_time/system_time_counter.h",
+      "sha256": "2E10FD5184E5DAD81C40A3F48FED0A264051A1A1C2DB4DA09E4B86852043FB85"
+    },
+    {
+      "path": "KswordARKDriver/src/features/system_time/system_time_hyperv.c",
+      "sha256": "8FEB920861B4D4AF0DE55608FC39555F7D4467F9453950AA319B79BCC9438C54"
+    },
+    {
+      "path": "KswordARKDriver/src/features/system_time/system_time_hyperv.h",
+      "sha256": "8ECFA5667D9F6D49F9CF682DB05CD38B50F0597C3B8DFD2BF52930B00F0A277F"
+    },
+    {
+      "path": "KswordARKDriver/src/features/system_time/system_time_internal.h",
+      "sha256": "378F825A4B24CE1BCF94F3363EFFB3F07A5FBD0181E066E314035A449080A197"
+    },
+    {
+      "path": "KswordARKDriver/src/features/system_time/system_time_ioctl.c",
+      "sha256": "A702C74892034BCD5A9C1DF94A6FA3A22615D6BB8A4E282AB2AE3D3D8090D7E2"
+    },
+    {
+      "path": "KswordARKDriver/src/features/system_time/system_time_resolver.c",
+      "sha256": "45C5E331FDBC5D0B40C3627916390C32C7E67838D510DD6FC00E5002DFAF126A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/system_time/system_time_runtime.c",
+      "sha256": "0EE6336337AB46605A7794E83F58EDDABD3FD431A0FD5F5D6737A5ACA0EEF810"
+    },
+    {
+      "path": "KswordARKDriver/src/features/thread/thread_apc.c",
+      "sha256": "F4494E01216E8F855F009E48EFD0D9B76FB8BA601811AACC2DEE18719A290247"
+    },
+    {
+      "path": "KswordARKDriver/src/features/thread/thread_crossview.c",
+      "sha256": "7A018E5DB68D382A8DB1224142F842ACBF5789491BF5A17BF8987D3B61C47D79"
+    },
+    {
+      "path": "KswordARKDriver/src/features/thread/thread_crossview.h",
+      "sha256": "3DC1A81FFB339A0FB2F8D9664362D1A6D893490FAAAB325D8AF28ADD005CF3B9"
+    },
+    {
+      "path": "KswordARKDriver/src/features/thread/thread_detail.c",
+      "sha256": "7B6F9C2ABC09A31C34D91AC6A5D03EF2B4F3FC66D51B46978073284B79425E21"
+    },
+    {
+      "path": "KswordARKDriver/src/features/thread/thread_ioctl.c",
+      "sha256": "FF6DB6B9A6E88D86D3E1D51034BB4D7349C488EEB8F1FC4BDDB2AB83D8470E81"
+    },
+    {
+      "path": "KswordARKDriver/src/features/thread/thread_query.c",
+      "sha256": "5E4977C11730078EA761EEACC3C29D8529C8781A920744CA029D16FEA9C3373C"
+    },
+    {
+      "path": "KswordARKDriver/src/features/thread/thread_worker_state.c",
+      "sha256": "BA854E5CEACD94A68A266023AFB13241BCB8FDF39A2EDE1FCD75EEED4AA17A2A"
+    },
+    {
+      "path": "KswordARKDriver/src/features/thread/thread_worker_state.h",
+      "sha256": "C96F901C38B5717F8675734EA61CE04B83646F7DBFE8A07695F79684F8F405A9"
+    },
+    {
+      "path": "KswordARKDriver/src/features/thread/work_queue_fallback.c",
+      "sha256": "DAA42785CD1B95A2A171F3915AF1156F72F6030E0F3C1240BF201A38FE7C6F9F"
+    },
+    {
+      "path": "KswordARKDriver/src/features/thread/work_queue_fallback.h",
+      "sha256": "D7D6CEE673072D5051A20EF4DCEFF51992283E9E648F183E8C27203902DF1219"
+    },
+    {
+      "path": "KswordARKDriver/src/features/thread/work_queue_query.c",
+      "sha256": "7046E457D0E0BCDB2451C741A67C8B86AF81061FB32FA0AF5ED88CADEFA15BFE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/trust/trust_ioctl.c",
+      "sha256": "1C3B2F963AA47C9DCB5F35815ED139072EAF9282C63594ED75B3D08003CB2209"
+    },
+    {
+      "path": "KswordARKDriver/src/features/trust/trust_query.c",
+      "sha256": "9C1D3345E5D320A6EF58A9516113743CC4AF5F01FD77F6CA0A996EEBE3DB39D3"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/win32k_detail.c",
+      "sha256": "FC05073A0166D380DF4FE1928B10D08B4816A84D438FB0F90C18FB4B19F85CF9"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/win32k_event_hook.c",
+      "sha256": "D8763F5B4D8F8207CA19E0C59492DF72A49D2FB9376A0C745BCE2B16700B65EB"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/win32k_fallback.c",
+      "sha256": "A7BA7180260644965A1FDDD9FA32935B618AE292EF0FD4C3E4FEFE471EF2979B"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/win32k_fallback.h",
+      "sha256": "C5C02F40FE03E3151281A0DFCC6DD7BE6F1C9F488FA1F0422D5332E7955511ED"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/win32k_ioctl.c",
+      "sha256": "3C96E929BF703922029879B839F6D27F8E251FF016EC7AE4F9B90F977C831EAE"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/win32k_message_hook.c",
+      "sha256": "00ACB0FA740C7E31A1282A1A0F51C90090D6536D78925D69046129B674946A0E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/win32k_query.c",
+      "sha256": "F7982EAC3B7C3B943EC7E1351A33A2F340646E124623C4FCA21DD0E7F4F7F31B"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/win32k_query.h",
+      "sha256": "8199DCCA14211E0E6997FADE3315E9AB99F72CD76170B5D759EF14044041DA99"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/win32k_queue_layout.c",
+      "sha256": "3AFCD1EF1ACDD85215A52C63CF2A6AA018ED82DA6952FB7DC623388F43374CDF"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/win32k_runtime_query.c",
+      "sha256": "A13D8C20E9806285304BE2C046F66DF2EF2035C066085B9E3BB7716F850F4F2F"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/win32k_support.c",
+      "sha256": "AD50C2B141BDDDFC744450B470EB6FCEEA9F68EEAF73568EE215BA3BA8321584"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/win32k_support.h",
+      "sha256": "F97CA2651DA414E5C8E24AFB3661765B72A0FD0DC4C0E9AB7527829FD5FF2758"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/win32k_timer.c",
+      "sha256": "AEA686A496E40A6E75F6C3302FD94AAA03B4E81803AC5641362C8A4A2C6B5A4B"
+    },
+    {
+      "path": "KswordARKDriver/src/features/win32k/window_band.c",
+      "sha256": "2A30D199E3FEAF1AD66D1AFD47357D1CAF6269FF05DA37B4F5005B173DDAFAB0"
+    },
+    {
+      "path": "KswordARKDriver/src/features/wsl/wsl_silo_ioctl.c",
+      "sha256": "7A7D3EF0ACDEF6EE74B79046E291D0C38B2C9345BC10FC51F28972DF65A7A34E"
+    },
+    {
+      "path": "KswordARKDriver/src/features/wsl/wsl_silo_query.c",
+      "sha256": "DE1001738B9ABBE59695BB2BDBB58A8FA1AF9E33AD6A576BC49989FF2C8FF3FB"
+    },
+    {
+      "path": "KswordARKDriver/src/framework/device_control.c",
+      "sha256": "EE82C6C5BE009CBBF2C85F830485FFFD66922854F558327B0EE552AD21DB6E78"
+    },
+    {
+      "path": "KswordARKDriver/src/framework/driver_entry.c",
+      "sha256": "A23E9DC72F267752133943BBABE4A3902C78E61551ABBE66ADACFA91F4929053"
+    },
+    {
+      "path": "KswordARKDriver/src/framework/io_queue.c",
+      "sha256": "C4B6D4A8F04E1B4A608C0A55CF8072CBD2BD6A71DE5E33CB227180F8BB8BFDB9"
+    },
+    {
+      "path": "KswordARKDriver/src/framework/startup_breadcrumb.c",
+      "sha256": "2C93986CE2F25D1026AEDE276A5DC3D8C5110E6B2FF16462DD7B5F39C486FA02"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/dyndata_fallback_resolver.c",
+      "sha256": "8148387E21C735FD30DDF9C1D7AC5DFEC0BEBE1B7DFBAC782DFF2E7F9F5F1F8D"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/dyndata_fallback_resolver.h",
+      "sha256": "AB8ABBE840BEF1723C5271F78CC52FCE65A906F459050A524E560599B6AD1519"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/kernel_cache_fallback.c",
+      "sha256": "53FE9E4B0CC67DF7D6BE181828CB8108634D8D296512CA4ED09063556C37DF6E"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/kernel_cache_fallback.h",
+      "sha256": "5B212456BD70D04AF1F82F857EC3A781AEA8A28D17913C9FECAA15383FA62DC1"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/kernel_module_identity.c",
+      "sha256": "0C74FF3766AEB632100B6866BD64758B49E0B2EF4CC8A77958ED818983D450F3"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/kernel_module_identity.h",
+      "sha256": "D3F4B7FE69EEE43E4A15C2928892B3A8A459D1628B4650AB7432E8DF4DD88FAA"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/kernel_object_probe.c",
+      "sha256": "E9261A372819F9D1CD410F501EC3E16787154858DBF9BF183C8D5686EA78B327"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/kernel_object_probe.h",
+      "sha256": "1CED58E9FCFC89209E051820241F2680E942E077FDE69460192E8C2113865308"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/pool_compat.c",
+      "sha256": "CD40B638AA3B9E6F642562D2AA28900383C058DA8E326B445C00E5B749908CF2"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/pool_compat.h",
+      "sha256": "7E625922AC04D35A60E4E4688906071D4041FA440697941E8892A9DE545190DD"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/process_resolver.c",
+      "sha256": "02C7457DC529EF64C4D260475EB438E4136353546D925A0FC9085EFA7FD87E4A"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/process_resolver.h",
+      "sha256": "2110F10713917647897E37966373C75F4EEE44F7B90EF433A85DCBCAB24F5352"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/runtime_signature_scan.c",
+      "sha256": "E73476CFC66E9AC36C244ACDD34DB20E0BD15E1D5BFDEA496228A430B6EA8EC9"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/runtime_signature_scan.h",
+      "sha256": "3116D9FE3D071168F2500E8F45529CB7FD6BC0EFBBE49A095586F627CE3526AD"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/token_layout_resolver.c",
+      "sha256": "150909B83F40A2D9607EA768F7BC5E300AE2CFA93D6DE3D074931B3707DDAAA3"
+    },
+    {
+      "path": "KswordARKDriver/src/platform/token_layout_resolver.h",
+      "sha256": "D2F0AFEE0B611385160753FF677BF16843DDC539F7FE34523C15AB5CE58FDD5A"
+    },
+    {
+      "path": "shared/driver/KswordArkAlpcIoctl.h",
+      "sha256": "B6D34C31C32F3ED26B75448FB8289B1134FAA496D563AA68864E53BE29D6E4B8"
+    },
+    {
+      "path": "shared/driver/KswordArkBugcheckIoctl.h",
+      "sha256": "7538ABFF09810286625E7C6966332D8D5BB15D5DEC895B58083745528A5B5635"
+    },
+    {
+      "path": "shared/driver/KswordArkCallbackIoctl.h",
+      "sha256": "33EEFB15E760E95552113FFA1F1D8DB6C3D492CE673876F2E0F7687CACB72C55"
+    },
+    {
+      "path": "shared/driver/KswordArkCallbackMonitorIoctl.h",
+      "sha256": "7674492DB79A60D82BDD0BD943A89B52C8C9535FC4076625B1093CC26FEB298F"
+    },
+    {
+      "path": "shared/driver/KswordArkCapabilityIoctl.h",
+      "sha256": "AD5002D34BB9F199A6A3DE9F65357911303C7B73A48E6A89DEE6C61A154B052A"
+    },
+    {
+      "path": "shared/driver/KswordArkCpuPowerIoctl.h",
+      "sha256": "684C6D3C519B8A87674F14457A03E6A7E7EC28C09E64F73C73656CB8A1F52203"
+    },
+    {
+      "path": "shared/driver/KswordArkDebugOutputIoctl.h",
+      "sha256": "AF35C4BC539AA55B08FC62443C546C6FE44426ACE07AC441228E846ABC0A552A"
+    },
+    {
+      "path": "shared/driver/KswordArkDeviceAuditIoctl.h",
+      "sha256": "AE9CF06D16E056EF8756E10F743E4E4F37E9463F89E09A8CEAECEA6EFD1812EF"
+    },
+    {
+      "path": "shared/driver/KswordArkDriverBlindIoctl.h",
+      "sha256": "CC0988F7CFA9BD55BEC73AFE37B2FFBFC7490F0E77C57DDF25D070C89D882147"
+    },
+    {
+      "path": "shared/driver/KswordArkDriverDispatchIoctl.h",
+      "sha256": "7B531F6482BBB52718C21B259AB1A5978C7591856E312F550DD445D5766D07F3"
+    },
+    {
+      "path": "shared/driver/KswordArkDriverImageEditorIoctl.h",
+      "sha256": "219ADF16161B2EAE3AE2C98812D54CF2AD4BB2F81F6C32E55955B8C0CEAC5BDF"
+    },
+    {
+      "path": "shared/driver/KswordArkDynDataIoctl.h",
+      "sha256": "FDAB37385C23B6E83EFE0224871955B56CFB13A8A59B0A4FBFA9EB33E5C88616"
+    },
+    {
+      "path": "shared/driver/KswordArkFileIoctl.h",
+      "sha256": "9ED79E43CF46890A97F0DE1D2F82DF89DDA24C4952CACE2DCE5C84AD885A7189"
+    },
+    {
+      "path": "shared/driver/KswordArkFileIrpIoctl.h",
+      "sha256": "C13C506E3F0D2EB2CC30405359A8F9245F8C4EC920943EC4DC0A2840510139B7"
+    },
+    {
+      "path": "shared/driver/KswordArkFileMonitorIoctl.h",
+      "sha256": "7237D76279F266CCB5C1CAC87B5DBC278A387F1C1A6CB76C68C8867342E5E4C9"
+    },
+    {
+      "path": "shared/driver/KswordArkFilterIoctl.h",
+      "sha256": "67713F1B7AE298714705976C5940DD1FC7F38B2C1D19AFD1AD7A2F7B89A249A6"
+    },
+    {
+      "path": "shared/driver/KswordArkHandleIoctl.h",
+      "sha256": "8727BB4A0083DAC2F89FF4B6E79E0238F51A2900452723BA7220343A5B569D97"
+    },
+    {
+      "path": "shared/driver/KswordArkHvmControls.h",
+      "sha256": "6E9EAF13D266E80DEDD84DDE7DBC4848B9C5E4571776B776423C28F3C7123085"
+    },
+    {
+      "path": "shared/driver/KswordArkHvmEptSwitch.h",
+      "sha256": "02E451A923C15BB351542ACF4DF63B4215C2D40A6F5EE99C56895D8B9DB95207"
+    },
+    {
+      "path": "shared/driver/KswordArkHvmIoctl.h",
+      "sha256": "0AA72A4A7ABFB741B49B83FAFC8836380DBDE852F08E84ABBB71F362CE382E22"
+    },
+    {
+      "path": "shared/driver/KswordArkHvmMetricsIoctl.h",
+      "sha256": "9EFB1033B589E85D484AA749492740F9663F241216E5E793C4EA78924F9297E2"
+    },
+    {
+      "path": "shared/driver/KswordArkHvmRequest.h",
+      "sha256": "798C98FCD77B2B2645FFBD9C6F180B81CD083DD14E1CAD92ED5A33A657A762DD"
+    },
+    {
+      "path": "shared/driver/KswordArkHwidIoctl.h",
+      "sha256": "52EF64B10609D3EF89EE61BC8AA9106D9F06D3AA29DE64F6028D4B24999C37D3"
+    },
+    {
+      "path": "shared/driver/KswordArkI8042AuditIoctl.h",
+      "sha256": "8988561DFADA51AAB0D5992BAB3006FC4F3FCF96402F9BB5BBCD846A1B7110CC"
+    },
+    {
+      "path": "shared/driver/KswordArkInjectionScanIoctl.h",
+      "sha256": "025058DFE05D452E936D81F4C4D4F9BFBC7E7A2EC3A33C72F17AB7E5FF18C54C"
+    },
+    {
+      "path": "shared/driver/KswordArkKernelBaselineIoctl.h",
+      "sha256": "600051A81E86C727897C3B71EC2DC77338AF33964F81A2C957C54060E1A32C22"
+    },
+    {
+      "path": "shared/driver/KswordArkKernelIoctl.h",
+      "sha256": "9C02FE01EBDFC9BE27E3280E561AD76CCB946DC67B63B53641221F44A72488E8"
+    },
+    {
+      "path": "shared/driver/KswordArkKernelObjectIoctl.h",
+      "sha256": "AA2C867588BE906EAF0A921291F0E4D59884B632351F73E42723FECBB01DEE94"
+    },
+    {
+      "path": "shared/driver/KswordArkKeyboardIoctl.h",
+      "sha256": "3CF3591C6B723093F99A81A62764EFADB985CBEF6659F18758CBF8C9FCAEBE2C"
+    },
+    {
+      "path": "shared/driver/KswordArkMemoryIoctl.h",
+      "sha256": "8EE33DE71C2393DAB056C34499BBB472907951CF8731D6B5D3DFC5E7175E0555"
+    },
+    {
+      "path": "shared/driver/KswordArkMutationIoctl.h",
+      "sha256": "BB43A10A6DEA4F743DA6C7CD545486155314DCC56716FC143DA9E10841D54B6F"
+    },
+    {
+      "path": "shared/driver/KswordArkNetworkIoctl.h",
+      "sha256": "02F38B1CA0005AA291B77A227C23EE7DFE514BF373454E747FB464034507A97A"
+    },
+    {
+      "path": "shared/driver/KswordArkPiDdbIoctl.h",
+      "sha256": "6005B21F2D1BB1E008D92AD6749C31CEB62D6444203037E0C9BB94548B0EA976"
+    },
+    {
+      "path": "shared/driver/KswordArkPlatformAuditIoctl.h",
+      "sha256": "6C74F77E477AD16A92873059B68A18327E425765E24491FC341BC596C91DB726"
+    },
+    {
+      "path": "shared/driver/KswordArkPreflightIoctl.h",
+      "sha256": "A8D7A5062F2D44F266A8408B16431989E998315E1E12A449BAFBCC9F9863BCF4"
+    },
+    {
+      "path": "shared/driver/KswordArkProcessIoctl.h",
+      "sha256": "0857A10BEC775941082A77C1C680B9BF5667CC2D0693963896120D156615F9D2"
+    },
+    {
+      "path": "shared/driver/KswordArkProcessProtectIoctl.h",
+      "sha256": "BF9FED24AC0F94A009D35A160768B32ADF6A2B8E80D71498797F24437CFDFDA7"
+    },
+    {
+      "path": "shared/driver/KswordArkRedirectIoctl.h",
+      "sha256": "1663202539F80A09BBED021C1BDDE58EE775AE4E942E1C57BC3DEA70987A50C8"
+    },
+    {
+      "path": "shared/driver/KswordArkRegistryIoctl.h",
+      "sha256": "00EE5997B6D104F3D1862103F4C09F2580B6867AC09F77465EF4E17735ED66B5"
+    },
+    {
+      "path": "shared/driver/KswordArkResearchIoctl.h",
+      "sha256": "80AD21B363E40FD0FF69D6A6AA559E31B290C152713E2DFE259828D948A16411"
+    },
+    {
+      "path": "shared/driver/KswordArkRxPfIoctl.h",
+      "sha256": "651EF7F8FC505931F1C28975A7DD8E71D38C6BA641E1599F7861730BCBADF5AC"
+    },
+    {
+      "path": "shared/driver/KswordArkSafetyIoctl.h",
+      "sha256": "C84DA3BDE4117EB2E6436B564246996F9299078EA15442AA9558DB309F52D8FE"
+    },
+    {
+      "path": "shared/driver/KswordArkSectionIoctl.h",
+      "sha256": "C2E450E8CF587AC5425E1D7C2E8EAFAD571BA562E8B32D4C4BCB2CD45FBA3353"
+    },
+    {
+      "path": "shared/driver/KswordArkSecurityAuditIoctl.h",
+      "sha256": "EA3AC77BD1F4B8C039181109ECC930FE253E7AD4E7FC51C0E7EE6625081FC852"
+    },
+    {
+      "path": "shared/driver/KswordArkSlatIommuAuditIoctl.h",
+      "sha256": "054C67656E1911AEB52C74A542608C2A77340703AC0089EB0A41D7A9A0A3690D"
+    },
+    {
+      "path": "shared/driver/KswordArkStorageForensicsIoctl.h",
+      "sha256": "0CAEF63E36FAEE2D25A718672BF8146F876BC226CB801DD514145CDDB5D32049"
+    },
+    {
+      "path": "shared/driver/KswordArkStorageIoctl.h",
+      "sha256": "BCD9B957A7A406A0A36EB0E58A30B895A877BC7A3D85DE9A26EC03191816B4B1"
+    },
+    {
+      "path": "shared/driver/KswordArkSystemTimeIoctl.h",
+      "sha256": "7E7D5C3E8463103A7AB2C95074D413A23710F3E7F8DA2A0B3AE525C78A6D0693"
+    },
+    {
+      "path": "shared/driver/KswordArkThreadIoctl.h",
+      "sha256": "0425B5E215BF2C600274890C26DE74C6FCA3B9A9EC114A329B071D782F0C1D99"
+    },
+    {
+      "path": "shared/driver/KswordArkTrustIoctl.h",
+      "sha256": "25839DFF5B2433FA9D7B04E7E961F3A79C5D79519E2D7782EB3529449DA2453F"
+    },
+    {
+      "path": "shared/driver/KswordArkUnloadedDriverIoctl.h",
+      "sha256": "DA1A49A33E36DAC349428583770C31905108BA712A9ADA620A4563E46F2881E0"
+    },
+    {
+      "path": "shared/driver/KswordArkWin32kIoctl.h",
+      "sha256": "B63CB31ABAC153128924788E3AABB40063A845163B709EA82F438A77F129E19A"
+    },
+    {
+      "path": "shared/driver/KswordArkWindowBandIoctl.h",
+      "sha256": "B92B9C6B9F823C89E310E46FCEC5B21DBC9D9C2723C7511AA571D4FEDD2AD5F2"
+    },
+    {
+      "path": "shared/driver/KswordArkWorkQueueIoctl.h",
+      "sha256": "422FA8DF6C29E548C62C2E8ADFAE637B70095F6F1909E43DCF33038D39B037D2"
+    },
+    {
+      "path": "shared/driver/KswordArkWslSiloIoctl.h",
+      "sha256": "488D75C799C0DB340B7ACA3AC01991E440EFFCFE444F2E41F6648DF908C2A9D7"
+    },
+    {
+      "path": "tools/hvm_ctl/hvm_ctl.c",
+      "sha256": "82EAB77119CD590BC069D08EB973A0FB363926CC8EBD76090A7B7E1CB2EF4317"
+    }
+  ]
+}

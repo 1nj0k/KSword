@@ -337,7 +337,7 @@ def main():
     write(derived/"summary.json",result)
     index=[{"path":str(p.relative_to(root)).replace("\\","/"),"bytes":p.stat().st_size,
             "sha256":hashlib.sha256(p.read_bytes()).hexdigest()}
-           for p in sorted(root.rglob("*")) if p.is_file() and derived not in p.parents and p.name!="raw-index.json"]
+           for p in sorted(root.rglob("*")) if p.is_file() and 'derived' not in p.relative_to(root).parts and p.name!="raw-index.json"]
     write(root/"raw-index.json",index)
     print(json.dumps({"rawFiles":len(index),"windowsComparisons":result["windows"]["matchedComparisons"],
                       "nested":result["nestedPages"]["byConditionAndResult"],"transitions":result["transitions"]["results"]},ensure_ascii=False))

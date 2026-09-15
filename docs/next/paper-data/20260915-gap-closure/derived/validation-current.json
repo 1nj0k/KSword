@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "status": "pass",
+  "scope": "Frozen archive hashes, identities and complete/incomplete denominators; not runtime correctness",
+  "sourceCommit": "a7e1842f2d4a9bb3d3e77c8c5e98a53c8b2f3263",
+  "driverSha256": "667D21B398B7C6A6FA9D00BAC203576C05E32B6F33F0536573C99011D3EFC407",
+  "rawFilesChecked": 488,
+  "windowsExecutions": 168,
+  "windowsBoots": [
+    "2026-09-15T21:22:40.0366010Z"
+  ],
+  "benchmarkHashes": [
+    "A37D9D1B3FC22D5539C51C3DC364B7C1BAA0061913B72EFEF8183E020D464E0D"
+  ],
+  "issues": []
+}

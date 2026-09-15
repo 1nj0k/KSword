@@ -42,6 +42,27 @@ def fresh(before, after):
             all(a[c][1] > b[c][1] for c in b))
 
 
+def load_periods(serial):
+    periods=[]
+    markers=list(re.finditer(r'^paper-load-(start|end)\r?$',serial,re.M))
+    for marker,finish in zip(markers,markers[1:]):
+        if marker[1]!='start' or finish[1]!='end':continue
+        end=finish.start()
+        following=next((m.start() for m in markers if m.start()>finish.start()),len(serial))
+        busy={}
+        for cpu in (0,1):
+            rx=rf'^cpu{cpu}\s+([0-9 ]+)\r?$'
+            b=re.search(rx,serial[marker.end():min(end,marker.end()+8000)],re.M)
+            a=re.search(rx,serial[finish.end():min(following,finish.end()+8000)],re.M)
+            if not (a and b):continue
+            bv,av=list(map(int,b[1].split())),list(map(int,a[1].split()))
+            if min(len(bv),len(av))<8 or any(a<b for a,b in zip(av[:8],bv[:8])):continue
+            total=sum(av[:8])-sum(bv[:8])
+            if total>0:busy[cpu]=100*(1-(sum(av[3:5])-sum(bv[3:5]))/total)
+        periods.append({'startOffset':marker.start(),'endOffset':end,'busyPercent':busy})
+    return periods
+
+
 def ledger(before, after):
     names = ('ruleAllocations', 'ruleFrees', 'replacementAllocations', 'replacementFrees',
              'inveptAttempts', 'inveptSucceeded', 'inveptFailed')
@@ -114,6 +135,7 @@ def faults(root):
 
 def cycles(root, serial):
     results = []
+    loads=load_periods(serial)
     for path in sorted(root.glob('nested-page-*.json')):
         r = read(path)
         row = {'runId':r['runId'], 'source':path.name, 'case':r['case'], 'condition':r['condition'], 'result':'incomplete'}
@@ -123,6 +145,12 @@ def cycles(root, serial):
             b, a = r['before'], r['after']
             if not continuity(b, a):
                 raise ValueError('Windows/process identity changed')
+            if r['condition']=='guest-cpu-load':
+                period=next((p for p in loads if p['startOffset']<=b['serialOffset']<=a['serialOffset']<=p['endOffset']),None)
+                if not period or set(period['busyPercent'])!={0,1} or min(period['busyPercent'].values())<90:
+                    raise ValueError('missing encompassing measured two-CPU load interval')
+                row['loadCpu0BusyPercent']=period['busyPercent'][0]
+                row['loadCpu1BusyPercent']=period['busyPercent'][1]
             if any(s['status']['parsed']['residentProcessorCount'] != 2 or
                    {'FAULTED','ROLLBACK_REQUIRED'}.intersection(s['status']['parsed']['stateNames']) for s in (b,a)):
                 raise ValueError('unhealthy resident state')
@@ -144,6 +172,7 @@ def cycles(root, serial):
                     raise ValueError('map/remove control or composition failed')
                 if int(p['originalPhysicalPage'],16) == int(p['shadowPhysicalPage'],16):
                     raise ValueError('original/replacement aliases')
+                row['effectPass'] = True
                 freq=int(a['metrics']['parsed']['qpcFrequency'])
                 mt=trace(r['mapEvents'],r['map'],[1,2,3,4,5,6,11],freq)
                 rt=trace(r['removeEvents'],r['remove'],[1,7,8,9,10,11],freq)
@@ -162,16 +191,53 @@ def cycles(root, serial):
     return results
 
 
+def isolation(root):
+    from analyze import identities
+    results=[]
+    patterns=[('a5a5a5a5',bytes([0xa5])*4096),('d1d1d1d1',bytes([0xd1])*4096),
+              ('b2b2b2b2',bytes([0xb2])*4+bytes([0xd1])*4092),('a5a5a5a5',bytes([0xa5])*4096)]
+    for path in sorted(root.glob('write-isolation-*.json')):
+        r=read(path);row={'source':path.name,'result':'incomplete'}
+        try:
+            before,after=r['before'],r['after']
+            serial=after['guestSerial'];tail=serial[serial.rfind('paper-isolation-before'):]
+            samples=observations(tail);boots={s[2] for s in samples}
+            for cpu in (0,1):
+                stage=0
+                for s in samples:
+                    if s[0]==cpu and s[3:]==(patterns[stage][0],hashlib.md5(patterns[stage][1]).hexdigest()):
+                        stage+=1
+                        if stage==4:break
+                if stage!=4:raise ValueError(f'CPU {cpu} lacks the full four-stage page sequence')
+            if len(boots)!=1 or before['os']['bootUtc']!=after['os']['bootUtc'] or identities(before)!=identities(after):
+                raise ValueError('identity discontinuity')
+            if any(s['exitCode'] for s in r['steps'] if s['kind']=='hvm-cli'):
+                raise ValueError('control command failed')
+            p=after['hvm']['nested-page-query']['parsed']
+            if p['active'] or p['retired']:raise ValueError('mapping not retired')
+            if any(before['vmware'].get(k)!=after['vmware'].get(k) for k in ('sha256','configSha256')):
+                raise ValueError('VMware disk/config identity changed')
+            row.update(result='pass',guestBootIds=sorted(boots),cpuCount=2,
+                       writtenBytes=4,readbackHashBytes=4096,patterns=[v for v,_ in patterns])
+        except (KeyError,ValueError,TypeError) as e:row['error']=str(e)
+        results.append(row)
+    return results
+
+
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('directory',type=Path)
     args=parser.parse_args();root=args.directory;derived=root/'derived';derived.mkdir(exist_ok=True)
     # StreamReader offsets count CR and LF separately; preserve raw newlines.
     with (root/'serial.txt').open(encoding='utf-8-sig',newline='') as f: serial=f.read()
     f,c=faults(root),cycles(root,serial)
+    iso=isolation(root);write(derived/'write-isolation-smp.json',iso)
     table(derived/'faults.csv',f);table(derived/'cycles.csv',c)
     summary={'faults':dict(Counter(f"{r['faultMode']}:{r['result']}" for r in f)),
+             'loadPeriods':load_periods(serial),
              'cycles':dict(Counter(f"{r['condition']}:{r['case']}:{r['result']}" for r in c)),
-             'latencyUs':{k:distribution([r[k] for r in c if r['result']=='pass']) for k in ('mapBodyUs','restoreBodyUs','commitDrainUs','retireDrainUs')},
+             'effectResults':dict(Counter(f"{r['condition']}:{r.get('effectPass',False)}" for r in c if r['case']=='remap-restore')),
+             'latencyUs':{condition:{k:distribution([r[k] for r in c if r['result']=='pass' and r['condition']==condition]) for k in ('mapBodyUs','restoreBodyUs','commitDrainUs','retireDrainUs')} for condition in sorted({r['condition'] for r in c})},
+             'writeIsolation':iso,
              'scope':'Two guest CPU-pinned observers; one reserved 4 KiB page and one boot. Sampled full-page MD5/readback, not arbitrary application atomicity or universal stale-translation freedom. Actual INVEPT deltas include background work. Fault modes 4/5 omit one drain call; not injected hardware INVEPT faults. Allocation ledger covers only page-control objects/backing.',
              'incomplete':[r for r in f+c if r['result']=='incomplete']}
     write(derived/'smp-summary.json',summary);print(json.dumps(summary,indent=2))

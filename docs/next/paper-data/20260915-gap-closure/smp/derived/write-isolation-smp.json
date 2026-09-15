@@ -1,0 +1,18 @@
+[
+  {
+    "source": "write-isolation-20260915T205842Z.json",
+    "result": "pass",
+    "guestBootIds": [
+      "13391ee4-65c6-4dd3-b3f7-17d181422f30"
+    ],
+    "cpuCount": 2,
+    "writtenBytes": 4,
+    "readbackHashBytes": 4096,
+    "patterns": [
+      "a5a5a5a5",
+      "d1d1d1d1",
+      "b2b2b2b2",
+      "a5a5a5a5"
+    ]
+  }
+]

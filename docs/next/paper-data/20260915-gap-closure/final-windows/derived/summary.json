@@ -1,0 +1,385 @@
+{
+  "schemaVersion": 1,
+  "experiment": "final-windows",
+  "windows": {
+    "metricRows": 192,
+    "invalidMetricRows": 0,
+    "failedRuns": [],
+    "summary": [
+      {
+        "configuration": "off-post-no-vmware",
+        "workload": "cpuid-leaf0",
+        "n": 7,
+        "median": 0.0328659,
+        "mean": 0.033292657142857146,
+        "min": 0.0322652,
+        "max": 0.0348544,
+        "sampleSd": 0.0008916235675387207
+      },
+      {
+        "configuration": "off-post-no-vmware",
+        "workload": "disk-direct-read-64MiB",
+        "n": 7,
+        "median": 0.0326692,
+        "mean": 0.0395569,
+        "min": 0.0314711,
+        "max": 0.0760424,
+        "sampleSd": 0.01630107380491645
+      },
+      {
+        "configuration": "off-post-no-vmware",
+        "workload": "disk-direct-write-64MiB",
+        "n": 7,
+        "median": 0.0425448,
+        "mean": 0.046742900000000004,
+        "min": 0.032099,
+        "max": 0.0708856,
+        "sampleSd": 0.01343509078483159
+      },
+      {
+        "configuration": "off-post-no-vmware",
+        "workload": "integer-xorshift",
+        "n": 7,
+        "median": 0.1234212,
+        "mean": 0.1262892,
+        "min": 0.120735,
+        "max": 0.1454433,
+        "sampleSd": 0.0085799366343814
+      },
+      {
+        "configuration": "off-post-no-vmware",
+        "workload": "memcpy-32MiB",
+        "n": 7,
+        "median": 0.1613697,
+        "mean": 0.15714814285714285,
+        "min": 0.1382162,
+        "max": 0.1847373,
+        "sampleSd": 0.017374614071575527
+      },
+      {
+        "configuration": "off-post-no-vmware",
+        "workload": "pointer-chase-64MiB",
+        "n": 7,
+        "median": 0.7394317,
+        "mean": 0.7516535,
+        "min": 0.7356994,
+        "max": 0.8054918,
+        "sampleSd": 0.02584870101410642
+      },
+      {
+        "configuration": "off-post-no-vmware",
+        "workload": "tcp-loopback-64MiB",
+        "n": 7,
+        "median": 0.0206645,
+        "mean": 0.02257985714285714,
+        "min": 0.0201589,
+        "max": 0.0327705,
+        "sampleSd": 0.004530362508621558
+      },
+      {
+        "configuration": "off-post-no-vmware",
+        "workload": "tcp-loopback-rtt-1B",
+        "n": 7,
+        "median": 0.0248399,
+        "mean": 0.025945657142857143,
+        "min": 0.024251,
+        "max": 0.0316764,
+        "sampleSd": 0.0026786583158098275
+      },
+      {
+        "configuration": "off-pre-no-vmware",
+        "workload": "cpuid-leaf0",
+        "n": 7,
+        "median": 0.0339593,
+        "mean": 0.03613045714285714,
+        "min": 0.0320127,
+        "max": 0.0516827,
+        "sampleSd": 0.006952857572695595
+      },
+      {
+        "configuration": "off-pre-no-vmware",
+        "workload": "disk-direct-read-64MiB",
+        "n": 7,
+        "median": 0.0325931,
+        "mean": 0.032448614285714286,
+        "min": 0.0316077,
+        "max": 0.0332665,
+        "sampleSd": 0.000608007303762521
+      },
+      {
+        "configuration": "off-pre-no-vmware",
+        "workload": "disk-direct-write-64MiB",
+        "n": 7,
+        "median": 0.0463495,
+        "mean": 0.0449156,
+        "min": 0.0312234,
+        "max": 0.0642874,
+        "sampleSd": 0.011700667277410577
+      },
+      {
+        "configuration": "off-pre-no-vmware",
+        "workload": "integer-xorshift",
+        "n": 7,
+        "median": 0.1232316,
+        "mean": 0.1239115,
+        "min": 0.1207457,
+        "max": 0.1288104,
+        "sampleSd": 0.0025858389199638846
+      },
+      {
+        "configuration": "off-pre-no-vmware",
+        "workload": "memcpy-32MiB",
+        "n": 7,
+        "median": 0.1530819,
+        "mean": 0.16017375714285714,
+        "min": 0.140032,
+        "max": 0.1891239,
+        "sampleSd": 0.01978562795649553
+      },
+      {
+        "configuration": "off-pre-no-vmware",
+        "workload": "pointer-chase-64MiB",
+        "n": 7,
+        "median": 0.7482617,
+        "mean": 0.7536361571428571,
+        "min": 0.7241579,
+        "max": 0.7889721,
+        "sampleSd": 0.02769057959227631
+      },
+      {
+        "configuration": "off-pre-no-vmware",
+        "workload": "tcp-loopback-64MiB",
+        "n": 7,
+        "median": 0.0240972,
+        "mean": 0.024369285714285715,
+        "min": 0.0235394,
+        "max": 0.0255504,
+        "sampleSd": 0.0007559809883600948
+      },
+      {
+        "configuration": "off-pre-no-vmware",
+        "workload": "tcp-loopback-rtt-1B",
+        "n": 7,
+        "median": 0.0248426,
+        "mean": 0.024829485714285716,
+        "min": 0.0238755,
+        "max": 0.0259787,
+        "sampleSd": 0.0006352410157532633
+      },
+      {
+        "configuration": "on-no-vmware",
+        "workload": "cpuid-leaf0",
+        "n": 7,
+        "median": 0.3480576,
+        "mean": 0.3581414857142857,
+        "min": 0.3413052,
+        "max": 0.4111781,
+        "sampleSd": 0.024908649748191795
+      },
+      {
+        "configuration": "on-no-vmware",
+        "workload": "disk-direct-read-64MiB",
+        "n": 7,
+        "median": 0.0347314,
+        "mean": 0.03435835714285714,
+        "min": 0.0320549,
+        "max": 0.0359343,
+        "sampleSd": 0.0014123266877238952
+      },
+      {
+        "configuration": "on-no-vmware",
+        "workload": "disk-direct-write-64MiB",
+        "n": 7,
+        "median": 0.039695,
+        "mean": 0.0442591,
+        "min": 0.0342629,
+        "max": 0.0626502,
+        "sampleSd": 0.010456024191664186
+      },
+      {
+        "configuration": "on-no-vmware",
+        "workload": "integer-xorshift",
+        "n": 7,
+        "median": 0.1280318,
+        "mean": 0.12996552857142857,
+        "min": 0.1224565,
+        "max": 0.1475641,
+        "sampleSd": 0.008451994543639645
+      },
+      {
+        "configuration": "on-no-vmware",
+        "workload": "memcpy-32MiB",
+        "n": 7,
+        "median": 0.1550087,
+        "mean": 0.17089585714285715,
+        "min": 0.145559,
+        "max": 0.2380073,
+        "sampleSd": 0.034894551848049155
+      },
+      {
+        "configuration": "on-no-vmware",
+        "workload": "pointer-chase-64MiB",
+        "n": 7,
+        "median": 0.767671,
+        "mean": 0.7719038285714286,
+        "min": 0.7329488,
+        "max": 0.8208835,
+        "sampleSd": 0.03565339557366704
+      },
+      {
+        "configuration": "on-no-vmware",
+        "workload": "tcp-loopback-64MiB",
+        "n": 7,
+        "median": 0.0243186,
+        "mean": 0.024500357142857143,
+        "min": 0.0235253,
+        "max": 0.0253211,
+        "sampleSd": 0.0007597870509933314
+      },
+      {
+        "configuration": "on-no-vmware",
+        "workload": "tcp-loopback-rtt-1B",
+        "n": 7,
+        "median": 0.0339964,
+        "mean": 0.03459704285714286,
+        "min": 0.0329167,
+        "max": 0.0393734,
+        "sampleSd": 0.0021688464651800072
+      }
+    ],
+    "matchedComparisons": [
+      {
+        "workload": "cpuid-leaf0",
+        "offN": 14,
+        "onN": 7,
+        "offMedianSeconds": 0.033783549999999996,
+        "onMedianSeconds": 0.3480576,
+        "elapsedOverheadPercent": 930.2576253827679,
+        "bootstrap95LowPercent": 908.4284656830508,
+        "bootstrap95HighPercent": 1017.002425005857,
+        "offPostVsPrePercent": -3.2197365670081357
+      },
+      {
+        "workload": "disk-direct-read-64MiB",
+        "offN": 14,
+        "onN": 7,
+        "offMedianSeconds": 0.032602400000000004,
+        "onMedianSeconds": 0.0347314,
+        "elapsedOverheadPercent": 6.530194096140152,
+        "bootstrap95LowPercent": -0.10893677102893351,
+        "bootstrap95HighPercent": 9.823114701909796,
+        "offPostVsPrePercent": 0.23348500142668094
+      },
+      {
+        "workload": "disk-direct-write-64MiB",
+        "offN": 14,
+        "onN": 7,
+        "offMedianSeconds": 0.044447150000000005,
+        "onMedianSeconds": 0.039695,
+        "elapsedOverheadPercent": -10.691686643575583,
+        "bootstrap95LowPercent": -26.547428949740702,
+        "bootstrap95HighPercent": 31.003795087587037,
+        "offPostVsPrePercent": -8.20871854065308
+      },
+      {
+        "workload": "integer-xorshift",
+        "offN": 14,
+        "onN": 7,
+        "offMedianSeconds": 0.1233264,
+        "onMedianSeconds": 0.1280318,
+        "elapsedOverheadPercent": 3.815403676747242,
+        "bootstrap95LowPercent": -0.374798940822485,
+        "bootstrap95HighPercent": 6.817699715752412,
+        "offPostVsPrePercent": 0.15385664066684956
+      },
+      {
+        "workload": "memcpy-32MiB",
+        "offN": 14,
+        "onN": 7,
+        "offMedianSeconds": 0.1535354,
+        "onMedianSeconds": 0.1550087,
+        "elapsedOverheadPercent": 0.9595832622313782,
+        "bootstrap95LowPercent": -9.422630753120787,
+        "bootstrap95HighPercent": 33.54958938512971,
+        "offPostVsPrePercent": 5.413964681650807
+      },
+      {
+        "workload": "pointer-chase-64MiB",
+        "offN": 14,
+        "onN": 7,
+        "offMedianSeconds": 0.7399983,
+        "onMedianSeconds": 0.767671,
+        "elapsedOverheadPercent": 3.739562644941219,
+        "bootstrap95LowPercent": -2.5702075977773964,
+        "bootstrap95HighPercent": 10.06956101660168,
+        "offPostVsPrePercent": -1.180068417239588
+      },
+      {
+        "workload": "tcp-loopback-64MiB",
+        "offN": 14,
+        "onN": 7,
+        "offMedianSeconds": 0.0235714,
+        "onMedianSeconds": 0.0243186,
+        "elapsedOverheadPercent": 3.1699432362948254,
+        "bootstrap95LowPercent": -1.6225951562837126,
+        "bootstrap95HighPercent": 18.562505001435703,
+        "offPostVsPrePercent": -14.245223511445316
+      },
+      {
+        "workload": "tcp-loopback-rtt-1B",
+        "offN": 14,
+        "onN": 7,
+        "offMedianSeconds": 0.024841250000000002,
+        "onMedianSeconds": 0.0339964,
+        "elapsedOverheadPercent": 36.854626880692386,
+        "bootstrap95LowPercent": 32.739899915044624,
+        "bootstrap95HighPercent": 40.599594641397,
+        "offPostVsPrePercent": -0.010868427620291943
+      }
+    ],
+    "method": "Off/pre, on, off/post sequential blocks. 7 measured repetitions per block plus one warmup. Off samples pooled (n=14). 10000 percentile bootstrap resamples of medians, seed 20260915. Conditional descriptive CI; not independent machine/boot replication. Positive percent means longer elapsed time. No comparison to VMware-present block."
+  },
+  "nestedPages": {
+    "byConditionAndResult": {},
+    "mapCommandMs": {
+      "n": 0
+    },
+    "restoreCommandMs": {
+      "n": 0
+    },
+    "allocationScope": "Only the single nested mapping slot and retired slot are observed. Total driver outstanding allocations, leak freedom and global stale translations are not measured."
+  },
+  "writeIsolation": [],
+  "linux": {
+    "status": "missing_raw_serial"
+  },
+  "stability": [],
+  "transitions": {
+    "results": {
+      "windows1-no-vmware-no-busy-observers:resident-nested-hidehv:pass": 10,
+      "windows1-no-vmware-no-busy-observers:stop:pass": 10
+    },
+    "commandWallMs": {
+      "windows1-no-vmware-no-busy-observers:resident-nested-hidehv": {
+        "n": 10,
+        "median": 15.156500000000001,
+        "mean": 15.55848,
+        "min": 14.0564,
+        "max": 17.3729,
+        "sampleSd": 1.2176903308221587
+      },
+      "windows1-no-vmware-no-busy-observers:stop": {
+        "n": 10,
+        "median": 15.3367,
+        "mean": 15.80986,
+        "min": 14.4339,
+        "max": 20.7923,
+        "sampleSd": 1.8474485596206582
+      }
+    },
+    "internalPhaseTimes": null,
+    "perCpuTransitionTime": null,
+    "ipiLatency": null,
+    "limits": "Busy QPC loops on both CPUs perturb scheduling. Top 16 gaps only per CPU; missing overlap is not zero. CLI process creation is inside command wall time. Gaps and command duration cannot identify exact kernel quiesce/capture/VMCS/EPT/resume timings or simultaneous topology entry."
+  }
+}
