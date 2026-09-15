@@ -852,7 +852,20 @@ KswordARKHvmNestedL2Enter(
                 break;
             }
         }
+        /*
+         * The whole distribution, and whether L2 was halted - see the fields.
+         *
+         * LastEntryGuestActivity was read out of vmcs02 just above, so it is
+         * the state the processor is about to resume in: one means halted.
+         */
+        if (nested->LastEntryGuestActivity == 1UL) {
+            nested->L2EntryHaltedCount += 1ULL;
+        }
         if ((entryEvent & 0x80000000ULL) != 0ULL) {
+            nested->L2InjectVectorCount[(ULONG)(entryEvent & 0xFFULL)] += 1UL;
+            if (nested->LastEntryGuestActivity == 1UL) {
+                nested->L2InjectWhileHaltedCount += 1ULL;
+            }
             nested->L2InjectionCount += 1ULL;
             if (region < 4UL) {
                 nested->L2Vmcs12RegionInjections[region] += 1ULL;

@@ -1173,6 +1173,24 @@ typedef struct _KSW_HVM_NESTED_VCPU
      * says.
      */
     ULONG Vmcs12EvictionCount;
+    /*
+     * Every event entry carried into L2, counted by vector.
+     *
+     * The eight-slot ring beside this one keeps the first eight injections of
+     * the run and nothing after, so it describes the boot's opening and is
+     * silent about the hours that follow.  The question it cannot answer is
+     * the one that matters: the guest halts and is woken about eighty times a
+     * second for a while and then stops dead, and whether those wakes were the
+     * timer tick or something else decides whether the tick is missing or
+     * merely late.  A vector is eight bits, so the whole distribution fits.
+     *
+     * Delivered-while-halted is counted beside it, because an interrupt that
+     * arrives at a processor in the halt state is the only kind that can end
+     * the halt, and "injected" alone does not say that happened.
+     */
+    ULONG L2InjectVectorCount[256];
+    ULONGLONG L2InjectWhileHaltedCount;
+    ULONGLONG L2EntryHaltedCount;
     /* Preserve explicit partial vmcs02 merge state. */
     KSW_HVM_VMCS02_STATE Vmcs02;
     /* Preserve explicit partial shadow-EPT composition state. */

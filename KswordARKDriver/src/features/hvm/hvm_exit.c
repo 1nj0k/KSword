@@ -1653,6 +1653,34 @@ KswordARKHvmExitPublishCost(
     }
     {
         /*
+         * One row per vector L2 was ever entered carrying - see the fields.
+         *
+         * Only the vectors that happened, so an idle hierarchy costs nothing,
+         * and the halted totals ride along on each row because the question
+         * they answer together is one question.
+         */
+        ULONG vector = 0UL;
+
+        for (vector = 0UL; vector < 256UL; ++vector) {
+            if (Context->Nested.L2InjectVectorCount[vector] == 0UL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = vector;
+            row.qualification =
+                (ULONGLONG)Context->Nested.L2InjectVectorCount[vector];
+            row.guestPhysicalAddress =
+                Context->Nested.L2InjectWhileHaltedCount;
+            row.guestLinearAddress = Context->Nested.L2EntryHaltedCount;
+            row.guestRip = Context->Nested.L2InjectionCount;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xC7u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /*
          * The flags at each region's last exit, and the last four IPIs.
          *
          * Split from the row above only because that row is full.  A halt with
