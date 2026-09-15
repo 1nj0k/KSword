@@ -56,6 +56,14 @@ approval review; [the blocked record](linux-benchmark-blocked.json) is not a res
 Full Hyper-V cannot be installed on this Home edition. Intermediate Hyper-V remains
 unverified, and Windows 10 LTSC is deferred by the user.
 
+Baseline correction: `vmp-baseline-diagnostics.json`, captured before component
+restoration, still records `hypervisorlaunchtype Off`. An earlier BCD command
+reported success, but that does not establish that an inner hypervisor actually
+started. The three refused starts are retained as observations; they are not
+evidence that a correctly running WHP configuration cannot work. Whole-chain
+insertion beneath an already-running VMware/guest was subsequently deferred by
+the user. No VMware defect has been established by these records.
+
 ## Recompute without changing raw evidence
 
 From repository root, using Python standard library only:

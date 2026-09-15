@@ -8,6 +8,8 @@
 
 这两项是独立实验。完整运行中的 VMware/TinyCore 随 Windows 一起进入新增
 监控器的 VMX 所有权交接仍未实现，不能由上述两项拼接推出。
+用户随后要求暂时搁置这条整链平移路径；它不属于当前已验收能力，也没有被确认为
+VMware 自身缺陷。此次检查没有移除 VMX 所有权保护或部署未经验证的接管实现。
 
 ## 本次代码修复
 
@@ -66,7 +68,11 @@ Linux 6.18.35-tinycore64，2 vCPU。引导没有 `nosmp`、`hpet=disable` 或
 三次独立尝试分别使用原配置、启用 WHP、启用 WHP+VMP；均在没有 KSword 常驻时
 启动 VMware，并保存新产生的临时启动日志。三次都被 VMware 拒绝，不能计为
 成功启动，更不能从中计算 nested guest 的开销。日志表明检测到外层 Hyper-V，
-同时可用 WHP 路径不成立。试验后已恢复组件状态和 BCD，并重启 HVM TARGET。
+但这三次失败不能证明有效 WHP 路径不可用：再次核对发现
+`vmp-baseline-diagnostics.json` 在恢复组件之前仍记录 `hypervisorlaunchtype Off`，
+尽管更早的启用记录显示 BCD 命令返回成功。组件启用和命令成功没有证明内层 hypervisor
+实际启动。旧失败记录全部保留，WHP 基线的有效性标为未确认。试验后已恢复组件状态和
+BCD，并重启 HVM TARGET。
 
 Windows 1 是 Home/Core 版，全 Hyper-V 角色及 vmms 不存在；微软文档明确该版本
 不支持安装该角色。因此，这台靶机没有取得 Hyper-V 作为中间 VMM 的正向证据。

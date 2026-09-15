@@ -6,7 +6,7 @@ configuration, time domain, continuity checks and retained raw record.
 
 | Item | Required result | Current state |
 | --- | --- | --- |
-| Running descendant insertion | Already-running Windows, VMM and descendant remain live across insertion | Open; current start rejects pre-existing CR4.VMXE ownership |
+| Running descendant insertion | Already-running Windows, VMM and descendant remain live across insertion | Deferred by user on 2026-09-15; current start rejects pre-existing CR4.VMXE ownership, and native VMCS import is not implemented. No confirmed attribution to a VMware defect |
 | Novelty and application | Prior-work comparison and a useful measured application | Primary-source comparison added; useful application and measured advantage remain open |
 | Transition timing and performance | Internal phase timestamps, per-CPU timing, matched current-binary baselines | Current driver: 10 start/stop pairs, 168 Windows benchmark processes, per-CPU timestamps complete; exact application pause, matched nested baseline and multiple machines remain open |
 | Architectural state and stability | State invariants, timer regression, monitored long runs and teardown coverage | Descriptor fix verified; normal two-vCPU TinyCore boot, 10-minute monitored run and one current-driver VMware teardown pass; timer-specific, hour-scale and broader state regressions remain open |
