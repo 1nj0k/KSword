@@ -108,7 +108,8 @@ if ($blame.Count -eq 0) { Write-Output ''; Write-Output '0xCF（归零归因）�
 foreach ($r in ($blame | Sort-Object { [int64]$_.sequence } | Select-Object -Last 4)) {
     Write-Output ''
     Write-Output ("0xCF 归零归因  核{0}  区{1}  vmcs12=0x{2:X}  序号 {3}" -f `
-        $r.access, [uint64]$r.exitReason, ([uint64]$r.guestRip), $r.sequence)
+        $r.access, (([uint64]$r.exitReason) -band 0xFF), ([uint64]$r.guestRip), $r.sequence)
+    Write-Output ("  该区域装上过 IDT 基址 {0} 次" -f ((([uint64]$r.exitReason) -shr 8)))
     Write-Output ("  归零总数 = {0}" -f ([uint32]$r.status))
     Write-Output ("    其中我们装入抹掉的 = {0}" -f ([uint64]$r.guestPhysicalAddress))
     Write-Output ("    其中 L2 自己重载的 = {0}" -f ([uint64]$r.guestLinearAddress))

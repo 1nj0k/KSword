@@ -647,8 +647,19 @@ KswordARKHvmNestedRegionStore(
             }
         }
         if (regionSlot >= 4UL) {
-            /* More regions than slots: report every spill rather than none. */
-            changed = TRUE;
+            /*
+             * More regions than slots, so report a bounded number of them.
+             *
+             * This used to report every spill, which is fine until L1 has a
+             * fifth region and then it is the only thing in the ring - see the
+             * field comment for what that cost.
+             */
+            if (Nested->RegionStoreOverflowRows < 64UL) {
+                Nested->RegionStoreOverflowRows += 1UL;
+                changed = TRUE;
+            } else {
+                Nested->RegionStoreOverflowSuppressed += 1ULL;
+            }
         } else if (Nested->RegionStoreSlotEntries[regionSlot] !=
                        (ULONG)written) {
             changed = TRUE;
@@ -664,6 +675,8 @@ KswordARKHvmNestedRegionStore(
             row.guestLinearAddress = written;
             row.guestRip = (ULONGLONG)Nested->RegionStoreEntries;
             row.qualification = Nested->RegionLastStorePhysical;
+            /* How many of these were dropped, so the cap is not silent. */
+            row.status = (LONG)Nested->RegionStoreOverflowSuppressed;
             row.ruleId = 0xF2u;
             KswordARKHvmEventPublish(&row);
         }

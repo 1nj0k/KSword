@@ -116,12 +116,29 @@ $msg[0] = 2; Put16 $msg 2 1; Put32 $msg 4 0
 $ns.Write($msg, 0, 8)
 
 # --- 按键 ---
+# 位 0x10000 = "这一键要按着 Shift"。
+#
+# RFB 的 keysym 本身已经区分大小写，但 VMware 的服务端把 keysym 翻成扫描码时
+# 不会替你合成 Shift：送 'S'（0x53）进去，来宾收到的是 's'。实测代价是一整轮
+# —— isolinux 的编辑行上出现 console=ttys0，Linux 没有这个控制台名，串口一个
+# 字节都没有，而画面上那一行看着完全正常。
+$shiftL = 0xFFE1
 foreach ($k in $Keys) {
+    $shifted = ($k -band 0x10000) -ne 0
+    $code = $k -band 0xFFFF
+    if ($shifted) {
+        $km = New-Object byte[] 8
+        $km[0] = 4; $km[1] = 1; Put32 $km 4 $shiftL; $ns.Write($km, 0, 8)
+    }
     foreach ($down in 1, 0) {
         $km = New-Object byte[] 8
         $km[0] = 4; $km[1] = [byte]$down
-        Put32 $km 4 $k
+        Put32 $km 4 $code
         $ns.Write($km, 0, 8)
+    }
+    if ($shifted) {
+        $km = New-Object byte[] 8
+        $km[0] = 4; $km[1] = 0; Put32 $km 4 $shiftL; $ns.Write($km, 0, 8)
     }
     Start-Sleep -Milliseconds $KeyDelayMs
 }

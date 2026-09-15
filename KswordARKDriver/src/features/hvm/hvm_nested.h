@@ -594,6 +594,18 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONGLONG L2IdtrGainedVmcs;
     ULONG L2IdtrGainedReason;
     ULONG L2IdtrGainedCount;
+    /*
+     * Per region, because the processor-wide count lumps L1's two virtual
+     * processors together and the whole question is that they differ.
+     *
+     * One region carries 0xFFFFFE0000000000 from its first sixty-four-bit exit
+     * to its last, the other carries zero the whole way, and both run kernel
+     * code with the same entry-area GDT and TSS loaded.  If the second one's
+     * count here is zero while the first one's is in the thousands, then its
+     * LIDT never reached vmcs02 - which is a different defect from losing a
+     * value that did.
+     */
+    ULONG L2RegionIdtrGained[4];
     /* What this processor last saved for the region the bad entry names. */
     ULONGLONG L2Idt0In64LastSaved;
     ULONGLONG L2IdtrLostEntryRip;
@@ -890,6 +902,20 @@ typedef struct _KSW_HVM_NESTED_VCPU
      */
     ULONGLONG RegionStoreSlotPhysical[4];
     ULONG RegionStoreSlotEntries[4];
+    /*
+     * A bound on the rows a fifth region can produce.
+     *
+     * The four slots above exist so a spill that changed nothing stays quiet.
+     * When L1 has more regions than that, the fallback was "report every spill
+     * rather than none" - and once the guest started triple-faulting, VMware
+     * allocated a fresh VMCS per reset and that branch took over the ring
+     * completely: a two-thousand-row sample came back a hundred percent this
+     * one row, with every other reading aged out behind it.  Bounded here,
+     * with the suppressed count carried on the row so the truncation is
+     * visible rather than silent.
+     */
+    ULONG RegionStoreOverflowRows;
+    ULONGLONG RegionStoreOverflowSuppressed;
     /*
      * What the region already holds, so an unchanged spill can be skipped.
      *

@@ -1536,7 +1536,10 @@ KswordARKHvmExitPublishCost(
             /* And the decomposition of that count - see the fields. */
             RtlZeroMemory(&row, sizeof(row));
             row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
-            row.exitReason = slot;
+            /* Slot in the low byte, how often L2 set a base above it. */
+            row.exitReason =
+                slot |
+                ((Context->Nested.L2RegionIdtrGained[slot] & 0xFFFFFFUL) << 8);
             row.qualification = Context->Nested.L2RegionIdtrLoaded[slot];
             row.guestPhysicalAddress =
                 (ULONGLONG)Context->Nested.L2RegionIdtrCacheLost[slot];

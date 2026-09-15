@@ -2103,7 +2103,21 @@ KswordARKHvmNestedL2Reflect(
     (void)KswordARKHvmNestedEptPropagateAccessedDirty(
         &nested->ShadowEpt,
         Context->PhysWindow);
-    /* Record where L2 got to so L1 can inspect and later resume it. */
+    /*
+     * Record where L2 got to so L1 can inspect and later resume it.
+     *
+     * This once also mirrored every field into the shared pool's copy, on the
+     * reasoning that the working copy is this processor's and only reaches the
+     * pool when this processor gives the region up - so a processor picking
+     * the same vmcs12 up elsewhere would load state older than this exit.
+     * That gap is real, but the reading offered for it was not: the per-region
+     * IDTR base this driver publishes is each processor's record of what *it*
+     * last saved, so two processors holding different values for one region
+     * only means one of them has not run it lately.  Mirrored, it cost fifty
+     * extra writes per exit, ran three hundred and fifty thousand times, and
+     * the triple faults and the boot both came out exactly where they were.
+     * Reverted for want of a reading that asks for it.
+     */
     for (index = 0UL;
          index < RTL_NUMBER_OF(g_KswordL2GuestFields);
          ++index) {
@@ -2134,6 +2148,17 @@ KswordARKHvmNestedL2Reflect(
                 nested->L2IdtrGainedVmcs = nested->CurrentVmcs;
                 nested->L2IdtrGainedReason = ExitReason;
                 nested->L2IdtrGainedCount += 1UL;
+                {
+                    ULONG gained = 0UL;
+
+                    for (gained = 0UL; gained < 4UL; ++gained) {
+                        if (nested->L2Vmcs12Regions[gained] ==
+                                nested->CurrentVmcs) {
+                            nested->L2RegionIdtrGained[gained] += 1UL;
+                            break;
+                        }
+                    }
+                }
             }
             if (saved == 0ULL && nested->L2IdtrBaseLoadedLast != 0ULL) {
                 /* 0x4816 is the CS access rights; bit 13 is long mode. */
