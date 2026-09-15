@@ -528,6 +528,24 @@ typedef struct _KSW_HVM_NESTED_VCPU
      * store's own health has never been published anywhere, so it is captured
      * here at the instant it matters rather than read as a total afterwards.
      */
+    /*
+     * How often L2 is entered in the shape the triple fault was found in.
+     *
+     * Sixty-four-bit mode with an IDTR base of zero and a limit of 0x0FFF is
+     * a real state Linux passes through - its bring-up descriptor is declared
+     * with exactly that size and an address filled in later - and it is
+     * harmless there only because interrupts are off.  So the state alone is
+     * not the defect and counting it is not enough: what matters is whether
+     * an entry ever carries an event into it.  One counter for the state and
+     * one for the state with an injection separates "the guest lives here all
+     * the time" from "this happened once, and that once was fatal".
+     */
+    ULONGLONG L2Idt0In64Count;
+    ULONGLONG L2Idt0In64InjectedCount;
+    ULONGLONG L2Idt0In64Rip;
+    ULONGLONG L2Idt0In64Vmcs;
+    ULONG L2Idt0In64Entry;
+    ULONG L2Idt0In64Rflags;
     ULONGLONG L2IdtrLostEntryRip;
     ULONGLONG L2IdtrLostVmcs;
     ULONGLONG L2IdtrLostHeader;

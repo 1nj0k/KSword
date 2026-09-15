@@ -1596,6 +1596,18 @@ KswordARKHvmExitPublishCost(
         row.access = (ULONG)Context->ApicId;
         row.ruleId = 0xCDu;
         KswordARKHvmEventPublish(&row);
+        /* How often L2 is entered in the triple fault's shape - see the fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2Idt0In64Count;
+        row.guestPhysicalAddress = Context->Nested.L2Idt0In64InjectedCount;
+        row.guestLinearAddress = Context->Nested.L2Idt0In64Rip;
+        row.guestRip = Context->Nested.L2Idt0In64Vmcs;
+        row.exitReason = Context->Nested.L2Idt0In64Entry;
+        row.status = (LONG)Context->Nested.L2Idt0In64Rflags;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xCCu;
+        KswordARKHvmEventPublish(&row);
     }
     {
         /*

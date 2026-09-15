@@ -874,6 +874,27 @@ KswordARKHvmNestedL2Enter(
                 nested->L2InjectStateIndex += 1UL;
             }
         }
+        /*
+         * And whether this entry is the triple fault's shape - see the fields.
+         *
+         * 0x4812 is the IDTR limit, 0x6818 its base, and bit 13 of the CS
+         * access rights is the long-mode bit.  All read back from vmcs02, so
+         * this is the state the processor is about to run in rather than
+         * anything L1 asked for.
+         */
+        if ((nested->LastEntryGuestCsAr & 0x2000UL) != 0UL &&
+            KswordARKHvmNestedL2Read(0x6818UL) == 0ULL &&
+            (KswordARKHvmNestedL2Read(0x4812UL) & 0xFFFFULL) == 0x0FFFULL) {
+            nested->L2Idt0In64Count += 1ULL;
+            if ((entryEvent & 0x80000000ULL) != 0ULL) {
+                nested->L2Idt0In64InjectedCount += 1ULL;
+                nested->L2Idt0In64Rip = nested->LastEntryGuestRip;
+                nested->L2Idt0In64Vmcs = nested->CurrentVmcs;
+                nested->L2Idt0In64Entry = (ULONG)entryEvent;
+                nested->L2Idt0In64Rflags =
+                    (ULONG)KswordARKHvmNestedL2Read(0x6820UL);
+            }
+        }
     }
     nested->LastEntryMsrBitmap =
         KswordARKHvmNestedL2Read(KSW_L2_MSR_BITMAP);

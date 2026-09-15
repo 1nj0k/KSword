@@ -39,7 +39,7 @@ $rows = Invoke-Command -Session $s -ArgumentList $Depth -ScriptBlock {
         $all += $r
         $cur = [int64]$r[-1].sequence
     }
-    return ($all | Where-Object { $_.ruleId -in @(205, 206, 207, 208, 209, 210, 211) })
+    return ($all | Where-Object { $_.ruleId -in @(204, 205, 206, 207, 208, 209, 210, 211) })
 }
 
 Remove-PSSession $s
@@ -58,7 +58,7 @@ foreach ($r in $desc) {
     Write-Output ("  GDTR 基址 = 0x{0:X16}  界限 = 0x{1:X4}" -f `
         ([uint64]$r.guestPhysicalAddress), (($lim -shr 16) -band 0xFFFF))
     Write-Output ("  TR   基址 = 0x{0:X16}  界限 = 0x{1:X8}  AR = 0x{2:X}" -f `
-        ([uint64]$r.guestLinearAddress), (($lim -shr 32) -band 0xFFFFFFFF), ([uint32]$r.status))
+        ([uint64]$r.guestLinearAddress), (($lim -shr 32) -band 0xFFFFFFFFL), ([uint32]$r.status))
     Write-Output ("  与 vmcs12 不一致掩码 = 0x{0:X}（0 = 逐字段一致）" -f ([uint64]$r.exitReason))
 }
 
@@ -82,7 +82,7 @@ foreach ($r in $copy) {
     Write-Output ("  存出（vmcs02→vmcs12）次数 = {0}   其中非零 = {1}   最后存出值 = 0x{2:X16}" -f `
         ($cn -shr 32), ($nz -shr 32), ([uint64]$r.qualification))
     Write-Output ("  装入（vmcs12→vmcs02）次数 = {0}   其中非零 = {1}   最后装入值 = 0x{2:X16}" -f `
-        ($cn -band 0xFFFFFFFF), ($nz -band 0xFFFFFFFF), ([uint64]$r.guestPhysicalAddress))
+        ($cn -band 0xFFFFFFFFL), ($nz -band 0xFFFFFFFFL), ([uint64]$r.guestPhysicalAddress))
     # exitReason 只有 32 位，两个对照计数各占 16 位。第一版按 32/32 打包，
     # 高半直接被截掉，读出来是个恒零的假读数。
     Write-Output ("  对照：L1 写 IDTR 界限 {0} 次，写 GDTR 基址 {1} 次" -f `
@@ -136,7 +136,21 @@ foreach ($r in (@($rows | Where-Object { $_.ruleId -eq 205 }) |
     Write-Output ''
     Write-Output ("0xCD 后备存储健康度  核{0}  序号 {1}" -f $r.access, $r.sequence)
     Write-Output ("  存页：成功 {0}   失败 {1}   跳过 {2}   最近一次写了 {3} 条" -f `
-        ($q -shr 32), ($q -band 0xFFFFFFFF), ([uint64]$r.guestPhysicalAddress), ([uint32]$r.status))
+        ($q -shr 32), ($q -band 0xFFFFFFFFL), ([uint64]$r.guestPhysicalAddress), ([uint32]$r.status))
     Write-Output ("  还原：成功 {0}   未命中 {1}   被拒字段 {2}   池淘汰 {3}   上次头里的条数 {4}" -f `
-        ($l -shr 32), ($l -band 0xFFFFFFFF), ($g -shr 32), ($g -band 0xFFFFFFFF), ([uint32]$r.exitReason))
+        ($l -shr 32), ($l -band 0xFFFFFFFFL), ($g -shr 32), ($g -band 0xFFFFFFFFL), ([uint32]$r.exitReason))
+}
+
+# 三重故障那个形状：64 位模式 + IDTR 基址 0 + 界限 0x0FFF。
+# 只数状态没用（Linux 正常会路过），关键是带不带注入。
+foreach ($r in (@($rows | Where-Object { $_.ruleId -eq 204 }) |
+                Sort-Object { [int64]$_.sequence } | Select-Object -Last 2)) {
+    Write-Output ''
+    Write-Output ("0xCC 64 位下 IDT 基址为 0 的进入  核{0}  序号 {1}" -f $r.access, $r.sequence)
+    Write-Output ("  这样进入过 {0} 次，其中带着注入的 {1} 次" -f `
+        ([uint64]$r.qualification), ([uint64]$r.guestPhysicalAddress))
+    Write-Output ("  最后一次带注入的：RIP = 0x{0:X}   vmcs12 = 0x{1:X}" -f `
+        ([uint64]$r.guestLinearAddress), ([uint64]$r.guestRip))
+    Write-Output ("    注入信息 = 0x{0:X8}   RFLAGS = 0x{1:X}" -f `
+        ([uint32]$r.exitReason), ([uint32]$r.status))
 }
