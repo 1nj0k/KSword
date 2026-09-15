@@ -399,6 +399,7 @@ namespace
         defaultSettings.launchMaximizedOnStartup = true;
         defaultSettings.startupTopMostEnabled = false;
         defaultSettings.autoRequestAdminOnStartup = true;
+        defaultSettings.startupAutoInstallR0Driver = false;
         defaultSettings.preventMultipleInstances = true;
         defaultSettings.startupWindowScaleFactor = 1.0;
         defaultSettings.startupScaleRecommendPromptDisabled = false;
@@ -425,10 +426,10 @@ namespace
         defaultSettings.logWindowGeometryBase64.clear();
         defaultSettings.virusTotalApiKey.clear();
         defaultSettings.threatBookApiKey.clear();
-        // 六个按钮默认全显示，与设置项出现之前的固定行为一致。
+        // Debug 默认隐藏；其余权限按钮保持此前默认显示的行为。
         defaultSettings.privilegeButtonUiAccessVisible = true;
         defaultSettings.privilegeButtonAdminVisible = true;
-        defaultSettings.privilegeButtonDebugVisible = true;
+        defaultSettings.privilegeButtonDebugVisible = false;
         defaultSettings.privilegeButtonSystemVisible = true;
         defaultSettings.privilegeButtonR0Visible = true;
         defaultSettings.privilegeButtonHvmVisible = true;
@@ -702,6 +703,11 @@ ks::settings::AppearanceSettings ks::settings::loadAppearanceSettings()
     loadedSettings.autoRequestAdminOnStartup = rootObject.value(QStringLiteral("startup_auto_request_admin"))
         .toBool(loadedSettings.autoRequestAdminOnStartup);
 
+    // startupAutoInstallR0Driver 作用：读取“启动时自动安装驱动”开关，缺失时默认关闭。
+    loadedSettings.startupAutoInstallR0Driver = rootObject
+        .value(QStringLiteral("startup_auto_install_r0_driver"))
+        .toBool(loadedSettings.startupAutoInstallR0Driver);
+
     // preventMultipleInstances 作用：读取“防止多开”开关，缺失时默认开启以保持旧版行为。
     loadedSettings.preventMultipleInstances = rootObject.value(QStringLiteral("prevent_multiple_instances"))
         .toBool(loadedSettings.preventMultipleInstances);
@@ -900,6 +906,7 @@ bool ks::settings::saveAppearanceSettings(const AppearanceSettings& settings, QS
     rootObject.insert(QStringLiteral("startup_maximized"), settings.launchMaximizedOnStartup);
     rootObject.insert(QStringLiteral("startup_topmost_enabled"), settings.startupTopMostEnabled);
     rootObject.insert(QStringLiteral("startup_auto_request_admin"), settings.autoRequestAdminOnStartup);
+    rootObject.insert(QStringLiteral("startup_auto_install_r0_driver"), settings.startupAutoInstallR0Driver);
     rootObject.insert(QStringLiteral("prevent_multiple_instances"), settings.preventMultipleInstances);
     rootObject.insert(
         QStringLiteral("startup_window_scale_factor"),

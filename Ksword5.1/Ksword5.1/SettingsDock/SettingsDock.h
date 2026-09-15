@@ -342,6 +342,9 @@ private:
     // m_startupAutoAdminCheckBox 作用：设置下次启动时是否先尝试申请管理员权限。
     QCheckBox* m_startupAutoAdminCheckBox = nullptr;
 
+    // m_startupAutoInstallR0DriverCheckBox 作用：设置下次启动时是否自动安装并启动 KswordARK 驱动。
+    QCheckBox* m_startupAutoInstallR0DriverCheckBox = nullptr;
+
     // m_preventMultipleInstancesCheckBox 作用：设置普通启动时是否防止同时运行多个实例。
     QCheckBox* m_preventMultipleInstancesCheckBox = nullptr;
 

@@ -119,11 +119,15 @@ static const KSWORD_ARK_CALLBACK_ENUM_SOURCE_CONTEXT g_KswordArkCallbackEnumPdbO
     KSWORD_ARK_CALLBACK_ENUM_SOURCE_PDB_PROFILE,
     KSWORD_ARK_CALLBACK_TRUST_PDB_PROFILE |
         KSWORD_ARK_CALLBACK_TRUST_PROFILE_GATED |
-        KSWORD_ARK_CALLBACK_TRUST_STORAGE_VALIDATED,
-    KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_NONE,
+        KSWORD_ARK_CALLBACK_TRUST_STORAGE_VALIDATED |
+        KSWORD_ARK_CALLBACK_TRUST_STRUCTURE_SIGNATURE,
+    KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+        KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION,
     KSWORD_ARK_CALLBACK_ENUM_FIELD_TRUSTED |
         KSWORD_ARK_CALLBACK_ENUM_FIELD_STORAGE_ADDRESS |
-        KSWORD_ARK_CALLBACK_ENUM_FIELD_PROFILE_GATED,
+        KSWORD_ARK_CALLBACK_ENUM_FIELD_PROFILE_GATED |
+        KSWORD_ARK_CALLBACK_ENUM_FIELD_HANDLE |
+        KSWORD_ARK_CALLBACK_ENUM_FIELD_VERIFIED_REMOVE,
     L"PDB callback profile trusted object list"
 };
 
@@ -2443,7 +2447,6 @@ Return Value:
         KSWORD_ARK_CALLBACK_ENUM_FIELD_CONTEXT_ADDRESS |
         KSWORD_ARK_CALLBACK_ENUM_FIELD_REGISTRATION_ADDRESS |
         KSWORD_ARK_CALLBACK_ENUM_FIELD_NAME |
-        KSWORD_ARK_CALLBACK_ENUM_FIELD_REMOVABLE_CANDIDATE |
         KSWORD_ARK_CALLBACK_ENUM_FIELD_OPERATION_MASK |
         KSWORD_ARK_CALLBACK_ENUM_FIELD_STORAGE_ADDRESS;
     entry->operationMask = KSWORD_ARK_REG_OP_ALL;
@@ -2904,6 +2907,7 @@ Return Value:
     ULONG64 preOperation = 0ULL;
     ULONG64 postOperation = 0ULL;
     ULONG64 callbackEntry = 0ULL;
+    ULONG64 registrationProbe = 0ULL;
     ULONG operationMask = 0UL;
     KSWORD_ARK_CALLBACK_ENUM_OBJECT_SCAN_RESULT result;
 
@@ -2975,6 +2979,12 @@ Return Value:
         return FALSE;
     }
     if (callbackEntry == 0ULL || !KswordArkCallbackEnumLooksLikeKernelPointer(callbackEntry)) {
+        return FALSE;
+    }
+    if (callbackEntry == entryItemBase ||
+        callbackEntry == NodeAddress ||
+        KswordArkCallbackEnumIsKernelModuleAddress(ModuleCache, callbackEntry) ||
+        !KswordArkCallbackEnumReadPointer(callbackEntry, &registrationProbe)) {
         return FALSE;
     }
 
@@ -3162,11 +3172,10 @@ Return Value:
     entry->source = KSWORD_ARK_CALLBACK_ENUM_SOURCE_PRIVATE_OBJECT_TYPE_LIST;
     entry->status = KSWORD_ARK_CALLBACK_ENUM_STATUS_OK;
     entry->fieldFlags = KSWORD_ARK_CALLBACK_ENUM_FIELD_CALLBACK_ADDRESS |
-        KSWORD_ARK_CALLBACK_ENUM_FIELD_REGISTRATION_ADDRESS |
         KSWORD_ARK_CALLBACK_ENUM_FIELD_NAME |
-        KSWORD_ARK_CALLBACK_ENUM_FIELD_REMOVABLE_CANDIDATE |
         KSWORD_ARK_CALLBACK_ENUM_FIELD_OPERATION_MASK |
         KSWORD_ARK_CALLBACK_ENUM_FIELD_OBJECT_TYPE_MASK |
+        KSWORD_ARK_CALLBACK_ENUM_FIELD_RAW_STORAGE_VALUE |
         KSWORD_ARK_CALLBACK_ENUM_FIELD_STORAGE_ADDRESS;
     entry->operationMask = OperationMask;
     entry->objectTypeMask = ObjectTypeMask;
@@ -3175,13 +3184,30 @@ Return Value:
         entry->fieldFlags |= KSWORD_ARK_CALLBACK_ENUM_FIELD_REGISTRATION_TYPE;
     }
     entry->callbackAddress = CallbackAddress;
-    entry->registrationAddress = NodeAddress;
-    entry->contextAddress = RegistrationBlock;
-    if (RegistrationBlock != 0ULL) {
-        entry->fieldFlags |= KSWORD_ARK_CALLBACK_ENUM_FIELD_CONTEXT_ADDRESS;
-    }
+    // The list node is only diagnostic storage identity. It is never a valid
+    // RegistrationHandle and therefore travels separately from registrationAddress.
+    entry->rawStorageValue = NodeAddress;
     KswordArkCallbackEnumApplySourceContext(entry, SourceContext);
-    if (SourceContext == NULL) {
+    if (UsedPdbOffsets && SourceContext != NULL && RegistrationBlock != 0ULL) {
+        // _CALLBACK_ENTRY_ITEM.CallbackEntry is the value returned by
+        // ObRegisterCallbacks. Only a profile-gated exact field read may publish it.
+        entry->registrationAddress = RegistrationBlock;
+        entry->fieldFlags |= KSWORD_ARK_CALLBACK_ENUM_FIELD_REGISTRATION_ADDRESS;
+    }
+    else {
+        // Heuristic scans cannot prove the private structure version, but the UI
+        // exposes a high-risk candidate path when the candidate block is present.
+        entry->contextAddress = RegistrationBlock;
+        if (RegistrationBlock != 0ULL) {
+            entry->registrationAddress = RegistrationBlock;
+            entry->removeBehavior = KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+                KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION;
+            entry->fieldFlags |= KSWORD_ARK_CALLBACK_ENUM_FIELD_CONTEXT_ADDRESS |
+                KSWORD_ARK_CALLBACK_ENUM_FIELD_REGISTRATION_ADDRESS |
+                KSWORD_ARK_CALLBACK_ENUM_FIELD_REMOVABLE_CANDIDATE;
+        }
+        entry->fieldFlags &= ~(KSWORD_ARK_CALLBACK_ENUM_FIELD_HANDLE |
+            KSWORD_ARK_CALLBACK_ENUM_FIELD_VERIFIED_REMOVE);
         entry->trustFlags |= KSWORD_ARK_CALLBACK_TRUST_FALLBACK_PATTERN;
     }
 
@@ -3872,6 +3898,82 @@ Return Value:
         KSWORD_ARK_CALLBACK_ENUM_CLASS_ETW_PROVIDER,
         L"ETW providers/consumers",
         L"System Informer DynData 暴露 EgeGuid/EreGuidEntry 偏移，但仍需安全定位 ETW 全局表入口；当前仅标记未支持。");
+}
+
+NTSTATUS
+KswordArkCallbackEnumRevalidateObjectRemoveRequest(
+    _In_ const KSWORD_ARK_REMOVE_EXTERNAL_CALLBACK_EX_REQUEST* RequestPacket,
+    _In_ BOOLEAN RequireGenerationMatch,
+    _Out_ BOOLEAN* MatchPresentOut,
+    _Out_opt_ ULONG* MatchedFieldFlagsOut,
+    _Out_opt_ ULONG64* MatchedRegistrationAddressOut,
+    _Out_opt_ ULONG64* CurrentGenerationOut
+    )
+/*++
+
+Routine Description:
+
+    Rebuilds the same complete ordered callback snapshot exposed by the default
+    V3 R3 enumeration and matches one exact Object Callback row. No private
+    address supplied by R3 is dereferenced by this routine.
+
+--*/
+{
+    KSWORD_ARK_CALLBACK_ENUM_BUILDER builder;
+
+    if (RequestPacket == NULL || MatchPresentOut == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    *MatchPresentOut = FALSE;
+    if (MatchedFieldFlagsOut != NULL) {
+        *MatchedFieldFlagsOut = 0UL;
+    }
+    if (MatchedRegistrationAddressOut != NULL) {
+        *MatchedRegistrationAddressOut = 0ULL;
+    }
+    if (CurrentGenerationOut != NULL) {
+        *CurrentGenerationOut = 0ULL;
+    }
+
+    RtlZeroMemory(&builder, sizeof(builder));
+    builder.LastStatus = STATUS_SUCCESS;
+    builder.RemoveMatchRequest = RequestPacket;
+    KswordArkCallbackEnumSnapshotBegin(&builder);
+    KswordArkCallbackEnumAddSelfCallbacks(&builder);
+    KswordArkCallbackEnumAddMinifilters(&builder);
+    KswordArkCallbackEnumAddPrivateCallbacks(&builder);
+    KswordArkCallbackExtendedAddSpecialCallbacks(&builder);
+    KswordArkCallbackExternalAddCallbacks(&builder);
+    KswordArkCallbackEnumAddUnsupportedKinds(&builder);
+    KswordArkCallbackEnumSnapshotFinalize(&builder);
+
+    if (builder.SnapshotRowCount != builder.TotalCount || !NT_SUCCESS(builder.LastStatus)) {
+        return NT_SUCCESS(builder.LastStatus) ? STATUS_DATA_ERROR : builder.LastStatus;
+    }
+    if (CurrentGenerationOut != NULL) {
+        *CurrentGenerationOut = builder.SnapshotHash;
+    }
+    if (RequireGenerationMatch &&
+        RequestPacket->enumerationGeneration != builder.SnapshotHash) {
+        return STATUS_RETRY;
+    }
+    if (builder.RemoveMatchCount > 1UL) {
+        return STATUS_DATA_ERROR;
+    }
+    if (builder.RemoveMatchCount == 1UL) {
+        *MatchPresentOut = TRUE;
+        if (MatchedFieldFlagsOut != NULL) {
+            *MatchedFieldFlagsOut = builder.RemoveMatchedFieldFlags |
+                KSWORD_ARK_CALLBACK_ENUM_FIELD_ENUMERATION_GENERATION |
+                KSWORD_ARK_CALLBACK_ENUM_FIELD_IDENTITY_HASH;
+        }
+        if (MatchedRegistrationAddressOut != NULL) {
+            *MatchedRegistrationAddressOut = builder.RemoveMatchedRegistrationAddress;
+        }
+    }
+
+    return STATUS_SUCCESS;
 }
 
 NTSTATUS

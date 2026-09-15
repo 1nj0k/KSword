@@ -13,6 +13,7 @@
 #include <QMetaObject>
 #include <QPointer>
 #include <QPushButton>
+#include <QStandardItemModel>
 #include <QStringList>
 #include <QThreadPool>
 #include <QVBoxLayout>
@@ -262,6 +263,27 @@ void KernelDock::initializeCallbackRemovePanel()
     m_callbackRemoveTypeCombo->addItem(QStringLiteral("WFP Callout"), static_cast<quint32>(KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_WFP_CALLOUT));
     m_callbackRemoveTypeCombo->addItem(QStringLiteral("ETW Provider/Consumer"), static_cast<quint32>(KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_ETW_PROVIDER));
 
+    // Registry and ETW have no reliable safe path. Object remains selectable:
+    // its typed callback address is resolved back to one unique V3 enumeration row.
+    if (auto* callbackTypeModel = qobject_cast<QStandardItemModel*>(m_callbackRemoveTypeCombo->model()))
+    {
+        for (int itemIndex = 0; itemIndex < m_callbackRemoveTypeCombo->count(); ++itemIndex)
+        {
+            const quint32 callbackType = m_callbackRemoveTypeCombo->itemData(itemIndex).toUInt();
+            if (callbackType == KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_REGISTRY
+                || callbackType == KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_ETW_PROVIDER)
+            {
+                if (QStandardItem* item = callbackTypeModel->item(itemIndex))
+                {
+                    item->setEnabled(false);
+                    item->setToolTip(kernelText(
+                        "kernel.callback.enum.remove.safe.unavailable",
+                        QStringLiteral("当前记录不支持安全移除。")));
+                }
+            }
+        }
+    }
+
     m_callbackRemoveAddressEdit = new QLineEdit(m_callbackRemoveContentWidget);
     m_callbackRemoveAddressEdit->setPlaceholderText(kernelText("kernel.callback.remove.address.placeholder", QStringLiteral("输入回调地址（例如 0xFFFFF80012345678）")));
     m_callbackRemoveAddressEdit->setClearButtonEnabled(true);
@@ -312,10 +334,113 @@ void KernelDock::initializeCallbackRemovePanel()
             return;
         }
 
+        const quint32 selectedCallbackType =
+            static_cast<quint32>(m_callbackRemoveTypeCombo->currentData().toUInt());
+        if (selectedCallbackType == KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_OBJECT)
+        {
+            const KernelCallbackEnumEntry* matchedEntry = nullptr;
+            std::size_t matchCount = 0U;
+            for (const KernelCallbackEnumEntry& entry : m_callbackEnumRows)
+            {
+                const bool hasRemovalIdentity =
+                    entry.callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_OBJECT
+                    && entry.status == KSWORD_ARK_CALLBACK_ENUM_STATUS_OK
+                    && entry.callbackAddress == callbackAddress
+                    && entry.registrationAddress != 0U
+                    && entry.rawStorageValue != 0U
+                    && entry.generation != 0U
+                    && entry.identityHash != 0U
+                    && (entry.fieldFlags &
+                        (KSWORD_ARK_CALLBACK_ENUM_FIELD_VERIFIED_REMOVE |
+                         KSWORD_ARK_CALLBACK_ENUM_FIELD_REMOVABLE_CANDIDATE)) != 0U
+                    && (entry.removeBehavior &
+                        (KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+                         KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION)) ==
+                        (KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+                         KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION);
+                if (!hasRemovalIdentity)
+                {
+                    continue;
+                }
+                matchedEntry = &entry;
+                ++matchCount;
+            }
+
+            if (matchCount != 1U || matchedEntry == nullptr)
+            {
+                m_callbackRemoveStatusLabel->setText(kernelText(
+                    "kernel.callback.enum.remove.safe.unavailable",
+                    QStringLiteral("当前记录不支持安全移除。")));
+                QMessageBox::warning(
+                    this,
+                    kernelText("kernel.callback.remove.title.short", QStringLiteral("回调移除")),
+                    m_callbackRemoveStatusLabel->text());
+                refreshCallbackEnumAsync();
+                return;
+            }
+
+            KSWORD_ARK_REMOVE_EXTERNAL_CALLBACK_EX_REQUEST exRequest{};
+            exRequest.size = sizeof(exRequest);
+            exRequest.version = KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_PROTOCOL_VERSION;
+            exRequest.callbackClass = KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_OBJECT;
+            exRequest.flags = KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_FLAG_REQUIRE_REVALIDATION;
+            exRequest.callbackAddress = matchedEntry->callbackAddress;
+            exRequest.registrationAddress = matchedEntry->registrationAddress;
+            exRequest.rawStorageValue = matchedEntry->rawStorageValue;
+            exRequest.enumerationGeneration = matchedEntry->generation;
+            exRequest.identityHash = matchedEntry->identityHash;
+            exRequest.source = matchedEntry->source;
+            exRequest.operationMask = matchedEntry->operationMask;
+            exRequest.objectTypeMask = matchedEntry->objectTypeMask;
+            exRequest.trustFlags = matchedEntry->trustFlags;
+            exRequest.removeBehavior = matchedEntry->removeBehavior;
+
+            const ksword::ark::DriverClient driverClient;
+            const ksword::ark::CallbackRemoveExResult removeResult =
+                driverClient.removeExternalCallbackEx(exRequest);
+            if (!removeResult.io.ok)
+            {
+                m_callbackRemoveStatusLabel->setText(
+                    kernelText("kernel.callback.enum.remove.safe.io_failed", QStringLiteral("状态：安全移除失败，Win32=%1"))
+                    .arg(static_cast<qulonglong>(removeResult.io.win32Error)));
+                QMessageBox::warning(
+                    this,
+                    kernelText("kernel.callback.remove.title.short", QStringLiteral("回调移除")),
+                    m_callbackRemoveStatusLabel->text());
+                return;
+            }
+
+            const QString responseMessage = QString::fromWCharArray(removeResult.response.message);
+            if (removeResult.response.ntstatus >= 0)
+            {
+                m_callbackRemoveStatusLabel->setText(kernelText(
+                    "kernel.callback.enum.remove.safe.completed",
+                    QStringLiteral("状态：安全移除完成")));
+                QMessageBox::information(
+                    this,
+                    kernelText("kernel.callback.remove.title.short", QStringLiteral("回调移除")),
+                    responseMessage.isEmpty() ? m_callbackRemoveStatusLabel->text() : responseMessage);
+                refreshCallbackEnumAsync();
+            }
+            else
+            {
+                m_callbackRemoveStatusLabel->setText(
+                    kernelText("kernel.callback.enum.remove.safe.driver_failed", QStringLiteral("状态：驱动返回失败，NTSTATUS=%1"))
+                    .arg(QStringLiteral("0x%1")
+                        .arg(static_cast<qulonglong>(static_cast<quint32>(removeResult.response.ntstatus)), 8, 16, QChar('0'))
+                        .toUpper()));
+                QMessageBox::warning(
+                    this,
+                    kernelText("kernel.callback.remove.title.short", QStringLiteral("回调移除")),
+                    responseMessage.isEmpty() ? m_callbackRemoveStatusLabel->text() : responseMessage);
+            }
+            return;
+        }
+
         KSWORD_ARK_REMOVE_EXTERNAL_CALLBACK_REQUEST requestPacket{};
         requestPacket.size = sizeof(requestPacket);
         requestPacket.version = KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_PROTOCOL_VERSION;
-        requestPacket.callbackClass = static_cast<quint32>(m_callbackRemoveTypeCombo->currentData().toUInt());
+        requestPacket.callbackClass = selectedCallbackType;
         requestPacket.flags = KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_FLAG_NONE;
         requestPacket.callbackAddress = callbackAddress;
 

@@ -5810,11 +5810,24 @@ void MainWindow::showEvent(QShowEvent* event)
 
         const QString enableAfterElevationArgument =
             QString::fromWCharArray(kKswordEnableR0AfterElevationArgument);
-        if (QCoreApplication::arguments().contains(enableAfterElevationArgument, Qt::CaseInsensitive))
+        const bool enableAfterElevation =
+            QCoreApplication::arguments().contains(enableAfterElevationArgument, Qt::CaseInsensitive);
+        if (enableAfterElevation)
         {
             QTimer::singleShot(0, this, [this]()
                 {
                     enableR0ForUserRequest();
+                });
+        }
+        else if (m_currentAppearanceSettings.startupAutoInstallR0Driver)
+        {
+            // 自动安装沿用同一异步 SCM 链路；普通权限失败只报错，不把启动设置变成额外的 UAC 请求。
+            QTimer::singleShot(0, this, [this]()
+                {
+                    if (!startR0DriverService(true))
+                    {
+                        refreshPrivilegeStatusButtons();
+                    }
                 });
         }
     }
@@ -9559,7 +9572,7 @@ bool MainWindow::enableWindowsTestModeAndPromptReboot()
     return true;
 }
 
-bool MainWindow::startR0DriverService()
+bool MainWindow::startR0DriverService(const bool suppressPrivilegeElevationPrompt)
 {
     // 作用：
     // - 输入：无；驱动固定取当前 exe 目录下的 KswordARK.sys；
@@ -9596,7 +9609,7 @@ bool MainWindow::startR0DriverService()
     const QPointer<MainWindow> guardedSelf(this);
     dispatchR0ServiceStartToWorker(
         nativeDriverPath,
-        [guardedSelf](const R0ServiceOperationOutcome& operationOutcome)
+        [guardedSelf, suppressPrivilegeElevationPrompt](const R0ServiceOperationOutcome& operationOutcome)
         {
             g_r0ServiceOperationInFlight.store(false);
             if (guardedSelf == nullptr)
@@ -9623,10 +9636,11 @@ bool MainWindow::startR0DriverService()
                         operationOutcome.errorCode,
                         QStringLiteral("启动 KswordARK 驱动服务"));
                 }
-                else if (!ks::ui::promptForPrivilegeFailure(
-                    guardedSelf.data(),
-                    QStringLiteral("启用 R0"),
-                    operationOutcome.errorCode))
+                else if (suppressPrivilegeElevationPrompt
+                    || !ks::ui::promptForPrivilegeFailure(
+                        guardedSelf.data(),
+                        QStringLiteral("启用 R0"),
+                        operationOutcome.errorCode))
                 {
                     guardedSelf->showR0FatalError(
                         operationOutcome.stageText,

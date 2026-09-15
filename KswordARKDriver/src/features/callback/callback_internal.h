@@ -179,6 +179,11 @@ typedef struct _KSWORD_ARK_CALLBACK_ENUM_BUILDER
     KSWORD_ARK_CALLBACK_ENUM_ENTRY* PendingEntry;
     // 分页范围外的行在 ScratchEntry 中构建，使其仍能参与快照哈希。
     KSWORD_ARK_CALLBACK_ENUM_ENTRY ScratchEntry;
+    // EX Object Callback 注销会在完整快照聚合期间匹配一条原始枚举行。
+    const KSWORD_ARK_REMOVE_EXTERNAL_CALLBACK_EX_REQUEST* RemoveMatchRequest;
+    ULONG RemoveMatchedFieldFlags;
+    ULONG64 RemoveMatchedRegistrationAddress;
+    ULONG RemoveMatchCount;
 } KSWORD_ARK_CALLBACK_ENUM_BUILDER;
 
 typedef struct _KSWORD_ARK_CALLBACK_MODULE_ENTRY
@@ -393,6 +398,17 @@ KswordArkMinifilterQueryFirstCallbackOwner(
 VOID
 KswordArkCallbackEnumAddPrivateCallbacks(
     _Inout_ KSWORD_ARK_CALLBACK_ENUM_BUILDER* Builder
+    );
+
+_Must_inspect_result_
+NTSTATUS
+KswordArkCallbackEnumRevalidateObjectRemoveRequest(
+    _In_ const KSWORD_ARK_REMOVE_EXTERNAL_CALLBACK_EX_REQUEST* RequestPacket,
+    _In_ BOOLEAN RequireGenerationMatch,
+    _Out_ BOOLEAN* MatchPresentOut,
+    _Out_opt_ ULONG* MatchedFieldFlagsOut,
+    _Out_opt_ ULONG64* MatchedRegistrationAddressOut,
+    _Out_opt_ ULONG64* CurrentGenerationOut
     );
 
 VOID

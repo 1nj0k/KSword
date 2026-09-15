@@ -943,6 +943,65 @@ namespace
             return CallbackEnumRemovePolicyKind::NotRemovable;
         }
 
+        // Registry and ETW have no reliable safe removal path. Object callbacks
+        // are removable only when R0 published a real profile-gated handle plus
+        // complete V3 row identity; diagnostic nodes and heuristic fields never qualify.
+        if (entry.callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_REGISTRY
+            || entry.callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_ETW_PROVIDER)
+        {
+            return CallbackEnumRemovePolicyKind::NotRemovable;
+        }
+        if (entry.callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_OBJECT)
+        {
+            const std::uint32_t requiredTrustFlags =
+                KSWORD_ARK_CALLBACK_TRUST_PDB_PROFILE |
+                KSWORD_ARK_CALLBACK_TRUST_PROFILE_GATED |
+                KSWORD_ARK_CALLBACK_TRUST_STORAGE_VALIDATED |
+                KSWORD_ARK_CALLBACK_TRUST_STRUCTURE_SIGNATURE |
+                KSWORD_ARK_CALLBACK_TRUST_OWNER_MODULE_RESOLVED;
+            const bool verifiedObjectHandle =
+                entry.source == KSWORD_ARK_CALLBACK_ENUM_SOURCE_PDB_PROFILE
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_HANDLE)
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_VERIFIED_REMOVE)
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_IDENTITY_HASH)
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_ENUMERATION_GENERATION)
+                && entry.registrationAddress != 0U
+                && entry.rawStorageValue != 0U
+                && entry.identityHash != 0U
+                && entry.generation != 0U
+                && (entry.trustFlags & requiredTrustFlags) == requiredTrustFlags
+                && (entry.trustFlags & KSWORD_ARK_CALLBACK_TRUST_FALLBACK_PATTERN) == 0U
+                && (entry.removeBehavior &
+                    (KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+                     KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION)) ==
+                    (KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+                     KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION);
+            if (verifiedObjectHandle)
+            {
+                return CallbackEnumRemovePolicyKind::RemovableVerified;
+            }
+
+            const bool heuristicObjectCandidate =
+                entry.source == KSWORD_ARK_CALLBACK_ENUM_SOURCE_PRIVATE_OBJECT_TYPE_LIST
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_REMOVABLE_CANDIDATE)
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_REGISTRATION_ADDRESS)
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_IDENTITY_HASH)
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_ENUMERATION_GENERATION)
+                && entry.registrationAddress != 0U
+                && entry.rawStorageValue != 0U
+                && entry.identityHash != 0U
+                && entry.generation != 0U
+                && callbackEnumTrustFlagsIndicateFallbackPattern(entry)
+                && (entry.removeBehavior &
+                    (KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+                     KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION)) ==
+                    (KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+                     KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION);
+            return heuristicObjectCandidate
+                ? CallbackEnumRemovePolicyKind::RemovableCandidate
+                : CallbackEnumRemovePolicyKind::NotRemovable;
+        }
+
         const bool removableCandidate =
             callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_REMOVABLE_CANDIDATE);
         const bool hasLegacyRemoveValue = callbackEnumRemoveRequestValue(entry) != 0U;
@@ -976,7 +1035,24 @@ namespace
         // Input: one cached callback row.
         // Processing: converts the derived policy to stable UX wording.
         // Return: display text containing the requested removable policy keywords.
-        switch (callbackEnumRemovePolicyKind(entry))
+        const CallbackEnumRemovePolicyKind policy = callbackEnumRemovePolicyKind(entry);
+        if (policy == CallbackEnumRemovePolicyKind::NotRemovable
+            && entry.callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_OBJECT)
+        {
+            return kernelText(
+                "kernel.callback.enum.remove_policy.object_unverified",
+                QStringLiteral("unsupported/unverified（句柄或行身份无法验证）"));
+        }
+        if (policy == CallbackEnumRemovePolicyKind::NotRemovable
+            && (entry.callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_REGISTRY
+                || entry.callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_ETW_PROVIDER))
+        {
+            return kernelText(
+                "kernel.callback.enum.remove_policy.disabled",
+                QStringLiteral("unsupported（移除入口已禁用）"));
+        }
+
+        switch (policy)
         {
         case CallbackEnumRemovePolicyKind::RemovableVerified:
             return kernelText("kernel.callback.enum.remove_policy.verified", QStringLiteral("removable verified（公开 API 可验证）"));
@@ -1314,7 +1390,7 @@ namespace
             QMessageBox::No) == QMessageBox::Yes;
     }
 
-    void callbackEnumExecuteSafeRemove(
+    bool callbackEnumExecuteSafeRemove(
         QWidget* parentWidget,
         QLabel* statusLabel,
         CodeEditorWidget* detailEditor,
@@ -1322,20 +1398,20 @@ namespace
     {
         // Input: UI sinks plus the selected callback row.
         // Processing: validates the EX packet, asks for confirmation, then calls ArkDriverClient.
-        // Return: no return value; status/detail widgets and QMessageBox carry the outcome.
+        // Return: true only when R0 completed and confirmed the removal.
         if (!callbackEnumCanUseLegacySafeRemove(entry))
         {
             QMessageBox::information(
                 parentWidget,
                 kernelText("kernel.callback.enum.remove.safe.title", QStringLiteral("安全移除")),
                 kernelText("kernel.callback.enum.remove.safe.unavailable", QStringLiteral("当前记录不支持安全移除。")));
-            return;
+            return false;
         }
 
         const KSWORD_ARK_REMOVE_EXTERNAL_CALLBACK_EX_REQUEST requestPacket =
             callbackEnumBuildExRemoveRequest(
                 entry,
-                KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_FLAG_NONE,
+                KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_FLAG_REQUIRE_REVALIDATION,
                 KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
                 KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION);
         if (requestPacket.callbackClass == 0U || requestPacket.callbackAddress == 0U)
@@ -1344,7 +1420,7 @@ namespace
                 parentWidget,
                 kernelText("kernel.callback.enum.remove.safe.title", QStringLiteral("安全移除")),
                 kernelText("kernel.callback.enum.remove.safe.missing_value", QStringLiteral("当前记录缺少可用的类型或地址/标识值。")));
-            return;
+            return false;
         }
 
         if (!callbackEnumConfirmSafeRemove(parentWidget, entry))
@@ -1353,7 +1429,7 @@ namespace
             {
                 statusLabel->setText(kernelText("kernel.callback.enum.remove.safe.cancelled", QStringLiteral("状态：已取消安全移除")));
             }
-            return;
+            return false;
         }
 
         const ksword::ark::DriverClient driverClient;
@@ -1377,7 +1453,7 @@ namespace
                 kernelText("kernel.callback.enum.remove.safe.title", QStringLiteral("安全移除")),
                 kernelText("kernel.callback.enum.remove.safe.call_failed", QStringLiteral("回调移除失败，Win32=%1。"))
                     .arg(static_cast<qulonglong>(removeResult.io.win32Error)));
-            return;
+            return false;
         }
 
         if (removeResult.response.ntstatus >= 0)
@@ -1386,6 +1462,7 @@ namespace
             {
                 statusLabel->setText(kernelText("kernel.callback.enum.remove.safe.completed", QStringLiteral("状态：安全移除完成")));
             }
+            return true;
         }
         else
         {
@@ -1401,6 +1478,7 @@ namespace
                 kernelText("kernel.callback.enum.remove.safe.driver_failed_message", QStringLiteral("驱动返回失败，NTSTATUS=%1。"))
                     .arg(callbackEnumNtStatusText(removeResult.response.ntstatus)));
         }
+        return false;
     }
 
     void callbackEnumShowExperimentalUnlinkNotice(
@@ -2874,7 +2952,7 @@ void KernelDock::showCallbackEnumContextMenu(const QPoint& localPosition)
     const bool canUseLegacySafeRemove =
         hasSingleActionEntry && callbackEnumCanUseLegacySafeRemove(*actionEntry);
     const bool canUseExperimentalUnlink =
-        hasSingleActionEntry && selectedRemovePolicy != CallbackEnumRemovePolicyKind::NotRemovable;
+        hasSingleActionEntry && selectedRemovePolicy == CallbackEnumRemovePolicyKind::ExperimentalOnly;
 
     QMenu contextMenu(this);
     contextMenu.setStyleSheet(KswordTheme::ContextMenuStyle());
@@ -2991,11 +3069,15 @@ void KernelDock::showCallbackEnumContextMenu(const QPoint& localPosition)
     {
         if (actionEntry != nullptr)
         {
-            callbackEnumExecuteSafeRemove(
+            const bool removalConfirmed = callbackEnumExecuteSafeRemove(
                 this,
                 m_callbackEnumStatusLabel,
                 m_callbackEnumDetailEditor,
                 *actionEntry);
+            if (removalConfirmed)
+            {
+                refreshCallbackEnumAsync();
+            }
         }
         return;
     }

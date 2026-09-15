@@ -360,6 +360,16 @@ KswordARKCallbackIoctlRemoveExternalCallback( // 实现外部回调移除 IOCTL 
     responsePacket->moduleBase = 0ULL; // 默认模块基址为 0。
     responsePacket->moduleSize = 0UL; // 默认模块大小为 0。
     responsePacket->mappingFlags = 0UL; // 默认映射标志为 0。
+
+    // Object Callback cannot be removed safely from a callback-code address.
+    // Registry and ETW currently have no verified public removal path either.
+    if (requestCallbackClass == KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_OBJECT ||
+        requestCallbackClass == KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_REGISTRY ||
+        requestCallbackClass == KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_ETW_PROVIDER) {
+        operationStatus = STATUS_NOT_SUPPORTED;
+        goto CompleteRemoveExternalCallback;
+    }
+
     (VOID)KswordArkCallbackResolveModuleByAddress( // 尝试解析回调地址所属模块。
         requestCallbackAddress, // 输入缓存后的回调地址。
         responsePacket->modulePath, // 输出模块路径缓冲。
@@ -434,6 +444,159 @@ CompleteRemoveExternalCallback: // 统一完成响应和日志路径。
 
     return STATUS_SUCCESS; // 返回 IOCTL 分发执行成功状态。
 } // 结束外部回调移除 IOCTL 处理函数。
+
+static NTSTATUS
+KswordArkCallbackRemoveVerifiedObject(
+    _In_ const KSWORD_ARK_REMOVE_EXTERNAL_CALLBACK_EX_REQUEST* RequestPacket,
+    _Inout_ KSWORD_ARK_REMOVE_EXTERNAL_CALLBACK_EX_RESPONSE* ResponsePacket
+    )
+/*++
+
+Routine Description:
+
+    Revalidates one profile-gated or explicitly exposed heuristic Object
+    Callback row, calls ObUnRegisterCallbacks with the re-enumerated candidate,
+    and rebuilds the callback snapshot to confirm the exact row is gone.
+
+--*/
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    BOOLEAN matchPresent = FALSE;
+    ULONG matchedFieldFlags = 0UL;
+    ULONG64 matchedRegistrationAddress = 0ULL;
+    ULONG64 currentGeneration = 0ULL;
+    BOOLEAN isPdbCandidate = FALSE;
+    BOOLEAN isHeuristicCandidate = FALSE;
+    const ULONG requiredPdbTrustFlags =
+        KSWORD_ARK_CALLBACK_TRUST_PDB_PROFILE |
+        KSWORD_ARK_CALLBACK_TRUST_PROFILE_GATED |
+        KSWORD_ARK_CALLBACK_TRUST_STORAGE_VALIDATED |
+        KSWORD_ARK_CALLBACK_TRUST_STRUCTURE_SIGNATURE |
+        KSWORD_ARK_CALLBACK_TRUST_OWNER_MODULE_RESOLVED;
+    const ULONG requiredCommonFieldFlags =
+        KSWORD_ARK_CALLBACK_ENUM_FIELD_CALLBACK_ADDRESS |
+        KSWORD_ARK_CALLBACK_ENUM_FIELD_REGISTRATION_ADDRESS |
+        KSWORD_ARK_CALLBACK_ENUM_FIELD_RAW_STORAGE_VALUE |
+        KSWORD_ARK_CALLBACK_ENUM_FIELD_IDENTITY_HASH |
+        KSWORD_ARK_CALLBACK_ENUM_FIELD_ENUMERATION_GENERATION;
+
+    if (RequestPacket == NULL || ResponsePacket == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    isPdbCandidate = RequestPacket->source == KSWORD_ARK_CALLBACK_ENUM_SOURCE_PDB_PROFILE &&
+        (RequestPacket->trustFlags & requiredPdbTrustFlags) == requiredPdbTrustFlags &&
+        (RequestPacket->trustFlags & KSWORD_ARK_CALLBACK_TRUST_FALLBACK_PATTERN) == 0UL;
+    isHeuristicCandidate =
+        RequestPacket->source == KSWORD_ARK_CALLBACK_ENUM_SOURCE_PRIVATE_OBJECT_TYPE_LIST &&
+        (RequestPacket->trustFlags & KSWORD_ARK_CALLBACK_TRUST_FALLBACK_PATTERN) != 0UL &&
+        (RequestPacket->trustFlags & KSWORD_ARK_CALLBACK_TRUST_OWNER_MODULE_RESOLVED) != 0UL;
+
+    if ((!isPdbCandidate && !isHeuristicCandidate) ||
+        RequestPacket->registrationAddress == 0ULL ||
+        RequestPacket->rawStorageValue == 0ULL ||
+        RequestPacket->enumerationGeneration == 0ULL ||
+        RequestPacket->identityHash == 0ULL ||
+        RequestPacket->operationMask == 0UL ||
+        RequestPacket->objectTypeMask == 0UL ||
+        (RequestPacket->flags & KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_FLAG_REQUIRE_REVALIDATION) == 0UL ||
+        (RequestPacket->removeBehavior &
+            (KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+             KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION)) !=
+            (KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+             KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION) ||
+        (isPdbCandidate &&
+            (RequestPacket->trustFlags & KSWORD_ARK_CALLBACK_TRUST_FALLBACK_PATTERN) != 0UL)) {
+        ResponsePacket->revalidationStatus = STATUS_INVALID_PARAMETER;
+        KswordArkCallbackRemoveExSetMessage(
+            ResponsePacket->message,
+            RTL_NUMBER_OF(ResponsePacket->message),
+            L"Object Callback removal requires a re-enumerable PDB or heuristic candidate with complete V3 row identity.");
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    status = KswordArkCallbackEnumRevalidateObjectRemoveRequest(
+        RequestPacket,
+        TRUE,
+        &matchPresent,
+        &matchedFieldFlags,
+        &matchedRegistrationAddress,
+        &currentGeneration);
+    ResponsePacket->revalidationStatus = status;
+    if (!NT_SUCCESS(status)) {
+        KswordArkCallbackRemoveExSetMessage(
+            ResponsePacket->message,
+            RTL_NUMBER_OF(ResponsePacket->message),
+            status == STATUS_RETRY
+                ? L"Callback snapshot generation changed; refresh enumeration before retrying removal."
+                : L"Object Callback re-enumeration failed; no unregister call was made.");
+        return status;
+    }
+    if (!matchPresent ||
+        (matchedFieldFlags & requiredCommonFieldFlags) != requiredCommonFieldFlags ||
+        (isPdbCandidate &&
+            (matchedFieldFlags &
+                (KSWORD_ARK_CALLBACK_ENUM_FIELD_HANDLE |
+                 KSWORD_ARK_CALLBACK_ENUM_FIELD_VERIFIED_REMOVE)) !=
+                (KSWORD_ARK_CALLBACK_ENUM_FIELD_HANDLE |
+                 KSWORD_ARK_CALLBACK_ENUM_FIELD_VERIFIED_REMOVE)) ||
+        (isHeuristicCandidate &&
+            (matchedFieldFlags & KSWORD_ARK_CALLBACK_ENUM_FIELD_REMOVABLE_CANDIDATE) == 0UL) ||
+        matchedRegistrationAddress != RequestPacket->registrationAddress) {
+        ResponsePacket->revalidationStatus = STATUS_NOT_FOUND;
+        KswordArkCallbackRemoveExSetMessage(
+            ResponsePacket->message,
+            RTL_NUMBER_OF(ResponsePacket->message),
+            L"Object Callback row identity or re-enumerated registration candidate did not match; no unregister call was made.");
+        return STATUS_NOT_FOUND;
+    }
+
+    ResponsePacket->mappingFlags |=
+        KSWORD_ARK_EXTERNAL_CALLBACK_MAPPING_FLAG_ENUMERATED |
+        KSWORD_ARK_EXTERNAL_CALLBACK_MAPPING_FLAG_PUBLIC_API;
+    if (isPdbCandidate) {
+        ResponsePacket->mappingFlags |= KSWORD_ARK_EXTERNAL_CALLBACK_MAPPING_FLAG_PDB_TRUSTED;
+    }
+    else {
+        ResponsePacket->mappingFlags |= KSWORD_ARK_EXTERNAL_CALLBACK_MAPPING_FLAG_EXPERIMENTAL;
+    }
+
+    ObUnRegisterCallbacks((PVOID)(ULONG_PTR)matchedRegistrationAddress);
+
+    matchPresent = FALSE;
+    status = KswordArkCallbackEnumRevalidateObjectRemoveRequest(
+        RequestPacket,
+        FALSE,
+        &matchPresent,
+        NULL,
+        NULL,
+        &currentGeneration);
+    ResponsePacket->revalidationStatus = status;
+    if (!NT_SUCCESS(status)) {
+        KswordArkCallbackRemoveExSetMessage(
+            ResponsePacket->message,
+            RTL_NUMBER_OF(ResponsePacket->message),
+            L"ObUnRegisterCallbacks was called, but the confirmation enumeration failed.");
+        return status;
+    }
+    if (matchPresent) {
+        ResponsePacket->revalidationStatus = STATUS_UNSUCCESSFUL;
+        KswordArkCallbackRemoveExSetMessage(
+            ResponsePacket->message,
+            RTL_NUMBER_OF(ResponsePacket->message),
+            L"ObUnRegisterCallbacks returned, but the exact Object Callback row is still present.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    ResponsePacket->revalidationStatus = STATUS_SUCCESS;
+    KswordArkCallbackRemoveExSetMessage(
+        ResponsePacket->message,
+        RTL_NUMBER_OF(ResponsePacket->message),
+        isPdbCandidate
+            ? L"Object Callback RegistrationHandle was revalidated, unregistered, and confirmed absent by re-enumeration."
+            : L"Heuristic Object Callback candidate was re-enumerated, unregistered, and confirmed absent.");
+    return STATUS_SUCCESS;
+}
 
 NTSTATUS
 KswordARKCallbackIoctlRemoveExternalCallbackEx(
@@ -540,7 +703,18 @@ Return Value:
     responsePacket->mappingFlags = 0UL;
     *CompleteBytesOut = sizeof(*responsePacket);
 
-    if ((requestCopy.trustFlags & KSWORD_ARK_CALLBACK_TRUST_PDB_PROFILE) != 0UL) {
+    if ((requestCopy.flags &
+        ~(KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_FLAG_EXPERIMENTAL_UNLINK |
+          KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_FLAG_REQUIRE_REVALIDATION)) != 0UL) {
+        operationStatus = STATUS_INVALID_PARAMETER;
+        KswordArkCallbackRemoveExSetMessage(
+            responsePacket->message,
+            RTL_NUMBER_OF(responsePacket->message),
+            L"REMOVE_EXTERNAL_CALLBACK_EX contains unsupported flags.");
+        goto CompleteRemoveExternalCallbackEx;
+    }
+    if (requestCopy.callbackClass != KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_OBJECT &&
+        (requestCopy.trustFlags & KSWORD_ARK_CALLBACK_TRUST_PDB_PROFILE) != 0UL) {
         responsePacket->mappingFlags |= KSWORD_ARK_EXTERNAL_CALLBACK_MAPPING_FLAG_PDB_TRUSTED;
     }
     if ((requestCopy.flags & KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_FLAG_EXPERIMENTAL_UNLINK) != 0UL ||
@@ -560,6 +734,16 @@ Return Value:
             responsePacket->message,
             RTL_NUMBER_OF(responsePacket->message),
             L"REMOVE_EXTERNAL_CALLBACK_EX request did not ask for a supported public API remove path.");
+        goto CompleteRemoveExternalCallbackEx;
+    }
+
+    if (requestCopy.callbackClass == KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_REGISTRY ||
+        requestCopy.callbackClass == KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_ETW_PROVIDER) {
+        operationStatus = STATUS_NOT_SUPPORTED;
+        KswordArkCallbackRemoveExSetMessage(
+            responsePacket->message,
+            RTL_NUMBER_OF(responsePacket->message),
+            L"Removal is disabled for Registry and ETW callbacks because no reliable public path is available.");
         goto CompleteRemoveExternalCallbackEx;
     }
 
@@ -587,6 +771,11 @@ Return Value:
     }
     else {
         responsePacket->revalidationStatus = STATUS_SUCCESS;
+    }
+
+    if (requestCopy.callbackClass == KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_OBJECT) {
+        operationStatus = KswordArkCallbackRemoveVerifiedObject(&requestCopy, responsePacket);
+        goto CompleteRemoveExternalCallbackEx;
     }
 
     legacyRequest.size = sizeof(legacyRequest);

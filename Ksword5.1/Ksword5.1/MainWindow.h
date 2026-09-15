@@ -265,7 +265,8 @@ private:
     // - 最后通过 CreateProcessAsUserW 启动自身。
     bool launchSelfWithSystemUiAccessToken(QString* detailTextOut);
     bool queryR0DriverServiceRunning(bool& runningOut, bool fatalOnError);
-    bool startR0DriverService();
+    // suppressPrivilegeElevationPrompt：true 时权限不足只显示启动失败，不弹出管理员重启/UAC 提示。
+    bool startR0DriverService(bool suppressPrivilegeElevationPrompt = false);
     bool stopR0DriverService(bool suppressErrorDialog = false);
     // prepareR0DriverServiceStop 作用：
     // - 输入：无；

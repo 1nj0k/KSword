@@ -85,6 +85,7 @@ namespace ks::settings
     // launchMaximizedOnStartup：下次启动时是否默认最大化显示；
     // startupTopMostEnabled：启动后是否自动启用最高级置顶，手动图钉切换会同步保存；
     // autoRequestAdminOnStartup：下次启动时是否在启动图出现前先尝试申请管理员权限；
+    // startupAutoInstallR0Driver：下次主窗口显示后是否自动尝试安装并启动 KswordARK 驱动；
     // preventMultipleInstances：普通启动时是否防止多开；权限切换重启依然允许接管。
     // startupWindowScaleFactor：主窗口启动缩放因子（1.0=100%，重启后生效）；
     // startupScaleRecommendPromptDisabled：小屏推荐缩放提示是否不再弹出。
@@ -123,6 +124,7 @@ namespace ks::settings
         bool launchMaximizedOnStartup = true;
         bool startupTopMostEnabled = false;
         bool autoRequestAdminOnStartup = true;
+        bool startupAutoInstallR0Driver = false;
         bool preventMultipleInstances = true;
         double startupWindowScaleFactor = 1.0;
         bool startupScaleRecommendPromptDisabled = false;
@@ -158,10 +160,10 @@ namespace ks::settings
         // 用位掩码会让"第 3 位是哪个"变成一件需要查表的事，而这里没有任何
         // 需要按集合运算处理的场景。
         //
-        // 默认全开，等于此前的固定行为：设置项只用来减少显示，不改变能力。
+        // 默认显示常用权限入口；Debug 默认隐藏，用户可在外观设置中显式开启。
         bool privilegeButtonUiAccessVisible = true;
         bool privilegeButtonAdminVisible = true;
-        bool privilegeButtonDebugVisible = true;
+        bool privilegeButtonDebugVisible = false;
         bool privilegeButtonSystemVisible = true;
         bool privilegeButtonR0Visible = true;
         bool privilegeButtonHvmVisible = true;
