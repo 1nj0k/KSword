@@ -24,6 +24,7 @@ Environment:
 /* The multicore start gate asks the view records whether any would flip a leaf. */
 #include "hvm_ept_view.h"
 #include "hvm_vmcs.h"
+#include "hvm_descriptor.h"
 #include "../../platform/pool_compat.h"
 
 #if defined(_M_AMD64)
@@ -1508,6 +1509,8 @@ KswordARKHvmResidentDeactivateCurrent(
     NTSTATUS status = STATUS_SUCCESS;
     BOOLEAN transientRestored = TRUE;
     BOOLEAN safeToResumeNative = TRUE;
+    /* Preserve the current guest tables independently of VMX host state. */
+    KSW_HVM_SEGMENT_SNAPSHOT guestTables = { 0 };
 
     /* Reject a missing or inactive current processor context. */
     if (Context == NULL ||
@@ -1568,6 +1571,13 @@ KswordARKHvmResidentDeactivateCurrent(
         /* Preserve an unsafe VMREAD failure. */
         Context->LastStatus = STATUS_HV_OPERATION_FAILED;
         /* Report that no safe devirtualization occurred. */
+        return FALSE;
+    }
+    /* Capture current guest tables before VMCLEAR, including nested changes. */
+    if (!KswordARKHvmCaptureGuestDescriptorTables(&guestTables)) {
+        /* Do not leave VMX with only the host's tables available. */
+        Context->LastStatus = STATUS_HV_OPERATION_FAILED;
+        /* Refuse an unverified native continuation. */
         return FALSE;
     }
     /* Preserve every optional guest component before VMCLEAR. */
@@ -1641,6 +1651,14 @@ KswordARKHvmResidentDeactivateCurrent(
      * requesting process quietly losing its user half after it resumes.
      */
     __writecr3((ULONG_PTR)Context->GuestCr3);
+    /* Remove the private host IDT and restore exact guest table limits. */
+    if (!KswordARKHvmRestoreDescriptorTables(
+            &guestTables, KSW_HVM_DESCRIPTOR_RESIDENT)) {
+        /* Retain a failed hardware readback instead of reporting clean stop. */
+        status = STATUS_HV_OPERATION_FAILED;
+        /* Keep the continuation fail-closed until its tables are verified. */
+        safeToResumeNative = FALSE;
+    }
     /* Publish completed VMX root cleanup. */
     InterlockedExchange(&Context->VmxRoot, 0L);
     /* Restore non-CET state before entering the final assembly continuation. */

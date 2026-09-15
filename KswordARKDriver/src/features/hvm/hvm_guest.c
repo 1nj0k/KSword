@@ -18,6 +18,7 @@ Environment:
 
 #include "hvm_guest.h"
 #include "hvm_internal.h"
+#include "hvm_descriptor.h"
 #include "../../platform/pool_compat.h"
 
 #if defined(_M_AMD64)
@@ -66,6 +67,8 @@ typedef struct _KSW_HVM_ACTIVE_GUEST
     UCHAR DebugStateManaged;
     ULONG Reserved;
     ULONGLONG OriginalRflags;
+    /* Preserve the caller's exact tables even if VM entry itself fails. */
+    KSW_HVM_SEGMENT_SNAPSHOT OriginalTables;
 } KSW_HVM_ACTIVE_GUEST;
 
 /* Keep the assembly continuation pointer at the documented field-zero offset. */
@@ -230,6 +233,12 @@ KswordARKHvmVmExitDispatch(
     }
     /* Leave VMX operation before restoring the original CR4 value. */
     __vmx_off();
+    /* VMXOFF retains host table bases and 0xFFFF limits; undo both here. */
+    if (!KswordARKHvmRestoreDescriptorTables(
+            &context->OriginalTables, KSW_HVM_DESCRIPTOR_ONESHOT)) {
+        /* A native return with unverified tables cannot be allowed. */
+        KeBugCheckEx(KSW_HVM_BUGCHECK_CODE, 0x48564D02UL, 0U, 0U, 0U);
+    }
     /* 恢复 VM-exit 为根模式加载或清除的非 CET 状态。 */
     if (context->PkrsStateManaged != 0U) {
         __writemsr(KSW_HVM_IA32_PKRS, context->GuestPkrs);
@@ -344,6 +353,8 @@ KswordARKHvmLaunchControlledGuest(
         originalCr0 = __readcr0();
         /* Capture CR4 for both conflict detection and exact restoration. */
         context.OriginalCr4 = __readcr4();
+        /* Capture Windows state before any VM entry can replace its tables. */
+        KswordARKHvmCaptureSegments(&context.OriginalTables);
         /* Calculate the architecturally required CR0 without changing it. */
         requiredCr0 =
             (originalCr0 | Input->Cr0Fixed0) &

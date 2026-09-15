@@ -53,6 +53,8 @@ checked before each experiment. Target reset belongs outside measured transition
 | `Run-Transition.ps1` | PowerShell Direct `-FilePath` | One start/stop; optional busy QPC observer |
 | `Run-NestedPageCycles.ps1` | root | Repeated live mapping or invalid-request rejection |
 | `Run-WriteIsolation.ps1` | root | One A5 → D1 → B2 → A5 effect record, using existing VNC helper |
+| `Test-DescriptorContinuity.ps1` | root | One-shot, nested-probe, self-virtualization and stop hardware GDTR/IDTR readbacks per CPU |
+| `Test-VmwareTeardown.ps1` | root | Deliberately stop the lab VMware VM while KSword remains resident; save pre-state before the potentially failing operation |
 
 Example matched collection:
 

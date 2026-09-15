@@ -18,6 +18,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Hyper-V PowerShell Direct requires a nonempty local machine name.
+$env:COMPUTERNAME = [Environment]::MachineName
 $vncScript = Join-Path $PSScriptRoot 'Get-VmwareVnc.ps1'
 $cred = New-Object PSCredential('felix',
     (ConvertTo-SecureString 'password' -AsPlainText -Force))

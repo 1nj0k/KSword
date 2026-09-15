@@ -39,6 +39,7 @@ EXTERN KswordARKHvmResidentVmExitDispatch:PROC
 EXTERN KswordARKHvmResidentVmResumeFailure:PROC
 
 PUBLIC KswordARKHvmCaptureSegments
+PUBLIC KswordARKHvmAsmRestoreDescriptorTables
 PUBLIC KswordARKHvmAsmReadSsp
 PUBLIC KswordARKHvmControlledGuestEntry
 PUBLIC KswordARKHvmAsmLaunch
@@ -57,6 +58,15 @@ EXTERN g_KswordHvmOriginalNmiHandler:QWORD
 EXTERN g_KswordHvmPendingTlbNmi:DWORD
 
 .CODE
+
+KswordARKHvmAsmRestoreDescriptorTables PROC
+    ; Restore the guest GDT base and limit from the packed snapshot.
+    lgdt FWORD PTR [rcx]
+    ; Restore the guest IDT base and limit, replacing the private host IDT.
+    lidt FWORD PTR [rcx + 10]
+    ; Return while the caller still keeps interrupts disabled.
+    ret
+KswordARKHvmAsmRestoreDescriptorTables ENDP
 
 KswordARKHvmCaptureSegments PROC
     ; Store the packed ten-byte GDTR at snapshot offset zero.

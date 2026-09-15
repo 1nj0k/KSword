@@ -19,6 +19,7 @@ Environment:
 #include "hvm_resident.h"
 #include "hvm_runtime.h"
 #include "hvm_vmcs.h"
+#include "hvm_descriptor.h"
 #include "hvm_ept.h"
 #include "driver/KswordArkHvmIoctl.h"
 /* For the capability MSR indices the in-guest readout below names. */
@@ -323,6 +324,8 @@ typedef struct _KSW_HVM_PROBE_SLOT
     BOOLEAN MemoryOperandsPassed;
     volatile LONG FxPassed;
     DECLSPEC_ALIGN(16) CONTEXT ResumeContext;
+    /* RtlRestoreContext does not restore descriptor-table registers. */
+    KSW_HVM_SEGMENT_SNAPSHOT OriginalTables;
 } KSW_HVM_PROBE_SLOT;
 
 static KSW_HVM_PROBE_SLOT g_KswordProbeSlots[
@@ -554,6 +557,12 @@ KswordARKHvmNestedProbeL1Host(
     InterlockedExchange(&slot->L2Exited, 1L);
     /* Leave emulated VMX operation before abandoning this stack. */
     __vmx_off();
+    /* Undo the emulated VM-exit's 0xFFFF limits before returning to Windows. */
+    if (!KswordARKHvmRestoreDescriptorTables(
+            &slot->OriginalTables, KSW_HVM_DESCRIPTOR_PROBE)) {
+        /* Stop instead of returning a PASS with corrupted descriptor state. */
+        KeBugCheckEx(0x00020001UL, 0x48564D03UL, 0U, 0U, 0U);
+    }
     /*
      * Return to the launcher by restoring the context it captured.
      *
@@ -893,6 +902,11 @@ KswordARKHvmNestedProbeExecute(
         return;
     }
     startingCount = vcpu->Nested.InstructionCount;
+    /* Capture the caller's tables on this pinned CPU before its VMX sequence. */
+    if (slot != NULL) {
+        /* Preserve the original limits, not the synthetic host's 0xFFFF ones. */
+        KswordARKHvmCaptureSegments(&slot->OriginalTables);
+    }
     /*
      * Set CR4.VMXE and read it back.
      *
