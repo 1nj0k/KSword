@@ -487,6 +487,22 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONG L2IdtrBaseSavedNonZeroCount;
     ULONG L2IdtrBaseLoadedNonZeroCount;
     /*
+     * The same base per vmcs12 region, and the moment it goes backwards.
+     *
+     * The totals above mix two virtual processors on one physical core, so a
+     * fourteen-percent non-zero rate means nothing on its own: it reads the
+     * same whether one processor never had an IDT or both keep losing one.
+     * Per region it separates, and the transition is the whole question - a
+     * region that is zero from its first exit is carrying the guest's own
+     * early state, while one that held 0xFFFFFE0000000000 and then reads zero
+     * lost it somewhere between two of our entries, and the RIP and reason
+     * recorded at that transition say where to look.
+     */
+    ULONGLONG L2RegionIdtrBase[4];
+    ULONGLONG L2RegionIdtrLostRip[4];
+    ULONG L2RegionIdtrLostReason[4];
+    ULONG L2RegionIdtrLostCount[4];
+    /*
      * Where L2 actually is, and whether it can take an interrupt there.
      *
      * Three times now a mechanism has been reasoned about, found genuinely

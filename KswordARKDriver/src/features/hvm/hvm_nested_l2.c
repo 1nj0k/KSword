@@ -1981,10 +1981,26 @@ KswordARKHvmNestedL2Reflect(
 
         /* What vmcs02 held for the IDTR base as L1 took over - see the field. */
         if (g_KswordL2GuestFields[index] == 0x6818UL) {
+            ULONG region = 0UL;
+
             nested->L2IdtrBaseSavedLast = saved;
             nested->L2IdtrBaseSaveCount += 1UL;
             if (saved != 0ULL) {
                 nested->L2IdtrBaseSavedNonZeroCount += 1UL;
+            }
+            /* And per region, where a transition to zero is visible. */
+            for (region = 0UL; region < 4UL; ++region) {
+                if (nested->L2Vmcs12Regions[region] != nested->CurrentVmcs) {
+                    continue;
+                }
+                if (saved == 0ULL && nested->L2RegionIdtrBase[region] != 0ULL) {
+                    nested->L2RegionIdtrLostRip[region] =
+                        KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+                    nested->L2RegionIdtrLostReason[region] = ExitReason;
+                    nested->L2RegionIdtrLostCount[region] += 1UL;
+                }
+                nested->L2RegionIdtrBase[region] = saved;
+                break;
             }
         }
         (void)KswordARKHvmNestedVmcs12Write(

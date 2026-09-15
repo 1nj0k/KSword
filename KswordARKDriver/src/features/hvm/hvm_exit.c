@@ -1512,6 +1512,27 @@ KswordARKHvmExitPublishCost(
             row.access = (ULONG)Context->ApicId;
             row.ruleId = 0xDAu;
             KswordARKHvmEventPublish(&row);
+            /*
+             * And that region's IDTR base, with the moment it went to zero.
+             *
+             * Not behind the triple fault: the transition happens long before
+             * the fault does, and gating it on the fault would only ever show
+             * the wreckage.  See the fields for why the per-processor totals
+             * cannot answer this.
+             */
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification = Context->Nested.L2RegionIdtrBase[slot];
+            row.guestPhysicalAddress =
+                Context->Nested.L2RegionIdtrLostRip[slot];
+            row.guestLinearAddress =
+                (ULONGLONG)Context->Nested.L2RegionIdtrLostCount[slot];
+            row.guestRip = Context->Nested.L2Vmcs12Regions[slot];
+            row.status = (LONG)Context->Nested.L2RegionIdtrLostReason[slot];
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xD0u;
+            KswordARKHvmEventPublish(&row);
         }
     }
     {

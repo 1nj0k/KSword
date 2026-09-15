@@ -39,7 +39,7 @@ $rows = Invoke-Command -Session $s -ArgumentList $Depth -ScriptBlock {
         $all += $r
         $cur = [int64]$r[-1].sequence
     }
-    return ($all | Where-Object { $_.ruleId -in @(209, 210, 211) })
+    return ($all | Where-Object { $_.ruleId -in @(208, 209, 210, 211) })
 }
 
 Remove-PSSession $s
@@ -85,4 +85,16 @@ foreach ($r in $copy) {
         ($cn -band 0xFFFFFFFF), ($nz -band 0xFFFFFFFF), ([uint64]$r.guestPhysicalAddress))
     Write-Output ("  对照：L1 写 IDTR 界限 {0} 次，写 GDTR 基址 {1} 次" -f `
         ($wc -shr 32), ($wc -band 0xFFFFFFFF))
+}
+
+# 每个 vmcs12 区域自己的 IDTR 基址。这一组不受三重故障门控，随时可读。
+$perRegion = @($rows | Where-Object { $_.ruleId -eq 208 })
+if ($perRegion.Count -eq 0) { Write-Output ''; Write-Output '0xD0（每区域 IDTR 基址）：(没有这一行)' }
+foreach ($r in ($perRegion | Sort-Object { [int64]$_.sequence } | Select-Object -Last 8)) {
+    Write-Output ''
+    Write-Output ("0xD0 区域 IDTR 基址  核{0}  区{1}  vmcs12=0x{2:X}  序号 {3}" -f `
+        $r.access, [uint64]$r.exitReason, ([uint64]$r.guestRip), $r.sequence)
+    Write-Output ("  当前基址 = 0x{0:X16}" -f ([uint64]$r.qualification))
+    Write-Output ("  归零次数 = {0}   归零时 RIP = 0x{1:X}   归零时退出原因 = {2}" -f `
+        ([uint64]$r.guestLinearAddress), ([uint64]$r.guestPhysicalAddress), ([uint32]$r.status))
 }
