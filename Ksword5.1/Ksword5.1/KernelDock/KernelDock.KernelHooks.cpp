@@ -801,8 +801,6 @@ namespace
         ServiceAddress,
         SlotAddress,
         Module,
-        Baseline,
-        Status,
         Count
     };
 
@@ -1010,12 +1008,6 @@ namespace
                 QStringLiteral("槽位地址"));
         case ShadowSsdtColumn::Module:
             return kernelText("kernel.ssdt.header.module", QStringLiteral("模块"));
-        case ShadowSsdtColumn::Baseline:
-            return kernelText(
-                "kernel.hooks.shadow.header.baseline",
-                QStringLiteral("磁盘基线"));
-        case ShadowSsdtColumn::Status:
-            return kernelText("kernel.ssdt.header.status", QStringLiteral("状态"));
         default:
             return kernelText("kernel.hooks.header.unknown", QStringLiteral("未知列"));
         }
@@ -1197,20 +1189,6 @@ namespace
             return kernelHookFormatAddress(entry.tableEntryAddress);
         case ShadowSsdtColumn::Module:
             return kernelHookSafeText(entry.moduleNameText);
-        case ShadowSsdtColumn::Baseline:
-            return entry.cleanBaselineAvailable
-                ? (entry.cleanBaselineDiffers
-                    ? kernelText(
-                        "kernel.hooks.shadow.baseline.differs",
-                        QStringLiteral("差异"))
-                    : kernelText(
-                        "kernel.hooks.shadow.baseline.clean",
-                        QStringLiteral("一致")))
-                : kernelText(
-                    "kernel.hooks.shadow.baseline.unavailable",
-                    QStringLiteral("不可用"));
-        case ShadowSsdtColumn::Status:
-            return kernelHookSafeText(entry.statusText);
         default:
             return QString();
         }
@@ -1741,7 +1719,7 @@ void KernelDock::initializeShadowSsdtTab()
     KswordTheme::ApplyCompactIconButtonMetrics(m_refreshShadowSsdtButton);
 
     m_shadowSsdtFilterEdit = new QLineEdit(m_shadowSsdtPage);
-    m_shadowSsdtFilterEdit->setPlaceholderText(kernelText("kernel.hooks.shadow.toolbar.filter.placeholder", QStringLiteral("按索引/服务名/模块/地址/状态筛选")));
+    m_shadowSsdtFilterEdit->setPlaceholderText(kernelText("kernel.hooks.shadow.toolbar.filter.placeholder", QStringLiteral("按索引/服务名/模块/地址筛选")));
     m_shadowSsdtFilterEdit->setClearButtonEnabled(true);
     m_shadowSsdtFilterEdit->setStyleSheet(kernelHookInputStyle());
 
@@ -1763,8 +1741,8 @@ void KernelDock::initializeShadowSsdtTab()
         shadowSsdtColumnHeader(ShadowSsdtColumn::ServiceName),
         shadowSsdtColumnHeader(ShadowSsdtColumn::StubAddress),
         shadowSsdtColumnHeader(ShadowSsdtColumn::ServiceAddress),
-        shadowSsdtColumnHeader(ShadowSsdtColumn::Module),
-        shadowSsdtColumnHeader(ShadowSsdtColumn::Status)
+        shadowSsdtColumnHeader(ShadowSsdtColumn::SlotAddress),
+        shadowSsdtColumnHeader(ShadowSsdtColumn::Module)
         });
     prepareTable(m_shadowSsdtTable);
     m_shadowSsdtTable->horizontalHeader()->setSectionResizeMode(static_cast<int>(ShadowSsdtColumn::ServiceName), QHeaderView::Stretch);
@@ -2658,10 +2636,6 @@ void KernelDock::rebuildShadowSsdtTable(const QString& filterKeyword)
             if (column == 0)
             {
                 item->setData(Qt::UserRole, static_cast<qulonglong>(sourceIndex));
-            }
-            if (column == static_cast<int>(ShadowSsdtColumn::Status) && !entry.indexResolved)
-            {
-                item->setForeground(QBrush(KswordTheme::WarningColor()));
             }
             setTableItem(m_shadowSsdtTable, rowIndex, column, item);
         }

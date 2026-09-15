@@ -13,7 +13,6 @@
 #include <QAbstractItemView>
 #include <QAction>
 #include <QApplication>
-#include <QBrush>
 #include <QClipboard>
 #include <QHeaderView>
 #include <QHBoxLayout>
@@ -134,8 +133,6 @@ namespace
         ServiceAddress,
         SlotAddress,
         Module,
-        Baseline,
-        Status,
         Count
     };
 }
@@ -174,7 +171,7 @@ void KernelDock::initializeSsdtTab()
     m_restoreSsdtButton->setEnabled(false);
 
     m_ssdtFilterEdit = new QLineEdit(m_ssdtPage);
-    m_ssdtFilterEdit->setPlaceholderText(kernelText("kernel.ssdt.toolbar.filter.placeholder", QStringLiteral("按索引/服务名/地址/模块/状态筛选")));
+    m_ssdtFilterEdit->setPlaceholderText(kernelText("kernel.ssdt.toolbar.filter.placeholder", QStringLiteral("按索引/服务名/地址/模块筛选")));
     m_ssdtFilterEdit->setToolTip(kernelText("kernel.ssdt.toolbar.filter.tooltip", QStringLiteral("输入关键字后实时过滤 SSDT 结果")));
     m_ssdtFilterEdit->setClearButtonEnabled(true);
     m_ssdtFilterEdit->setStyleSheet(blueInputStyle());
@@ -199,9 +196,7 @@ void KernelDock::initializeSsdtTab()
         kernelText("kernel.ssdt.header.zw_address", QStringLiteral("Zw导出地址")),
         kernelText("kernel.ssdt.header.service_address", QStringLiteral("服务例程")),
         kernelText("kernel.ssdt.header.slot_address", QStringLiteral("槽位地址")),
-        kernelText("kernel.ssdt.header.module", QStringLiteral("模块")),
-        kernelText("kernel.ssdt.header.baseline", QStringLiteral("磁盘基线")),
-        kernelText("kernel.ssdt.header.status", QStringLiteral("状态"))
+        kernelText("kernel.ssdt.header.module", QStringLiteral("模块"))
         });
     m_ssdtTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_ssdtTable->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -394,17 +389,6 @@ void KernelDock::rebuildSsdtTable(const QString& filterKeyword)
         const QString serviceAddressText = formatAddressHex(entry.serviceRoutineAddress);
         const QString slotAddressText =
             formatAddressHex(entry.tableEntryAddress);
-        const QString baselineText = entry.cleanBaselineAvailable
-            ? (entry.cleanBaselineDiffers
-                ? kernelText(
-                    "kernel.ssdt.baseline.differs",
-                    QStringLiteral("差异"))
-                : kernelText(
-                    "kernel.ssdt.baseline.clean",
-                    QStringLiteral("一致")))
-            : kernelText(
-                "kernel.ssdt.baseline.unavailable",
-                QStringLiteral("不可用"));
 
         const bool matched = filterKeyword.isEmpty()
             || indexText.contains(filterKeyword, Qt::CaseInsensitive)
@@ -412,9 +396,7 @@ void KernelDock::rebuildSsdtTable(const QString& filterKeyword)
             || zwAddressText.contains(filterKeyword, Qt::CaseInsensitive)
             || serviceAddressText.contains(filterKeyword, Qt::CaseInsensitive)
             || slotAddressText.contains(filterKeyword, Qt::CaseInsensitive)
-            || baselineText.contains(filterKeyword, Qt::CaseInsensitive)
-            || entry.moduleNameText.contains(filterKeyword, Qt::CaseInsensitive)
-            || entry.statusText.contains(filterKeyword, Qt::CaseInsensitive);
+            || entry.moduleNameText.contains(filterKeyword, Qt::CaseInsensitive);
         if (!matched)
         {
             continue;
@@ -430,8 +412,6 @@ void KernelDock::rebuildSsdtTable(const QString& filterKeyword)
         auto* serviceAddressItem = new QTableWidgetItem(serviceAddressText);
         auto* slotAddressItem = new QTableWidgetItem(slotAddressText);
         auto* moduleItem = new QTableWidgetItem(safeText(entry.moduleNameText));
-        auto* baselineItem = new QTableWidgetItem(baselineText);
-        auto* statusItem = new QTableWidgetItem(safeText(entry.statusText));
 
         indexItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
         serviceNameItem->setFlags(serviceNameItem->flags() & ~Qt::ItemIsEditable);
@@ -439,18 +419,6 @@ void KernelDock::rebuildSsdtTable(const QString& filterKeyword)
         serviceAddressItem->setFlags(serviceAddressItem->flags() & ~Qt::ItemIsEditable);
         slotAddressItem->setFlags(slotAddressItem->flags() & ~Qt::ItemIsEditable);
         moduleItem->setFlags(moduleItem->flags() & ~Qt::ItemIsEditable);
-        baselineItem->setFlags(baselineItem->flags() & ~Qt::ItemIsEditable);
-        statusItem->setFlags(statusItem->flags() & ~Qt::ItemIsEditable);
-
-        if (!entry.indexResolved)
-        {
-            statusItem->setForeground(QBrush(KswordTheme::WarningAccentColor()));
-        }
-        if (entry.cleanBaselineDiffers)
-        {
-            baselineItem->setForeground(
-                QBrush(KswordTheme::WarningAccentColor()));
-        }
 
         m_ssdtTable->setItem(rowIndex, static_cast<int>(SsdtColumn::Index), indexItem);
         m_ssdtTable->setItem(rowIndex, static_cast<int>(SsdtColumn::ServiceName), serviceNameItem);
@@ -458,8 +426,6 @@ void KernelDock::rebuildSsdtTable(const QString& filterKeyword)
         m_ssdtTable->setItem(rowIndex, static_cast<int>(SsdtColumn::ServiceAddress), serviceAddressItem);
         m_ssdtTable->setItem(rowIndex, static_cast<int>(SsdtColumn::SlotAddress), slotAddressItem);
         m_ssdtTable->setItem(rowIndex, static_cast<int>(SsdtColumn::Module), moduleItem);
-        m_ssdtTable->setItem(rowIndex, static_cast<int>(SsdtColumn::Baseline), baselineItem);
-        m_ssdtTable->setItem(rowIndex, static_cast<int>(SsdtColumn::Status), statusItem);
     }
 
     m_ssdtTable->setSortingEnabled(true);

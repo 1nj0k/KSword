@@ -40,6 +40,7 @@
 // 前置声明：减少头文件编译开销。
 class QComboBox;
 class QCheckBox;
+class QDialog;
 class QDoubleSpinBox;
 class QFormLayout;
 class QGroupBox;
@@ -590,6 +591,8 @@ private:
     int tableRefreshIntervalMillisecondsFromInput() const;
     void applyTableRefreshIntervalInput();
     void initializeCreateProcessConnections();
+    // showProcessSettingsDialog：打开进程列表的集中设置窗口；窗口复用已有控件，设置即时生效。
+    void showProcessSettingsDialog();
     void focusProcessSearchBox(bool selectAllText);
     QString currentProcessSearchText() const;
     bool processRecordMatchesSearch(const ks::process::ProcessRecord& processRecord) const;
@@ -1118,6 +1121,8 @@ private:
     // ======== 控制栏 ========
     QHBoxLayout* m_controlLayout = nullptr;   // 上方“操作按钮”行布局。
     QComboBox* m_strategyCombo = nullptr;     // 进程遍历方案下拉框。
+    QDialog* m_processSettingsDialog = nullptr; // 进程列表设置窗口，非模态复用已有设置控件。
+    QVBoxLayout* m_processSettingsLayout = nullptr; // 设置窗口单列布局。
     QComboBox* m_viewModeCombo = nullptr;     // 监视视图/详细视图下拉框。
     QPushButton* m_startButton = nullptr;     // 开始监视按钮。
     QPushButton* m_pauseButton = nullptr;     // 暂停监视按钮。
@@ -1130,7 +1135,7 @@ private:
     QLabel* m_sampleIntervalLabel = nullptr;  // 活动采样间隔标签。
     QDoubleSpinBox* m_refreshIntervalSpin = nullptr; // 活动采样/后台监视间隔步进框，0.05~60 秒，默认 1 秒。
     QPushButton* m_columnChooserButton = nullptr; // “选择列”按钮：打开添加/减少列对话框。
-    QPushButton* m_processProtectCallbackButton = nullptr; // “句柄回调保护”快捷入口。
+    QPushButton* m_processSettingsButton = nullptr; // 齿轮按钮：打开进程列表设置窗口。
 
     // ======== 进程活动记录面板 ========
     QWidget* m_activityPanelWidget = nullptr;       // m_activityPanelWidget：进程活动图表面板。

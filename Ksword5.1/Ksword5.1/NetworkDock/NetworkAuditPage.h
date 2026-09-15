@@ -353,6 +353,12 @@ private:
     // - 返回：无。
     void updateCrossViewActionState();
 
+    // applyCrossViewSearchFilter 作用：
+    // - 按当前搜索词实时隐藏 TCP、UDP 和进程汇总表中不匹配的行；
+    // - 搜索与已有 PID 筛选叠加，不修改快照缓存和 UserRole 行索引；
+    // - 返回：无。
+    void applyCrossViewSearchFilter();
+
     // refreshAfdTable 作用：
     // - 重建 AFD 相关句柄表格；
     // - 输入 snapshot：来自后台的 AFD 句柄结果；
@@ -431,6 +437,7 @@ private:
     QSplitter* m_crossViewSplitter = nullptr;
     QSplitter* m_crossViewTopSplitter = nullptr;
     QHBoxLayout* m_crossControlLayout = nullptr;
+    QLineEdit* m_crossSearchEdit = nullptr;        // m_crossSearchEdit：Cross-View 三张表的实时文本筛选。
     QPushButton* m_crossAutoRefreshButton = nullptr;
     QPushButton* m_crossTerminateButton = nullptr;
     QPushButton* m_clearProcessFilterButton = nullptr;

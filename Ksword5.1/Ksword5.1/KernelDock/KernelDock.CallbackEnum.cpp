@@ -23,6 +23,7 @@
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QHash>
@@ -942,6 +943,65 @@ namespace
             return CallbackEnumRemovePolicyKind::NotRemovable;
         }
 
+        // Registry and ETW have no reliable safe removal path. Object callbacks
+        // are removable only when R0 published a real profile-gated handle plus
+        // complete V3 row identity; diagnostic nodes and heuristic fields never qualify.
+        if (entry.callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_REGISTRY
+            || entry.callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_ETW_PROVIDER)
+        {
+            return CallbackEnumRemovePolicyKind::NotRemovable;
+        }
+        if (entry.callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_OBJECT)
+        {
+            const std::uint32_t requiredTrustFlags =
+                KSWORD_ARK_CALLBACK_TRUST_PDB_PROFILE |
+                KSWORD_ARK_CALLBACK_TRUST_PROFILE_GATED |
+                KSWORD_ARK_CALLBACK_TRUST_STORAGE_VALIDATED |
+                KSWORD_ARK_CALLBACK_TRUST_STRUCTURE_SIGNATURE |
+                KSWORD_ARK_CALLBACK_TRUST_OWNER_MODULE_RESOLVED;
+            const bool verifiedObjectHandle =
+                entry.source == KSWORD_ARK_CALLBACK_ENUM_SOURCE_PDB_PROFILE
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_HANDLE)
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_VERIFIED_REMOVE)
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_IDENTITY_HASH)
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_ENUMERATION_GENERATION)
+                && entry.registrationAddress != 0U
+                && entry.rawStorageValue != 0U
+                && entry.identityHash != 0U
+                && entry.generation != 0U
+                && (entry.trustFlags & requiredTrustFlags) == requiredTrustFlags
+                && (entry.trustFlags & KSWORD_ARK_CALLBACK_TRUST_FALLBACK_PATTERN) == 0U
+                && (entry.removeBehavior &
+                    (KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+                     KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION)) ==
+                    (KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+                     KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION);
+            if (verifiedObjectHandle)
+            {
+                return CallbackEnumRemovePolicyKind::RemovableVerified;
+            }
+
+            const bool heuristicObjectCandidate =
+                entry.source == KSWORD_ARK_CALLBACK_ENUM_SOURCE_PRIVATE_OBJECT_TYPE_LIST
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_REMOVABLE_CANDIDATE)
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_REGISTRATION_ADDRESS)
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_IDENTITY_HASH)
+                && callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_ENUMERATION_GENERATION)
+                && entry.registrationAddress != 0U
+                && entry.rawStorageValue != 0U
+                && entry.identityHash != 0U
+                && entry.generation != 0U
+                && callbackEnumTrustFlagsIndicateFallbackPattern(entry)
+                && (entry.removeBehavior &
+                    (KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+                     KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION)) ==
+                    (KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
+                     KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION);
+            return heuristicObjectCandidate
+                ? CallbackEnumRemovePolicyKind::RemovableCandidate
+                : CallbackEnumRemovePolicyKind::NotRemovable;
+        }
+
         const bool removableCandidate =
             callbackEnumHasField(entry, KSWORD_ARK_CALLBACK_ENUM_FIELD_REMOVABLE_CANDIDATE);
         const bool hasLegacyRemoveValue = callbackEnumRemoveRequestValue(entry) != 0U;
@@ -975,7 +1035,24 @@ namespace
         // Input: one cached callback row.
         // Processing: converts the derived policy to stable UX wording.
         // Return: display text containing the requested removable policy keywords.
-        switch (callbackEnumRemovePolicyKind(entry))
+        const CallbackEnumRemovePolicyKind policy = callbackEnumRemovePolicyKind(entry);
+        if (policy == CallbackEnumRemovePolicyKind::NotRemovable
+            && entry.callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_OBJECT)
+        {
+            return kernelText(
+                "kernel.callback.enum.remove_policy.object_unverified",
+                QStringLiteral("unsupported/unverified（句柄或行身份无法验证）"));
+        }
+        if (policy == CallbackEnumRemovePolicyKind::NotRemovable
+            && (entry.callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_REGISTRY
+                || entry.callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_ETW_PROVIDER))
+        {
+            return kernelText(
+                "kernel.callback.enum.remove_policy.disabled",
+                QStringLiteral("unsupported（移除入口已禁用）"));
+        }
+
+        switch (policy)
         {
         case CallbackEnumRemovePolicyKind::RemovableVerified:
             return kernelText("kernel.callback.enum.remove_policy.verified", QStringLiteral("removable verified（公开 API 可验证）"));
@@ -987,6 +1064,62 @@ namespace
         default:
             return kernelText("kernel.callback.enum.remove_policy.not_removable", QStringLiteral("not removable（不可移除）"));
         }
+    }
+
+    QString callbackEnumRemovePolicyGlyph(const KernelCallbackEnumEntry& entry)
+    {
+        switch (callbackEnumRemovePolicyKind(entry))
+        {
+        case CallbackEnumRemovePolicyKind::RemovableVerified:
+            return QStringLiteral("✓");
+        case CallbackEnumRemovePolicyKind::RemovableCandidate:
+        case CallbackEnumRemovePolicyKind::ExperimentalOnly:
+            return QStringLiteral("!");
+        case CallbackEnumRemovePolicyKind::NotRemovable:
+        default:
+            return QStringLiteral("×");
+        }
+    }
+
+    void callbackEnumApplyRemovePolicyPresentation(
+        QTableWidgetItem* item,
+        const KernelCallbackEnumEntry& entry)
+    {
+        if (item == nullptr)
+        {
+            return;
+        }
+
+        item->setText(callbackEnumRemovePolicyGlyph(entry));
+        item->setTextAlignment(Qt::AlignCenter);
+        item->setToolTip(callbackEnumRemovePolicyText(entry));
+    }
+
+    bool callbackEnumIsVisibleSuccess(const KernelCallbackEnumEntry& entry)
+    {
+        return entry.status == KSWORD_ARK_CALLBACK_ENUM_STATUS_OK;
+    }
+
+    bool callbackEnumReadSourceIndex(
+        const QTableWidgetItem* item,
+        const std::size_t sourceCount,
+        std::size_t& sourceIndexOut)
+    {
+        sourceIndexOut = 0U;
+        if (item == nullptr)
+        {
+            return false;
+        }
+
+        bool conversionOk = false;
+        const qulonglong rawSourceIndex = item->data(Qt::UserRole).toULongLong(&conversionOk);
+        if (!conversionOk)
+        {
+            return false;
+        }
+
+        sourceIndexOut = static_cast<std::size_t>(rawSourceIndex);
+        return sourceIndexOut < sourceCount;
     }
 
     bool callbackEnumCanUseLegacySafeRemove(const KernelCallbackEnumEntry& entry)
@@ -1257,7 +1390,7 @@ namespace
             QMessageBox::No) == QMessageBox::Yes;
     }
 
-    void callbackEnumExecuteSafeRemove(
+    bool callbackEnumExecuteSafeRemove(
         QWidget* parentWidget,
         QLabel* statusLabel,
         CodeEditorWidget* detailEditor,
@@ -1265,20 +1398,20 @@ namespace
     {
         // Input: UI sinks plus the selected callback row.
         // Processing: validates the EX packet, asks for confirmation, then calls ArkDriverClient.
-        // Return: no return value; status/detail widgets and QMessageBox carry the outcome.
+        // Return: true only when R0 completed and confirmed the removal.
         if (!callbackEnumCanUseLegacySafeRemove(entry))
         {
             QMessageBox::information(
                 parentWidget,
                 kernelText("kernel.callback.enum.remove.safe.title", QStringLiteral("安全移除")),
                 kernelText("kernel.callback.enum.remove.safe.unavailable", QStringLiteral("当前记录不支持安全移除。")));
-            return;
+            return false;
         }
 
         const KSWORD_ARK_REMOVE_EXTERNAL_CALLBACK_EX_REQUEST requestPacket =
             callbackEnumBuildExRemoveRequest(
                 entry,
-                KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_FLAG_NONE,
+                KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_FLAG_REQUIRE_REVALIDATION,
                 KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_PUBLIC_API |
                 KSWORD_ARK_CALLBACK_REMOVE_BEHAVIOR_REQUIRE_REVALIDATION);
         if (requestPacket.callbackClass == 0U || requestPacket.callbackAddress == 0U)
@@ -1287,7 +1420,7 @@ namespace
                 parentWidget,
                 kernelText("kernel.callback.enum.remove.safe.title", QStringLiteral("安全移除")),
                 kernelText("kernel.callback.enum.remove.safe.missing_value", QStringLiteral("当前记录缺少可用的类型或地址/标识值。")));
-            return;
+            return false;
         }
 
         if (!callbackEnumConfirmSafeRemove(parentWidget, entry))
@@ -1296,7 +1429,7 @@ namespace
             {
                 statusLabel->setText(kernelText("kernel.callback.enum.remove.safe.cancelled", QStringLiteral("状态：已取消安全移除")));
             }
-            return;
+            return false;
         }
 
         const ksword::ark::DriverClient driverClient;
@@ -1320,7 +1453,7 @@ namespace
                 kernelText("kernel.callback.enum.remove.safe.title", QStringLiteral("安全移除")),
                 kernelText("kernel.callback.enum.remove.safe.call_failed", QStringLiteral("回调移除失败，Win32=%1。"))
                     .arg(static_cast<qulonglong>(removeResult.io.win32Error)));
-            return;
+            return false;
         }
 
         if (removeResult.response.ntstatus >= 0)
@@ -1329,6 +1462,7 @@ namespace
             {
                 statusLabel->setText(kernelText("kernel.callback.enum.remove.safe.completed", QStringLiteral("状态：安全移除完成")));
             }
+            return true;
         }
         else
         {
@@ -1344,6 +1478,7 @@ namespace
                 kernelText("kernel.callback.enum.remove.safe.driver_failed_message", QStringLiteral("驱动返回失败，NTSTATUS=%1。"))
                     .arg(callbackEnumNtStatusText(removeResult.response.ntstatus)));
         }
+        return false;
     }
 
     void callbackEnumShowExperimentalUnlinkNotice(
@@ -1679,7 +1814,7 @@ namespace
         case CallbackEnumColumn::Status:
             return kernelText("kernel.callback.enum.header.status", QStringLiteral("状态"));
         case CallbackEnumColumn::RemovePolicy:
-            return kernelText("kernel.callback.enum.header.remove_policy", QStringLiteral("移除策略"));
+            return kernelText("kernel.callback.enum.header.remove_policy", QStringLiteral("可移除"));
         case CallbackEnumColumn::Name:
             return kernelText("kernel.callback.enum.header.name", QStringLiteral("名称"));
         case CallbackEnumColumn::CallbackAddress:
@@ -1888,7 +2023,7 @@ namespace
         sourceIndices.reserve(selectedRows.size());
         for (const int visualRow : selectedRows)
         {
-            QTableWidgetItem* classItem = tableWidget->item(
+            const QTableWidgetItem* classItem = tableWidget->item(
                 visualRow,
                 static_cast<int>(CallbackEnumColumn::Class));
             if (classItem == nullptr)
@@ -1896,9 +2031,8 @@ namespace
                 continue;
             }
 
-            const std::size_t sourceIndex =
-                static_cast<std::size_t>(classItem->data(Qt::UserRole).toULongLong());
-            if (sourceIndex < sourceRows.size())
+            std::size_t sourceIndex = 0U;
+            if (callbackEnumReadSourceIndex(classItem, sourceRows.size(), sourceIndex))
             {
                 sourceIndices.push_back(sourceIndex);
             }
@@ -1985,10 +2119,19 @@ void KernelDock::initializeCallbackEnumTab()
     m_callbackEnumTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_callbackEnumTable->horizontalHeader()->setSectionResizeMode(static_cast<int>(CallbackEnumColumn::Name), QHeaderView::Stretch);
     m_callbackEnumTable->setColumnWidth(static_cast<int>(CallbackEnumColumn::Trust), 170);
-    m_callbackEnumTable->setColumnWidth(static_cast<int>(CallbackEnumColumn::RemovePolicy), 200);
+    const int removePolicyColumn = static_cast<int>(CallbackEnumColumn::RemovePolicy);
+    m_callbackEnumTable->horizontalHeader()->setSectionResizeMode(removePolicyColumn, QHeaderView::Fixed);
+    const QFontMetrics removePolicyHeaderMetrics(m_callbackEnumTable->horizontalHeader()->font());
+    m_callbackEnumTable->setColumnWidth(
+        removePolicyColumn,
+        removePolicyHeaderMetrics.horizontalAdvance(callbackEnumColumnHeaderText(CallbackEnumColumn::RemovePolicy)) + 12);
     m_callbackEnumTable->setColumnWidth(static_cast<int>(CallbackEnumColumn::CallbackAddress), 180);
     m_callbackEnumTable->setColumnWidth(static_cast<int>(CallbackEnumColumn::Module), 220);
     m_callbackEnumTable->setColumnWidth(static_cast<int>(CallbackEnumColumn::FileDescription), 220);
+    m_callbackEnumTable->setColumnHidden(static_cast<int>(CallbackEnumColumn::Class), true);
+    m_callbackEnumTable->setColumnHidden(static_cast<int>(CallbackEnumColumn::Trust), true);
+    m_callbackEnumTable->setColumnHidden(static_cast<int>(CallbackEnumColumn::Status), true);
+    m_callbackEnumTable->setSortingEnabled(false);
     callbackEnumInstallHeaderColumnMenu(m_callbackEnumTable);
     callbackViewTabs->addTab(
         m_callbackEnumTable,
@@ -2250,7 +2393,27 @@ void KernelDock::refreshCallbackEnumAsync()
 
             if (guardThis->m_callbackEnumTable->rowCount() > 0)
             {
-                guardThis->m_callbackEnumTable->setCurrentCell(0, 0);
+                int firstDataRow = -1;
+                for (int rowIndex = 0; rowIndex < guardThis->m_callbackEnumTable->rowCount(); ++rowIndex)
+                {
+                    std::size_t sourceIndex = 0U;
+                    if (callbackEnumReadSourceIndex(
+                        guardThis->m_callbackEnumTable->item(
+                            rowIndex,
+                            static_cast<int>(CallbackEnumColumn::Class)),
+                        guardThis->m_callbackEnumRows.size(),
+                        sourceIndex))
+                    {
+                        firstDataRow = rowIndex;
+                        break;
+                    }
+                }
+                if (firstDataRow >= 0)
+                {
+                    guardThis->m_callbackEnumTable->setCurrentCell(
+                        firstDataRow,
+                        static_cast<int>(CallbackEnumColumn::RegistrationType));
+                }
             }
             else
             {
@@ -2285,6 +2448,11 @@ void KernelDock::rebuildCallbackEnumTable(const QString& filterKeyword)
     m_callbackEnumTable->setSortingEnabled(false);
     m_callbackEnumTable->setRowCount(0);
 
+    std::vector<std::size_t> successfulSourceIndices;
+    std::vector<std::size_t> deferredSourceIndices;
+    successfulSourceIndices.reserve(m_callbackEnumRows.size());
+    deferredSourceIndices.reserve(m_callbackEnumRows.size());
+
     for (std::size_t sourceIndex = 0; sourceIndex < m_callbackEnumRows.size(); ++sourceIndex)
     {
         const KernelCallbackEnumEntry& entry = m_callbackEnumRows[sourceIndex];
@@ -2312,6 +2480,22 @@ void KernelDock::rebuildCallbackEnumTable(const QString& filterKeyword)
             continue;
         }
 
+        if (callbackEnumIsVisibleSuccess(entry))
+        {
+            successfulSourceIndices.push_back(sourceIndex);
+        }
+        else
+        {
+            deferredSourceIndices.push_back(sourceIndex);
+        }
+    }
+
+    const auto appendCallbackRow = [this](const std::size_t sourceIndex) {
+        const KernelCallbackEnumEntry& entry = m_callbackEnumRows[sourceIndex];
+        const QString addressText = callbackEnumPrimaryAddressText(entry);
+        const QString moduleText = entry.modulePathText.isEmpty()
+            ? kernelText("kernel.callback.enum.placeholder.unresolved", QStringLiteral("<未解析>"))
+            : entry.modulePathText;
         const int rowIndex = m_callbackEnumTable->rowCount();
         m_callbackEnumTable->insertRow(rowIndex);
 
@@ -2321,7 +2505,7 @@ void KernelDock::rebuildCallbackEnumTable(const QString& filterKeyword)
         auto* sourceItem = new QTableWidgetItem(entry.sourceText);
         auto* trustItem = new QTableWidgetItem(entry.sourceTrustText);
         auto* statusItem = new QTableWidgetItem(entry.statusText);
-        auto* removePolicyItem = new QTableWidgetItem(entry.removePolicyText);
+        auto* removePolicyItem = new QTableWidgetItem();
         auto* nameItem = new QTableWidgetItem(callbackEnumSafeText(entry.nameText));
         auto* addressItem = new QTableWidgetItem(addressText);
         auto* moduleItem = new QTableWidgetItem(moduleText);
@@ -2360,20 +2544,7 @@ void KernelDock::rebuildCallbackEnumTable(const QString& filterKeyword)
             statusItem->setForeground(QBrush(KswordTheme::ErrorColor()));
         }
 
-        switch (callbackEnumRemovePolicyKind(entry))
-        {
-        case CallbackEnumRemovePolicyKind::RemovableVerified:
-            removePolicyItem->setForeground(QBrush(KswordTheme::SuccessColor()));
-            break;
-        case CallbackEnumRemovePolicyKind::RemovableCandidate:
-        case CallbackEnumRemovePolicyKind::ExperimentalOnly:
-            removePolicyItem->setForeground(QBrush(KswordTheme::WarningColor()));
-            break;
-        case CallbackEnumRemovePolicyKind::NotRemovable:
-        default:
-            removePolicyItem->setForeground(QBrush(KswordTheme::TextSecondaryColor()));
-            break;
-        }
+        callbackEnumApplyRemovePolicyPresentation(removePolicyItem, entry);
 
         m_callbackEnumTable->setItem(rowIndex, static_cast<int>(CallbackEnumColumn::Class), classItem);
         m_callbackEnumTable->setItem(rowIndex, static_cast<int>(CallbackEnumColumn::RegistrationType), registrationTypeItem);
@@ -2388,9 +2559,49 @@ void KernelDock::rebuildCallbackEnumTable(const QString& filterKeyword)
         m_callbackEnumTable->setItem(rowIndex, static_cast<int>(CallbackEnumColumn::FileVersion), fileVersionItem);
         m_callbackEnumTable->setItem(rowIndex, static_cast<int>(CallbackEnumColumn::FileDescription), fileDescriptionItem);
         m_callbackEnumTable->setItem(rowIndex, static_cast<int>(CallbackEnumColumn::Altitude), altitudeItem);
+    };
+
+    for (const std::size_t sourceIndex : successfulSourceIndices)
+    {
+        appendCallbackRow(sourceIndex);
     }
 
-    m_callbackEnumTable->setSortingEnabled(true);
+    if (!deferredSourceIndices.empty())
+    {
+        const int separatorRow = m_callbackEnumTable->rowCount();
+        m_callbackEnumTable->insertRow(separatorRow);
+        int firstVisibleColumn = -1;
+        for (int columnIndex = 0; columnIndex < m_callbackEnumTable->columnCount(); ++columnIndex)
+        {
+            if (!m_callbackEnumTable->isColumnHidden(columnIndex))
+            {
+                firstVisibleColumn = columnIndex;
+                break;
+            }
+        }
+        if (firstVisibleColumn >= 0)
+        {
+            auto* separatorItem = new QTableWidgetItem(kernelText(
+                "kernel.callback.enum.separator.failed_or_unsupported",
+                QStringLiteral("以下项查询失败/当前不支持")));
+            separatorItem->setFlags(Qt::ItemIsEnabled);
+            separatorItem->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+            separatorItem->setBackground(KswordTheme::SurfaceMutedColor());
+            separatorItem->setForeground(KswordTheme::TextPrimaryColor());
+            separatorItem->setToolTip(separatorItem->text());
+            m_callbackEnumTable->setItem(separatorRow, firstVisibleColumn, separatorItem);
+            m_callbackEnumTable->setSpan(
+                separatorRow,
+                firstVisibleColumn,
+                1,
+                m_callbackEnumTable->columnCount() - firstVisibleColumn);
+        }
+    }
+
+    for (const std::size_t sourceIndex : deferredSourceIndices)
+    {
+        appendCallbackRow(sourceIndex);
+    }
 
     if (m_minifilterCallbackTree == nullptr)
     {
@@ -2562,8 +2773,14 @@ bool KernelDock::currentCallbackEnumSourceIndex(std::size_t& sourceIndexOut) con
         return false;
     }
 
-    sourceIndexOut = static_cast<std::size_t>(classItem->data(Qt::UserRole).toULongLong());
-    return sourceIndexOut < m_callbackEnumRows.size();
+    std::size_t sourceIndex = 0U;
+    if (!callbackEnumReadSourceIndex(classItem, m_callbackEnumRows.size(), sourceIndex))
+    {
+        return false;
+    }
+
+    sourceIndexOut = sourceIndex;
+    return true;
 }
 
 const KernelCallbackEnumEntry* KernelDock::currentCallbackEnumEntry() const
@@ -2735,7 +2952,7 @@ void KernelDock::showCallbackEnumContextMenu(const QPoint& localPosition)
     const bool canUseLegacySafeRemove =
         hasSingleActionEntry && callbackEnumCanUseLegacySafeRemove(*actionEntry);
     const bool canUseExperimentalUnlink =
-        hasSingleActionEntry && selectedRemovePolicy != CallbackEnumRemovePolicyKind::NotRemovable;
+        hasSingleActionEntry && selectedRemovePolicy == CallbackEnumRemovePolicyKind::ExperimentalOnly;
 
     QMenu contextMenu(this);
     contextMenu.setStyleSheet(KswordTheme::ContextMenuStyle());
@@ -2852,11 +3069,15 @@ void KernelDock::showCallbackEnumContextMenu(const QPoint& localPosition)
     {
         if (actionEntry != nullptr)
         {
-            callbackEnumExecuteSafeRemove(
+            const bool removalConfirmed = callbackEnumExecuteSafeRemove(
                 this,
                 m_callbackEnumStatusLabel,
                 m_callbackEnumDetailEditor,
                 *actionEntry);
+            if (removalConfirmed)
+            {
+                refreshCallbackEnumAsync();
+            }
         }
         return;
     }

@@ -144,6 +144,38 @@ Return Value:
     return (hashValue != 0ULL) ? hashValue : 1ULL;
 }
 
+static BOOLEAN
+KswordArkCallbackEnumRemoveRequestMatchesEntry(
+    _In_ const KSWORD_ARK_REMOVE_EXTERNAL_CALLBACK_EX_REQUEST* RequestPacket,
+    _In_ const KSWORD_ARK_CALLBACK_ENUM_ENTRY* Entry
+    )
+/*++
+
+Routine Description:
+
+    Compares every Object Callback row-identity field carried by the EX request.
+    identityHash additionally covers field flags, context, registration type,
+    module identity, name, and altitude, so an address-only match is impossible.
+
+--*/
+{
+    if (RequestPacket == NULL || Entry == NULL) {
+        return FALSE;
+    }
+
+    return Entry->callbackClass == KSWORD_ARK_CALLBACK_ENUM_CLASS_OBJECT &&
+        RequestPacket->callbackClass == KSWORD_ARK_EXTERNAL_CALLBACK_REMOVE_TYPE_OBJECT &&
+        Entry->source == RequestPacket->source &&
+        Entry->callbackAddress == RequestPacket->callbackAddress &&
+        Entry->registrationAddress == RequestPacket->registrationAddress &&
+        Entry->rawStorageValue == RequestPacket->rawStorageValue &&
+        Entry->operationMask == RequestPacket->operationMask &&
+        Entry->objectTypeMask == RequestPacket->objectTypeMask &&
+        Entry->trustFlags == RequestPacket->trustFlags &&
+        Entry->removeBehavior == RequestPacket->removeBehavior &&
+        Entry->identityHash == RequestPacket->identityHash;
+}
+
 VOID
 KswordArkCallbackEnumSnapshotBegin(
     _Inout_ KSWORD_ARK_CALLBACK_ENUM_BUILDER* Builder
@@ -216,6 +248,15 @@ Return Value:
     identityHash = KswordArkCallbackEnumBuildIdentityHash(entry);
     entry->identityHash = identityHash;
     entry->fieldFlags |= KSWORD_ARK_CALLBACK_ENUM_FIELD_IDENTITY_HASH;
+
+    // EX removal captures the unique, fully reconstructed row while all rows
+    // still participate in the same ordered snapshot hash used by R3.
+    if (Builder->RemoveMatchRequest != NULL &&
+        KswordArkCallbackEnumRemoveRequestMatchesEntry(Builder->RemoveMatchRequest, entry)) {
+        Builder->RemoveMatchedFieldFlags = entry->fieldFlags;
+        Builder->RemoveMatchedRegistrationAddress = entry->registrationAddress;
+        Builder->RemoveMatchCount += 1UL;
+    }
 
     // 使用提交前的行数作为零基全局行序。
     rowIndex = Builder->SnapshotRowCount;

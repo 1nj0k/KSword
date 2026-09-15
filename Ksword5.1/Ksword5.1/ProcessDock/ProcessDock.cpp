@@ -4623,11 +4623,23 @@ void ProcessDock::initializeTopControls()
     m_controlLayout->setSpacing(8);
     ks::i18n::LanguageManager& languageManager = ks::i18n::LanguageManager::instance();
 
+    // 进程列表的低频设置集中放进一个可重复打开的非模态窗口，避免把顶部控制行撑得过长。
+    m_processSettingsDialog = new QDialog(this, Qt::Dialog);
+    m_processSettingsDialog->setModal(false);
+    m_processSettingsDialog->setAttribute(Qt::WA_DeleteOnClose, false);
+    languageManager.bindWindowTitle(
+        m_processSettingsDialog,
+        QStringLiteral("process.dialog.settings.title"),
+        QStringLiteral("进程列表设置"));
+    m_processSettingsLayout = new QVBoxLayout(m_processSettingsDialog);
+    m_processSettingsLayout->setContentsMargins(12, 12, 12, 12);
+    m_processSettingsLayout->setSpacing(8);
+
     // 遍历策略下拉框：
     // 1) Toolhelp（CreateToolhelp32Snapshot + Process32First/Next）
     // 2) NtQuerySystemInformation
     // 说明：不再默认 Auto，直接明确展示当前使用的方法。
-    m_strategyCombo = new QComboBox(this);
+    m_strategyCombo = new QComboBox(m_processSettingsDialog);
     m_strategyCombo->setObjectName(QStringLiteral("ProcessDockStrategyCombo"));
     m_strategyCombo->addItem(QIcon(IconRefresh), "Toolhelp Snapshot / Process32First / Process32Next");
     m_strategyCombo->addItem(QIcon(IconRefresh), "NtQuerySystemInformation");
@@ -4650,7 +4662,7 @@ void ProcessDock::initializeTopControls()
     // 自适应宽度策略：避免长文本把 Dock 顶出横向滚动条。
     m_strategyCombo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     m_strategyCombo->setMinimumContentsLength(18);
-    m_strategyCombo->setMaximumWidth(260);
+    m_strategyCombo->setMinimumWidth(320);
 
     // 进程友好视图：
     // - 唯一复选框同时承担两种互斥视图的切换；
@@ -4709,9 +4721,9 @@ void ProcessDock::initializeTopControls()
     // QLineEdit + QDoubleValidator：校验器只会静默吞掉不合法的按键，
     // 用户既看不到可用范围，也不知道自己为什么打不出想要的数；
     // 步进控件把范围、步长和单位一次性摆在界面上，还能用箭头/滚轮调。
-    m_refreshLabel = new QLabel("列表刷新:", this);
+    m_refreshLabel = new QLabel("列表刷新:", m_processSettingsDialog);
     languageManager.bindText(m_refreshLabel, QStringLiteral("process.label.refresh_interval"), QStringLiteral("列表刷新:"));
-    m_tableRefreshIntervalSpin = new QDoubleSpinBox(this);
+    m_tableRefreshIntervalSpin = new QDoubleSpinBox(m_processSettingsDialog);
     m_tableRefreshIntervalSpin->setDecimals(1);
     // 范围直接取自定时器实际使用的上下限常量，避免控件和 clamp 逻辑各说一套。
     m_tableRefreshIntervalSpin->setRange(
@@ -4732,9 +4744,9 @@ void ProcessDock::initializeTopControls()
     // 活动采样间隔：
     // - 允许小数秒，默认 1s；
     // - 该间隔驱动后台监视刷新和活动记录采样。
-    m_sampleIntervalLabel = new QLabel("采样间隔:", this);
+    m_sampleIntervalLabel = new QLabel("采样间隔:", m_processSettingsDialog);
     languageManager.bindText(m_sampleIntervalLabel, QStringLiteral("process.label.sample_interval"), QStringLiteral("采样间隔:"));
-    m_refreshIntervalSpin = new QDoubleSpinBox(this);
+    m_refreshIntervalSpin = new QDoubleSpinBox(m_processSettingsDialog);
     m_refreshIntervalSpin->setDecimals(2);
     m_refreshIntervalSpin->setRange(
         static_cast<double>(ActivityMinimumIntervalMilliseconds) / 1000.0,
@@ -4775,7 +4787,7 @@ void ProcessDock::initializeTopControls()
     //   驱动未加载时 enumerateProcessesByR0Driver 走 openSilently 静默跳过，
     //   不会每轮触发 R0 权限提示；已退出进程的 CID 残骸也已在驱动侧过滤。
     //   开关保留，用户仍可关掉以省下每轮一次枚举 IOCTL。
-    m_kernelCompareCheck = new QCheckBox("刷新时对比内核进程（查隐藏）", this);
+    m_kernelCompareCheck = new QCheckBox("刷新时对比内核进程（查隐藏）", m_processSettingsDialog);
     m_kernelCompareCheck->setChecked(true);
     m_kernelCompareCheck->setToolTip("勾选后刷新会额外请求驱动进程列表，并显示仅内核可见的进程。");
     languageManager.bindText(
@@ -4790,7 +4802,7 @@ void ProcessDock::initializeTopControls()
     // Ksword 可恢复隐藏显示开关：
     // - 默认不显示 R0 标记隐藏的进程；
     // - 勾选后仍展示这些行，便于右键“取消隐藏”。
-    m_showKswordHiddenProcessCheck = new QCheckBox(QStringLiteral("显示Ksword隐藏项"), this);
+    m_showKswordHiddenProcessCheck = new QCheckBox(QStringLiteral("显示Ksword隐藏项"), m_processSettingsDialog);
     m_showKswordHiddenProcessCheck->setChecked(false);
     m_showKswordHiddenProcessCheck->setToolTip(QStringLiteral("显示由 R0 摘链后仍可通过内核扫描读取的 Ksword 隐藏项。"));
     languageManager.bindText(
@@ -4801,6 +4813,39 @@ void ProcessDock::initializeTopControls()
         m_showKswordHiddenProcessCheck,
         QStringLiteral("process.tooltip.hidden"),
         QStringLiteral("显示由 R0 摘链后仍可通过内核扫描读取的 Ksword 隐藏项。"));
+
+    m_activityBackgroundRecordCheck = new QCheckBox(QStringLiteral("后台保持刷新/记录"), m_processSettingsDialog);
+    m_activityBackgroundRecordCheck->setToolTip(QStringLiteral("默认仅进程列表 Tab 显示时刷新和记录；勾选后切到其它 Tab 仍继续刷新并记录。"));
+    languageManager.bindText(
+        m_activityBackgroundRecordCheck,
+        QStringLiteral("process.activity.background"),
+        QStringLiteral("后台保持刷新/记录"));
+    languageManager.bindToolTip(
+        m_activityBackgroundRecordCheck,
+        QStringLiteral("process.activity.tooltip.background"),
+        QStringLiteral("默认仅进程列表 Tab 显示时刷新和记录；勾选后切到其它 Tab 仍继续刷新并记录。"));
+
+    m_activityListOnlyRefreshCheck = new QCheckBox(QStringLiteral("不记录历史"), m_processSettingsDialog);
+    m_activityListOnlyRefreshCheck->setToolTip(QStringLiteral("勾选后周期刷新仍会更新进程列表，但不会向上方时间轴写入新的活动记录。"));
+    languageManager.bindText(
+        m_activityListOnlyRefreshCheck,
+        QStringLiteral("process.activity.list_only"),
+        QStringLiteral("不记录历史"));
+    languageManager.bindToolTip(
+        m_activityListOnlyRefreshCheck,
+        QStringLiteral("process.activity.tooltip.list_only"),
+        QStringLiteral("勾选后周期刷新仍会更新进程列表，但不会向上方时间轴写入新的活动记录。"));
+
+    m_processSettingsLayout->addWidget(m_strategyCombo);
+    m_processSettingsLayout->addWidget(m_refreshLabel);
+    m_processSettingsLayout->addWidget(m_tableRefreshIntervalSpin);
+    m_processSettingsLayout->addWidget(m_sampleIntervalLabel);
+    m_processSettingsLayout->addWidget(m_refreshIntervalSpin);
+    m_processSettingsLayout->addWidget(m_kernelCompareCheck);
+    m_processSettingsLayout->addWidget(m_showKswordHiddenProcessCheck);
+    m_processSettingsLayout->addWidget(m_activityBackgroundRecordCheck);
+    m_processSettingsLayout->addWidget(m_activityListOnlyRefreshCheck);
+    m_processSettingsLayout->addStretch(1);
 
     // “选择列”入口：
     // - 列集合已经对齐任务管理器“详细信息”页，仅靠表头右键逐列勾选不便于批量增减；
@@ -4817,50 +4862,37 @@ void ProcessDock::initializeTopControls()
         QStringLiteral("添加或移除进程列表中显示的列。"));
     m_columnChooserButton->setStyleSheet(buildBlueButtonStyle(false));
 
-    // 句柄回调进程保护入口：
-    // - 仅负责跳转到 KernelDock 的统一规则页；
-    // - 具体规则编辑、驱动应用和状态刷新仍由回调保护页面管理。
-    m_processProtectCallbackButton = new QPushButton(QStringLiteral("句柄回调保护"), this);
-    m_processProtectCallbackButton->setToolTip(
-        QStringLiteral("打开内核句柄回调的进程保护规则页。"));
-    languageManager.bindText(
-        m_processProtectCallbackButton,
-        QStringLiteral("process.toolbar.callback_process_protect"),
-        QStringLiteral("句柄回调保护"));
+    // 进程列表设置入口：仅显示齿轮图标，具体选项在独立窗口中即时生效。
+    m_processSettingsButton = new QPushButton(QIcon(QStringLiteral(":/Icon/process_settings.svg")), QString(), this);
+    KswordTheme::ApplyCompactIconButtonMetrics(m_processSettingsButton);
+    m_processSettingsButton->setToolTip(QStringLiteral("打开进程列表设置"));
     languageManager.bindToolTip(
-        m_processProtectCallbackButton,
-        QStringLiteral("process.tooltip.callback_process_protect"),
-        QStringLiteral("打开内核句柄回调的进程保护规则页。"));
-    m_processProtectCallbackButton->setStyleSheet(buildBlueButtonStyle(false));
+        m_processSettingsButton,
+        QStringLiteral("process.tooltip.settings"),
+        QStringLiteral("打开进程列表设置"));
 
     // 按钮统一蓝色风格（图标按钮版本）。
     const QString buttonStyle = buildBlueButtonStyle(true);
     m_startButton->setStyleSheet(buttonStyle);
     m_pauseButton->setStyleSheet(buttonStyle);
+    m_processSettingsButton->setStyleSheet(buttonStyle);
 
     // 第一行按功能分组，组间留空隙，避免同类控件被别的组隔开：
     // ① 枚举与视图：决定“列出哪些进程、怎么组织”；
     // ② 运行控制：开始/暂停/选择列/回调保护；
     // ③ 搜索；
     // ④ 活动记录：由 initializeProcessActivityPanel 插在搜索框之后；
-    // ⑤ 右侧刷新间隔组，靠 addStretch 推到最右。
-    m_controlLayout->addWidget(m_strategyCombo);
+    // ⑤ 右侧刷新间隔组和齿轮设置入口，靠 addStretch 推到最右。
     m_controlLayout->addWidget(m_friendlyViewCheck);
     m_controlLayout->addWidget(m_viewModeCombo);
-    m_controlLayout->addWidget(m_kernelCompareCheck);
-    m_controlLayout->addWidget(m_showKswordHiddenProcessCheck);
     m_controlLayout->addSpacing(12);
     m_controlLayout->addWidget(m_startButton);
     m_controlLayout->addWidget(m_pauseButton);
     m_controlLayout->addWidget(m_columnChooserButton);
-    m_controlLayout->addWidget(m_processProtectCallbackButton);
     m_controlLayout->addSpacing(12);
     m_controlLayout->addWidget(m_processSearchLineEdit);
     m_controlLayout->addStretch(1);
-    m_controlLayout->addWidget(m_refreshLabel);
-    m_controlLayout->addWidget(m_tableRefreshIntervalSpin);
-    m_controlLayout->addWidget(m_sampleIntervalLabel);
-    m_controlLayout->addWidget(m_refreshIntervalSpin);
+    m_controlLayout->addWidget(m_processSettingsButton);
     controlContainerLayout->addLayout(m_controlLayout);
     m_processPageLayout->addLayout(controlContainerLayout);
 }
@@ -4896,28 +4928,6 @@ void ProcessDock::initializeProcessActivityPanel()
         QStringLiteral("process.activity.tooltip.clear"),
         QStringLiteral("清空当前刷新同步记录的进程活动样本。"));
     m_activityClearButton->setStyleSheet(buildBlueButtonStyle(false));
-
-    m_activityBackgroundRecordCheck = new QCheckBox(QStringLiteral("后台保持刷新/记录"), m_activityPanelWidget);
-    m_activityBackgroundRecordCheck->setToolTip(QStringLiteral("默认仅进程列表 Tab 显示时刷新和记录；勾选后切到其它 Tab 仍继续刷新并记录。"));
-    languageManager.bindText(
-        m_activityBackgroundRecordCheck,
-        QStringLiteral("process.activity.background"),
-        QStringLiteral("后台保持刷新/记录"));
-    languageManager.bindToolTip(
-        m_activityBackgroundRecordCheck,
-        QStringLiteral("process.activity.tooltip.background"),
-        QStringLiteral("默认仅进程列表 Tab 显示时刷新和记录；勾选后切到其它 Tab 仍继续刷新并记录。"));
-
-    m_activityListOnlyRefreshCheck = new QCheckBox(QStringLiteral("不记录历史"), m_activityPanelWidget);
-    m_activityListOnlyRefreshCheck->setToolTip(QStringLiteral("勾选后周期刷新仍会更新进程列表，但不会向上方时间轴写入新的活动记录。"));
-    languageManager.bindText(
-        m_activityListOnlyRefreshCheck,
-        QStringLiteral("process.activity.list_only"),
-        QStringLiteral("不记录历史"));
-    languageManager.bindToolTip(
-        m_activityListOnlyRefreshCheck,
-        QStringLiteral("process.activity.tooltip.list_only"),
-        QStringLiteral("勾选后周期刷新仍会更新进程列表，但不会向上方时间轴写入新的活动记录。"));
 
     const QString metricButtonStyle = QStringLiteral(
         "QPushButton {"
@@ -5001,15 +5011,11 @@ void ProcessDock::initializeProcessActivityPanel()
         QStringLiteral("显示:"));
 
     // 活动控制项并入顶部控制行，图表面板只保留图表本身，省下一整行垂直空间。
-    // 作为独立的一组插在搜索框之后、addStretch 之前：右侧刷新间隔组仍靠右对齐，
-    // 而枚举类开关留在最左边那一组，不会被这一组隔开。
-    // insertWidget 会自动把这些控件从 m_activityPanelWidget 重新认父到控制行容器。
+    // 设置类控件已集中到齿轮窗口，这里只保留清空、指标选择和窗口拾取入口。
     int topControlInsertIndex = m_controlLayout->indexOf(m_processSearchLineEdit) + 1;
     m_controlLayout->insertSpacing(topControlInsertIndex++, 12);
     for (QWidget* const activityControlWidget : {
              static_cast<QWidget*>(m_activityClearButton),
-             static_cast<QWidget*>(m_activityBackgroundRecordCheck),
-             static_cast<QWidget*>(m_activityListOnlyRefreshCheck),
              static_cast<QWidget*>(activityDisplayLabel),
              static_cast<QWidget*>(m_activityCpuButton),
              static_cast<QWidget*>(m_activityMemoryButton),
@@ -5788,6 +5794,20 @@ void ProcessDock::initializeCreateProcessPage()
     initializeCreateProcessConnections();
 }
 
+void ProcessDock::showProcessSettingsDialog()
+{
+    if (m_processSettingsDialog == nullptr)
+    {
+        return;
+    }
+
+    // 非模态窗口复用同一组控件，重复点击齿轮只把已有窗口带回前台。
+    m_processSettingsDialog->adjustSize();
+    m_processSettingsDialog->show();
+    m_processSettingsDialog->raise();
+    m_processSettingsDialog->activateWindow();
+}
+
 void ProcessDock::initializeConnections()
 {
     // 策略切换后立即强制刷新。
@@ -5928,10 +5948,10 @@ void ProcessDock::initializeConnections()
         });
     }
 
-    if (m_processProtectCallbackButton != nullptr)
+    if (m_processSettingsButton != nullptr)
     {
-        connect(m_processProtectCallbackButton, &QPushButton::clicked, this, [this]() {
-            emit requestFocusProcessProtectByCallback();
+        connect(m_processSettingsButton, &QPushButton::clicked, this, [this]() {
+            showProcessSettingsDialog();
         });
     }
 

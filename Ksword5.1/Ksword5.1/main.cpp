@@ -1448,6 +1448,8 @@ int main(int argc, char* argv[])
         + (startupSettings.launchMaximizedOnStartup ? "true" : "false")
         + ", auto_admin="
         + (startupSettings.autoRequestAdminOnStartup ? "true" : "false")
+        + ", auto_install_r0_driver="
+        + (startupSettings.startupAutoInstallR0Driver ? "true" : "false")
         + ", prevent_multiple_instances="
         + (startupSettings.preventMultipleInstances ? "true" : "false"));
     {
@@ -1459,6 +1461,8 @@ int main(int argc, char* argv[])
             << (startupSettings.launchMaximizedOnStartup ? "true" : "false")
             << ", auto_admin="
             << (startupSettings.autoRequestAdminOnStartup ? "true" : "false")
+            << ", auto_install_r0_driver="
+            << (startupSettings.startupAutoInstallR0Driver ? "true" : "false")
             << ", prevent_multiple_instances="
             << (startupSettings.preventMultipleInstances ? "true" : "false")
             << ", startup_scale_factor="
@@ -1479,7 +1483,9 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    if (!privilegeRestartLaunch && !isCurrentProcessElevated())
+    if (startupSettings.autoRequestAdminOnStartup
+        && !privilegeRestartLaunch
+        && !isCurrentProcessElevated())
     {
         startupTraceRaw("autoRequestAdminOnStartup enabled and process not elevated");
         kLogEvent adminRequestEvent;

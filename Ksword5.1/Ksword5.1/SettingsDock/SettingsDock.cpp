@@ -817,6 +817,14 @@ void SettingsDock::initializeAppearanceTab()
     languageManager.bindToolTip(m_startupAutoAdminCheckBox, QStringLiteral("settings.startup.admin.tooltip"), QStringLiteral("下次启动时请求管理员权限；若取消或失败，将以普通权限继续"));
     startupLayout->addWidget(m_startupAutoAdminCheckBox);
 
+    // m_startupAutoInstallR0DriverCheckBox 作用：控制主窗口首次显示后是否自动安装并启动 KswordARK 驱动。
+    m_startupAutoInstallR0DriverCheckBox = new QCheckBox(QStringLiteral("启动时自动安装驱动"), startupGroupBox);
+    languageManager.bindText(m_startupAutoInstallR0DriverCheckBox, QStringLiteral("settings.startup.auto_install_r0"), QStringLiteral("启动时自动安装驱动"));
+    m_startupAutoInstallR0DriverCheckBox->setToolTip(
+        QStringLiteral("下次启动时自动尝试安装并启动 KswordARK 驱动；权限不足时会显示错误，但不会额外请求管理员重启"));
+    languageManager.bindToolTip(m_startupAutoInstallR0DriverCheckBox, QStringLiteral("settings.startup.auto_install_r0.tooltip"), QStringLiteral("下次启动时自动尝试安装并启动 KswordARK 驱动；权限不足时会显示错误，但不会额外请求管理员重启"));
+    startupLayout->addWidget(m_startupAutoInstallR0DriverCheckBox);
+
     // m_preventMultipleInstancesCheckBox 作用：控制普通启动是否激活已有窗口并退出新进程。
     m_preventMultipleInstancesCheckBox = new QCheckBox(QStringLiteral("防止多开"), startupGroupBox);
     languageManager.bindText(m_preventMultipleInstancesCheckBox, QStringLiteral("settings.startup.prevent_multiple_instances"), QStringLiteral("防止多开"));
@@ -1350,6 +1358,10 @@ void SettingsDock::bindAppearanceSignals()
         markPendingChanges(QStringLiteral("启动时自动请求管理员权限开关切换"));
         });
 
+    connect(m_startupAutoInstallR0DriverCheckBox, &QCheckBox::toggled, this, [this](const bool /*checkedState*/) {
+        markPendingChanges(QStringLiteral("启动时自动安装驱动开关切换"));
+        });
+
     connect(m_preventMultipleInstancesCheckBox, &QCheckBox::toggled, this, [this](const bool /*checkedState*/) {
         markPendingChanges(QStringLiteral("防止多开开关切换"));
         });
@@ -1569,6 +1581,10 @@ void SettingsDock::applySettingsToUi(const ks::settings::AppearanceSettings& set
     {
         m_startupAutoAdminCheckBox->setChecked(settings.autoRequestAdminOnStartup);
     }
+    if (m_startupAutoInstallR0DriverCheckBox != nullptr)
+    {
+        m_startupAutoInstallR0DriverCheckBox->setChecked(settings.startupAutoInstallR0Driver);
+    }
     if (m_preventMultipleInstancesCheckBox != nullptr)
     {
         m_preventMultipleInstancesCheckBox->setChecked(settings.preventMultipleInstances);
@@ -1764,6 +1780,9 @@ ks::settings::AppearanceSettings SettingsDock::collectSettingsFromUi() const
         (m_startupTopMostCheckBox != nullptr) && m_startupTopMostCheckBox->isChecked();
     collectedSettings.autoRequestAdminOnStartup =
         (m_startupAutoAdminCheckBox != nullptr) && m_startupAutoAdminCheckBox->isChecked();
+    collectedSettings.startupAutoInstallR0Driver =
+        (m_startupAutoInstallR0DriverCheckBox != nullptr)
+        && m_startupAutoInstallR0DriverCheckBox->isChecked();
     collectedSettings.preventMultipleInstances =
         (m_preventMultipleInstancesCheckBox == nullptr) || m_preventMultipleInstancesCheckBox->isChecked();
     collectedSettings.startupWindowScaleFactor = parseWindowScaleFactorFromUi();
@@ -2101,6 +2120,7 @@ void SettingsDock::saveAndEmitFromUi(const QString& triggerReason)
         && nextSettings.launchMaximizedOnStartup == m_currentAppearanceSettings.launchMaximizedOnStartup
         && nextSettings.startupTopMostEnabled == m_currentAppearanceSettings.startupTopMostEnabled
         && nextSettings.autoRequestAdminOnStartup == m_currentAppearanceSettings.autoRequestAdminOnStartup
+        && nextSettings.startupAutoInstallR0Driver == m_currentAppearanceSettings.startupAutoInstallR0Driver
         && nextSettings.preventMultipleInstances == m_currentAppearanceSettings.preventMultipleInstances
         && sameScaleFactor
         && nextSettings.startupScaleRecommendPromptDisabled == m_currentAppearanceSettings.startupScaleRecommendPromptDisabled
@@ -2238,6 +2258,8 @@ void SettingsDock::saveAndEmitFromUi(const QString& triggerReason)
         << (m_currentAppearanceSettings.startupTopMostEnabled ? "true" : "false")
         << "，启动时自动请求管理员权限="
         << (m_currentAppearanceSettings.autoRequestAdminOnStartup ? "true" : "false")
+        << "，启动时自动安装驱动="
+        << (m_currentAppearanceSettings.startupAutoInstallR0Driver ? "true" : "false")
         << "，防止多开="
         << (m_currentAppearanceSettings.preventMultipleInstances ? "true" : "false")
         << "，启动窗口缩放因子="

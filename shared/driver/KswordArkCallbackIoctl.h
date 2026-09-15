@@ -601,7 +601,11 @@ typedef struct _KSWORD_ARK_REMOVE_EXTERNAL_CALLBACK_EX_REQUEST
     unsigned long callbackClass;
     unsigned long flags;
     unsigned long long callbackAddress;
+    // For a verified Object Callback row this is the actual RegistrationHandle
+    // returned by ObRegisterCallbacks; nodes/callback pointers are forbidden substitutes.
     unsigned long long registrationAddress;
+    // Exact diagnostic storage identity (for Object Callback, the list node),
+    // carried separately so it can never be mistaken for RegistrationHandle.
     unsigned long long rawStorageValue;
     unsigned long long enumerationGeneration;
     unsigned long long identityHash;
@@ -673,7 +677,9 @@ typedef struct _KSWORD_ARK_CALLBACK_ENUM_ENTRY
     long lastStatus;
     unsigned long long callbackAddress;
     unsigned long long contextAddress;
+    // A handle/cookie only when the corresponding field flags prove that meaning.
     unsigned long long registrationAddress;
+    // Private storage/node identity used for revalidation, never as an API handle.
     unsigned long long rawStorageValue;
     // V3 publishes a whole-snapshot generation plus a stable identity for this logical row.
     unsigned long long enumerationGeneration;
