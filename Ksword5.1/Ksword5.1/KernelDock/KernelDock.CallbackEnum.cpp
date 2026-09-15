@@ -39,11 +39,7 @@
 #include <QPointer>
 #include <QProcess>
 #include <QPushButton>
-#include <QPainter>
 #include <QStringList>
-#include <QStyle>
-#include <QStyleOptionViewItem>
-#include <QStyledItemDelegate>
 #include <QSplitter>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -994,54 +990,6 @@ namespace
         }
     }
 
-    class CallbackEnumRemovePolicyDelegate final : public QStyledItemDelegate
-    {
-    public:
-        using QStyledItemDelegate::QStyledItemDelegate;
-
-        void paint(
-            QPainter* painter,
-            const QStyleOptionViewItem& option,
-            const QModelIndex& index) const override
-        {
-            if (painter == nullptr || !index.isValid())
-            {
-                return;
-            }
-
-            QStyleOptionViewItem baseOption(option);
-            initStyleOption(&baseOption, index);
-            const QString glyphText = index.data(Qt::DisplayRole).toString();
-            const QBrush backgroundBrush = index.data(Qt::BackgroundRole).value<QBrush>();
-            const QBrush foregroundBrush = index.data(Qt::ForegroundRole).value<QBrush>();
-            baseOption.text.clear();
-            baseOption.backgroundBrush = QBrush();
-
-            QStyle* const style = baseOption.widget != nullptr
-                ? baseOption.widget->style()
-                : QApplication::style();
-            style->drawControl(QStyle::CE_ItemViewItem, &baseOption, painter, baseOption.widget);
-
-            const QFontMetrics metrics(baseOption.font);
-            QSize badgeSize = metrics.size(Qt::TextSingleLine, glyphText);
-            badgeSize.rwidth() += 8;
-            badgeSize.rheight() += 2;
-            QRect badgeRect(QPoint(), badgeSize);
-            badgeRect.moveCenter(option.rect.center());
-
-            painter->save();
-            painter->setPen(Qt::NoPen);
-            painter->setBrush(backgroundBrush);
-            painter->drawRect(badgeRect);
-            painter->setPen(foregroundBrush.color().isValid()
-                ? foregroundBrush.color()
-                : option.palette.color(QPalette::Text));
-            painter->setFont(baseOption.font);
-            painter->drawText(badgeRect, Qt::AlignCenter, glyphText);
-            painter->restore();
-        }
-    };
-
     QString callbackEnumRemovePolicyGlyph(const KernelCallbackEnumEntry& entry)
     {
         switch (callbackEnumRemovePolicyKind(entry))
@@ -1069,24 +1017,6 @@ namespace
         item->setText(callbackEnumRemovePolicyGlyph(entry));
         item->setTextAlignment(Qt::AlignCenter);
         item->setToolTip(callbackEnumRemovePolicyText(entry));
-
-        switch (callbackEnumRemovePolicyKind(entry))
-        {
-        case CallbackEnumRemovePolicyKind::RemovableVerified:
-            item->setBackground(QColor(0, 128, 0, 255));
-            item->setForeground(KswordTheme::WhiteColor());
-            break;
-        case CallbackEnumRemovePolicyKind::RemovableCandidate:
-        case CallbackEnumRemovePolicyKind::ExperimentalOnly:
-            item->setBackground(QColor(255, 255, 0, 255));
-            item->setForeground(KswordTheme::BlackColor());
-            break;
-        case CallbackEnumRemovePolicyKind::NotRemovable:
-        default:
-            item->setBackground(QColor(128, 128, 128, 255));
-            item->setForeground(KswordTheme::WhiteColor());
-            break;
-        }
     }
 
     bool callbackEnumIsVisibleSuccess(const KernelCallbackEnumEntry& entry)
@@ -2124,9 +2054,6 @@ void KernelDock::initializeCallbackEnumTab()
     m_callbackEnumTable->setColumnHidden(static_cast<int>(CallbackEnumColumn::Trust), true);
     m_callbackEnumTable->setColumnHidden(static_cast<int>(CallbackEnumColumn::Status), true);
     m_callbackEnumTable->setSortingEnabled(false);
-    m_callbackEnumTable->setItemDelegateForColumn(
-        removePolicyColumn,
-        new CallbackEnumRemovePolicyDelegate(m_callbackEnumTable));
     callbackEnumInstallHeaderColumnMenu(m_callbackEnumTable);
     callbackViewTabs->addTab(
         m_callbackEnumTable,
