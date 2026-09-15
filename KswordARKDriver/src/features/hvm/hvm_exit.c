@@ -1608,6 +1608,18 @@ KswordARKHvmExitPublishCost(
         row.access = (ULONG)Context->ApicId;
         row.ruleId = 0xCCu;
         KswordARKHvmEventPublish(&row);
+        /* The same field out of all three stores at that entry - see fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2Idt0In64FromCache;
+        row.guestPhysicalAddress = Context->Nested.L2Idt0In64FromPool;
+        row.guestLinearAddress = Context->Nested.L2Idt0In64FromRegion;
+        row.guestRip = Context->Nested.L2Idt0In64Vmcs;
+        row.exitReason = Context->Nested.L2Idt0In64RegionEntries;
+        row.status = (LONG)Context->Nested.L2Idt0In64Count;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xCBu;
+        KswordARKHvmEventPublish(&row);
     }
     {
         /*

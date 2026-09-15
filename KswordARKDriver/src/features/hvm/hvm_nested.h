@@ -546,6 +546,21 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONGLONG L2Idt0In64Vmcs;
     ULONG L2Idt0In64Entry;
     ULONG L2Idt0In64Rflags;
+    /*
+     * The same field read out of all three places it lives, at that entry.
+     *
+     * L2 halts in its idle loop at that address with the entry area's GDT and
+     * TSS loaded, which is a fully running kernel: a base of zero there is not
+     * a state Linux has, so the value is lost rather than absent.  The working
+     * copy, the pooled copy and the region page are the three stages it passes
+     * through, and reading all three at the moment the entry goes wrong says
+     * which stage still had it - one reading instead of another round of
+     * narrowing.
+     */
+    ULONGLONG L2Idt0In64FromCache;
+    ULONGLONG L2Idt0In64FromPool;
+    ULONGLONG L2Idt0In64FromRegion;
+    ULONG L2Idt0In64RegionEntries;
     ULONGLONG L2IdtrLostEntryRip;
     ULONGLONG L2IdtrLostVmcs;
     ULONGLONG L2IdtrLostHeader;

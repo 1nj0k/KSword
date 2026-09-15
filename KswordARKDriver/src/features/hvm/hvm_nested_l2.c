@@ -886,6 +886,71 @@ KswordARKHvmNestedL2Enter(
             KswordARKHvmNestedL2Read(0x6818UL) == 0ULL &&
             (KswordARKHvmNestedL2Read(0x4812UL) & 0xFFFFULL) == 0x0FFFULL) {
             nested->L2Idt0In64Count += 1ULL;
+            /*
+             * The same field out of all three stores it passes through.
+             *
+             * Cheap enough to do on every one of these - there have only ever
+             * been fourteen - and it is the whole answer: whichever store
+             * still holds the base, the loss is downstream of it.
+             */
+            nested->L2Idt0In64FromCache = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(
+                vmcs12,
+                0x6818UL,
+                &nested->L2Idt0In64FromCache);
+            nested->L2Idt0In64FromPool = 0ULL;
+            if (nested->Vmcs12Pool != NULL) {
+                ULONG pooled = 0UL;
+
+                for (pooled = 0UL;
+                     pooled < nested->Vmcs12Pool->Count;
+                     ++pooled) {
+                    if (nested->Vmcs12Pool->Slots[pooled].PhysicalAddress !=
+                            nested->CurrentVmcs) {
+                        continue;
+                    }
+                    (void)KswordARKHvmNestedVmcs12Read(
+                        &nested->Vmcs12Pool->Slots[pooled],
+                        0x6818UL,
+                        &nested->L2Idt0In64FromPool);
+                    break;
+                }
+            }
+            nested->L2Idt0In64FromRegion = 0ULL;
+            nested->L2Idt0In64RegionEntries = 0UL;
+            {
+                volatile VOID* mapped = NULL;
+
+                if (nested->PhysWindow != NULL &&
+                    nested->CurrentVmcs != 0ULL &&
+                    KswordARKHvmPhysWindowMap(
+                        nested->PhysWindow,
+                        nested->CurrentVmcs,
+                        4096UL,
+                        &mapped) == KSW_HVM_PHYS_WINDOW_OK &&
+                    mapped != NULL) {
+                    volatile ULONGLONG* words = (volatile ULONGLONG*)mapped;
+                    const ULONGLONG header = words[1];
+
+                    /* Same layout the spill writes: magic and count, then pairs. */
+                    if ((ULONG)(header & 0xFFFFFFFFULL) == 0x5657534BUL) {
+                        const ULONGLONG count = header >> 32;
+                        ULONGLONG entry = 0ULL;
+
+                        nested->L2Idt0In64RegionEntries = (ULONG)count;
+                        for (entry = 0ULL; entry < count && entry < 254ULL;
+                             ++entry) {
+                            const ULONGLONG base = (24ULL + entry * 16ULL) / 8ULL;
+
+                            if ((ULONG)words[base] == 0x6818UL) {
+                                nested->L2Idt0In64FromRegion = words[base + 1ULL];
+                                break;
+                            }
+                        }
+                    }
+                    KswordARKHvmPhysWindowUnmap(nested->PhysWindow);
+                }
+            }
             if ((entryEvent & 0x80000000ULL) != 0ULL) {
                 nested->L2Idt0In64InjectedCount += 1ULL;
                 nested->L2Idt0In64Rip = nested->LastEntryGuestRip;

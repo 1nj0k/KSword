@@ -39,7 +39,8 @@ $rows = Invoke-Command -Session $s -ArgumentList $Depth -ScriptBlock {
         $all += $r
         $cur = [int64]$r[-1].sequence
     }
-    return ($all | Where-Object { $_.ruleId -in @(204, 205, 206, 207, 208, 209, 210, 211) })
+    return ($all | Where-Object {
+        $_.ruleId -in @(203, 204, 205, 206, 207, 208, 209, 210, 211) })
 }
 
 Remove-PSSession $s
@@ -153,4 +154,17 @@ foreach ($r in (@($rows | Where-Object { $_.ruleId -eq 204 }) |
         ([uint64]$r.guestLinearAddress), ([uint64]$r.guestRip))
     Write-Output ("    注入信息 = 0x{0:X8}   RFLAGS = 0x{1:X}" -f `
         ([uint32]$r.exitReason), ([uint32]$r.status))
+}
+
+# 同一个字段在三处存储里各是什么：工作副本 / 池槽 / 区域页。
+foreach ($r in (@($rows | Where-Object { $_.ruleId -eq 203 }) |
+                Sort-Object { [int64]$_.sequence } | Select-Object -Last 2)) {
+    Write-Output ''
+    Write-Output ("0xCB 三处存储里的 IDTR 基址  核{0}  序号 {1}（第 {2} 次这样进入）" -f `
+        $r.access, $r.sequence, ([uint32]$r.status))
+    Write-Output ("  工作副本 vmcs12 = 0x{0:X16}" -f ([uint64]$r.qualification))
+    Write-Output ("  池槽          = 0x{0:X16}" -f ([uint64]$r.guestPhysicalAddress))
+    Write-Output ("  区域页        = 0x{0:X16}（页里共 {1} 条）" -f `
+        ([uint64]$r.guestLinearAddress), ([uint32]$r.exitReason))
+    Write-Output ("  该区域 = 0x{0:X}" -f ([uint64]$r.guestRip))
 }
