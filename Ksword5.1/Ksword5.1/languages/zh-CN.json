@@ -4684,7 +4684,7 @@
     "kernel.callback.enum.header.file_version": "文件版本",
     "kernel.callback.enum.header.module": "模块",
     "kernel.callback.enum.header.name": "名称",
-    "kernel.callback.enum.header.remove_policy": "移除策略",
+    "kernel.callback.enum.header.remove_policy": "可移除",
     "kernel.callback.enum.header.registration_type": "注册类型",
     "kernel.callback.enum.header.source": "来源",
     "kernel.callback.enum.header.status": "状态",
@@ -5933,6 +5933,7 @@
     "settings.background.translucency_material.acrylic": "磨砂玻璃"
   },
   "source_translations": {
+    "可移除": "可移除",
     "以下项查询失败/当前不支持": "以下项查询失败/当前不支持",
     "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=": "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=",
     "read-image-section-pages byte area truncated": "read-image-section-pages byte area truncated",

@@ -4684,7 +4684,7 @@
     "kernel.callback.enum.header.file_version": "File version",
     "kernel.callback.enum.header.module": "Module",
     "kernel.callback.enum.header.name": "Name",
-    "kernel.callback.enum.header.remove_policy": "Removal policy",
+    "kernel.callback.enum.header.remove_policy": "Removable",
     "kernel.callback.enum.header.registration_type": "Registration type",
     "kernel.callback.enum.header.source": "Source",
     "kernel.callback.enum.header.status": "Status",
@@ -5933,6 +5933,7 @@
     "settings.background.translucency_material.acrylic": "Frosted glass"
   },
   "source_translations": {
+    "可移除": "Removable",
     "以下项查询失败/当前不支持": "The following items failed to query / are currently unsupported",
     "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=": "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=",
     "read-image-section-pages byte area truncated": "read-image-section-pages byte area truncated",
