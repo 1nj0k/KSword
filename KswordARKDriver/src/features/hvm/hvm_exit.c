@@ -1620,6 +1620,21 @@ KswordARKHvmExitPublishCost(
         row.access = (ULONG)Context->ApicId;
         row.ruleId = 0xCBu;
         KswordARKHvmEventPublish(&row);
+        /* And a 64-bit L2 that threw its own IDT away - see the fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2Idt64ZeroedRip;
+        row.guestPhysicalAddress = Context->Nested.L2Idt64ZeroedLoaded;
+        row.guestLinearAddress =
+            (ULONGLONG)Context->Nested.L2Idt64ZeroedCount;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.L2Idt64ZeroedCsAr << 32) |
+            ((ULONGLONG)Context->Nested.L2Idt64ZeroedLimit & 0xFFFFFFFFULL);
+        row.exitReason = Context->Nested.L2Idt64ZeroedReason;
+        row.status = (LONG)Context->Nested.L2Idt0In64RegionEntries;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xCAu;
+        KswordARKHvmEventPublish(&row);
     }
     {
         /*

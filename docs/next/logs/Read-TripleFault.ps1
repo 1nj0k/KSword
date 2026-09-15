@@ -40,7 +40,7 @@ $rows = Invoke-Command -Session $s -ArgumentList $Depth -ScriptBlock {
         $cur = [int64]$r[-1].sequence
     }
     return ($all | Where-Object {
-        $_.ruleId -in @(203, 204, 205, 206, 207, 208, 209, 210, 211) })
+        $_.ruleId -in @(202, 203, 204, 205, 206, 207, 208, 209, 210, 211) })
 }
 
 Remove-PSSession $s
@@ -167,4 +167,17 @@ foreach ($r in (@($rows | Where-Object { $_.ruleId -eq 203 }) |
     Write-Output ("  区域页        = 0x{0:X16}（页里共 {1} 条）" -f `
         ([uint64]$r.guestLinearAddress), ([uint32]$r.exitReason))
     Write-Output ("  该区域 = 0x{0:X}" -f ([uint64]$r.guestRip))
+}
+
+# 64 位 L2 自己把 IDT 基址扔掉的那一刻。
+foreach ($r in (@($rows | Where-Object { $_.ruleId -eq 202 }) |
+                Sort-Object { [int64]$_.sequence } | Select-Object -Last 2)) {
+    $g = [uint64]$r.guestRip
+    Write-Output ''
+    Write-Output ("0xCA 64 位 L2 自己丢掉 IDT 基址  核{0}  序号 {1}" -f $r.access, $r.sequence)
+    Write-Output ("  发生 {0} 次   最后一次退出 RIP = 0x{1:X}   退出原因 = {2}" -f `
+        ([uint64]$r.guestLinearAddress), ([uint64]$r.qualification), ([uint32]$r.exitReason))
+    Write-Output ("  进入时我们装的是 0x{0:X16}" -f ([uint64]$r.guestPhysicalAddress))
+    Write-Output ("  当时 IDTR 界限 = 0x{0:X}   CS.AR = 0x{1:X}" -f `
+        ($g -band 0xFFFFFFFFL), ($g -shr 32))
 }

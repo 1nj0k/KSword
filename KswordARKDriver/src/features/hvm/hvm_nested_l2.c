@@ -2106,6 +2106,29 @@ KswordARKHvmNestedL2Reflect(
             if (saved != 0ULL) {
                 nested->L2IdtrBaseSavedNonZeroCount += 1UL;
             }
+            /*
+             * L2 threw its own IDT away while running - see the fields.
+             *
+             * Against L2IdtrBaseLoadedLast rather than the per-region record,
+             * because that is what this processor put into vmcs02 at the entry
+             * this exit belongs to; nothing can have moved in between.
+             */
+            if (saved == 0ULL && nested->L2IdtrBaseLoadedLast != 0ULL) {
+                /* 0x4816 is the CS access rights; bit 13 is long mode. */
+                const ULONG csAr =
+                    (ULONG)KswordARKHvmNestedL2Read(0x4816UL);
+
+                if ((csAr & 0x2000UL) != 0UL) {
+                    nested->L2Idt64ZeroedRip =
+                        KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+                    nested->L2Idt64ZeroedLoaded = nested->L2IdtrBaseLoadedLast;
+                    nested->L2Idt64ZeroedReason = ExitReason;
+                    nested->L2Idt64ZeroedLimit =
+                        (ULONG)KswordARKHvmNestedL2Read(0x4812UL);
+                    nested->L2Idt64ZeroedCsAr = csAr;
+                    nested->L2Idt64ZeroedCount += 1UL;
+                }
+            }
             /* And per region, where a transition to zero is visible. */
             for (region = 0UL; region < 4UL; ++region) {
                 if (nested->L2Vmcs12Regions[region] != nested->CurrentVmcs) {

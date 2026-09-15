@@ -561,6 +561,23 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONGLONG L2Idt0In64FromPool;
     ULONGLONG L2Idt0In64FromRegion;
     ULONG L2Idt0In64RegionEntries;
+    /*
+     * The other end of it: a sixty-four-bit L2 that had a base when we
+     * entered it and has none when it comes back.
+     *
+     * A whole boot went by with three triple faults and not one entry in the
+     * faulting shape, which says the base is not arriving zero - it goes to
+     * zero while L2 runs, and the only thing that can do that is L2's own
+     * LIDT.  Keyed on what this processor loaded at the entry that is now
+     * exiting, which is exact whichever virtual processor it was: the pairing
+     * is entry-then-exit on one processor, with no migration in between.
+     */
+    ULONGLONG L2Idt64ZeroedRip;
+    ULONGLONG L2Idt64ZeroedLoaded;
+    ULONG L2Idt64ZeroedReason;
+    ULONG L2Idt64ZeroedCount;
+    ULONG L2Idt64ZeroedLimit;
+    ULONG L2Idt64ZeroedCsAr;
     ULONGLONG L2IdtrLostEntryRip;
     ULONGLONG L2IdtrLostVmcs;
     ULONGLONG L2IdtrLostHeader;
