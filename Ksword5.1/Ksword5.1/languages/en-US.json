@@ -4669,6 +4669,7 @@
     "kernel.callback.enum.copy.detail_item": "[%1] %2\n%3",
     "kernel.callback.enum.detail.full": "Class: %1\nSource: %2\nTrust status: %3\nRemoval policy: %4\nSecond confirmation required: %5\nIs this only a locating clue: %6\nStatus: %7\nName: %8\nAltitude: %9\nPrimary address display: %10\nActual callback address: %11\nContext/diagnostic value: %12\nRegistration handle/Cookie/global node: %13\nModule path: %14\nWin32 module path: %15\nModule base: %16\nModule size: 0x%17\nOperation mask: 0x%18\nObject-type mask: 0x%19\nField flags: 0x%20\nTrust flags (reserved): 0x%21\nRemoval behavior (reserved): 0x%22\nRemoval flags (reserved): 0x%23\nGeneration (reserved): %24\nIdentityHash (reserved): %25\nRawStorageValue (reserved): %26\nLastStatus: 0x%27\n\nNote: The primary address shows the actual callback when available; otherwise it shows a node or identifier that can help locate the entry.\n\nDetails:\n%28",
     "kernel.callback.enum.detail.full_v2": "Class: %1\nRegistration type: %2\nSource: %3\nTrust status: %4\nRemoval policy: %5\nSecond confirmation required: %6\nIs this only a locating clue: %7\nStatus: %8\nName: %9\nAltitude: %10\nPrimary address display: %11\nActual callback address: %12\nContext/diagnostic value: %13\nRegistration handle/Cookie/global node: %14\nModule path: %15\nWin32 module path: %16\nCompany: %17\nFile version: %18\nFile description: %19\nModule base: %20\nModule size: 0x%21\nOperation mask: 0x%22\nObject-type mask: 0x%23\nField flags: 0x%24\nTrust flags: 0x%25\nRemoval behavior: 0x%26\nRemoval flags: 0x%27\nGeneration: %28\nIdentityHash: %29\nRawStorageValue: %30\nLastStatus: 0x%31\n\nNote: The primary address shows the actual callback when available; otherwise it shows a node or identifier that can help locate the entry.\n\nDetails:\n%32",
+    "kernel.callback.enum.separator.failed_or_unsupported": "The following items failed to query / are currently unsupported",
     "kernel.callback.enum.detail.initial": "Select a callback record to view its details.",
     "kernel.callback.enum.empty": "The current environment returned no visible callback records.",
     "kernel.callback.enum.error.io": "Callback enumeration IOCTL call failed.\nWin32=%1\nDetails=%2",
@@ -5932,6 +5933,7 @@
     "settings.background.translucency_material.acrylic": "Frosted glass"
   },
   "source_translations": {
+    "以下项查询失败/当前不支持": "The following items failed to query / are currently unsupported",
     "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=": "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=",
     "read-image-section-pages byte area truncated": "read-image-section-pages byte area truncated",
     "内存区域清单被人动过手脚": "The memory region list has been tampered with",

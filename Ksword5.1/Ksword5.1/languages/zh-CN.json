@@ -4669,6 +4669,7 @@
     "kernel.callback.enum.copy.detail_item": "[%1] %2\n%3",
     "kernel.callback.enum.detail.full": "类别: %1\n来源: %2\n可信状态: %3\n移除策略: %4\n是否需要二次确认: %5\n是否仅为定位线索: %6\n状态: %7\n名称: %8\nAltitude: %9\n主地址显示: %10\n真实回调地址: %11\n上下文/诊断值: %12\n注册句柄/Cookie/全局节点: %13\n模块路径: %14\nWin32模块路径: %15\n模块基址: %16\n模块大小: 0x%17\n操作掩码: 0x%18\n对象类型掩码: 0x%19\n字段标志: 0x%20\n可信标志(预留): 0x%21\n移除行为(预留): 0x%22\n移除标志(预留): 0x%23\nGeneration(预留): %24\nIdentityHash(预留): %25\nRawStorageValue(预留): %26\nLastStatus: 0x%27\n\n说明: 主地址优先显示真实回调函数；无法获取时会显示可用于定位的节点或标识值。\n\n详情:\n%28",
     "kernel.callback.enum.detail.full_v2": "类别: %1\n注册类型: %2\n来源: %3\n可信状态: %4\n移除策略: %5\n是否需要二次确认: %6\n是否仅为定位线索: %7\n状态: %8\n名称: %9\nAltitude: %10\n主地址显示: %11\n真实回调地址: %12\n上下文/诊断值: %13\n注册句柄/Cookie/全局节点: %14\n模块路径: %15\nWin32模块路径: %16\n公司: %17\n文件版本: %18\n文件描述: %19\n模块基址: %20\n模块大小: 0x%21\n操作掩码: 0x%22\n对象类型掩码: 0x%23\n字段标志: 0x%24\n可信标志: 0x%25\n移除行为: 0x%26\n移除标志: 0x%27\nGeneration: %28\nIdentityHash: %29\nRawStorageValue: %30\nLastStatus: 0x%31\n\n说明: 主地址优先显示真实回调函数；无法获取时会显示可用于定位的节点或标识值。\n\n详情:\n%32",
+    "kernel.callback.enum.separator.failed_or_unsupported": "以下项查询失败/当前不支持",
     "kernel.callback.enum.detail.initial": "请选择一条回调记录查看详情。",
     "kernel.callback.enum.empty": "当前环境未返回可见回调记录。",
     "kernel.callback.enum.error.io": "回调遍历 IOCTL 调用失败。\nWin32=%1\n详情=%2",
@@ -5932,6 +5933,7 @@
     "settings.background.translucency_material.acrylic": "磨砂玻璃"
   },
   "source_translations": {
+    "以下项查询失败/当前不支持": "以下项查询失败/当前不支持",
     "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=": "DeviceIoControl(IOCTL_KSWORD_ARK_READ_IMAGE_SECTION_PAGES) failed, error=",
     "read-image-section-pages byte area truncated": "read-image-section-pages byte area truncated",
     "内存区域清单被人动过手脚": "内存区域清单被人动过手脚",

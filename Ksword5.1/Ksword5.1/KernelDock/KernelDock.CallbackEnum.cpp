@@ -989,6 +989,80 @@ namespace
         }
     }
 
+    QString callbackEnumRemovePolicyGlyph(const KernelCallbackEnumEntry& entry)
+    {
+        switch (callbackEnumRemovePolicyKind(entry))
+        {
+        case CallbackEnumRemovePolicyKind::RemovableVerified:
+            return QStringLiteral("✓");
+        case CallbackEnumRemovePolicyKind::RemovableCandidate:
+        case CallbackEnumRemovePolicyKind::ExperimentalOnly:
+            return QStringLiteral("!");
+        case CallbackEnumRemovePolicyKind::NotRemovable:
+        default:
+            return QStringLiteral("×");
+        }
+    }
+
+    void callbackEnumApplyRemovePolicyPresentation(
+        QTableWidgetItem* item,
+        const KernelCallbackEnumEntry& entry)
+    {
+        if (item == nullptr)
+        {
+            return;
+        }
+
+        item->setText(callbackEnumRemovePolicyGlyph(entry));
+        item->setTextAlignment(Qt::AlignCenter);
+        item->setToolTip(callbackEnumRemovePolicyText(entry));
+
+        switch (callbackEnumRemovePolicyKind(entry))
+        {
+        case CallbackEnumRemovePolicyKind::RemovableVerified:
+            item->setBackground(KswordTheme::SuccessBackgroundColor());
+            item->setForeground(KswordTheme::WhiteColor());
+            break;
+        case CallbackEnumRemovePolicyKind::RemovableCandidate:
+        case CallbackEnumRemovePolicyKind::ExperimentalOnly:
+            item->setBackground(KswordTheme::WarningBackgroundColor());
+            item->setForeground(KswordTheme::BlackColor());
+            break;
+        case CallbackEnumRemovePolicyKind::NotRemovable:
+        default:
+            item->setBackground(KswordTheme::PaletteDarkColor());
+            item->setForeground(KswordTheme::WhiteColor());
+            break;
+        }
+    }
+
+    bool callbackEnumIsVisibleSuccess(const KernelCallbackEnumEntry& entry)
+    {
+        return entry.status == KSWORD_ARK_CALLBACK_ENUM_STATUS_OK;
+    }
+
+    bool callbackEnumReadSourceIndex(
+        const QTableWidgetItem* item,
+        const std::size_t sourceCount,
+        std::size_t& sourceIndexOut)
+    {
+        sourceIndexOut = 0U;
+        if (item == nullptr)
+        {
+            return false;
+        }
+
+        bool conversionOk = false;
+        const qulonglong rawSourceIndex = item->data(Qt::UserRole).toULongLong(&conversionOk);
+        if (!conversionOk)
+        {
+            return false;
+        }
+
+        sourceIndexOut = static_cast<std::size_t>(rawSourceIndex);
+        return sourceIndexOut < sourceCount;
+    }
+
     bool callbackEnumCanUseLegacySafeRemove(const KernelCallbackEnumEntry& entry)
     {
         // Input: one cached callback row.
@@ -1888,7 +1962,7 @@ namespace
         sourceIndices.reserve(selectedRows.size());
         for (const int visualRow : selectedRows)
         {
-            QTableWidgetItem* classItem = tableWidget->item(
+            const QTableWidgetItem* classItem = tableWidget->item(
                 visualRow,
                 static_cast<int>(CallbackEnumColumn::Class));
             if (classItem == nullptr)
@@ -1896,9 +1970,8 @@ namespace
                 continue;
             }
 
-            const std::size_t sourceIndex =
-                static_cast<std::size_t>(classItem->data(Qt::UserRole).toULongLong());
-            if (sourceIndex < sourceRows.size())
+            std::size_t sourceIndex = 0U;
+            if (callbackEnumReadSourceIndex(classItem, sourceRows.size(), sourceIndex))
             {
                 sourceIndices.push_back(sourceIndex);
             }
@@ -1989,6 +2062,10 @@ void KernelDock::initializeCallbackEnumTab()
     m_callbackEnumTable->setColumnWidth(static_cast<int>(CallbackEnumColumn::CallbackAddress), 180);
     m_callbackEnumTable->setColumnWidth(static_cast<int>(CallbackEnumColumn::Module), 220);
     m_callbackEnumTable->setColumnWidth(static_cast<int>(CallbackEnumColumn::FileDescription), 220);
+    m_callbackEnumTable->setColumnHidden(static_cast<int>(CallbackEnumColumn::Class), true);
+    m_callbackEnumTable->setColumnHidden(static_cast<int>(CallbackEnumColumn::Trust), true);
+    m_callbackEnumTable->setColumnHidden(static_cast<int>(CallbackEnumColumn::Status), true);
+    m_callbackEnumTable->setSortingEnabled(false);
     callbackEnumInstallHeaderColumnMenu(m_callbackEnumTable);
     callbackViewTabs->addTab(
         m_callbackEnumTable,
@@ -2250,7 +2327,27 @@ void KernelDock::refreshCallbackEnumAsync()
 
             if (guardThis->m_callbackEnumTable->rowCount() > 0)
             {
-                guardThis->m_callbackEnumTable->setCurrentCell(0, 0);
+                int firstDataRow = -1;
+                for (int rowIndex = 0; rowIndex < guardThis->m_callbackEnumTable->rowCount(); ++rowIndex)
+                {
+                    std::size_t sourceIndex = 0U;
+                    if (callbackEnumReadSourceIndex(
+                        guardThis->m_callbackEnumTable->item(
+                            rowIndex,
+                            static_cast<int>(CallbackEnumColumn::Class)),
+                        guardThis->m_callbackEnumRows.size(),
+                        sourceIndex))
+                    {
+                        firstDataRow = rowIndex;
+                        break;
+                    }
+                }
+                if (firstDataRow >= 0)
+                {
+                    guardThis->m_callbackEnumTable->setCurrentCell(
+                        firstDataRow,
+                        static_cast<int>(CallbackEnumColumn::RegistrationType));
+                }
             }
             else
             {
@@ -2285,6 +2382,11 @@ void KernelDock::rebuildCallbackEnumTable(const QString& filterKeyword)
     m_callbackEnumTable->setSortingEnabled(false);
     m_callbackEnumTable->setRowCount(0);
 
+    std::vector<std::size_t> successfulSourceIndices;
+    std::vector<std::size_t> deferredSourceIndices;
+    successfulSourceIndices.reserve(m_callbackEnumRows.size());
+    deferredSourceIndices.reserve(m_callbackEnumRows.size());
+
     for (std::size_t sourceIndex = 0; sourceIndex < m_callbackEnumRows.size(); ++sourceIndex)
     {
         const KernelCallbackEnumEntry& entry = m_callbackEnumRows[sourceIndex];
@@ -2312,6 +2414,22 @@ void KernelDock::rebuildCallbackEnumTable(const QString& filterKeyword)
             continue;
         }
 
+        if (callbackEnumIsVisibleSuccess(entry))
+        {
+            successfulSourceIndices.push_back(sourceIndex);
+        }
+        else
+        {
+            deferredSourceIndices.push_back(sourceIndex);
+        }
+    }
+
+    const auto appendCallbackRow = [this](const std::size_t sourceIndex) {
+        const KernelCallbackEnumEntry& entry = m_callbackEnumRows[sourceIndex];
+        const QString addressText = callbackEnumPrimaryAddressText(entry);
+        const QString moduleText = entry.modulePathText.isEmpty()
+            ? kernelText("kernel.callback.enum.placeholder.unresolved", QStringLiteral("<未解析>"))
+            : entry.modulePathText;
         const int rowIndex = m_callbackEnumTable->rowCount();
         m_callbackEnumTable->insertRow(rowIndex);
 
@@ -2321,7 +2439,7 @@ void KernelDock::rebuildCallbackEnumTable(const QString& filterKeyword)
         auto* sourceItem = new QTableWidgetItem(entry.sourceText);
         auto* trustItem = new QTableWidgetItem(entry.sourceTrustText);
         auto* statusItem = new QTableWidgetItem(entry.statusText);
-        auto* removePolicyItem = new QTableWidgetItem(entry.removePolicyText);
+        auto* removePolicyItem = new QTableWidgetItem();
         auto* nameItem = new QTableWidgetItem(callbackEnumSafeText(entry.nameText));
         auto* addressItem = new QTableWidgetItem(addressText);
         auto* moduleItem = new QTableWidgetItem(moduleText);
@@ -2360,20 +2478,7 @@ void KernelDock::rebuildCallbackEnumTable(const QString& filterKeyword)
             statusItem->setForeground(QBrush(KswordTheme::ErrorColor()));
         }
 
-        switch (callbackEnumRemovePolicyKind(entry))
-        {
-        case CallbackEnumRemovePolicyKind::RemovableVerified:
-            removePolicyItem->setForeground(QBrush(KswordTheme::SuccessColor()));
-            break;
-        case CallbackEnumRemovePolicyKind::RemovableCandidate:
-        case CallbackEnumRemovePolicyKind::ExperimentalOnly:
-            removePolicyItem->setForeground(QBrush(KswordTheme::WarningColor()));
-            break;
-        case CallbackEnumRemovePolicyKind::NotRemovable:
-        default:
-            removePolicyItem->setForeground(QBrush(KswordTheme::TextSecondaryColor()));
-            break;
-        }
+        callbackEnumApplyRemovePolicyPresentation(removePolicyItem, entry);
 
         m_callbackEnumTable->setItem(rowIndex, static_cast<int>(CallbackEnumColumn::Class), classItem);
         m_callbackEnumTable->setItem(rowIndex, static_cast<int>(CallbackEnumColumn::RegistrationType), registrationTypeItem);
@@ -2388,9 +2493,49 @@ void KernelDock::rebuildCallbackEnumTable(const QString& filterKeyword)
         m_callbackEnumTable->setItem(rowIndex, static_cast<int>(CallbackEnumColumn::FileVersion), fileVersionItem);
         m_callbackEnumTable->setItem(rowIndex, static_cast<int>(CallbackEnumColumn::FileDescription), fileDescriptionItem);
         m_callbackEnumTable->setItem(rowIndex, static_cast<int>(CallbackEnumColumn::Altitude), altitudeItem);
+    };
+
+    for (const std::size_t sourceIndex : successfulSourceIndices)
+    {
+        appendCallbackRow(sourceIndex);
     }
 
-    m_callbackEnumTable->setSortingEnabled(true);
+    if (!deferredSourceIndices.empty())
+    {
+        const int separatorRow = m_callbackEnumTable->rowCount();
+        m_callbackEnumTable->insertRow(separatorRow);
+        int firstVisibleColumn = -1;
+        for (int columnIndex = 0; columnIndex < m_callbackEnumTable->columnCount(); ++columnIndex)
+        {
+            if (!m_callbackEnumTable->isColumnHidden(columnIndex))
+            {
+                firstVisibleColumn = columnIndex;
+                break;
+            }
+        }
+        if (firstVisibleColumn >= 0)
+        {
+            auto* separatorItem = new QTableWidgetItem(kernelText(
+                "kernel.callback.enum.separator.failed_or_unsupported",
+                QStringLiteral("以下项查询失败/当前不支持")));
+            separatorItem->setFlags(Qt::ItemIsEnabled);
+            separatorItem->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+            separatorItem->setBackground(KswordTheme::SurfaceMutedColor());
+            separatorItem->setForeground(KswordTheme::TextPrimaryColor());
+            separatorItem->setToolTip(separatorItem->text());
+            m_callbackEnumTable->setItem(separatorRow, firstVisibleColumn, separatorItem);
+            m_callbackEnumTable->setSpan(
+                separatorRow,
+                firstVisibleColumn,
+                1,
+                m_callbackEnumTable->columnCount() - firstVisibleColumn);
+        }
+    }
+
+    for (const std::size_t sourceIndex : deferredSourceIndices)
+    {
+        appendCallbackRow(sourceIndex);
+    }
 
     if (m_minifilterCallbackTree == nullptr)
     {
@@ -2562,8 +2707,14 @@ bool KernelDock::currentCallbackEnumSourceIndex(std::size_t& sourceIndexOut) con
         return false;
     }
 
-    sourceIndexOut = static_cast<std::size_t>(classItem->data(Qt::UserRole).toULongLong());
-    return sourceIndexOut < m_callbackEnumRows.size();
+    std::size_t sourceIndex = 0U;
+    if (!callbackEnumReadSourceIndex(classItem, m_callbackEnumRows.size(), sourceIndex))
+    {
+        return false;
+    }
+
+    sourceIndexOut = sourceIndex;
+    return true;
 }
 
 const KernelCallbackEnumEntry* KernelDock::currentCallbackEnumEntry() const
