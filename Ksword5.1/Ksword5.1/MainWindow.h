@@ -97,8 +97,10 @@ public:
         StartupProgressCallback startupProgressCallback,
         const QFont& startupSystemFont);
     ~MainWindow();
+    int runHvmCommandCoverageTest(const QString& reportPath);
 
 public slots:
+    void focusKvmCommands();
     // focusHandleDockByPid 作用：
     // - 将“句柄”Dock 置顶并切换 PID 过滤；
     // - 供进程详情窗口发起“跳转到句柄视图”时调用。

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build" ToolsVersion="17.0">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -1100,4 +1100,17 @@
   </ImportGroup>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <ItemGroup>
+    <ClCompile Include="ArkDriverClient\HvmCommandCatalog.c"><CompileAs>CompileAsC</CompileAs></ClCompile>
+    <ClCompile Include="ArkDriverClient\HvmCommandEngine.c"><CompileAs>CompileAsC</CompileAs></ClCompile>
+    <ClCompile Include="ArkDriverClient\HvmCommandProcess.cpp"></ClCompile>
+    <ClCompile Include="UI\KvmCommandPanel.cpp"></ClCompile>
+    <ClInclude Include="ArkDriverClient\HvmCommandCatalog.h" />
+    <ClInclude Include="ArkDriverClient\HvmCommandProcess.h" />
+    <ClInclude Include="UI\KvmCommandPanel.h" />
+  </ItemGroup>
+  <ItemGroup><ClInclude Include="..\..\shared\driver\KswordArkHvmRequest.h" /></ItemGroup>
+  <Target Name="AuditKswordHvmCommandCatalog" BeforeTargets="ClCompile">
+    <Exec Command="&quot;python&quot; &quot;$(MSBuildProjectDirectory)\..\..\tools\hvm_ctl\audit_catalog.py&quot;" />
+  </Target>
 </Project>

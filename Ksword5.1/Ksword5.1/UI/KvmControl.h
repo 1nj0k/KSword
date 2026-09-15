@@ -182,6 +182,8 @@ namespace ksword::kvm
     // - 【不持久化】：与 #VE / VMFUNC 同类，武装的是一项能力而不是描述环境的
     //   事实，每次启动客户端都必须重新打开。
     bool isNestedDispatchEnabled();
+    bool isHypervisorHidden();
+    void setHypervisorHidden(bool enabled);
     void setNestedDispatchEnabled(bool enabled);
 
     // #VE 开关（把 EPT violation 反射成 guest 的 #VE，向量 20）：

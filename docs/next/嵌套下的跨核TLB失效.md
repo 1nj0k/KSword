@@ -202,7 +202,7 @@ root 里处理另一次退出，NMI 走的是 `HOST_IDTR_BASE` 指的那张表�
 
 ## 9. 相关
 
-- 探针实现：`tools/hvm_ctl/hvm_ctl.c`，动词 `tlb-probe` / `tlb-probe-exit`
+- 探针实现：`Ksword5.1/Ksword5.1/ArkDriverClient/HvmCommandEngine.c`，动词 `tlb-probe` / `tlb-probe-exit`
 - 驱动侧：`hvm_resident.c`（私有 IDT 构建、台账、发送端）、`hvm_entry.asm`
   （vector 2 stub）、`hvm_exit.c`（NMI 认领与延后投递、转发后触发）、
   `hvm_vmcs.c`（pin 控制位、`HOST_IDTR_BASE`）

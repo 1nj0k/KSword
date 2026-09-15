@@ -1,4 +1,5 @@
 #include "ArkDriverClient.h"
+#include "../../../shared/driver/KswordArkHvmRequest.h"
 
 #include <algorithm>
 #include <cstring>
@@ -62,7 +63,8 @@ namespace ksword::ark
         const bool enableVmFunc,
         const bool enableLocalEpt,
         const bool enableEptpSwitch,
-        const unsigned long soakMilliseconds) const
+        const unsigned long soakMilliseconds,
+        const bool hideHypervisor) const
     {
         HvmControlResult result{};
         KSWORD_ARK_CONTROL_HVM_REQUEST request{};
@@ -116,14 +118,13 @@ namespace ksword::ark
         {
             request.flags |= KSWORD_ARK_HVM_CONTROL_FLAG_ONE_SHOT_GUEST;
         }
-        // 驱动只允许 SOAK 携带非零时长，其它命令必须保持该字段为零。
-        if (command == KSWORD_ARK_HVM_CONTROL_SOAK)
+        if (hideHypervisor)
         {
-            request.soakMilliseconds = soakMilliseconds;
+            request.flags |= KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR;
         }
-        request.confirmationToken =
-            KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN;
-        request.expectedGeneration = expectedGeneration;
+        const unsigned long flags = request.flags;
+        KswordArkHvmBuildControlRequest(&request, command, flags,
+                                       expectedGeneration, soakMilliseconds);
 
         result.io = deviceIoControl(
             IOCTL_KSWORD_ARK_CONTROL_HVM,
