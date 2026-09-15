@@ -1715,7 +1715,7 @@ KswordARKHvmExitPublishCost(
         /* What we did with the two interrupt-hardware pages - see the fields. */
         ULONG page = 0UL;
 
-        for (page = 0UL; page < 2UL; ++page) {
+        for (page = 0UL; page < 3UL; ++page) {
             RtlZeroMemory(&row, sizeof(row));
             row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
             row.exitReason = page;
@@ -1766,6 +1766,31 @@ KswordARKHvmExitPublishCost(
         row.exitReason = Context->Nested.LastEntryGuestActivity;
         row.access = (ULONG)Context->ApicId;
         row.ruleId = 0xC3u;
+        KswordARKHvmEventPublish(&row);
+        /* Acknowledgements and re-arms against injections - see the fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2InjectionCount;
+        row.guestPhysicalAddress =
+            Context->Nested.L2EoiMsrCount + Context->Nested.L2EoiMmioCount;
+        row.guestLinearAddress = Context->Nested.L2TimerArmCount;
+        row.guestRip = Context->Nested.L2TimerArmLastValue;
+        row.exitReason = (ULONG)Context->Nested.L2EoiMmioCount;
+        row.status = (LONG)Context->Nested.L2EoiMsrCount;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xC2u;
+        KswordARKHvmEventPublish(&row);
+        /* Where the tick device is programmed, if anywhere - see the fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2HpetWrites;
+        row.guestPhysicalAddress = Context->Nested.L2HpetReads;
+        row.guestLinearAddress = Context->Nested.L2ApicTimerLvtWrites;
+        row.guestRip = Context->Nested.L2ApicTimerCountWrites;
+        row.exitReason = Context->Nested.L2ApicMmio[2][0];
+        row.status = (LONG)Context->Nested.L2PitWriteTotal;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xC1u;
         KswordARKHvmEventPublish(&row);
     }
     {

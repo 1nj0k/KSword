@@ -1235,6 +1235,28 @@ typedef struct _KSW_HVM_NESTED_VCPU
      * idle loop is spinning rather than sleeping and its own account of time
      * is the only thing that would ever have shown it.
      */
+    /*
+     * Acknowledgements and re-arms, against the injections they belong to.
+     *
+     * The timer runs at about a hertz for a while and then stops dead with L2
+     * halted and nothing pending anywhere.  A one-shot timer has exactly one
+     * way to end like that: the guest is handed an interrupt, never runs its
+     * handler, and so never writes the end-of-interrupt.  The controller then
+     * holds that vector in service and refuses every vector at or below its
+     * priority forever - which for vector 0x30 is nearly all of Linux's.  This
+     * driver has already paid for that once with the 8259, where the in-service
+     * register stuck at 0x03 and the guest never took another interrupt.
+     *
+     * So count both ends.  Injections against acknowledgements says whether one
+     * went unanswered; the arm count says whether the guest stopped asking for
+     * the next tick, which is the same wedge seen from the other side.  EOI is
+     * MSR 0x80B in x2APIC and a write to offset 0xB0 of the local APIC page
+     * otherwise, and the guest uses both across a boot.
+     */
+    ULONGLONG L2EoiMsrCount;
+    ULONGLONG L2EoiMmioCount;
+    ULONGLONG L2TimerArmCount;
+    ULONGLONG L2TimerArmLastValue;
     ULONGLONG L2ResumeAfterHaltNoEvent;
     ULONGLONG L2ResumeAfterHaltWithEvent;
     ULONGLONG L2ResumeAfterHaltRip;
@@ -1254,7 +1276,27 @@ typedef struct _KSW_HVM_NESTED_VCPU
      * Index 0 is the IOAPIC at 0xFEC00000, index 1 the local APIC at
      * 0xFEE00000; the three counts are seen, composed and reflected.
      */
-    ULONG L2ApicMmio[2][3];
+    ULONG L2ApicMmio[3][3];
+    /*
+     * Where the guest's tick device is actually programmed.
+     *
+     * Two candidates both came back zero: Linux never reprograms the PIT - the
+     * only fifteen writes to 0x40-0x43 in a whole run are the BIOS setting
+     * divisor 65536 for its 18.2 Hz - and it never arms the local APIC timer
+     * through the x2APIC MSRs either.  A guest with no tick device at all is
+     * not a thing, so the path it uses is one neither counter watches: the
+     * HPET at 0xFED00000, or the local APIC's own timer registers reached as
+     * memory rather than as MSRs - offset 0x320 is the timer's LVT entry and
+     * 0x380 its initial count.
+     *
+     * Counting the writes separately from the reads matters here: a clocksource
+     * is read constantly and programmed once, so a page that is only ever read
+     * is being used to tell the time, not to schedule the next tick.
+     */
+    ULONGLONG L2HpetWrites;
+    ULONGLONG L2HpetReads;
+    ULONGLONG L2ApicTimerLvtWrites;
+    ULONGLONG L2ApicTimerCountWrites;
     /* Preserve explicit partial vmcs02 merge state. */
     KSW_HVM_VMCS02_STATE Vmcs02;
     /* Preserve explicit partial shadow-EPT composition state. */

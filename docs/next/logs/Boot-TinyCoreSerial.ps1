@@ -26,15 +26,19 @@ $s = New-PSSession -VMName $VMName -Credential $cred
 # 串口是追加写的，先清掉，否则读到的是上一轮探针的字节。
 Invoke-Command -Session $s -ArgumentList $SerialLog -ScriptBlock {
     param($log)
-    # 用 vmrun 停，不要 Stop-Process -Force。
+    # 先停常驻，再停虚拟机，然后反过来起回来。
     #
-    # 强杀 vmware-vmx 会连着两次把整台靶机打掉：宿主 Hyper-V 日志里是事件 18560
-    # “虚拟处理器上发生不可恢复的错误，造成三键故障”，来宾侧没有蓝屏、没有转储。
-    # 它的 vCPU 正跑在我们下面的 VMX non-root 里，进程被抹掉之后那条路没人收尾。
-    # 这是一个真缺陷（另记），但先别让它每轮都吃掉一次重启。
+    # 拆掉 VMware 的虚拟机时如果常驻还在跑，整台靶机会被 Hyper-V 重置——宿主日志
+    # 事件 18560“虚拟处理器上发生不可恢复的错误，造成三键故障”，来宾侧没有蓝屏也
+    # 没有转储。三次实测：`Stop-Process -Force` 两次，换成 `vmrun stop` 之后又一次，
+    # 所以**不是强杀的问题**，是"它的 vCPU 还在我们下面的 VMX non-root 里而那条路
+    # 没人收尾"。缺陷本身另记；这里只是不再踩它。
     $vmxPath = 'C:\Users\felix\Documents\Virtual Machines\' +
                'Other Linux 6.x kernel 64-bit\Other Linux 6.x kernel 64-bit.vmx'
     $vmrun = 'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+    $ctl = 'C:\ksword\hvm_ctl.exe'
+
+    Start-Process $ctl -ArgumentList 'stop' -NoNewWindow -Wait | Out-Null
     if (@(Get-Process -Name 'vmware-vmx' -ErrorAction SilentlyContinue).Count -gt 0) {
         Start-Process -FilePath $vmrun `
             -ArgumentList @('-T', 'ws', 'stop', "`"$vmxPath`"", 'hard') `
@@ -47,7 +51,13 @@ Invoke-Command -Session $s -ArgumentList $SerialLog -ScriptBlock {
         $waited++
     }
     Get-Process -Name 'vmware' -ErrorAction SilentlyContinue | Stop-Process -Force
-    Start-Sleep -Seconds 3
+    Start-Sleep -Seconds 2
+    # 常驻起回来，并且必须是隐藏 hypervisor 的那一版，否则 VMware 的身份门直接拒绝。
+    Start-Process $ctl -ArgumentList 'resident-nested-hidehv' -NoNewWindow -Wait | Out-Null
+    & sc.exe stop vmx86 | Out-Null
+    Start-Sleep -Seconds 1
+    & sc.exe start vmx86 | Out-Null
+    Start-Sleep -Seconds 2
     if (Test-Path $log) { Remove-Item $log -Force }
     $vmx = 'C:\Users\felix\Documents\Virtual Machines\' +
            'Other Linux 6.x kernel 64-bit\Other Linux 6.x kernel 64-bit.vmx'

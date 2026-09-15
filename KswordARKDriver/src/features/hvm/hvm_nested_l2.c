@@ -1282,10 +1282,37 @@ KswordARKHvmNestedL2ExitOwner(
          */
         const ULONG apicPage =
             ((guestPhysical & ~0xFFFULL) == 0xFEC00000ULL) ? 1UL :
-            (((guestPhysical & ~0xFFFULL) == 0xFEE00000ULL) ? 2UL : 0UL);
+            (((guestPhysical & ~0xFFFULL) == 0xFEE00000ULL) ? 2UL :
+             (((guestPhysical & ~0xFFFULL) == 0xFED00000ULL) ? 3UL : 0UL));
 
         if (apicPage != 0UL) {
+            const BOOLEAN isWrite = ((qualification & 0x2ULL) != 0ULL);
+
             nested->L2ApicMmio[apicPage - 1UL][0] += 1UL;
+            /* Which register, for the two pages a tick device lives on. */
+            if (apicPage == 3UL) {
+                if (isWrite) {
+                    nested->L2HpetWrites += 1ULL;
+                } else {
+                    nested->L2HpetReads += 1ULL;
+                }
+            } else if (apicPage == 2UL && isWrite) {
+                if ((guestPhysical & 0xFFFULL) == 0x320ULL) {
+                    nested->L2ApicTimerLvtWrites += 1ULL;
+                } else if ((guestPhysical & 0xFFFULL) == 0x380ULL) {
+                    nested->L2ApicTimerCountWrites += 1ULL;
+                }
+            }
+            /*
+             * A write to offset 0xB0 of the local APIC page is the xAPIC
+             * end-of-interrupt - see the field.  Qualification bit 1 is the
+             * write flag.
+             */
+            if (apicPage == 2UL &&
+                (guestPhysical & 0xFFFULL) == 0xB0ULL &&
+                (qualification & 0x2ULL) != 0ULL) {
+                nested->L2EoiMmioCount += 1ULL;
+            }
         }
         /* Keep the address and the access, whatever is decided below. */
         nested->L2LastEptGuestPhysical = guestPhysical;
@@ -1660,6 +1687,19 @@ KswordARKHvmNestedL2ExitOwner(
 
                 nested->L2LastMsrWriteIndex = msrIndex;
                 nested->L2LastMsrWriteValue = value;
+                /*
+                 * The acknowledgement and the re-arm - see the fields.
+                 *
+                 * 0x80B is the x2APIC end-of-interrupt register.  0x6E0 is the
+                 * TSC deadline and 0x838 the local APIC initial count; either
+                 * one is the guest asking for the next tick.
+                 */
+                if (msrIndex == 0x80BUL) {
+                    nested->L2EoiMsrCount += 1ULL;
+                } else if (msrIndex == 0x6E0UL || msrIndex == 0x838UL) {
+                    nested->L2TimerArmCount += 1ULL;
+                    nested->L2TimerArmLastValue = value;
+                }
                 /*
                  * 0x830 is the x2APIC interrupt-command register: one write is
                  * one inter-processor interrupt, destination and vector
