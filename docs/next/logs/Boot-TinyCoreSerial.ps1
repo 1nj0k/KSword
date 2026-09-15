@@ -26,8 +26,27 @@ $s = New-PSSession -VMName $VMName -Credential $cred
 # 串口是追加写的，先清掉，否则读到的是上一轮探针的字节。
 Invoke-Command -Session $s -ArgumentList $SerialLog -ScriptBlock {
     param($log)
-    Get-Process -Name 'vmware', 'vmware-vmx' -ErrorAction SilentlyContinue |
-        Stop-Process -Force
+    # 用 vmrun 停，不要 Stop-Process -Force。
+    #
+    # 强杀 vmware-vmx 会连着两次把整台靶机打掉：宿主 Hyper-V 日志里是事件 18560
+    # “虚拟处理器上发生不可恢复的错误，造成三键故障”，来宾侧没有蓝屏、没有转储。
+    # 它的 vCPU 正跑在我们下面的 VMX non-root 里，进程被抹掉之后那条路没人收尾。
+    # 这是一个真缺陷（另记），但先别让它每轮都吃掉一次重启。
+    $vmxPath = 'C:\Users\felix\Documents\Virtual Machines\' +
+               'Other Linux 6.x kernel 64-bit\Other Linux 6.x kernel 64-bit.vmx'
+    $vmrun = 'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+    if (@(Get-Process -Name 'vmware-vmx' -ErrorAction SilentlyContinue).Count -gt 0) {
+        Start-Process -FilePath $vmrun `
+            -ArgumentList @('-T', 'ws', 'stop', "`"$vmxPath`"", 'hard') `
+            -NoNewWindow -Wait
+    }
+    $waited = 0
+    while (@(Get-Process -Name 'vmware-vmx' -ErrorAction SilentlyContinue).Count -gt 0 -and
+           $waited -lt 30) {
+        Start-Sleep -Seconds 1
+        $waited++
+    }
+    Get-Process -Name 'vmware' -ErrorAction SilentlyContinue | Stop-Process -Force
     Start-Sleep -Seconds 3
     if (Test-Path $log) { Remove-Item $log -Force }
     $vmx = 'C:\Users\felix\Documents\Virtual Machines\' +

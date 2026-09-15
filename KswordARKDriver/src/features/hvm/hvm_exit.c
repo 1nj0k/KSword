@@ -1755,6 +1755,20 @@ KswordARKHvmExitPublishCost(
         }
     }
     {
+        /* What resumes a halted L2, and where it lands - see the fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2ResumeAfterHaltNoEvent;
+        row.guestPhysicalAddress =
+            Context->Nested.L2ResumeAfterHaltWithEvent;
+        row.guestLinearAddress = Context->Nested.L2ResumeAfterHaltRip;
+        row.guestRip = Context->Nested.L2ResumeAfterHaltExitRip;
+        row.exitReason = Context->Nested.LastEntryGuestActivity;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xC3u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
         /*
          * The flags at each region's last exit, and the last four IPIs.
          *

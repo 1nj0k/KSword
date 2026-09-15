@@ -853,6 +853,28 @@ KswordARKHvmNestedL2Enter(
             }
         }
         /*
+         * What resumed a halted L2, and where it lands - see the fields.
+         *
+         * Reason 12 is HLT.  The trail's newest entry is the address that HLT
+         * exited from, and LastEntryGuestRip is where this entry resumes; the
+         * two being equal means the halt survived, and differing means it did
+         * not.
+         */
+        if (region < 4UL &&
+            nested->L2Vmcs12RegionLastExitReason[region] == 12UL) {
+            const ULONG newest =
+                (nested->L2Vmcs12RegionTrailIndex[region] - 1UL) & 0x3UL;
+
+            if ((entryEvent & 0x80000000ULL) != 0ULL) {
+                nested->L2ResumeAfterHaltWithEvent += 1ULL;
+            } else {
+                nested->L2ResumeAfterHaltNoEvent += 1ULL;
+            }
+            nested->L2ResumeAfterHaltRip = nested->LastEntryGuestRip;
+            nested->L2ResumeAfterHaltExitRip =
+                nested->L2Vmcs12RegionTrailRip[region][newest];
+        }
+        /*
          * The whole distribution, and whether L2 was halted - see the fields.
          *
          * LastEntryGuestActivity was read out of vmcs02 just above, so it is

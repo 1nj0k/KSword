@@ -1222,6 +1222,24 @@ typedef struct _KSW_HVM_NESTED_VCPU
      */
     ULONG L2InjectVector64[256];
     /*
+     * What resumes L2 after it halts, and where it lands.
+     *
+     * With one virtual processor and nothing else on the machine, L2 receives
+     * no timer interrupt at all and still halts about fifteen times a second.
+     * Something is resuming it, and the two possibilities are opposite: L1
+     * resuming a still-halted processor - wasteful but correct, the HLT simply
+     * re-executes - or the halt being consumed, which loses it.
+     *
+     * The address separates them.  A resume that lands on the HLT itself is
+     * the first; one that lands after it is the second, and then the guest's
+     * idle loop is spinning rather than sleeping and its own account of time
+     * is the only thing that would ever have shown it.
+     */
+    ULONGLONG L2ResumeAfterHaltNoEvent;
+    ULONGLONG L2ResumeAfterHaltWithEvent;
+    ULONGLONG L2ResumeAfterHaltRip;
+    ULONGLONG L2ResumeAfterHaltExitRip;
+    /*
      * Violations on the two pages a guest programs its interrupt hardware
      * through, and what we did with each.
      *
