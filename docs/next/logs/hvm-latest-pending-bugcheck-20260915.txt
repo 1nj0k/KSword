@@ -1,0 +1,359 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.031 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.6584 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Felix\CLionProjects\KSword\docs\next\logs\hvm-latest-full-20260915.dmp]
+Kernel Bitmap Dump File: Kernel address space is available, User address space may not be available.
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release
+Deferred                                       srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release;srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 22621 MP (2 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS Personal
+Edition build lab: 22621.2506.amd64fre.ni_release_svc_prod3.231018-1809
+Kernel base = 0xfffff806`50800000 PsLoadedModuleList = 0xfffff806`514134b0
+Debug session time: Tue Sep 15 13:39:08.282 2026 (UTC - 4:00)
+System Uptime: 0 days 1:06:00.014
+Loading Kernel Symbols
+...............................................................
+................................................................
+.................................................
+Loading User Symbols
+
+Loading unloaded module list
+........
+For analysis of this file, run !analyze -v
+0: kd> cdb: Reading initial command '.trap ffff928a06466c60; dq @rbp+380 L6; dq @rbp+0a80 L2; dt nt!_KPRCB fffff8064d495180 IdtBase; r idtr; r idtl; !idt -a; q'
+NOTE: The trap frame does not contain all registers.
+Some register values may be zeroed or incorrect.
+rax=0000000080040033 rbx=0000000000000000 rcx=fffff8064d495180
+rdx=fffff8064d495180 rsi=0000000000000000 rdi=0000000000000000
+rip=ffffa98be0817b9d rsp=ffff928a06466df0 rbp=ffff928a06466ef0
+ r8=0000000020201c84  r9=0000000000000002 r10=0000000000000000
+r11=ffffa98be0802486 r12=0000000000000000 r13=0000000000000000
+r14=0000000000000000 r15=0000000000000000
+iopl=0         nv up ei pl zr na po cy
+ffffa98b`e0817b9d 0f22c0          mov     cr0,rax
+ffff928a`06467270  00000000`00000001 a39fe8e4`7248d96e
+ffff928a`06467280  b3b6f56a`c4cb7cb7 00000000`00000003
+ffff928a`06467290  fffff806`4e516fb0 00000000`00000000
+ffff928a`06467970  ffffa98b`e0802486 00000000`00000003
+Cannot find specified field members.
+Last set context:
+idtr=ffffa98bdeb45000
+Last set context:
+idtl=ffff
+
+Dumping IDT: fffff8064e514000
+
+00:	fffff80650c22000 nt!KiDivideErrorFault
+01:	fffff80650c22380 nt!KiDebugTrapOrFault	Stack = 0xFFFFF8064E554000
+02:	fffff80650c22980 nt!KiNmiInterrupt	Stack = 0xFFFFF8064E546000
+03:	fffff80650c22f00 nt!KiBreakpointTrap
+04:	fffff80650c23280 nt!KiOverflowTrap
+05:	fffff80650c23600 nt!KiBoundFault
+06:	fffff80650c23d00 nt!KiInvalidOpcodeFault
+07:	fffff80650c243c0 nt!KiNpxNotAvailableFault
+08:	fffff80650c24780 nt!KiDoubleFaultAbort	Stack = 0xFFFFF8064E53F000
+09:	fffff80650c24b00 nt!KiNpxSegmentOverrunAbort
+0a:	fffff80650c24e80 nt!KiInvalidTssFault
+0b:	fffff80650c25200 nt!KiSegmentNotPresentFault
+0c:	fffff80650c25600 nt!KiStackFault
+0d:	fffff80650c25980 nt!KiGeneralProtectionFault
+0e:	fffff80650c25d00 nt!KiPageFault
+0f:	fffff80650c185f8 nt!KiIsrThunk+0x78
+10:	fffff80650c26500 nt!KiFloatingErrorFault
+11:	fffff80650c26900 nt!KiAlignmentFault
+12:	fffff80650c26c80 nt!KiMcheckAbort	Stack = 0xFFFFF8064E54D000
+13:	fffff80650c27a40 nt!KiXmmException
+14:	fffff80650c27e40 nt!KiVirtualizationException
+15:	fffff80650c28540 nt!KiControlProtectionFault
+16:	fffff80650c18630 nt!KiIsrThunk+0xB0
+17:	fffff80650c18638 nt!KiIsrThunk+0xB8
+18:	fffff80650c18640 nt!KiIsrThunk+0xC0
+19:	fffff80650c18648 nt!KiIsrThunk+0xC8
+1a:	fffff80650c18650 nt!KiIsrThunk+0xD0
+1b:	fffff80650c18658 nt!KiIsrThunk+0xD8
+1c:	fffff80650c18660 nt!KiIsrThunk+0xE0
+1d:	fffff80650c18668 nt!KiIsrThunk+0xE8
+1e:	fffff80650c18670 nt!KiIsrThunk+0xF0
+1f:	fffff80650c1aae0 nt!KiApcInterrupt
+20:	fffff80650c1cec0 nt!KiSwInterrupt
+21:	fffff80650c18688 nt!KiIsrThunk+0x108
+22:	fffff80650c18690 nt!KiIsrThunk+0x110
+23:	fffff80650c18698 nt!KiIsrThunk+0x118
+24:	fffff80650c186a0 nt!KiIsrThunk+0x120
+25:	fffff80650c186a8 nt!KiIsrThunk+0x128
+26:	fffff80650c186b0 nt!KiIsrThunk+0x130
+27:	fffff80650c186b8 nt!KiIsrThunk+0x138
+28:	fffff80650c186c0 nt!KiIsrThunk+0x140
+29:	fffff80650c28c80 nt!KiRaiseSecurityCheckFailure
+2a:	fffff80650c186d0 nt!KiIsrThunk+0x150
+2b:	fffff80650c186d8 nt!KiIsrThunk+0x158
+2c:	fffff80650c29000 nt!KiRaiseAssertion
+2d:	fffff80650c29380 nt!KiDebugServiceTrap
+2e:	fffff80650c186f0 nt!KiIsrThunk+0x170
+2f:	fffff80650c1d6b0 nt!KiDpcInterrupt
+30:	fffff80650c1b2a0 nt!KiHvInterrupt
+31:	fffff80650c1b600 nt!KiVmbusInterrupt0
+32:	fffff80650c1b960 nt!KiVmbusInterrupt1
+33:	fffff80650c1bcc0 nt!KiVmbusInterrupt2
+34:	fffff80650c1c020 nt!KiVmbusInterrupt3
+35:	fffff80650c18728 nt!HalpInterruptCmciService (KINTERRUPT fffff8065150ca90)
+
+36:	fffff80650c18730 nt!HalpInterruptCmciService (KINTERRUPT fffff8065150ccd0)
+
+37:	fffff80650c18738 nt!KiIsrThunk+0x1B8
+38:	fffff80650c18740 nt!KiIsrThunk+0x1C0
+39:	fffff80650c18748 nt!KiIsrThunk+0x1C8
+3a:	fffff80650c18750 nt!KiIsrThunk+0x1D0
+3b:	fffff80650c18758 nt!KiIsrThunk+0x1D8
+3c:	fffff80650c18760 nt!KiIsrThunk+0x1E0
+3d:	fffff80650c18768 nt!KiIsrThunk+0x1E8
+3e:	fffff80650c18770 nt!KiIsrThunk+0x1F0
+3f:	fffff80650c18778 nt!KiIsrThunk+0x1F8
+40:	fffff80650c18780 nt!KiIsrThunk+0x200
+41:	fffff80650c18788 nt!KiIsrThunk+0x208
+42:	fffff80650c18790 nt!KiIsrThunk+0x210
+43:	fffff80650c18798 nt!KiIsrThunk+0x218
+44:	fffff80650c187a0 nt!KiIsrThunk+0x220
+45:	fffff80650c187a8 nt!KiIsrThunk+0x228
+46:	fffff80650c187b0 nt!KiIsrThunk+0x230
+47:	fffff80650c187b8 nt!KiIsrThunk+0x238
+48:	fffff80650c187c0 nt!KiIsrThunk+0x240
+49:	fffff80650c187c8 nt!KiIsrThunk+0x248
+4a:	fffff80650c187d0 nt!KiIsrThunk+0x250
+4b:	fffff80650c187d8 nt!KiIsrThunk+0x258
+4c:	fffff80650c187e0 nt!KiIsrThunk+0x260
+4d:	fffff80650c187e8 nt!KiIsrThunk+0x268
+4e:	fffff80650c187f0 nt!KiIsrThunk+0x270
+4f:	fffff80650c187f8 nt!KiIsrThunk+0x278
+50:	fffff80650c18800 nt!KiIsrThunk+0x280
+51:	fffff80650c18808 nt!KiIsrThunk+0x288
+52:	fffff80650c18810 nt!KiIsrThunk+0x290
+53:	fffff80650c18818 nt!KiIsrThunk+0x298
+54:	fffff80650c18820 nt!KiIsrThunk+0x2A0
+55:	fffff80650c18828 nt!KiIsrThunk+0x2A8
+56:	fffff80650c18830 nt!KiIsrThunk+0x2B0
+57:	fffff80650c18838 nt!KiIsrThunk+0x2B8
+58:	fffff80650c18840 nt!KiIsrThunk+0x2C0
+59:	fffff80650c18848 nt!KiIsrThunk+0x2C8
+5a:	fffff80650c18850 nt!KiIsrThunk+0x2D0
+5b:	fffff80650c18858 nt!KiIsrThunk+0x2D8
+5c:	fffff80650c18860 nt!KiIsrThunk+0x2E0
+5d:	fffff80650c18868 nt!KiIsrThunk+0x2E8
+5e:	fffff80650c18870 nt!KiIsrThunk+0x2F0
+5f:	fffff80650c18878 nt!KiIsrThunk+0x2F8
+60:	fffff80650c18880 nt!KiIsrThunk+0x300
+61:	fffff80650c18888 nt!KiIsrThunk+0x308
+62:	fffff80650c18890 nt!KiIsrThunk+0x310
+63:	fffff80650c18898 nt!KiIsrThunk+0x318
+64:	fffff80650c188a0 nt!KiIsrThunk+0x320
+65:	fffff80650c188a8 nt!KiIsrThunk+0x328
+66:	fffff80650c188b0 nt!KiIsrThunk+0x330
+67:	fffff80650c188b8 nt!KiIsrThunk+0x338
+68:	fffff80650c188c0 nt!KiIsrThunk+0x340
+69:	fffff80650c188c8 nt!KiIsrThunk+0x348
+6a:	fffff80650c188d0 nt!KiIsrThunk+0x350
+6b:	fffff80650c188d8 nt!KiIsrThunk+0x358
+6c:	fffff80650c188e0 nt!KiIsrThunk+0x360
+6d:	fffff80650c188e8 nt!KiIsrThunk+0x368
+6e:	fffff80650c188f0 nt!KiIsrThunk+0x370
+6f:	fffff80650c188f8 nt!KiIsrThunk+0x378
+70:	fffff80650c18900 nt!KiIsrThunk+0x380
+71:	fffff80650c18908 nt!KiIsrThunk+0x388
+72:	fffff80650c18910 nt!KiIsrThunk+0x390
+73:	fffff80650c18918 nt!KiIsrThunk+0x398
+74:	fffff80650c18920 nt!KiIsrThunk+0x3A0
+75:	fffff80650c18928 nt!KiIsrThunk+0x3A8
+76:	fffff80650c18930 nt!KiIsrThunk+0x3B0
+77:	fffff80650c18938 nt!KiIsrThunk+0x3B8
+78:	fffff80650c18940 nt!KiIsrThunk+0x3C0
+79:	fffff80650c18948 nt!KiIsrThunk+0x3C8
+7a:	fffff80650c18950 nt!KiIsrThunk+0x3D0
+7b:	fffff80650c18958 nt!KiIsrThunk+0x3D8
+7c:	fffff80650c18960 nt!KiIsrThunk+0x3E0
+7d:	fffff80650c18968 nt!KiIsrThunk+0x3E8
+7e:	fffff80650c18970 nt!KiIsrThunk+0x3F0
+7f:	fffff80650c18978 nt!KiIsrThunk+0x3F8
+80:	fffff80650c18980 nt!KiIsrThunk+0x400
+81:	fffff80650c18988 nt!KiIsrThunk+0x408
+82:	fffff80650c18990 nt!KiIsrThunk+0x410
+83:	fffff80650c18998 nt!KiIsrThunk+0x418
+84:	fffff80650c189a0 nt!KiIsrThunk+0x420
+85:	fffff80650c189a8 nt!KiIsrThunk+0x428
+86:	fffff80650c189b0 nt!KiIsrThunk+0x430
+87:	fffff80650c189b8 nt!KiIsrThunk+0x438
+88:	fffff80650c189c0 nt!KiIsrThunk+0x440
+89:	fffff80650c189c8 nt!KiIsrThunk+0x448
+8a:	fffff80650c189d0 nt!KiIsrThunk+0x450
+8b:	fffff80650c189d8 nt!KiIsrThunk+0x458
+8c:	fffff80650c189e0 nt!KiIsrThunk+0x460
+8d:	fffff80650c189e8 nt!KiIsrThunk+0x468
+8e:	fffff80650c189f0 nt!KiIsrThunk+0x470
+8f:	fffff80650c189f8 nt!KiIsrThunk+0x478
+90:	fffff80650c18a00 nt!KiIsrThunk+0x480
+91:	fffff80650c18a08 nt!KiIsrThunk+0x488
+92:	fffff80650c18a10 nt!KiIsrThunk+0x490
+93:	fffff80650c18a18 nt!KiIsrThunk+0x498
+94:	fffff80650c18a20 nt!KiIsrThunk+0x4A0
+95:	fffff80650c18a28 nt!KiIsrThunk+0x4A8
+96:	fffff80650c18a30 nt!KiIsrThunk+0x4B0
+97:	fffff80650c18a38 nt!KiIsrThunk+0x4B8
+98:	fffff80650c18a40 nt!KiIsrThunk+0x4C0
+99:	fffff80650c18a48 nt!KiIsrThunk+0x4C8
+9a:	fffff80650c18a50 nt!KiIsrThunk+0x4D0
+9b:	fffff80650c18a58 nt!KiIsrThunk+0x4D8
+9c:	fffff80650c18a60 nt!KiIsrThunk+0x4E0
+9d:	fffff80650c18a68 nt!KiIsrThunk+0x4E8
+9e:	fffff80650c18a70 nt!KiIsrThunk+0x4F0
+9f:	fffff80650c18a78 nt!KiIsrThunk+0x4F8
+a0:	fffff80650c18a80 nt!KiIsrThunk+0x500
+a1:	fffff80650c18a88 nt!KiIsrThunk+0x508
+a2:	fffff80650c18a90 nt!KiIsrThunk+0x510
+a3:	fffff80650c18a98 nt!KiIsrThunk+0x518
+a4:	fffff80650c18aa0 nt!KiIsrThunk+0x520
+a5:	fffff80650c18aa8 nt!KiIsrThunk+0x528
+a6:	fffff80650c18ab0 nt!KiIsrThunk+0x530
+a7:	fffff80650c18ab8 nt!KiIsrThunk+0x538
+a8:	fffff80650c18ac0 nt!KiIsrThunk+0x540
+a9:	fffff80650c18ac8 nt!KiIsrThunk+0x548
+aa:	fffff80650c18ad0 nt!KiIsrThunk+0x550
+ab:	fffff80650c18ad8 nt!KiIsrThunk+0x558
+ac:	fffff80650c18ae0 nt!KiIsrThunk+0x560
+ad:	fffff80650c18ae8 nt!KiIsrThunk+0x568
+ae:	fffff80650c18af0 nt!KiIsrThunk+0x570
+af:	fffff80650c18af8 nt!KiIsrThunk+0x578
+b0:	fffff80650c18b00 ACPI!ACPIInterruptServiceRoutine (KINTERRUPT ffff9901c117fdc0)
+
+b1:	fffff80650c18b08 nt!KiIsrThunk+0x588
+b2:	fffff80650c18b10 nt!KiIsrThunk+0x590
+b3:	fffff80650c18b18 nt!KiIsrThunk+0x598
+b4:	fffff80650c18b20 nt!KiIsrThunk+0x5A0
+b5:	fffff80650c18b28 nt!KiIsrThunk+0x5A8
+b6:	fffff80650c18b30 nt!KiIsrThunk+0x5B0
+b7:	fffff80650c18b38 nt!KiIsrThunk+0x5B8
+b8:	fffff80650c18b40 nt!KiIsrThunk+0x5C0
+b9:	fffff80650c18b48 nt!KiIsrThunk+0x5C8
+ba:	fffff80650c18b50 nt!KiIsrThunk+0x5D0
+bb:	fffff80650c18b58 nt!KiIsrThunk+0x5D8
+bc:	fffff80650c18b60 nt!KiIsrThunk+0x5E0
+bd:	fffff80650c18b68 nt!KiIsrThunk+0x5E8
+be:	fffff80650c18b70 nt!KiIsrThunk+0x5F0
+bf:	fffff80650c18b78 nt!KiIsrThunk+0x5F8
+c0:	fffff80650c18b80 nt!KiIsrThunk+0x600
+c1:	fffff80650c18b88 nt!KiIsrThunk+0x608
+c2:	fffff80650c18b90 nt!KiIsrThunk+0x610
+c3:	fffff80650c18b98 nt!KiIsrThunk+0x618
+c4:	fffff80650c18ba0 nt!KiIsrThunk+0x620
+c5:	fffff80650c18ba8 nt!KiIsrThunk+0x628
+c6:	fffff80650c18bb0 nt!KiIsrThunk+0x630
+c7:	fffff80650c18bb8 nt!KiIsrThunk+0x638
+c8:	fffff80650c18bc0 nt!KiIsrThunk+0x640
+c9:	fffff80650c18bc8 nt!KiIsrThunk+0x648
+ca:	fffff80650c18bd0 nt!KiIsrThunk+0x650
+cb:	fffff80650c18bd8 nt!KiIsrThunk+0x658
+cc:	fffff80650c18be0 nt!KiIsrThunk+0x660
+cd:	fffff80650c18be8 nt!KiIsrThunk+0x668
+ce:	fffff80650c18bf0 nt!HalpIommuInterruptRoutine (KINTERRUPT fffff8065150d6f0)
+
+cf:	fffff80650c18bf8 nt!KiIsrThunk+0x678
+d0:	fffff80650c18c00 nt!KiIsrThunk+0x680
+d1:	fffff80650c18c08 nt!HalpTimerClockInterrupt (KINTERRUPT fffff8065150d4b0)
+
+d2:	fffff80650c18c10 nt!HalpTimerClockIpiRoutine (KINTERRUPT fffff8065150d390)
+
+d3:	fffff80650c18c18 nt!KiIsrThunk+0x698
+d4:	fffff80650c18c20 nt!KiIsrThunk+0x6A0
+d5:	fffff80650c18c28 nt!KiIsrThunk+0x6A8
+d6:	fffff80650c18c30 nt!KiIsrThunk+0x6B0
+d7:	fffff80650c18c38 nt!HalpInterruptRebootService (KINTERRUPT fffff8065150d150)
+
+d8:	fffff80650c18c40 nt!HalpInterruptStubService (KINTERRUPT fffff8065150cf10)
+
+d9:	fffff80650c18c48 nt!KiIsrThunk+0x6C8
+da:	fffff80650c18c50 nt!KiIsrThunk+0x6D0
+db:	fffff80650c18c58 nt!KiIsrThunk+0x6D8
+dc:	fffff80650c18c60 nt!KiIsrThunk+0x6E0
+dd:	fffff80650c18c68 nt!KiIsrThunk+0x6E8
+de:	fffff80650c18c70 nt!KiIsrThunk+0x6F0
+df:	fffff80650c18c78 nt!HalpInterruptSpuriousService (KINTERRUPT fffff8065150cdf0)
+
+e0:	fffff80650c18c80 nt!KiIsrThunk+0x700
+e1:	fffff80650c1ddc0 nt!KiIpiInterrupt
+e2:	fffff80650c18c90 nt!HalpInterruptLocalErrorService (KINTERRUPT fffff8065150d030)
+
+e3:	fffff80650c18c98 nt!HalpInterruptDeferredRecoveryService (KINTERRUPT fffff8065150cbb0)
+
+e4:	fffff80650c18ca0 nt!KiIsrThunk+0x720
+e5:	fffff80650c18ca8 nt!KiIsrThunk+0x728
+e6:	fffff80650c18cb0 nt!KiIsrThunk+0x730
+e7:	fffff80650c18cb8 nt!KiIsrThunk+0x738
+e8:	fffff80650c18cc0 nt!KiIsrThunk+0x740
+e9:	fffff80650c18cc8 nt!KiIsrThunk+0x748
+ea:	fffff80650c18cd0 nt!KiIsrThunk+0x750
+eb:	fffff80650c18cd8 nt!KiIsrThunk+0x758
+ec:	fffff80650c18ce0 nt!KiIsrThunk+0x760
+ed:	fffff80650c18ce8 nt!KiIsrThunk+0x768
+ee:	fffff80650c18cf0 nt!KiIsrThunk+0x770
+ef:	fffff80650c18cf8 nt!KiIsrThunk+0x778
+f0:	fffff80650c18d00 nt!KiIsrThunk+0x780
+f1:	fffff80650c18d08 nt!KiIsrThunk+0x788
+f2:	fffff80650c18d10 nt!KiIsrThunk+0x790
+f3:	fffff80650c18d18 nt!KiIsrThunk+0x798
+f4:	fffff80650c18d20 nt!KiIsrThunk+0x7A0
+f5:	fffff80650c18d28 nt!KiIsrThunk+0x7A8
+f6:	fffff80650c18d30 nt!KiIsrThunk+0x7B0
+f7:	fffff80650c18d38 nt!KiIsrThunk+0x7B8
+f8:	fffff80650c18d40 nt!KiIsrThunk+0x7C0
+f9:	fffff80650c18d48 nt!KiIsrThunk+0x7C8
+fa:	fffff80650c18d50 nt!KiIsrThunk+0x7D0
+fb:	fffff80650c18d58 nt!KiIsrThunk+0x7D8
+fc:	fffff80650c18d60 nt!KiIsrThunk+0x7E0
+fd:	fffff80650c18d68 nt!HalpTimerProfileInterrupt (KINTERRUPT fffff8065150d5d0)
+
+fe:	fffff80650c18d70 nt!HalpPerfInterrupt (KINTERRUPT fffff8065150d270)
+
+ff:	fffff80650c18d78 nt!KiIsrThunk+0x7F8
+
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'

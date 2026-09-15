@@ -1,0 +1,4 @@
+# Preserve measurement bytes and SHA256 across checkout platforms.
+# Whitespace in raw records belongs to the captured data.
+*.json -text -eol -whitespace
+*.jsonl -text -eol -whitespace

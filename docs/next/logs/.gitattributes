@@ -1,0 +1,9 @@
+# These raw debugger/build records retain their original bytes and whitespace.
+hvm-descriptor-final-build-20260915.txt -text -eol -whitespace
+hvm-descriptor-final-sign-20260915.txt -text -eol -whitespace
+hvm-descriptor-cli-build-20260915.txt -text -eol -whitespace
+hvm-descriptor-gdt-cli-build-20260915.txt -text -eol -whitespace
+hvm-latest-0a-analysis-20260915.txt -text -eol -whitespace
+hvm-latest-pending-bugcheck-20260915.txt -text -eol -whitespace
+hvm-latest-fault-owner-20260915.txt -text -eol -whitespace
+hvm-latest-first-exception-frame-20260915.txt -text -eol -whitespace

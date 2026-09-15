@@ -4,6 +4,11 @@
 机器可读汇总：[summary.json](paper-data/20260915-pilot/derived/summary.json)。
 原始文件校验：[raw-index.json](paper-data/20260915-pilot/raw-index.json)。
 
+后续审查发现该批旧驱动的 GDTR/IDTR 恢复遗漏，现已修复并单独回归，见
+[描述符表连续性记录](hvm-descriptor-continuity.md)。本页保留原始观测；其中
+start/stop 的成功只证明所记录的命令与运行状态，不证明完整描述符状态恢复。
+性能数字也只适用于本批记录的旧二进制，不能作为修复后版本的复测结果。
+
 本批证据支持：**Windows 在本次启动内进入／退出 KSword 常驻，以及在已运行的
 VMware → TinyCore 中完成单页 EPT 替换、写入隔离与恢复。**
 这两组实验分开执行；尚不能声称“运行中的 VMware 随 Windows 一起完成拓扑平移”。
