@@ -12,7 +12,9 @@
 param(
     [string] $VMName = 'KSword-HVM-Target',
     [string] $SerialLog = 'C:\vmware\hltprobe.log',
-    [int]    $WaitSeconds = 120
+    [int]    $WaitSeconds = 120,
+    # 额外追加的内核参数，例如 'nosmp'。只能用小写与数字，大写要走 Shift 位。
+    [string] $Append = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -43,6 +45,7 @@ $enter = 0xFF0D
 # ignore_loglevel：菜单给的是 loglevel=3，只印到 KERN_ERR，正好把"它停在哪"
 # 那一段全滤掉。追加在后面就够，不必改前面的参数。
 $text = ' console=ttyS0,115200n8 ignore_loglevel'
+if ($Append) { $text += ' ' + $Append }
 # 大写字母要带 Shift（0x10000 位），否则 ttyS0 会变成 ttys0 —— 见 VNC 脚本。
 $keys = @($down, $down, $tab) +
         ($text.ToCharArray() | ForEach-Object {
