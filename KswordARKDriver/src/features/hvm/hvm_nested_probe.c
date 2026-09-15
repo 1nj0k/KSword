@@ -290,6 +290,17 @@ typedef struct _KSW_HVM_PROBE_SLOT
     /* How many times L1's handler has resumed L2 in this run. */
     volatile LONG L2ResumeCount;
     /*
+     * Resumes spent on exits L2 did not ask for.
+     *
+     * Counted apart from the round-trip budget because they are not round
+     * trips: an NMI arriving while L2 runs is our own business - this driver
+     * broadcasts one to invalidate TLBs across cores, and the other processor
+     * may well be inside L2 at that moment.  Charging those to the loop would
+     * silently shorten the test; treating them as the result the probe was
+     * waiting for is worse, and is what used to happen.
+     */
+    volatile LONG L2AsyncResumeCount;
+    /*
      * Where the per-vCPU exit counters stood before this run started.
      *
      * Those counters are cumulative for the whole residency, not per probe.
@@ -434,6 +445,27 @@ KswordARKHvmNestedProbeL1Host(
      * reason does too, so an unexpected one ends the run rather than being
      * resumed past.
      */
+    /*
+     * An asynchronous exit is not the answer: put L2 back and keep waiting.
+     *
+     * Exit reason 0 is exception-or-NMI, and this driver broadcasts an NMI to
+     * invalidate TLBs across cores - so a processor sitting in L2 can be
+     * interrupted by work another processor started.  Measured: the probe
+     * failed about one run in four with reason 0x0 at RIP offset 0 and not a
+     * single shadow leaf composed, because it took that exit for the one it
+     * was waiting for.
+     *
+     * A real hypervisor simply resumes its guest here, which is exactly what
+     * this now does.  Budgeted separately from the round-trip count, because
+     * spending the loop's own budget on interruptions would quietly shorten
+     * the test instead of failing it.
+     */
+    if (slot->L2ExitReason == 0ULL &&
+        InterlockedCompareExchange(&slot->L2AsyncResumeCount, 0L, 0L) <
+            KSW_PROBE_SELF_ROUND_TRIPS) {
+        InterlockedIncrement(&slot->L2AsyncResumeCount);
+        (void)__vmx_vmresume();
+    }
     if (slot->L2ExitReason == 10ULL &&
         InterlockedCompareExchange(&slot->L2ResumeCount, 0L, 0L) <
             KSW_PROBE_SELF_ROUND_TRIPS) {
@@ -980,6 +1012,7 @@ KswordARKHvmNestedProbeExecute(
                 InterlockedExchange(&slot->SelfStage, 0L);
                 InterlockedExchange(&slot->L2SelfMarker, 0L);
                 InterlockedExchange(&slot->L2ResumeCount, 0L);
+                InterlockedExchange(&slot->L2AsyncResumeCount, 0L);
                 /* Baseline the cumulative counters, so the run reports a delta. */
                 slot->BaseEntryCount = vcpu->Nested.L2EntryCount;
                 slot->BaseReflectCount = vcpu->Nested.L2ExitReflectedCount;

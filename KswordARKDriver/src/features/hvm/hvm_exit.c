@@ -59,6 +59,8 @@ Environment:
 #define KSW_VMX_MISC_ACTIVITY_HLT (1ULL << 6)
 /* Blocking by STI and by MOV SS both forbid a non-active activity state. */
 #define KSW_VMX_INTERRUPTIBILITY_BLOCKING 3ULL
+/* Blocking by STI alone - bit 0 of the same field, without the MOV SS bit. */
+#define KSW_VMX_INTERRUPTIBILITY_STI 1ULL
 /*
  * Guest SS access rights.  Bits 6:5 carry the descriptor privilege level, which
  * is the architectural definition of the current privilege level.  This is SS,
@@ -72,6 +74,8 @@ Environment:
 #define KSW_VMX_ACCESS_RIGHTS_DPL_MASK 3ULL
 /* The only privilege level allowed to reach a lifecycle or forwarded VMCALL. */
 #define KSW_HVM_SUPERVISOR_CPL 0UL
+/* Guest user mode; also what an unreadable SS access right reports. */
+#define KSW_HVM_USER_CPL 3UL
 /*
  * Synthetic guest-idle MSR.  Named here only so the comment in the dispatcher
  * that explains why it is deliberately NOT intercepted has something to point
@@ -94,6 +98,8 @@ Environment:
 #define KSW_VMCS_EXIT_INTERRUPTION_INFO 0x4404UL
 /* VM-entry interruption information; writing it delivers an event on entry. */
 #define KSW_VMCS_ENTRY_INTERRUPTION_INFO 0x4016UL
+/* Name the guest RFLAGS field, read on the halt path to see whether IF is set. */
+#define KSW_VMCS_GUEST_RFLAGS 0x6820UL
 /* Bit 31 of either field marks the descriptor valid. */
 #define KSW_VMX_INTERRUPTION_VALID (1ULL << 31)
 /* Bits 10:8 carry the interruption type; type 2 is NMI. */
@@ -374,6 +380,13 @@ KswordARKHvmExitReadAddresses(
 }
 
 /* Publish one fixed VM-exit event and runtime snapshot. */
+/* Dispatch one VM exit; the wrapper below it only measures what this costs. */
+static ULONG
+KswordARKHvmResidentVmExitDispatchBody(
+    _Inout_ KSW_HVM_GPR_FRAME* Frame,
+    _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context
+    );
+
 static VOID
 KswordARKHvmExitPublishTelemetry(
     _Inout_ KSW_HVM_RESIDENT_VCPU* Context,
@@ -388,6 +401,7 @@ KswordARKHvmExitPublishTelemetry(
 {
     KSWORD_ARK_HVM_EVENT_ROW eventRow = { 0 };
     ULONG basicReason = 0UL;
+    ULONGLONG costStart = 0ULL;
 
     /* Reject incomplete fixed telemetry state. */
     if (Context == NULL ||
@@ -397,6 +411,7 @@ KswordARKHvmExitPublishTelemetry(
         /* Return without publishing partial evidence. */
         return;
     }
+    costStart = __rdtsc();
     /* Decode the Intel basic reason for protocol state. */
     basicReason =
         Telemetry->Reason &
@@ -477,6 +492,16 @@ KswordARKHvmExitPublishTelemetry(
      * exactly as before.  What changes is only which rows occupy the 1024 ring
      * slots.
      *
+     * Nested-VMX rows are now gated by the same switch, and for the same
+     * reason at a different scale.  They were published unconditionally while
+     * a guest hypervisor's VMCS handling was being diagnosed, which is over:
+     * one such hypervisor issues about twenty VMCS accesses per exit of its
+     * own, so a single boot published on the order of a hundred million rows -
+     * each one a timestamp plus two lock-prefixed operations on the one cache
+     * line both processors share.  The rows that survive without the switch
+     * are the rare, load-bearing ones: a refused write, a VMCS region first
+     * seen, a change in what gets spilled into one.
+     *
      * Measured 2026-09-07 on 2 vCPU over 30 s of residency: 682829 published,
      * 0 that failed to claim a slot, 681805 pushed out by wrap.  The ring never
      * had a write problem - it turns over about twenty-two times a second, and
@@ -488,7 +513,8 @@ KswordARKHvmExitPublishTelemetry(
      *
      * The four evidence classes are rare by construction and are always kept.
      */
-    if (eventRow.type != KSWORD_ARK_HVM_EVENT_TYPE_VMEXIT ||
+    if ((eventRow.type != KSWORD_ARK_HVM_EVENT_TYPE_VMEXIT &&
+         eventRow.type != KSWORD_ARK_HVM_EVENT_TYPE_NESTED_VMX) ||
         InterlockedCompareExchange(
             &Context->Runtime->TraceRoutineExits,
             0L,
@@ -500,6 +526,8 @@ KswordARKHvmExitPublishTelemetry(
     InterlockedOr(
         (volatile LONG*)&Context->Runtime->StateFlags,
         (LONG)KSWORD_ARK_HVM_STATE_EVENTS_AVAILABLE);
+    /* Charge this exit's telemetry to this processor's own account. */
+    Context->CostTelemetryCycles += (__rdtsc() - costStart);
 }
 
 /*
@@ -580,12 +608,13 @@ KswordARKHvmExitGuestCpl(
  * each other.  That does not happen today because every injection path returns
  * on its own and never shares an exit with this one.
  *
- * One honest limit on all of the above: the VMWRITE below is the only one on
- * this path whose result is discarded, and no counter distinguishes a halt that
- * was entered from one skipped by the three conservative branches.  The soak
- * criterion counts unexpected devirtualizations and reads identically either
- * way, so there is no positive evidence here that the halt state was ever
- * actually entered.  Anyone tuning this path should add those counters first.
+ * The limit this comment used to end with - that no counter distinguished a
+ * halt actually entered from one skipped by the conservative branches, so
+ * there was no positive evidence the halt state was ever reached - has been
+ * answered rather than repeated.  The counters exist now, the VMWRITEs on this
+ * path are checked, and what they were asked to settle is settled: the
+ * interrupt-shadow branch was firing on every idle HLT, because `sti; hlt`
+ * puts the HLT inside the shadow by construction.
  */
 static BOOLEAN
 KswordARKHvmExitHandleHlt(
@@ -602,6 +631,7 @@ KswordARKHvmExitHandleHlt(
     }
     /* A processor that does not advertise the halt state cannot enter it. */
     if ((Context->Runtime->VmxMisc & KSW_VMX_MISC_ACTIVITY_HLT) == 0ULL) {
+        Context->HltSkipNoActivitySupport += 1ULL;
         /* Resume without halting rather than risk a VM-entry failure. */
         return TRUE;
     }
@@ -609,11 +639,113 @@ KswordARKHvmExitHandleHlt(
     if (KswordARKHvmVmcsFieldLoad(
             KSW_VMCS_GUEST_INTERRUPTIBILITY,
             &interruptibility) != 0) {
+        Context->HltSkipReadFailed += 1ULL;
         /* Resume without halting when the state cannot be verified. */
         return TRUE;
     }
     if (((ULONGLONG)interruptibility &
             KSW_VMX_INTERRUPTIBILITY_BLOCKING) != 0ULL) {
+        /*
+         * Record what the state looked like, and still resume without halting.
+         *
+         * This branch was measured to fire on essentially every idle HLT -
+         * `sti; hlt` puts the HLT inside the shadow by construction - and the
+         * consequence is real: L1 took 60,686 HLT exits a second, one thread
+         * pinned at 97% of a core, and every other thread in its process,
+         * including the ones driving its virtual timer, given exactly zero
+         * milliseconds over fifteen seconds.  A guest that asks to sleep and
+         * is handed an immediate return has an idle loop that spins.
+         *
+         * Clearing the two blocking bits and halting anyway is NOT the fix.
+         * It was tried: residency faulted after 1,068 exits with reason 33,
+         * VM-entry failure due to invalid guest state - which is the second
+         * hazard the comment above this function already names.  Clearing the
+         * shadow satisfies one entry check and leaves others unsatisfied, and
+         * the architecture constrains the activity state against RFLAGS.IF and
+         * the pending-event fields as well.
+         *
+         * So this stays conservative until a reading says which condition
+         * actually blocks the halt.  RFLAGS and the entry-interruption field
+         * are captured below for exactly that, and nothing here acts on them.
+         */
+        Context->HltSkipBlockedCount += 1ULL;
+        {
+            SIZE_T rflags = 0;
+            SIZE_T entryEvent = 0;
+            BOOLEAN ifSet = FALSE;
+            BOOLEAN eventPending = FALSE;
+
+            if (KswordARKHvmVmcsFieldLoad(KSW_VMCS_GUEST_RFLAGS, &rflags) == 0 &&
+                (((ULONGLONG)rflags) & 0x200ULL) != 0ULL) {
+                ifSet = TRUE;
+                Context->HltBlockedWithIfSet += 1ULL;
+            }
+            if (KswordARKHvmVmcsFieldLoad(
+                    KSW_VMCS_ENTRY_INTERRUPTION_INFO,
+                    &entryEvent) == 0 &&
+                (((ULONGLONG)entryEvent) & 0x80000000ULL) != 0ULL) {
+                eventPending = TRUE;
+                Context->HltBlockedWithPendingEvent += 1ULL;
+            }
+            Context->HltLastInterruptibility = (ULONG)interruptibility;
+            UNREFERENCED_PARAMETER(ifSet);
+            UNREFERENCED_PARAMETER(eventPending);
+            /*
+             * Bisected, and the result is recorded rather than kept.
+             *
+             * The attempt that faulted changed two things at once - it cleared
+             * the interrupt shadow and it selected the HLT activity state - so
+             * the single number a VM-entry failure reports named neither.  A
+             * run that cleared the shadow and stopped there kept residency up
+             * through 193,536 exits and climbing, so:
+             *
+             *   clearing blocking-by-STI here   legal on this target
+             *   selecting the HLT activity state refused, exit reason 33
+             *
+             * The clear is therefore safe but pointless on its own - the guest
+             * resumes immediately either way - and nothing asks for it, so it
+             * is not kept.  What it bought is the attribution.
+             *
+             * Two further doors were closed by reading the capability MSRs
+             * rather than by trying things:
+             *
+             *   IA32_VMX_TRUE_PROCBASED allowed-0 = 0x240065F2, bit 7 set
+             *     -> HLT exiting is mandatory here; "just do not intercept
+             *        HLT" is not available.
+             *   IA32_VMX_TRUE_PINBASED allowed-1 = 0x3F, bit 6 clear
+             *     -> the VMX-preemption timer does not exist on this target,
+             *        so it cannot be offered to L1 either, whatever fields we
+             *        were willing to start copying.
+             *
+             * Which leaves L1 with no timed wakeup of any kind while it runs
+             * here.  That is worth stating plainly at the one place someone
+             * will come looking.
+             */
+        }
+        /*
+         * Waiting here by hand was tried, and it took the machine down.
+         *
+         * The idea was sound and the first half of it worked: hold the
+         * processor in the exit handler until the local APIC actually has a
+         * request pending, so that L1's HLT returns on an interrupt the way
+         * the instruction promises.  Bounded at roughly twenty microseconds,
+         * reading IA32_X2APIC_IRR0..7, resuming either way.  With residency up
+         * and nothing nested, idle exits fell from seven to ten thousand a
+         * second to 1,760 - the guest's own idle really did start sleeping.
+         *
+         * Then, with VMware running, the guest bugchecked 0xA at IRQL 2.  The
+         * attribution is not proven: this target bugchecks 0xA on its own (see
+         * the CR0.WP note), the criterion for telling them apart needs the
+         * dump, and that was not done.  What is certain is that this was the
+         * only variable changed, and a second crash on an unattended machine
+         * is not worth the reading.
+         *
+         * If it is picked up again: spinning in VMX root holds interrupts off
+         * for the whole bound, so the bound is the risk and twenty microseconds
+         * at eighty thousand halts a second is most of a processor spent with
+         * interrupts disabled.  Establish the attribution from the dump first,
+         * then make the bound small enough that the arithmetic is comfortable.
+         */
         /* Resume without halting while STI or MOV SS still blocks. */
         return TRUE;
     }
@@ -622,7 +754,14 @@ KswordARKHvmExitHandleHlt(
      * exit, so this selection lasts exactly one entry and does not have to be
      * cleared on the paths that resume for other reasons.
      */
-    (void)KswordARKHvmVmcsFieldStore(KSW_VMCS_GUEST_ACTIVITY, KSW_VMX_ACTIVITY_HLT);
+    if (KswordARKHvmVmcsFieldStore(
+            KSW_VMCS_GUEST_ACTIVITY,
+            KSW_VMX_ACTIVITY_HLT) != 0) {
+        Context->HltSkipReadFailed += 1ULL;
+        /* Resume without halting when the selection itself was refused. */
+        return TRUE;
+    }
+    Context->HltEnteredCount += 1ULL;
     /* Report a completely handled halt. */
     return TRUE;
 }
@@ -649,6 +788,49 @@ KswordARKHvmExitHandleCpuid(
         !Context->Nested.Enabled) {
         /* Clear the VMX capability bit in guest CPUID.1:ECX. */
         registers[2] &= ~(1L << 5);
+    }
+    /*
+     * Hide the outer hypervisor's identity from guest user mode when asked.
+     *
+     * The identity being hidden is not ours: it is the L0 hypervisor's, passed
+     * through to our own guest because this handler executes the host leaf
+     * verbatim.  A guest of ours has no business being told who is underneath
+     * us, and one real consumer refuses to start on the strength of exactly
+     * that answer - see KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR.
+     *
+     * Only CPL 3 is altered.  The guest kernel bound itself to the outer
+     * hypervisor at boot; telling it midway that no hypervisor exists has
+     * consequences nobody can enumerate, and nothing that needs this lie runs
+     * in kernel mode.  Note that an unreadable guest SS access right also
+     * reports CPL 3 - that conflation is accepted because a guest-state field
+     * that cannot be read means this exit path is already broken, and the
+     * outcome here is a narrower CPUID answer rather than a wider one.
+     */
+    if (Context->Runtime != NULL &&
+        InterlockedCompareExchange(
+            &Context->Runtime->HideHypervisorCpuid, 0L, 0L) != 0L &&
+        KswordARKHvmExitGuestCpl() == KSW_HVM_USER_CPL) {
+        /* Clear the hypervisor-present bit in CPUID.1:ECX. */
+        if (leaf == 1UL) {
+            registers[2] &= ~(1L << 31);
+        }
+        /*
+         * Report no hypervisor vendor leaves at all.
+         *
+         * Zeroing the whole 0x40000000..0x400000FF window rather than only the
+         * vendor leaf: a caller that finds an empty signature at 0x40000000 but
+         * a populated 0x40000001 learns more than one that finds nothing, and
+         * the range is architecturally reserved for exactly this purpose.  This
+         * is not an attempt to look like bare metal, which would also require
+         * matching the highest-basic-leaf aliasing real processors perform.
+         */
+        if (leaf >= 0x40000000UL &&
+            leaf <= 0x400000FFUL) {
+            registers[0] = 0L;
+            registers[1] = 0L;
+            registers[2] = 0L;
+            registers[3] = 0L;
+        }
     }
     /* Publish zero-extended guest RAX. */
     Frame->Rax = (ULONG)registers[0];
@@ -680,8 +862,1243 @@ KswordARKHvmExitIsNestedInstruction(
         ExitReason == KSW_VMX_EXIT_INVVPID;
 }
 
+/*
+ * Publish where this processor's exit cycles went, once per million exits.
+ *
+ * Through the event ring rather than the query protocol: this measurement
+ * exists to be read a few times and then deleted, and moving protocol fields
+ * for it would outlive it.  One row per 1,048,576 exits is about ninety rows
+ * across a guest hypervisor's whole boot - invisible against the traffic it
+ * is measuring.
+ */
+static VOID
+KswordARKHvmExitPublishCost(
+    _Inout_ KSW_HVM_RESIDENT_VCPU* Context
+    )
+{
+    KSWORD_ARK_HVM_EVENT_ROW row;
+    const ULONGLONG exits = Context->CostExits;
+
+    if (exits == 0ULL) {
+        /* Return rather than divide by an exit count that cannot be right. */
+        return;
+    }
+    {
+        /* One row per bucket: which exits are expensive, and how many there are. */
+        static const ULONG names[6] = { 23UL, 25UL, 48UL, 30UL, 12UL, 0xFFFFUL };
+        ULONG bucket = 0UL;
+
+        for (bucket = 0UL; bucket < 6UL; ++bucket) {
+            const ULONGLONG hits = Context->CostReasonCount[bucket];
+
+            if (hits == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = names[bucket];
+            row.qualification = Context->CostReasonCycles[bucket] / hits;
+            row.guestPhysicalAddress = hits;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xF4u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* Where L2 has been stopping, and whether it could take an interrupt. */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 16UL; ++slot) {
+            if (Context->Nested.L2ExitRipRing[slot] == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.qualification = Context->Nested.L2ExitRipRing[slot];
+            row.exitReason = Context->Nested.L2ExitReasonRing[slot];
+            row.guestPhysicalAddress = Context->Nested.L2LastRflags;
+            row.guestLinearAddress = Context->Nested.L2LastInterruptibility;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xF8u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /*
+         * The control-register exit in full, and both sides' masks beside it.
+         *
+         * One row rather than a ring: the loop repeats the same exit, so the
+         * last one is representative, and what is missing is not history but
+         * which register and whose control armed it.  The two masks and the
+         * two primary-control words are here together because the answer is a
+         * comparison - a bit set on our side and clear on L1's is an exit L1
+         * cannot be expected to handle.
+         */
+        if (Context->Nested.L2LastCrQualification != 0ULL ||
+            Context->Nested.L2Vmcs02Primary != 0UL) {
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.qualification = Context->Nested.L2LastCrQualification;
+            row.guestPhysicalAddress =
+                (Context->Nested.L2Vmcs12Cr0Mask << 32) |
+                (Context->Nested.L2Vmcs02Cr0Mask & 0xFFFFFFFFULL);
+            row.guestLinearAddress =
+                (Context->Nested.L2Vmcs12Cr4Mask << 32) |
+                (Context->Nested.L2Vmcs02Cr4Mask & 0xFFFFFFFFULL);
+            row.guestRip =
+                ((ULONGLONG)Context->Nested.L2Vmcs12Primary << 32) |
+                (ULONGLONG)Context->Nested.L2Vmcs02Primary;
+            row.exitReason = (ULONG)Context->Nested.L2LastGuestCr0;
+            row.status = (LONG)(ULONG)Context->Nested.L2Vmcs12Cr0Shadow;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xF9u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /*
+         * Asked against delivered, and whether L2 could have taken it.
+         *
+         * The pair that decides whose defect the missing clock is.  Requests
+         * are counted where L1 writes them, deliveries where the processor
+         * reads them, and the interruptibility totals say whether asking would
+         * have been possible at all.  Exit controls sit here rather than in
+         * the row above because acknowledge-interrupt-on-exit is the one
+         * control that destroys an interrupt instead of delaying it.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2InjectRequestCount;
+        row.guestPhysicalAddress = Context->Nested.L2InjectionCount;
+        row.guestLinearAddress = Context->Nested.L2ExitIfSetCount;
+        row.guestRip = Context->Nested.L2ExitIfClearCount;
+        row.exitReason = Context->Nested.L2Vmcs12Exit;
+        row.status = (LONG)Context->Nested.L2Vmcs02Exit;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xFAu;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /* And each injection request in full, vector and type included. */
+        ULONG entry = 0UL;
+
+        for (entry = 0UL; entry < Context->Nested.L2InjectRequestIndex &&
+                          entry < 8UL; ++entry) {
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = entry;
+            row.qualification = (ULONGLONG)Context->Nested.L2InjectRequests[entry];
+            row.guestPhysicalAddress = Context->Nested.L2InjectRequestCount;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xE9u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* And the mode the guest was in when each one was actually delivered. */
+        ULONG entry = 0UL;
+
+        for (entry = 0UL; entry < Context->Nested.L2InjectStateIndex &&
+                          entry < 8UL; ++entry) {
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = entry;
+            row.qualification = (ULONGLONG)Context->Nested.L2InjectStateVector[entry];
+            row.guestPhysicalAddress = (ULONGLONG)Context->Nested.L2InjectStateCr0[entry];
+            row.guestLinearAddress = (ULONGLONG)Context->Nested.L2InjectStateRflags[entry];
+            row.guestRip = (ULONGLONG)Context->Nested.L2InjectStateCsAr[entry];
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xE4u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* And every byte L2 sent the interrupt controller, in order. */
+        ULONG entry = 0UL;
+
+        for (entry = 0UL; entry < Context->Nested.L2PicWriteIndex &&
+                          entry < 16UL; ++entry) {
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = entry;
+            row.qualification = (ULONGLONG)Context->Nested.L2PicWrites[entry];
+            row.guestPhysicalAddress = Context->Nested.L2PicWriteTotal;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xE8u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* And where the mask ended up, which is what actually gates the timer. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        /*
+         * The shared value first: it is the one that answers the question.
+         * The per-processor pair rides along only to show the split that made
+         * the shared one necessary.
+         */
+        row.qualification = (ULONGLONG)(ULONG)InterlockedCompareExchange(
+            &Context->Runtime->L2PicMaskMaster, 0L, 0L);
+        row.guestPhysicalAddress = (ULONGLONG)(ULONG)InterlockedCompareExchange(
+            &Context->Runtime->L2PicMaskSlave, 0L, 0L);
+        row.guestLinearAddress = (ULONGLONG)Context->Nested.L2PicLastMaster;
+        row.guestRip = Context->Nested.L2PicWriteTotal;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xE7u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /* And how the interval timer itself was programmed. */
+        ULONG entry = 0UL;
+
+        for (entry = 0UL; entry < Context->Nested.L2PitWriteIndex &&
+                          entry < 16UL; ++entry) {
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = entry;
+            row.qualification = (ULONGLONG)Context->Nested.L2PitWrites[entry];
+            row.guestPhysicalAddress = Context->Nested.L2PitWriteTotal;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xE6u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /*
+         * What L2 actually spends its exits on, one row per reason.
+         *
+         * Only the reasons that happened, so an idle hierarchy costs nothing,
+         * and the pin controls ride along on each row because they are two
+         * words and the question they answer - did L1 ask for a preemption
+         * timer it never got - belongs with this set of readings.
+         */
+        ULONG reason = 0UL;
+
+        for (reason = 0UL; reason < 64UL; ++reason) {
+            const ULONGLONG hits = Context->Nested.L2ExitReasonCounts[reason];
+
+            if (hits == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = reason;
+            row.qualification = hits;
+            row.guestPhysicalAddress = Context->Nested.L2ExitTotalCount;
+            row.guestLinearAddress = (ULONGLONG)Context->Nested.L2Vmcs12Pin;
+            row.guestRip = (ULONGLONG)Context->Nested.LastEntryPinControls;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xFBu;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* The ports behind the catch-all bucket, sixteen consecutive samples. */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 16UL; ++slot) {
+            if (Context->Nested.L2PortRing[slot] == 0UL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification = (ULONGLONG)Context->Nested.L2PortRing[slot];
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xFCu;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* And the same ports counted, so the ring's sixteen are put in scale. */
+        ULONG entry = 0UL;
+
+        for (entry = 0UL; entry < 32UL; ++entry) {
+            if (Context->Nested.L2PortKeyCounts[entry] == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = Context->Nested.L2PortKeys[entry];
+            row.qualification = Context->Nested.L2PortKeyCounts[entry];
+            row.guestPhysicalAddress = Context->Nested.L2PortKeyMissCount;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xEEu;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* What the CR0 loop asks for, and what it can read back afterwards. */
+        ULONG entry = 0UL;
+
+        for (entry = 0UL; entry < 4UL; ++entry) {
+            if (Context->Nested.L2CrWriteCount[entry] == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = entry;
+            row.guestRip = Context->Nested.L2CrWriteRip[entry];
+            row.qualification = Context->Nested.L2CrWriteValue[entry];
+            row.guestPhysicalAddress = Context->Nested.L2CrWriteGuestCr0[entry];
+            row.guestLinearAddress = Context->Nested.L2CrWriteShadow[entry];
+            row.status = (LONG)(ULONG)Context->Nested.L2CrWriteCount[entry];
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xEDu;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /*
+         * What the capability MSRs force on us, next to what we ended up with.
+         *
+         * Resident mode asks for HLT exiting explicitly nowhere - the request
+         * site passes zero for it - and yet L1 takes 60,686 HLT exits a
+         * second.  Only one thing can put a control bit into the VMCS that the
+         * request did not ask for: the must-be-one half of the capability MSR.
+         * This row is the difference between "the hypervisor beneath us forces
+         * HLT exiting and there is nothing to be done here" and "we are asking
+         * for it somewhere we did not look" - two conclusions that lead to
+         * completely different files, and which nothing currently reports.
+         *
+         * Low half of each capability is allowed-0 (must be one), high half is
+         * allowed-1 (may be one).
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Runtime->ActiveControls.PrimaryCapability;
+        row.guestPhysicalAddress = Context->Runtime->ActiveControls.PinCapability;
+        row.guestLinearAddress = Context->Runtime->ActiveControls.ExitCapability;
+        row.guestRip = Context->Runtime->ActiveControls.EntryCapability;
+        row.exitReason = Context->Runtime->ActiveControls.Primary;
+        row.status = (LONG)Context->Runtime->ActiveControls.Pin;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xEBu;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * Whether L1's idle actually idles.
+         *
+         * Four ways a HLT exit can end, and the difference between them is the
+         * difference between a guest that sleeps and a guest that spins.  The
+         * rate matters more than the split: a halt that is entered wakes on an
+         * interrupt, so tens per second is healthy and tens of thousands means
+         * the halt is not happening whatever the split says.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->HltEnteredCount;
+        row.guestPhysicalAddress = Context->HltSkipBlockedCount;
+        row.guestLinearAddress = Context->HltBlockedWithIfSet;
+        row.guestRip = Context->HltBlockedWithPendingEvent;
+        row.exitReason = Context->HltLastInterruptibility;
+        row.status = (LONG)(ULONG)(Context->HltSkipNoActivitySupport +
+            Context->HltSkipReadFailed);
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xECu;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * Whose port and MSR exits we actually delivered.
+         *
+         * These two pairs have existed since the routing was written and have
+         * never been published, which is the wrong way round: they are the
+         * only place that says whether a decision about L1's events went L1's
+         * way.  Ninety-three thousand of L2's port accesses go to a port no
+         * bucket names, and if those are being answered here instead of by L1
+         * then L1's guest is talking to our emulation of a device L1 owns.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2IoExitsReflected;
+        row.guestPhysicalAddress = Context->Nested.L2IoExitsHandled;
+        row.guestLinearAddress = Context->Nested.L2MsrExitsReflected;
+        row.guestRip = Context->Nested.L2MsrExitsHandled;
+        row.exitReason = (ULONG)Context->Nested.L2ExitReflectedCount;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xEFu;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /* How wide the loop is: distinct L2 exit addresses and their weight. */
+        ULONG entry = 0UL;
+
+        for (entry = 0UL; entry < 32UL; ++entry) {
+            if (Context->Nested.L2RipCounts[entry] == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = entry;
+            row.guestRip = Context->Nested.L2RipKeys[entry];
+            row.qualification = Context->Nested.L2RipCounts[entry];
+            row.guestPhysicalAddress = Context->Nested.L2RipMissCount;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xFEu;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* And which control register the loop is actually touching. */
+        ULONG number = 0UL;
+
+        for (number = 0UL; number < 5UL; ++number) {
+            ULONG access = 0UL;
+
+            for (access = 0UL; access < 4UL; ++access) {
+                const ULONGLONG hits = Context->Nested.L2CrCounts[number][access];
+
+                if (hits == 0ULL) {
+                    continue;
+                }
+                RtlZeroMemory(&row, sizeof(row));
+                row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+                row.exitReason = (number << 4) | access;
+                row.qualification = hits;
+                row.access = (ULONG)Context->ApicId;
+                row.ruleId = 0xFDu;
+                KswordARKHvmEventPublish(&row);
+            }
+        }
+    }
+    {
+        /* Whether interrupts are reaching L1's guest, and through which gate. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2ExternalInterruptCount;
+        row.guestPhysicalAddress = Context->Nested.L2InjectionCount;
+        row.guestLinearAddress = (ULONGLONG)Context->Nested.LastEntryPinControls;
+        row.guestRip = (ULONGLONG)Context->Nested.LastEntryExitControls;
+        row.exitReason = Context->Nested.LastEntryPrimaryControls;
+        row.status = (LONG)Context->Nested.LastEntrySecondaryControls;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xF7u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * And the interrupts that were taken off the controller but never
+         * delivered.
+         *
+         * Seen against re-injected against reflected.  This is the one number
+         * that separates "L1 never asked" from "L1 asked and the event died
+         * mid-delivery": the second destroys an interrupt L1 has already
+         * acknowledged, which wedges the guest's own interrupt controller and
+         * leaves both sides' counters reading healthy.  Reinjected plus
+         * reflected must equal seen; a gap is an event nobody delivered.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2IdtVectoringSeenCount;
+        row.guestPhysicalAddress = Context->Nested.L2IdtVectoringReinjectedCount;
+        row.guestLinearAddress = Context->Nested.L2IdtVectoringReflectedCount;
+        row.guestRip = Context->Nested.L2InjectionRetiredCount;
+        row.exitReason = Context->Nested.L2IdtVectoringLastInfo;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xE3u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * The last EPT violation in full, and the fuse's verdict beside it.
+         *
+         * These belong on one row because the question they answer is one
+         * question.  A tripped fuse says "the same exit repeated a thousand
+         * times"; the address, the access and the disposition say which
+         * mapping could not be made and who was supposed to make it.  The deny
+         * count separates "EPT12 itself refuses this" from "we composed a leaf
+         * and the access faulted anyway", which look identical from the exit
+         * ring and have nothing in common as defects.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.guestPhysicalAddress = Context->Nested.L2LastEptGuestPhysical;
+        row.qualification = Context->Nested.L2LastEptQualification;
+        row.guestLinearAddress = Context->Nested.L2FuseRip;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.L2FuseCount << 32) |
+            (ULONGLONG)Context->Nested.ShadowEpt.DenyCount;
+        row.exitReason =
+            (Context->Nested.L2LastEptDisposition << 8) |
+            (Context->Nested.L2FuseTripped ? 1UL : 0UL);
+        row.status = (LONG)Context->Nested.L2FuseReason;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xE2u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * And why the last composition was refused.
+         *
+         * Separate row from the violation itself because the two answer
+         * different halves: that one says which access could not be made,
+         * this one says which step said no and what it read when it did.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.exitReason =
+            (Context->Nested.ShadowEpt.LastDenySite << 8) |
+            (Context->Nested.ShadowEpt.LastDenyLevel & 0xFFUL);
+        row.qualification = Context->Nested.ShadowEpt.LastDenyEntry;
+        row.guestPhysicalAddress =
+            Context->Nested.ShadowEpt.LastDenyGuestPhysical;
+        row.guestLinearAddress =
+            Context->Nested.ShadowEpt.LastDenyPermissions;
+        row.guestRip = Context->Nested.ShadowEpt.L1EptPointer;
+        row.status = (LONG)Context->Nested.ShadowEpt.LastDenyAccess;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xE1u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /* The last eight MSRs L2 touched, one row each, newest last. */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 8UL; ++slot) {
+            if (Context->Nested.L2MsrRing[slot] == 0UL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification = (ULONGLONG)Context->Nested.L2MsrRing[slot];
+            row.guestPhysicalAddress = Context->Nested.L2LastMsrWriteValue;
+            row.guestLinearAddress =
+                (ULONGLONG)Context->Nested.L2LastMsrWriteIndex;
+            row.guestRip = (ULONGLONG)Context->Nested.L2MsrRingIndex;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xE0u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /*
+         * Whether accessed/dirty is still being maintained for L1.
+         *
+         * L1 asked for it in its EPT pointer; we record one leaf address per
+         * composed page so the bits can be folded back, and that table holds
+         * six hundred and forty entries against a guest with a hundred and
+         * ninety thousand pages.  Overflow turns the feature off and keeps
+         * running - so "L1 asked" and "we are still doing it" are two
+         * different facts and this row carries both.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification =
+            (ULONGLONG)Context->Nested.ShadowEpt.AdRecordCount;
+        row.guestPhysicalAddress =
+            (ULONGLONG)Context->Nested.ShadowEpt.AdOverflowCount;
+        row.guestLinearAddress =
+            (Context->Nested.ShadowEpt.L1RequestedAccessedDirty ? 2ULL : 0ULL) |
+            (Context->Nested.ShadowEpt.AccessedDirtyActive ? 1ULL : 0ULL);
+        row.guestRip = Context->Nested.ShadowEpt.L1EptPointer;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xDFu;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * Whether the composed mappings still agree with EPT12.
+         *
+         * Mismatched is the number that matters; unresolved counts the
+         * hierarchies an invalidation legitimately dropped, and is kept beside
+         * it so a large unresolved count cannot be read as a clean result.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification =
+            ((ULONGLONG)Context->Nested.ShadowEpt.VerifySampleCount << 32) |
+            (ULONGLONG)Context->Nested.ShadowEpt.VerifyMismatchCount;
+        row.guestPhysicalAddress =
+            ((ULONGLONG)Context->Nested.ShadowEpt.VerifyUnresolvedCount << 32) |
+            (ULONGLONG)Context->Nested.ShadowEpt.LeafWriteMismatchCount;
+        row.guestLinearAddress =
+            Context->Nested.ShadowEpt.VerifyLastGuestPhysical;
+        row.guestRip = Context->Nested.ShadowEpt.VerifyLastShadowFrame;
+        row.exitReason =
+            Context->Nested.ShadowEpt.VerifySkippedGenerationCount;
+        row.status = 0L;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xD5u;
+        KswordARKHvmEventPublish(&row);
+        /* The frame EPT12 named at the same address, in its own row. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.ShadowEpt.VerifyLastL1Frame;
+        row.guestPhysicalAddress =
+            Context->Nested.ShadowEpt.VerifyLastShadowFrame;
+        row.guestLinearAddress =
+            Context->Nested.ShadowEpt.VerifyLastGuestPhysical;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xD4u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * Device-register accesses: did they reach L1, or did we answer them?
+         *
+         * Composed against reflected, plus the last one in full.  Only L1 has
+         * a device model, so a composed MMIO access is an access that touched
+         * memory instead of a device - and the guest then waits forever for an
+         * interrupt from a controller it never actually programmed.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2LastMmioQualification;
+        row.guestPhysicalAddress = Context->Nested.L2LastMmioGuestPhysical;
+        row.guestLinearAddress = Context->Nested.L2MmioComposedCount;
+        row.guestRip = Context->Nested.L2MmioReflectedCount;
+        row.exitReason = Context->Nested.L2LastMmioDisposition;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xDEu;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * What the last VM entry actually loaded: activity state, and both
+         * halves of the EPT-pointer question.
+         *
+         * Activity state, because an application processor starts in
+         * wait-for-SIPI (state 3) and this machine's VM entry has already been
+         * measured refusing the halt state (1) while its capability MSR said
+         * it was supported - so "which state did we ask for" is the first
+         * thing to know about an AP that never starts.
+         *
+         * Both EPT pointers side by side, because "the leaf was written into a
+         * hierarchy the processor is not loading" is a defect this driver has
+         * had before, and it is invisible from either pointer alone: every
+         * fill succeeds, every self-check passes, and the guest faults on the
+         * same address forever.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = (ULONGLONG)Context->Nested.LastEntryGuestActivity;
+        row.guestPhysicalAddress = Context->Nested.LastEntryEptPointer;
+        row.guestLinearAddress =
+            Context->Nested.ShadowEpt.ComposedEptPointer;
+        row.guestRip = Context->Nested.LastEntryGuestRip;
+        row.exitReason = Context->Nested.LastEntryGuestCsAr;
+        row.status = (LONG)Context->Nested.ShadowEpt.FillCount;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xDDu;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * One row per vmcs12 region this processor has entered - which is to
+         * say, per L1 virtual processor that ever reached hardware
+         * virtualization here.  See the field comment for what the count of
+         * rows means.
+         */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 4UL; ++slot) {
+            if (Context->Nested.L2Vmcs12Regions[slot] == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification = Context->Nested.L2Vmcs12Regions[slot];
+            row.guestPhysicalAddress =
+                Context->Nested.L2Vmcs12RegionEntries[slot];
+            row.guestLinearAddress =
+                Context->Nested.L2Vmcs12RegionLastRip[slot];
+            row.guestRip = Context->Nested.L2Vmcs12RegionInjections[slot];
+            row.status =
+                (LONG)Context->Nested.L2Vmcs12RegionLastExitReason[slot];
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xDAu;
+            KswordARKHvmEventPublish(&row);
+            /*
+             * And that region's IDTR base, with the moment it went to zero.
+             *
+             * Not behind the triple fault: the transition happens long before
+             * the fault does, and gating it on the fault would only ever show
+             * the wreckage.  See the fields for why the per-processor totals
+             * cannot answer this.
+             */
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification = Context->Nested.L2RegionIdtrBase[slot];
+            row.guestPhysicalAddress =
+                Context->Nested.L2RegionIdtrLostRip[slot];
+            row.guestLinearAddress =
+                (ULONGLONG)Context->Nested.L2RegionIdtrLostCount[slot];
+            row.guestRip = Context->Nested.L2Vmcs12Regions[slot];
+            row.status = (LONG)Context->Nested.L2RegionIdtrLostReason[slot];
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xD0u;
+            KswordARKHvmEventPublish(&row);
+            /* And the decomposition of that count - see the fields. */
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            /* Slot in the low byte, how often L2 set a base above it. */
+            row.exitReason =
+                slot |
+                ((Context->Nested.L2RegionIdtrGained[slot] & 0xFFFFFFUL) << 8);
+            row.qualification = Context->Nested.L2RegionIdtrLoaded[slot];
+            row.guestPhysicalAddress =
+                (ULONGLONG)Context->Nested.L2RegionIdtrCacheLost[slot];
+            row.guestLinearAddress =
+                (ULONGLONG)Context->Nested.L2RegionIdtrGuestZeroed[slot];
+            row.guestRip = Context->Nested.L2Vmcs12Regions[slot];
+            row.status = (LONG)Context->Nested.L2RegionIdtrLostCount[slot];
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xCFu;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* The scene at the last loss our own entry caused - see the fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2IdtrLostEntryRip;
+        row.guestPhysicalAddress = Context->Nested.L2IdtrLostVmcs;
+        row.guestLinearAddress = Context->Nested.L2IdtrLostHeader;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.L2IdtrLostStoreFail << 48) |
+            (((ULONGLONG)Context->Nested.L2IdtrLostLoadMiss & 0xFFFFULL)
+                << 32) |
+            (((ULONGLONG)Context->Nested.L2IdtrLostRefused & 0xFFFFULL)
+                << 16) |
+            ((ULONGLONG)Context->Nested.L2IdtrLostEvictions & 0xFFFFULL);
+        row.exitReason = Context->Nested.L2IdtrLostSerial;
+        row.status = (LONG)Context->Nested.L2IdtrLostEntries;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xCEu;
+        KswordARKHvmEventPublish(&row);
+        /*
+         * And the backing store's running totals, which nothing has ever
+         * published.
+         *
+         * A spill that could not map its page leaves the region holding an
+         * older vmcs12 and says so nowhere; a restore that took fewer fields
+         * than were spilled says so nowhere either.  Both are silent exactly
+         * where a lost field would come from.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification =
+            ((ULONGLONG)Context->Nested.RegionStoreOkCount << 32) |
+            (ULONGLONG)Context->Nested.RegionStoreFailCount;
+        row.guestPhysicalAddress = Context->Nested.RegionStoreSkippedCount;
+        row.guestLinearAddress =
+            ((ULONGLONG)Context->Nested.RegionLoadOkCount << 32) |
+            (ULONGLONG)Context->Nested.RegionLoadMissCount;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.RegionLoadRefusedFields << 32) |
+            (ULONGLONG)Context->Nested.Vmcs12EvictionCount;
+        /* The entry count the last restore read out of a region header. */
+        row.exitReason =
+            (ULONG)(Context->Nested.RegionLastLoadHeader >> 32);
+        row.status = (LONG)Context->Nested.RegionStoreEntries;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xCDu;
+        KswordARKHvmEventPublish(&row);
+        /* How often L2 is entered in the triple fault's shape - see the fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2Idt0In64Count;
+        row.guestPhysicalAddress = Context->Nested.L2Idt0In64InjectedCount;
+        row.guestLinearAddress = Context->Nested.L2Idt0In64Rip;
+        row.guestRip = Context->Nested.L2Idt0In64Vmcs;
+        row.exitReason = Context->Nested.L2Idt0In64Entry;
+        row.status = (LONG)Context->Nested.L2Idt0In64Rflags;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xCCu;
+        KswordARKHvmEventPublish(&row);
+        /* The same field out of all three stores at that entry - see fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2Idt0In64FromCache;
+        row.guestPhysicalAddress = Context->Nested.L2Idt0In64FromPool;
+        row.guestLinearAddress = Context->Nested.L2Idt0In64FromRegion;
+        row.guestRip = Context->Nested.L2Idt0In64Vmcs;
+        row.exitReason = Context->Nested.L2Idt0In64RegionEntries;
+        row.status = (LONG)Context->Nested.L2Idt0In64Count;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xCBu;
+        KswordARKHvmEventPublish(&row);
+        /* And a 64-bit L2 that threw its own IDT away - see the fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2Idt64ZeroedRip;
+        row.guestPhysicalAddress = Context->Nested.L2Idt64ZeroedLoaded;
+        row.guestLinearAddress =
+            (ULONGLONG)Context->Nested.L2Idt64ZeroedCount;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.L2Idt64ZeroedCsAr << 32) |
+            ((ULONGLONG)Context->Nested.L2Idt64ZeroedLimit & 0xFFFFFFFFULL);
+        row.exitReason = Context->Nested.L2Idt64ZeroedReason;
+        row.status = (LONG)Context->Nested.L2Idt0In64RegionEntries;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xCAu;
+        KswordARKHvmEventPublish(&row);
+        /* The transition upwards: an exit carrying a base we did not set. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2IdtrGainedValue;
+        row.guestPhysicalAddress = Context->Nested.L2IdtrGainedRip;
+        row.guestLinearAddress = Context->Nested.L2IdtrGainedVmcs;
+        row.guestRip = Context->Nested.L2Idt0In64LastSaved;
+        row.exitReason = Context->Nested.L2IdtrGainedReason;
+        row.status = (LONG)Context->Nested.L2IdtrGainedCount;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xC9u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * One row per vector L2 was ever entered carrying - see the fields.
+         *
+         * Only the vectors that happened, so an idle hierarchy costs nothing,
+         * and the halted totals ride along on each row because the question
+         * they answer together is one question.
+         */
+        ULONG vector = 0UL;
+
+        for (vector = 0UL; vector < 256UL; ++vector) {
+            if (Context->Nested.L2InjectVectorCount[vector] == 0UL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = vector;
+            row.qualification =
+                (ULONGLONG)Context->Nested.L2InjectVectorCount[vector];
+            row.guestPhysicalAddress =
+                Context->Nested.L2InjectWhileHaltedCount;
+            row.guestLinearAddress = Context->Nested.L2EntryHaltedCount;
+            row.guestRip = Context->Nested.L2InjectionCount;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xC7u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* The same per region, so the parked firmware one can be told apart. */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 4UL; ++slot) {
+            ULONG vector = 0UL;
+
+            if (Context->Nested.L2Vmcs12Regions[slot] == 0ULL) {
+                continue;
+            }
+            for (vector = 0UL; vector < 256UL; ++vector) {
+                if (Context->Nested.L2RegionInjectVector[slot][vector] == 0UL) {
+                    continue;
+                }
+                RtlZeroMemory(&row, sizeof(row));
+                row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+                row.exitReason = (slot << 16) | vector;
+                row.qualification = (ULONGLONG)
+                    Context->Nested.L2RegionInjectVector[slot][vector];
+                row.guestPhysicalAddress =
+                    Context->Nested.L2Vmcs12Regions[slot];
+                row.guestLinearAddress =
+                    Context->Nested.L2Vmcs12RegionLastRip[slot];
+                row.guestRip = Context->Nested.L2Vmcs12RegionInjections[slot];
+                row.status =
+                    (LONG)Context->Nested.L2Vmcs12RegionLastCsAr[slot];
+                row.access = (ULONG)Context->ApicId;
+                row.ruleId = 0xC6u;
+                KswordARKHvmEventPublish(&row);
+            }
+        }
+    }
+    {
+        /* What we did with the two interrupt-hardware pages - see the fields. */
+        ULONG page = 0UL;
+
+        for (page = 0UL; page < 3UL; ++page) {
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = page;
+            row.qualification =
+                (ULONGLONG)Context->Nested.L2ApicMmio[page][0];
+            row.guestPhysicalAddress =
+                (ULONGLONG)Context->Nested.L2ApicMmio[page][1];
+            row.guestLinearAddress =
+                (ULONGLONG)Context->Nested.L2ApicMmio[page][2];
+            row.guestRip = Context->Nested.L2LastMmioGuestPhysical;
+            row.status = (LONG)Context->Nested.L2LastMmioDisposition;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xC5u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* Vectors injected while L2 was in long mode - see the fields. */
+        ULONG vector = 0UL;
+
+        for (vector = 0UL; vector < 256UL; ++vector) {
+            if (Context->Nested.L2InjectVector64[vector] == 0UL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = vector;
+            row.qualification =
+                (ULONGLONG)Context->Nested.L2InjectVector64[vector];
+            row.guestPhysicalAddress =
+                (ULONGLONG)Context->Nested.L2InjectVectorCount[vector];
+            row.guestLinearAddress = Context->Nested.LastEntryGuestRip;
+            row.guestRip = (ULONGLONG)Context->Nested.LastEntryGuestCsAr;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xC4u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* What resumes a halted L2, and where it lands - see the fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2ResumeAfterHaltNoEvent;
+        row.guestPhysicalAddress =
+            Context->Nested.L2ResumeAfterHaltWithEvent;
+        row.guestLinearAddress = Context->Nested.L2ResumeAfterHaltRip;
+        row.guestRip = Context->Nested.L2ResumeAfterHaltExitRip;
+        row.exitReason = Context->Nested.LastEntryGuestActivity;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xC3u;
+        KswordARKHvmEventPublish(&row);
+        /* Acknowledgements and re-arms against injections - see the fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2InjectionCount;
+        row.guestPhysicalAddress =
+            Context->Nested.L2EoiMsrCount + Context->Nested.L2EoiMmioCount;
+        row.guestLinearAddress = Context->Nested.L2TimerArmCount;
+        row.guestRip = Context->Nested.L2TimerArmLastValue;
+        row.exitReason = (ULONG)Context->Nested.L2EoiMmioCount;
+        row.status = (LONG)Context->Nested.L2EoiMsrCount;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xC2u;
+        KswordARKHvmEventPublish(&row);
+        /* Where the tick device is programmed, if anywhere - see the fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2HpetWrites;
+        row.guestPhysicalAddress = Context->Nested.L2HpetReads;
+        row.guestLinearAddress = Context->Nested.L2ApicTimerLvtWrites;
+        row.guestRip = Context->Nested.L2ApicTimerCountWrites;
+        row.exitReason = Context->Nested.L2ApicMmio[2][0];
+        row.status = (LONG)Context->Nested.L2PitWriteTotal;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xC1u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /*
+         * The flags at each region's last exit, and the last four IPIs.
+         *
+         * Split from the row above only because that row is full.  A halt with
+         * RFLAGS.IF set is a processor waiting to be woken; the same halt with
+         * IF clear is one that never will.
+         */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 4UL; ++slot) {
+            if (Context->Nested.L2Vmcs12Regions[slot] == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification =
+                Context->Nested.L2Vmcs12RegionLastRflags[slot];
+            row.guestPhysicalAddress = Context->Nested.L2IcrWriteCount;
+            row.guestLinearAddress = Context->Nested.L2IcrRing[slot & 0x3UL];
+            row.guestRip = (ULONGLONG)Context->Nested.L2IcrRingIndex;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xD9u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* The last eight exceptions L2 took, newest last. */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 8UL; ++slot) {
+            if (Context->Nested.L2ExceptionInfoRing[slot] == 0UL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification =
+                (ULONGLONG)Context->Nested.L2ExceptionInfoRing[slot];
+            row.guestPhysicalAddress =
+                (ULONGLONG)Context->Nested.L2ExceptionErrorRing[slot];
+            row.guestLinearAddress = Context->Nested.L2ExceptionRipRing[slot];
+            row.guestRip = (ULONGLONG)Context->Nested.L2ExceptionCsRing[slot];
+            row.status = (LONG)Context->Nested.L2ExceptionRingIndex;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xD8u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /*
+         * Each region's four-deep trail, one row per step, with the mode that
+         * region was last running in.  See the trail fields for why the
+         * per-processor exit ring cannot answer this.
+         */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 4UL; ++slot) {
+            ULONG step = 0UL;
+
+            if (Context->Nested.L2Vmcs12Regions[slot] == 0ULL) {
+                continue;
+            }
+            for (step = 0UL; step < 4UL; ++step) {
+                if (Context->Nested.L2Vmcs12RegionTrailRip[slot][step] ==
+                        0ULL) {
+                    continue;
+                }
+                RtlZeroMemory(&row, sizeof(row));
+                row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+                row.exitReason = (slot << 8) | step;
+                row.qualification =
+                    Context->Nested.L2Vmcs12RegionTrailRip[slot][step];
+                row.guestPhysicalAddress = (ULONGLONG)
+                    Context->Nested.L2Vmcs12RegionTrailReason[slot][step];
+                row.guestLinearAddress =
+                    Context->Nested.L2Vmcs12RegionLastCr0[slot];
+                row.guestRip = (ULONGLONG)
+                    Context->Nested.L2Vmcs12RegionLastCsAr[slot];
+                row.status =
+                    (LONG)Context->Nested.L2Vmcs12RegionTrailIndex[slot];
+                row.access = (ULONG)Context->ApicId;
+                row.ruleId = 0xD7u;
+                KswordARKHvmEventPublish(&row);
+            }
+        }
+    }
+    if (Context->Nested.L2TripleFaultCount != 0ULL) {
+        /*
+         * The first triple fault's scene, in two rows because it does not fit
+         * in one and splitting it by meaning is better than truncating it.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2TripleFaultRip;
+        row.guestPhysicalAddress = Context->Nested.L2TripleFaultCr0;
+        row.guestLinearAddress = Context->Nested.L2TripleFaultCr3;
+        row.guestRip = Context->Nested.L2TripleFaultCr4;
+        row.exitReason =
+            (Context->Nested.L2TripleFaultActivity << 24) |
+            (Context->Nested.L2TripleFaultCsAr & 0x00FFFFFFUL);
+        row.status = (LONG)Context->Nested.L2TripleFaultCount;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xDCu;
+        KswordARKHvmEventPublish(&row);
+        /* The delivery half of the same scene; it did not fit in one row. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification =
+            (ULONGLONG)Context->Nested.L2TripleFaultEntryIntrInfo;
+        row.guestPhysicalAddress =
+            (ULONGLONG)Context->Nested.L2TripleFaultIdtVectoring;
+        row.guestLinearAddress = Context->Nested.L2TripleFaultRsp;
+        row.guestRip = Context->Nested.L2TripleFaultSsAr;
+        row.exitReason =
+            (Context->Nested.L2TripleFaultEntryWasRedeliver << 16) |
+            (Context->Nested.L2TripleFaultEntryIntbl & 0xFFFFUL);
+        row.status = (LONG)(ULONG)Context->Nested.L2TripleFaultEntryRflags;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xD6u;
+        KswordARKHvmEventPublish(&row);
+        /*
+         * And the three tables the delivery read.  The mismatch mask is the
+         * criterion: zero means vmcs02 carried exactly what L1 wrote, and any
+         * set bit names the field that did not survive the merge.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2TripleFaultIdtrBase;
+        row.guestPhysicalAddress = Context->Nested.L2TripleFaultGdtrBase;
+        row.guestLinearAddress = Context->Nested.L2TripleFaultTrBase;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.L2TripleFaultIdtrLimit & 0xFFFFULL) |
+            (((ULONGLONG)Context->Nested.L2TripleFaultGdtrLimit & 0xFFFFULL)
+                << 16) |
+            (((ULONGLONG)Context->Nested.L2TripleFaultTrLimit & 0xFFFFFFFFULL)
+                << 32);
+        row.exitReason = Context->Nested.L2TripleFaultDescMismatch;
+        row.status = (LONG)Context->Nested.L2TripleFaultTrAr;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xD3u;
+        KswordARKHvmEventPublish(&row);
+        /*
+         * What L1 ever passed for that IDTR base, beside what vmcs02 carried.
+         *
+         * A count of zero says L1 never wrote the field and the zero is its
+         * own; a non-zero value against a zero in vmcs02 says the value was
+         * lost between the two, which is ours.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2IdtrBaseLastWritten;
+        row.guestPhysicalAddress = Context->Nested.L2TripleFaultIdtrBase;
+        row.guestLinearAddress = (ULONGLONG)Context->Nested.L2IdtrBaseWriteCount;
+        row.guestRip = Context->Nested.CurrentVmcs;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xD2u;
+        KswordARKHvmEventPublish(&row);
+        /*
+         * And the same field seen from our own two copy loops.
+         *
+         * L2 loads its IDT with LIDT, which nothing intercepts, so the base
+         * can be correct in vmcs02 without any VMWRITE above ever counting it.
+         * These say whether it was ever there, and which of the two copies
+         * dropped it.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2IdtrBaseSavedLast;
+        row.guestPhysicalAddress = Context->Nested.L2IdtrBaseLoadedLast;
+        row.guestLinearAddress =
+            ((ULONGLONG)Context->Nested.L2IdtrBaseSavedNonZeroCount << 32) |
+            (ULONGLONG)Context->Nested.L2IdtrBaseLoadedNonZeroCount;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.L2IdtrBaseSaveCount << 32) |
+            (ULONGLONG)Context->Nested.L2IdtrBaseLoadCount;
+        /*
+         * exitReason is thirty-two bits wide, so the two control counts are
+         * packed sixteen and sixteen rather than thirty-two and thirty-two.
+         * The first version shifted one of them straight off the end and the
+         * reader dutifully reported zero for it.
+         */
+        row.exitReason =
+            ((Context->Nested.L2IdtrLimitWriteCount & 0xFFFFUL) << 16) |
+            (Context->Nested.L2GdtrBaseWriteCount & 0xFFFFUL);
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xD1u;
+        KswordARKHvmEventPublish(&row);
+        {
+            ULONG back = 0UL;
+
+            for (back = 0UL; back < 4UL; ++back) {
+                RtlZeroMemory(&row, sizeof(row));
+                row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+                row.exitReason = back;
+                row.qualification = Context->Nested.L2TripleFaultPrevRip[back];
+                row.guestPhysicalAddress =
+                    (ULONGLONG)Context->Nested.L2TripleFaultPrevReason[back];
+                row.guestLinearAddress = Context->Nested.L2TripleFaultEfer;
+                /*
+                 * How many exits back the last re-delivery was.  Zero means
+                 * this very exit carried one, one means the entry that led
+                 * straight here did - anything larger is unrelated history.
+                 */
+                row.guestRip =
+                    Context->Nested.L2TripleFaultExitOrdinal -
+                    Context->Nested.L2TripleFaultReinjectOrdinal;
+                row.status =
+                    (LONG)Context->Nested.L2TripleFaultLastVectoringInfo;
+                row.access = (ULONG)Context->ApicId;
+                row.ruleId = 0xDBu;
+                KswordARKHvmEventPublish(&row);
+            }
+        }
+    }
+    {
+        /* Whether L1's invalidations are costing the shadow hierarchy. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.ShadowEpt.InvalidateKeptCount;
+        row.guestPhysicalAddress =
+            Context->Nested.ShadowEpt.InvalidateDroppedCount;
+        row.guestLinearAddress =
+            Context->Nested.ShadowEpt.InvalidateForeignCount;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.ShadowEpt.TrackedCount << 32) |
+            (ULONGLONG)Context->Nested.ShadowEpt.TrackedOverflowCount;
+        row.exitReason = Context->Nested.ShadowEpt.FillCount;
+        /*
+         * Table pages used against pages exhausted.
+         *
+         * The pair that says whether keeping the hierarchy across an
+         * invalidation has simply moved the failure: the pool used to be reset
+         * hundreds of times a second, so it could never fill, and a hierarchy
+         * that survives is a hierarchy that grows until it does.
+         */
+        row.status = (LONG)(
+            (Context->Nested.ShadowEpt.PageUsed << 16) |
+            (Context->Nested.ShadowEpt.ExhaustionCount & 0xFFFFUL));
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xF6u;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
+        /* And which devices L2 has been talking to, one row per port range. */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 8UL; ++slot) {
+            if (Context->Nested.L2PortCounts[slot] == 0ULL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification = Context->Nested.L2PortCounts[slot];
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xF5u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    RtlZeroMemory(&row, sizeof(row));
+    row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+    /* Averages, so a reader never has to know which million this row covers. */
+    row.qualification = Context->CostTotalCycles / exits;
+    row.guestPhysicalAddress = Context->CostTelemetryCycles / exits;
+    row.guestLinearAddress = Context->CostNestedCycles / exits;
+    row.guestRip = Context->CostReflectCycles / exits;
+    /* The VMCS reads every exit begins with, and the EPT work some end with. */
+    row.exitReason = (ULONG)(Context->CostVmcsReadCycles / exits);
+    row.status = (LONG)(Context->CostEptCycles / exits);
+    row.access = (ULONG)Context->ApicId;
+    /* Mark the row so a reader cannot mistake it for a lifecycle event. */
+    row.ruleId = 0xF3u;
+    KswordARKHvmEventPublish(&row);
+}
+
 ULONG
 KswordARKHvmResidentVmExitDispatch(
+    _Inout_ KSW_HVM_GPR_FRAME* Frame,
+    _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context
+    )
+{
+    const ULONGLONG costStart = __rdtsc();
+    const ULONG action = KswordARKHvmResidentVmExitDispatchBody(Frame, Context);
+
+    if (Context != NULL) {
+        const ULONGLONG spent = __rdtsc() - costStart;
+        const ULONG bucket = (Context->CostLastBucket < 6UL)
+            ? Context->CostLastBucket
+            : 5UL;
+
+        Context->CostTotalCycles += spent;
+        Context->CostReasonCycles[bucket] += spent;
+        Context->CostReasonCount[bucket] += 1ULL;
+        Context->CostExits += 1ULL;
+        if ((Context->CostExits & 0xFFFFFULL) == 0ULL) {
+            KswordARKHvmExitPublishCost(Context);
+        }
+    }
+    /* Return the action the dispatcher itself decided on. */
+    return action;
+}
+
+static ULONG
+KswordARKHvmResidentVmExitDispatchBody(
     _Inout_ KSW_HVM_GPR_FRAME* Frame,
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context
     )
@@ -714,9 +2131,42 @@ KswordARKHvmResidentVmExitDispatch(
         /* Request a bounded fatal trap with no unsafe continuation. */
         return KSW_HVM_EXIT_ACTION_FATAL;
     }
-    /* Capture protocol-visible VMCS exit telemetry. */
-    status = KswordARKHvmReadVmExitTelemetry(
-        &telemetry);
+    {
+        const ULONGLONG readStart = __rdtsc();
+
+        /* Capture protocol-visible VMCS exit telemetry. */
+        status = KswordARKHvmReadVmExitTelemetry(
+            &telemetry);
+        Context->CostVmcsReadCycles += (__rdtsc() - readStart);
+    }
+    /* Name the bucket this exit belongs to, for the wrapper to charge. */
+    {
+        const ULONG reason =
+            telemetry.Reason & KSW_HVM_VMEXIT_REASON_BASIC_MASK;
+
+        Context->CostLastBucket =
+            (reason == 23UL) ? 0UL :
+            (reason == 25UL) ? 1UL :
+            (reason == 48UL) ? 2UL :
+            (reason == 30UL) ? 3UL :
+            (reason == 12UL) ? 4UL : 5UL;
+    }
+    /*
+     * What an empty measurement costs, measured the same way as the rest.
+     *
+     * The control every one of these numbers depends on.  This processor is
+     * itself somebody's guest, and if the outer hypervisor intercepts RDTSC
+     * then each of the ten timestamps an exit now takes is a VM exit of its
+     * own - and the "unexplained" nine tenths of the total would be the
+     * instrument, not the code.  Two back-to-back reads answer that directly:
+     * tens of cycles means the readings stand, hundreds means they are
+     * measuring themselves and every number above has to be thrown away.
+     */
+    {
+        const ULONGLONG emptyStart = __rdtsc();
+
+        Context->CostEptCycles += (__rdtsc() - emptyStart);
+    }
     /* Stop when the current VMCS cannot be inspected safely. */
     if (!NT_SUCCESS(status)) {
         /* Attempt devirtualization without advancing an unknown instruction. */
@@ -741,10 +2191,13 @@ KswordARKHvmResidentVmExitDispatch(
     nestedBasicReason =
         telemetry.Reason & KSW_HVM_VMEXIT_REASON_BASIC_MASK;
     if (Context->Nested.InL2) {
+        const ULONGLONG reflectStart = __rdtsc();
         const ULONG route = KswordARKHvmNestedL2Reflect(
             Context,
             Frame,
             nestedBasicReason);
+
+        Context->CostReflectCycles += (__rdtsc() - reflectStart);
 
         /*
          * Two of the four outcomes end the exit here.
@@ -1611,12 +3064,15 @@ KswordARKHvmResidentVmExitDispatch(
     /* Dispatch bounded VMX instruction semantics without claiming L2 active. */
     } else if (KswordARKHvmExitIsNestedInstruction(
         basicReason)) {
+        const ULONGLONG nestedStart = __rdtsc();
+
         /* Execute the explicit partial vmcs12 state machine. */
         handled = KswordARKHvmNestedHandleExit(
             Context,
             Frame,
             basicReason,
             telemetry.InstructionLength);
+        Context->CostNestedCycles += (__rdtsc() - nestedStart);
         /* Publish the latest nested state to the processor row. */
         Context->Resource->Row.nestedState =
             Context->Nested.State;

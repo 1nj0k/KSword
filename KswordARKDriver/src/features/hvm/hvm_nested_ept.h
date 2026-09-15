@@ -40,6 +40,25 @@ Environment:
  */
 #define KSW_HVM_NEPT_AD_RECORDS 640UL
 
+/*
+ * How many EPT12 table pages the shadow keeps a private copy of.
+ *
+ * These are the pages L1's own hierarchy is built out of - its PML4, its
+ * PDPTs, its page directories and whatever page tables it uses - not the pages
+ * it maps.  A guest of a few hundred megabytes needs a handful: one PML4, one
+ * or two PDPTs, a page directory per gigabyte, plus a page table wherever L1
+ * declines to use a large leaf.  Thirty-two covers that with room, and an
+ * overflow is counted rather than hidden, because the consequence of
+ * overflowing is losing the right to keep the shadow across an invalidation.
+ *
+ * Copies rather than checksums, deliberately.  The question these answer is
+ * "did L1 edit its tables", and the answer decides whether L2 keeps running on
+ * translations we composed earlier.  A checksum answers it with a probability;
+ * a copy answers it.  Thirty-two pages is 128 KiB per processor, which is less
+ * than this module already reserves for the shadow tables themselves.
+ */
+#define KSW_HVM_NEPT_TRACKED_PAGES 32UL
+
 /* Preserve one processor's shadow-EPT composition state. */
 typedef struct _KSW_HVM_SHADOW_EPT_STATE
 {
@@ -84,6 +103,70 @@ typedef struct _KSW_HVM_SHADOW_EPT_STATE
     ULONG DenyCount;
     /* Count violations refused because no table page remained. */
     ULONG ExhaustionCount;
+    /*
+     * Why the last refusal happened, in enough detail to act on.
+     *
+     * A refusal count alone cannot be acted on: "EPT12 maps nothing at this
+     * address" and "EPT12 maps it read-only" are the same number and opposite
+     * defects.  Measured need - L2 looped on a write to a guest-physical
+     * address inside RAM that this code refused thirty-five thousand times,
+     * and the reading said only "refused".
+     *
+     *   Site  1 the EPT12 walk found no mapping (Level and Entry say where)
+     *         2 EPT12 maps it, but grants less than the access needs
+     *         3 our own EPT01 leaf narrows it below the access
+     *         4 no table page left to compose with
+     *         5 an interior entry named a page we never handed out
+     */
+    /*
+     * Whether a composed mapping still says what EPT12 says.
+     *
+     * This is the one failure that can end in a triple fault while leaving no
+     * exit behind.  A shadow leaf naming a frame EPT12 did not means the
+     * guest's own page-table walk reads another page's bytes, and every fault
+     * after that - #PF, #DF, the shutdown - happens inside the guest, where
+     * nothing here can see it.  Measured symptom it exists to explain: L1's
+     * processor triple-faults while delivering its own local-timer vector into
+     * an interruptible 64-bit guest, with no exception exit anywhere near.
+     *
+     * Sampled rather than checked on every fill, because the check is a second
+     * EPT12 walk through the physical window and fills run into six figures per
+     * boot.  One GPA is held back from each sample and verified at the next
+     * one, so what is being tested is a mapping that has had time to go stale -
+     * checking a leaf against the walk that just produced it would prove only
+     * that the assignment worked.
+     *
+     * Unresolved is kept apart from mismatched: a hierarchy that no longer
+     * describes the address was dropped by an invalidation, which is correct
+     * behaviour and not a defect.
+     */
+    ULONGLONG VerifyPendingGuestPhysical;
+    /*
+     * The hierarchy generation when the address was held back.
+     *
+     * Without it the check has a false positive it cannot distinguish from the
+     * defect: an invalidation between the sample and the verify drops and
+     * rebuilds the hierarchy, and comparing a leaf composed from one EPT12
+     * against a walk of a later one proves nothing. Generation changed means
+     * skip, not mismatch.
+     */
+    ULONGLONG VerifyPendingGeneration;
+    ULONG VerifySampleCount;
+    ULONG VerifyMismatchCount;
+    ULONG VerifyUnresolvedCount;
+    ULONG VerifySkippedGenerationCount;
+    /* The scene of a mismatch, kept because the last *sample* is usually fine. */
+    ULONGLONG VerifyLastGuestPhysical;
+    ULONGLONG VerifyLastShadowFrame;
+    ULONGLONG VerifyLastL1Frame;
+    /* And whether the leaf assignment itself landed where it was aimed. */
+    ULONG LeafWriteMismatchCount;
+    ULONG LastDenySite;
+    ULONG LastDenyLevel;
+    ULONG LastDenyAccess;
+    ULONGLONG LastDenyGuestPhysical;
+    ULONGLONG LastDenyEntry;
+    ULONGLONG LastDenyPermissions;
     /* Retain the one nonpaged block every table page is carved from. */
     PVOID PageBlock;
     /* Retain how many pages the block holds. */
@@ -125,6 +208,32 @@ typedef struct _KSW_HVM_SHADOW_EPT_STATE
     ULONG AdPropagatedCount;
     /* Count records dropped because the table was full. */
     ULONG AdOverflowCount;
+    /*
+     * Every EPT12 table page this hierarchy was composed out of, with a copy.
+     *
+     * The shadow is a cache of L1's tables, so the only thing that can make it
+     * wrong is L1 editing them.  INVEPT is L1 saying "translations for this
+     * context may be stale" - which it issues as routine hygiene, not only
+     * after an edit.  Measured: VMware issues one per world switch, 319 times
+     * a second, and dropping the whole hierarchy each time left its guest able
+     * to fault in about 125 pages before losing them all again.  A BIOS
+     * loading a kernel needs thousands, so it never finished.
+     *
+     * With these, an invalidation compares each table page against its copy.
+     * Unchanged means the cache is still exactly what L1's tables say, and only
+     * the processor's own translation caches need flushing.  Changed - or
+     * overflowed, or never snapshotted - means the drop still happens.
+     */
+    ULONG TrackedCount;
+    ULONG TrackedOverflowCount;
+    ULONGLONG TrackedFrame[KSW_HVM_NEPT_TRACKED_PAGES];
+    /* One page of private copy per tracked frame, in walk order. */
+    PVOID TrackedCopyBlock;
+    /* Count invalidations that kept the hierarchy, and that dropped it. */
+    ULONG InvalidateKeptCount;
+    ULONG InvalidateDroppedCount;
+    /* Count invalidations that named a context that was not ours. */
+    ULONG InvalidateForeignCount;
 } KSW_HVM_SHADOW_EPT_STATE;
 
 EXTERN_C_START
@@ -187,6 +296,24 @@ KswordARKHvmNestedEptSetL1Pointer(
 VOID
 KswordARKHvmNestedEptInvalidate(
     _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow
+    );
+
+/*
+ * Serve one INVEPT from L1 without destroying a hierarchy that is still right.
+ *
+ * VM-exit safe.  Compares every EPT12 table page the hierarchy was composed
+ * out of against the copy taken when it was read.  All equal means L1 has not
+ * edited its tables since, so the composed mappings still say exactly what
+ * EPT12 says and only the processor's translation caches need flushing.  Any
+ * difference - or a hierarchy composed before tracking could keep up - falls
+ * back to dropping everything, which is what this used to do unconditionally.
+ *
+ * Returns TRUE when the hierarchy was kept.
+ */
+BOOLEAN
+KswordARKHvmNestedEptInvalidateChecked(
+    _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow,
+    _Inout_ KSW_HVM_PHYS_WINDOW* Window
     );
 
 /*

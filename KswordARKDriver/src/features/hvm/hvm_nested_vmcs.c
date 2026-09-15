@@ -149,6 +149,8 @@ KswordARKHvmNestedVmcs12Write(
         Vmcs12->Fields[slot] =
             KswordARKHvmNestedVmcs12Narrow(Value, width);
     }
+    /* Mark the copy changed, so the backing store knows it has work to do. */
+    Vmcs12->WriteSerial += 1UL;
     /* Complete the field write successfully. */
     return STATUS_SUCCESS;
 }

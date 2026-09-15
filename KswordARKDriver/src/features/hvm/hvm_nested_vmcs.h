@@ -65,6 +65,19 @@ typedef struct _KSW_HVM_VMCS12_STATE
     USHORT Reserved0;
     /* Preserve the last VM-instruction error visible to L1. */
     ULONG InstructionError;
+    /*
+     * How many field writes this vmcs12 has taken.
+     *
+     * Not a statistic: it is what lets the backing store in the VMCS region be
+     * skipped when nothing has changed since it was last written.  Measured
+     * need - a guest hypervisor's steady state is VMPTRLD, invalidate, VMCLEAR
+     * with no field writes at all in between, and spilling anyway cost about
+     * ninety thousand cycles per cycle of its loop, a third of all the time
+     * this driver spent.  Carried inside the vmcs12 rather than beside it so a
+     * copy that is pooled, restored, or migrated to another processor brings
+     * its own history with it.
+     */
+    ULONG WriteSerial;
     /* Preserve the current vmcs12 physical address. */
     ULONGLONG PhysicalAddress;
     /* Preserve every field L1 wrote, indexed by (type, index). */

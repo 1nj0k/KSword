@@ -201,6 +201,75 @@ typedef struct _KSW_HVM_RESIDENT_VCPU
      * Appended at the end for the same reason as the fields above it.
      */
     volatile LONG PendingGuestNmi;
+    /*
+     * Where the cycles of one VM exit go, on this processor alone.
+     *
+     * A guest hypervisor costs about twenty of our exits per exit of its own -
+     * it reads and writes its VMCS on every one, and this processor cannot
+     * offer VMCS shadowing to make those free, so the only thing left to
+     * improve is the price of a single exit.  Measured at roughly ten thousand
+     * cycles where a lean handler should be two to three; three unconditional
+     * costs are visible by reading, and which of them dominates is not.
+     *
+     * Plain arithmetic on per-processor storage: an interlocked counter here
+     * would be measuring instrumentation contention, which is one of the very
+     * things being measured.  Published to the event ring once per million
+     * exits rather than through the query protocol, so nothing in the
+     * protocol has to move for a measurement that exists to be deleted.
+     *
+     * Appended at the end for the same reason as the fields above it.
+     */
+    ULONGLONG CostExits;
+    ULONGLONG CostTotalCycles;
+    ULONGLONG CostTelemetryCycles;
+    ULONGLONG CostNestedCycles;
+    ULONGLONG CostReflectCycles;
+    ULONGLONG CostVmcsReadCycles;
+    ULONGLONG CostEptCycles;
+    /*
+     * The same cycles again, split by what caused the exit.
+     *
+     * Splitting by phase stopped explaining anything: every phase is small and
+     * the total is fifteen thousand cycles, which means the average is being
+     * set by a minority of exits that are enormously more expensive than the
+     * rest.  An average over a population that is not uniform answers no
+     * question at all, and the whole total doubled over one run - so the
+     * expensive minority is also growing.  Six buckets say which population it
+     * is; without them the next step would be a guess.
+     */
+    ULONGLONG CostReasonCycles[6];
+    ULONGLONG CostReasonCount[6];
+    ULONG CostLastBucket;
+    /*
+     * Which way each HLT exit went.
+     *
+     * The halt path has three conservative branches that resume without ever
+     * entering the halt state, and until now nothing told them apart - the
+     * handler's own comment says so and asks for exactly these counters before
+     * anyone tunes it.  The reading that made them necessary: L1 takes 60,686
+     * HLT exits a second.  A halt that is actually entered sleeps until the
+     * next interrupt, so that rate should be in the tens; sixty thousand means
+     * the guest asked to idle and we handed it a no-op, turning its idle loop
+     * into a spin that pins a core and starves every other thread in the
+     * process - which is where its device models, and therefore its timer,
+     * live.
+     */
+    ULONGLONG HltEnteredCount;
+    ULONGLONG HltSkipNoActivitySupport;
+    ULONGLONG HltSkipReadFailed;
+    ULONGLONG HltSkipBlockedCount;
+    /*
+     * The two fields the architecture checks the halt state against.
+     *
+     * Clearing the interrupt shadow and halting anyway was tried and faulted
+     * VM entry with reason 33 after 1,068 exits, so the shadow is not the only
+     * condition in play.  These say which of the others hold at the moment the
+     * guest asks to idle, so the next attempt is designed from a reading
+     * instead of from an argument about what ought to be legal.
+     */
+    ULONGLONG HltBlockedWithIfSet;
+    ULONGLONG HltBlockedWithPendingEvent;
+    ULONG HltLastInterruptibility;
 } KSW_HVM_RESIDENT_VCPU;
 
 EXTERN_C_START

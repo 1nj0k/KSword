@@ -2674,6 +2674,12 @@ KswordARKHvmQuery(
             (volatile LONG*)&g_KswordHvm.NestedL2LaunchRefusedCount,
             0L,
             0L);
+    /* Report which refusal produced the most recent one of those. */
+    Response->nestedLastRefusalSite = (unsigned short)
+        InterlockedCompareExchange(
+            &g_KswordHvm.NestedLastRefusalSite,
+            0L,
+            0L);
     /*
      * Same shape, and durable for the same reason: the per-processor vmcs12
      * pools are released at devirtualization, so an eviction that happened
@@ -2682,6 +2688,15 @@ KswordARKHvmQuery(
     Response->nestedVmcs12EvictionCount =
         (ULONG)InterlockedCompareExchange(
             (volatile LONG*)&g_KswordHvm.NestedVmcs12EvictionCount,
+            0L,
+            0L);
+    /*
+     * And the fuse.  A real L1 does not run our probe, so this is the only
+     * place "we had to stop somebody's guest" is readable at all.
+     */
+    Response->nestedFuseTripCount =
+        (ULONG)InterlockedCompareExchange(
+            (volatile LONG*)&g_KswordHvm.NestedFuseTripCount,
             0L,
             0L);
     Response->evmcsState =
@@ -2992,7 +3007,13 @@ KswordARKHvmControl(
              * exit's semantics; it only decides whether routine exits occupy
              * ring slots that the four evidence classes would otherwise hold.
              */
-            KSWORD_ARK_HVM_CONTROL_FLAG_TRACE_ROUTINE_EXITS;
+            KSWORD_ARK_HVM_CONTROL_FLAG_TRACE_ROUTINE_EXITS |
+            /*
+             * Identity choice, not a capability.  Narrows what guest user mode
+             * learns from CPUID about the hypervisor underneath; every other
+             * exit keeps its exact semantics.
+             */
+            KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR;
         /* Stop after selecting the resident-start flag set. */
         break;
     case KSWORD_ARK_HVM_CONTROL_SOAK:

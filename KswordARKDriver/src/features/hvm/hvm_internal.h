@@ -630,6 +630,14 @@ typedef struct _KSW_HVM_RUNTIME
      */
     volatile LONG NestedL2LaunchRefusedCount;
     /*
+     * Which of the entry path's refusals produced the most recent one, 1..7.
+     *
+     * The count beside it says a launch was refused; every one of those seven
+     * conditions reports the same architectural error to L1, so without this
+     * the count is the whole story and it does not name anything actionable.
+     */
+    volatile LONG NestedLastRefusalSite;
+    /*
      * Count vmcs12 dropped because the per-processor pool was full.
      *
      * The only honest readout for "this L1 keeps more VMCSs than we hold".  An
@@ -648,6 +656,15 @@ typedef struct _KSW_HVM_RUNTIME
      * ran, which is the fastest way to make a real warning unbelievable.
      */
     volatile LONG NestedVmcs12EvictionCount;
+    /*
+     * Times the no-progress fuse stopped an L2, machine-wide and durable.
+     *
+     * Same reason as the two counts above: the per-processor record dies with
+     * the residency, and the thing worth knowing afterwards is that it ever
+     * happened.  A real L1 does not run our probe, so without this a tripped
+     * fuse is invisible in exactly the situation it exists for.
+     */
+    volatile LONG NestedFuseTripCount;
     /*
      * How many bits our own MSR bitmap holds.
      *
@@ -759,6 +776,14 @@ typedef struct _KSW_HVM_RUNTIME
      * 而这一个必须在**每次**退出的发布点被读到。
      */
     volatile LONG TraceRoutineExits;
+    /*
+     * 非零时对来宾**用户态**的 CPUID 隐藏 hypervisor 身份；默认零。
+     *
+     * 与上面几个同样挂在 runtime 上，理由也一样：退出派发器读得到它，而这一位
+     * 必须在**每一次** CPUID 退出上被读到。每次起常驻重设，不粘连 —— 没要求隐藏
+     * 的那一轮绝不能继承上一轮的隐藏，否则"没开时行为不变"这句话就不成立了。
+     */
+    volatile LONG HideHypervisorCpuid;
     /* Preserve IA32_VMX_VMFUNC evidence; bit 0 is EPTP switching. */
     ULONGLONG VmFunctionCapabilities;
     /* Retain the 512-entry EPTP list published to VMFUNC. */
@@ -797,6 +822,21 @@ typedef struct _KSW_HVM_RUNTIME
     volatile LONG LastExitInstructionLength;
     /* Preserve the last VM-instruction error. */
     volatile LONG LastVmInstructionError;
+    /*
+     * The interrupt-controller mask L2 currently has in force.
+     *
+     * Shared rather than per-processor, and that is the entire point: the PIC
+     * is one device, while L1's virtual processor thread migrates between
+     * physical ones.  Recording the mask per-processor produced two records
+     * that disagreed - one said the timer was masked, the other said it was
+     * open - with no way to tell which write came last, because each half had
+     * only seen the writes that happened to land on its own processor.
+     *
+     * One location, last writer wins, which is exactly what a device register
+     * is.  Bit 8 marks it written so a mask of zero is not read as absence.
+     */
+    volatile LONG L2PicMaskMaster;
+    volatile LONG L2PicMaskSlave;
     /* Preserve the group of the last one-shot launch. */
     USHORT LastLaunchProcessorGroup;
     /* Preserve the group-relative CPU of the last one-shot launch. */

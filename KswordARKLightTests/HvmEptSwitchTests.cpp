@@ -21,6 +21,7 @@
 #include "../shared/driver/KswordArkHvmEptSwitch.h"
 
 #include <cstdint>
+#include <initializer_list>
 
 namespace {
 
@@ -1884,6 +1885,276 @@ void TestProgressLedger(KswordTests::Suite& s) {
              L"the same all-zero site switching to a real hierarchy is still progress");
 }
 
+// ---------------------------------------------------------------------------
+// VMX 能力 MSR 过滤（KswordArkHvmControls.h）
+//
+// 这一组是整个文件里最像「魔数」的东西：五个手写的 32 位允许掩码加一个 64 位的。
+// 它们已经错过一次 —— PROC 的掩码曾写成 0xF6DFCD84，是手算时把两个 nibble 排错
+// 了位置，编译、部署、自检全都不会响；真正的后果要等某个 hypervisor 拿着这份能力
+// 去算控制值，然后在一个指向**它自己**的错误码上失败。
+//
+// 所以这里的期望值一律**从记录在案的位号重新算一遍**（`1UL << n` 的或），而不是
+// 抄常量的十六进制。对不上时，要么是常量错了、要么是注释里的位号错了，两者都必须
+// 被看见 —— 抄过来的期望值一个都发现不了。
+//
+// 还有一条不在位号里的判据：这份白名单必须是**我们自己在来宾里用到的位的超集**。
+// 常驻起来之后驱动跑在来宾里，读这些 MSR 读到的是自己过滤后的值；把自己要用的
+// 能力屏蔽掉，现象和「嵌套坏了」一模一样。
+// ---------------------------------------------------------------------------
+
+// 把一串位号或成掩码。写成函数而不是宏，省得在期望值里出现移位优先级的坑。
+constexpr std::uint64_t BitsOf(std::initializer_list<unsigned> bits) {
+    std::uint64_t value = 0ULL;
+    for (unsigned b : bits) {
+        value |= (1ULL << b);
+    }
+    return value;
+}
+
+void TestVmxCapabilityMasks(KswordTests::Suite& s) {
+    // --- pin-based：外部中断退出 / NMI 退出 / 虚拟 NMI ---
+    s.expect(KSWORD_ARK_HVM_VMX_PIN_ALLOWED == BitsOf({0, 3, 5}),
+             L"the pin-based allow mask is exactly external-interrupt, NMI and virtual-NMI exiting");
+    s.expect((KSWORD_ARK_HVM_VMX_PIN_ALLOWED & BitsOf({6, 7})) == 0ULL,
+             L"the preemption timer and posted interrupts stay unadvertised: their fields are not copied");
+
+    // --- primary processor-based ---
+    // 2 中断窗口 / 3 TSC 偏移 / 7 HLT / 9 INVLPG / 10 MWAIT / 11 RDPMC / 12 RDTSC /
+    // 15 CR3 载入 / 16 CR3 存储 / 19 CR8 载入 / 20 CR8 存储 / 21 TPR 影子 /
+    // 22 NMI 窗口 / 23 MOV-DR / 24 无条件 I/O / 25 I/O 位图 / 28 MSR 位图 /
+    // 29 MONITOR / 30 PAUSE / 31 激活 secondary。
+    s.expect(KSWORD_ARK_HVM_VMX_PROC_ALLOWED ==
+                 BitsOf({2, 3, 7, 9, 10, 11, 12, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31}),
+             L"the primary processor-based allow mask matches the bit list its comment names");
+    s.expect((KSWORD_ARK_HVM_VMX_PROC_ALLOWED & (1ULL << 3)) != 0ULL,
+             L"TSC offsetting stays advertised: 0x2010 is in the copied control field table");
+    // 这一位的前提是 0x2012 与 0x401C 都进了 vmcs02 的被拷字段表。宣告了却只拷一个，
+    // 处理器会把**物理页 0** 当 virtual-APIC 页用，而且状态位上一点痕迹都没有。
+    s.expect((KSWORD_ARK_HVM_VMX_PROC_ALLOWED & (1ULL << 21)) != 0ULL,
+             L"the TPR shadow stays advertised: both the threshold and the page address are copied now");
+    s.expect((KSWORD_ARK_HVM_VMX_PROC_ALLOWED & (1ULL << 27)) == 0ULL,
+             L"the monitor trap flag stays unadvertised: it is not implemented for L2");
+    s.expect((KSWORD_ARK_HVM_VMX_PROC_ALLOWED & (1ULL << 31)) != 0ULL,
+             L"activating secondary controls stays advertised, or EPT could never be offered");
+
+    // --- secondary：EPT（bit 1）与 unrestricted guest（bit 7）---
+    s.expect(KSWORD_ARK_HVM_VMX_PROC2_ALLOWED == BitsOf({1, 7}),
+             L"the secondary allow mask offers EPT and unrestricted guest, and nothing else");
+    // 这一位是 VMware 点名要的，而且是它四项缺件里唯一无法绕开的：它的来宾从实模式
+    // 启动。它与其余 secondary 位的区别是**不需要任何新的 vmcs02 字段**。
+    s.expect((KSWORD_ARK_HVM_VMX_PROC2_ALLOWED & (1ULL << 7)) != 0ULL,
+             L"unrestricted guest stays advertised: a guest that boots in real mode cannot start without it");
+    // 宣告它就等于承诺 EPT 也在，因为 Intel 不允许只开一个。这里断言的是**我们宣告的
+    // 那两位本身自洽**；运行期那一对是否自洽由 hvm_nested_l2.c 的合并负责。
+    s.expect((KSWORD_ARK_HVM_VMX_PROC2_ALLOWED & (1ULL << 7)) == 0ULL ||
+                 (KSWORD_ARK_HVM_VMX_PROC2_ALLOWED & (1ULL << 1)) != 0ULL,
+             L"advertising unrestricted guest without EPT would promise a pair the processor refuses");
+    s.expect((KSWORD_ARK_HVM_VMX_PROC2_ALLOWED & (1ULL << 5)) == 0ULL,
+             L"VPID stays unadvertised: INVVPID is not implemented, whatever else is added here");
+
+    // --- VM-exit 控制 ---
+    s.expect(KSWORD_ARK_HVM_VMX_EXIT_ALLOWED == BitsOf({2, 9, 15, 18, 19, 20, 21}),
+             L"the exit-control allow mask matches the bit list its comment names");
+    s.expect((KSWORD_ARK_HVM_VMX_EXIT_ALLOWED & BitsOf({12, 22})) == 0ULL,
+             L"PERF_GLOBAL_CTRL and the preemption timer stay unadvertised: neither field is copied");
+    // 这一位既扣不下也不能在合并时剥掉，两次都是实机验证过的：去掉宣告是空操作
+    //（必须为一的位会被过滤器加回来），而在合并里剥掉会让 VMware 的监控器在
+    // irq.c:111 的 VERIFY 上当场倒下 —— L1 要了这一位就会无条件去读那个向量。
+    s.expect((KSWORD_ARK_HVM_VMX_EXIT_ALLOWED & (1ULL << 15)) != 0ULL,
+             L"acknowledge interrupt on exit is advertised: L1 reads the vector unconditionally once it asks");
+
+    // --- VM-entry 控制 ---
+    s.expect(KSWORD_ARK_HVM_VMX_ENTRY_ALLOWED == BitsOf({2, 9, 14, 15}),
+             L"the entry-control allow mask matches the bit list its comment names");
+    s.expect((KSWORD_ARK_HVM_VMX_ENTRY_ALLOWED & (1ULL << 9)) != 0ULL,
+             L"IA-32e mode guest stays advertised, or a 64-bit L2 could not be entered at all");
+    s.expect((KSWORD_ARK_HVM_VMX_ENTRY_ALLOWED & BitsOf({13, 16, 17, 18, 20, 21, 22})) == 0ULL,
+             L"PERF_GLOBAL_CTRL, BNDCFGS, PT, RTIT, CET, LBR and PKRS stay unadvertised");
+
+    // --- EPT/VPID 能力 ---
+    s.expect(KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED ==
+                 BitsOf({6, 8, 14, 16, 17, 20, 21, 25, 26, 32, 40, 41, 42}),
+             L"the EPT capability allow mask matches the bit list its comment names");
+    // 这两位不是「可以留」，是**必须留**：驱动自己在来宾里读它们。
+    s.expect((KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & (1ULL << 17)) != 0ULL,
+             L"one-GiB leaves stay advertised: the nested probe builds its EPT12 out of them");
+    s.expect((KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & (1ULL << 21)) != 0ULL,
+             L"accessed and dirty stays advertised: the nested EPT code reads it to decide whether to maintain A/D");
+    s.expect((KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & (1ULL << 0)) == 0ULL,
+             L"execute-only stays unadvertised: shadow synthesis has never been shown to preserve it");
+    // INVVPID 与 enable-VPID 是两件事：宣告前者不等于宣告后者，VMware 要的正是前者。
+    s.expect((KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & (1ULL << 32)) != 0ULL &&
+                 (KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & BitsOf({40, 41, 42})) ==
+                     BitsOf({40, 41, 42}),
+             L"INVVPID and its types zero, one and two stay advertised: a guest hypervisor names exactly these");
+    // 类型 3 不宣告，所以派发也必须拒绝它 —— 反过来也一样。两边只要有一边动了而
+    // 另一边没动，就是"宣告了却没实现"或"实现了却不敢用"，两种都不报错。
+    s.expect((KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & (1ULL << 43)) == 0ULL,
+             L"INVVPID type three stays unadvertised: nothing asked for that granularity");
+    s.expect((KSWORD_ARK_HVM_VMX_PROC2_ALLOWED & (1ULL << 5)) == 0ULL,
+             L"enable-VPID stays unadvertised even though INVVPID is: L2 runs under VPID zero");
+    s.expect((KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & (1ULL << 6)) != 0ULL &&
+                 (KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED & (1ULL << 20)) != 0ULL,
+             L"a four-level walk and INVEPT stay advertised: the shadow tables are four-level and are invalidated");
+
+    // --- MISC 的 CR3-target 字段是 24:16 这九位 ---
+    s.expect(KSWORD_ARK_HVM_VMX_MISC_CR3_TARGET_MASK ==
+                 BitsOf({16, 17, 18, 19, 20, 21, 22, 23, 24}),
+             L"the CR3-target count field is bits 24 through 16");
+
+    // --- 索引范围 ---
+    s.expect(KSWORD_ARK_HVM_VMX_MSR_BASIC == 0x480UL &&
+                 KSWORD_ARK_HVM_VMX_MSR_VMFUNC == 0x491UL,
+             L"the capability MSR block runs from 0x480 to 0x491");
+    s.expect(KswordArkHvmIsVmxCapabilityMsr(0x480UL) == 1 &&
+                 KswordArkHvmIsVmxCapabilityMsr(0x491UL) == 1,
+             L"both ends of the block are inside it");
+    s.expect(KswordArkHvmIsVmxCapabilityMsr(0x47FUL) == 0 &&
+                 KswordArkHvmIsVmxCapabilityMsr(0x492UL) == 0,
+             L"neither neighbour of the block is inside it");
+    s.expect(KswordArkHvmIsVmxCapabilityMsr(0x3AUL) == 0 &&
+                 KswordArkHvmIsVmxCapabilityMsr(0xC0000080UL) == 0,
+             L"FEATURE_CONTROL and EFER are not capability MSRs: narrowing them would be a different bug");
+}
+
+void TestVmxCapabilityFilter(KswordTests::Suite& s) {
+    // 成对格式：低半 allowed-0（必须为 1），高半 allowed-1（可以为 1）。
+    // 良构的输入满足 low ⊆ high —— 硬件强制为 1 的位必然也允许为 1。
+    {
+        const std::uint64_t low = BitsOf({0, 3});                 // 强制：外部中断退出、NMI 退出
+        const std::uint64_t high = BitsOf({0, 1, 3, 5, 6, 7});    // 主机还额外允许 1/6/7
+        const std::uint64_t host = (high << 32) | low;
+        const std::uint64_t got =
+            KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_PINBASED, host);
+
+        s.expect((got & 0xFFFFFFFFULL) == low,
+                 L"the mandatory half of a paired capability comes back untouched");
+        // 期望的高半：主机允许 ∩ 白名单，再并回强制位。1 不在白名单里所以掉了；
+        // 6/7 不在白名单里也掉了；0/3/5 留下。
+        s.expect((got >> 32) == BitsOf({0, 3, 5}),
+                 L"the optional half is the host value intersected with the allow list");
+        s.expect(((got >> 32) & ~(host >> 32)) == 0ULL,
+                 L"narrowing never advertises a bit the host itself does not offer");
+    }
+    {
+        // 强制位不在白名单里的那一格。这是 `high |= low` 存在的唯一理由：
+        // 把一个硬件强制为 1 的位从「可以为 1」里拿掉，造出的是一份**自相矛盾**
+        // 的能力，L1 照着它算出来的控制值会被处理器判非法，而错误码指向 L1。
+        const std::uint64_t low = BitsOf({0, 6});   // 6 被强制为 1，却不在白名单里
+        const std::uint64_t high = BitsOf({0, 3, 5, 6});
+        const std::uint64_t host = (high << 32) | low;
+        const std::uint64_t got =
+            KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_PINBASED, host);
+
+        s.expect(((got >> 32) & (1ULL << 6)) != 0ULL,
+                 L"a bit the hardware forces to one survives narrowing even when it is not on the allow list");
+        s.expect(((got >> 32) & (got & 0xFFFFFFFFULL)) == (got & 0xFFFFFFFFULL),
+                 L"the result is self-consistent: everything mandatory is also permitted");
+    }
+    {
+        // TRUE_* 变体必须和非 TRUE 的走同一条路。分叉了的话，只读 TRUE_* 的
+        // hypervisor（绝大多数现代实现）拿到的会是另一份能力。
+        const std::uint64_t host = (BitsOf({0, 1, 3, 5, 7}) << 32) | BitsOf({0});
+        s.expect(KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_PINBASED, host) ==
+                     KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_TRUE_PINBASED, host),
+                 L"the TRUE pin-based variant narrows exactly like the legacy one");
+        s.expect(KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_PROCBASED, host) ==
+                     KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_TRUE_PROCBASED, host),
+                 L"the TRUE primary variant narrows exactly like the legacy one");
+        s.expect(KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_EXIT_CTLS, host) ==
+                     KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_TRUE_EXIT_CTLS, host),
+                 L"the TRUE exit variant narrows exactly like the legacy one");
+        s.expect(KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_ENTRY_CTLS, host) ==
+                     KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_TRUE_ENTRY_CTLS, host),
+                 L"the TRUE entry variant narrows exactly like the legacy one");
+    }
+    {
+        // EPT/VPID 能力是**单值**格式，不是成对的 —— 按成对处理会把低 32 位
+        // 当成强制位并回高半，凭空宣告出一堆 VPID 能力。
+        const std::uint64_t host = 0x00000F0106F34041ULL;  // 靶机实测值
+        const std::uint64_t got =
+            KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_EPT_VPID_CAP, host);
+        s.expect(got == (host & KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED),
+                 L"the EPT capability is a plain intersection with the allow list");
+        // 高半区只剩 INVVPID 支持位与类型 0/1/2；主机有的类型 3 被丢掉。
+        s.expect((got >> 32) == 0x00000701ULL,
+                 L"exactly INVVPID and its three advertised types survive out of everything the host offers");
+        s.expect((got & (1ULL << 43)) == 0ULL,
+                 L"the host's INVVPID type three is dropped, because nothing promised it");
+        s.expect((got & ~host) == 0ULL,
+                 L"narrowing the EPT capability never adds a bit the host lacks");
+    }
+    {
+        // VMFUNC 报「一个功能都没有」。secondary 里那一位也是清的，两处都清是
+        // 故意的：只清激活位会让 L1 以为是配置问题而重试。
+        s.expect(KswordArkHvmFilterVmxCapabilityMsr(
+                     KSWORD_ARK_HVM_VMX_MSR_VMFUNC, 0xFFFFFFFFFFFFFFFFULL) == 0ULL,
+                 L"VMFUNC reports no functions at all, whatever the host offers");
+    }
+    {
+        // MISC：只清 CR3-target 个数，其余各位是描述性的，动它们没有依据。
+        const std::uint64_t host = 0x00000000007004C1ULL | KSWORD_ARK_HVM_VMX_MISC_CR3_TARGET_MASK;
+        const std::uint64_t got =
+            KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_MISC, host);
+        s.expect((got & KSWORD_ARK_HVM_VMX_MISC_CR3_TARGET_MASK) == 0ULL,
+                 L"the CR3-target count is reported as zero, because no CR3-target field is copied");
+        s.expect((got | KSWORD_ARK_HVM_VMX_MISC_CR3_TARGET_MASK) ==
+                     (host | KSWORD_ARK_HVM_VMX_MISC_CR3_TARGET_MASK),
+                 L"every other MISC bit passes through: they describe, they do not promise");
+    }
+    {
+        // 透传的那几个。BASIC 尤其不能动：低 31 位是 VMCS 修订号，改了它，
+        // VMXON 与 VMPTRLD 会因为区域头部对不上而失败 —— 一个跟能力毫无关系
+        // 的故障，却会被当成嵌套坏了。
+        const std::uint64_t host = 0x00DA0400000000FFULL;
+        s.expect(KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_BASIC, host) == host,
+                 L"VMX_BASIC passes through untouched, revision identifier included");
+        s.expect(KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_CR0_FIXED0, host) == host &&
+                     KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_CR0_FIXED1, host) == host &&
+                     KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_CR4_FIXED0, host) == host &&
+                     KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_CR4_FIXED1, host) == host,
+                 L"the fixed CR0 and CR4 bits pass through: they are architectural, not ours to narrow");
+        s.expect(KswordArkHvmFilterVmxCapabilityMsr(KSWORD_ARK_HVM_VMX_MSR_VMCS_ENUM, host) == host,
+                 L"the VMCS field enumeration passes through");
+    }
+    {
+        // 幂等。常驻起来之后驱动自己也跑在来宾里，读这些 MSR 读到的是**已经过滤
+        // 过的**值；再叠一层嵌套就会过滤第二遍。第二遍还改东西的话，越深的那层
+        // 看到的能力越少，而没有任何地方会报错。
+        const std::uint64_t samples[] = {
+            0x00000F0106F34041ULL,
+            (BitsOf({0, 1, 3, 5, 6, 7}) << 32) | BitsOf({0, 3}),
+            0xFFFFFFFFFFFFFFFFULL,
+            0ULL,
+        };
+        const unsigned long indices[] = {
+            KSWORD_ARK_HVM_VMX_MSR_PINBASED, KSWORD_ARK_HVM_VMX_MSR_PROCBASED,
+            KSWORD_ARK_HVM_VMX_MSR_EXIT_CTLS, KSWORD_ARK_HVM_VMX_MSR_ENTRY_CTLS,
+            KSWORD_ARK_HVM_VMX_MSR_PROCBASED2, KSWORD_ARK_HVM_VMX_MSR_EPT_VPID_CAP,
+            KSWORD_ARK_HVM_VMX_MSR_MISC, KSWORD_ARK_HVM_VMX_MSR_VMFUNC,
+            KSWORD_ARK_HVM_VMX_MSR_BASIC,
+        };
+        bool idempotent = true;
+        for (unsigned long index : indices) {
+            for (std::uint64_t sample : samples) {
+                const std::uint64_t once = KswordArkHvmFilterVmxCapabilityMsr(index, sample);
+                if (KswordArkHvmFilterVmxCapabilityMsr(index, once) != once) {
+                    idempotent = false;
+                }
+            }
+        }
+        s.expect(idempotent,
+                 L"narrowing twice equals narrowing once, so a second nesting level sees the same capability");
+    }
+    {
+        // 范围外的索引原样返回。调用方已经框过范围，这里再验一次是为了让这个
+        // 函数单独拿出来也是对的 —— 它在 hvm_exit.c 里排在策略引擎**之前**。
+        s.expect(KswordArkHvmFilterVmxCapabilityMsr(0x1B0UL, 0x1234567890ABCDEFULL) ==
+                     0x1234567890ABCDEFULL,
+                 L"an index outside the capability block is returned unchanged");
+    }
+}
+
 } // namespace
 
 int RunHvmEptSwitchTests() {
@@ -1915,6 +2186,8 @@ int RunHvmEptSwitchTests() {
     TestRefuseHelper(suite);
     TestPlanSwitch(suite);
     TestProgressLedger(suite);
+    TestVmxCapabilityMasks(suite);
+    TestVmxCapabilityFilter(suite);
     suite.report();
     return suite.failures();
 }

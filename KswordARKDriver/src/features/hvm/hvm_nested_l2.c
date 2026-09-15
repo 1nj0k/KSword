@@ -15,7 +15,9 @@ Environment:
 --*/
 
 #include "hvm_nested_l2.h"
+#include "driver/KswordArkHvmControls.h"
 #include "hvm_nested_bitmap.h"
+#include "hvm_nested_decode.h"
 #include "hvm_nested_ept.h"
 #include "hvm_resident.h"
 #include "hvm_exit.h"
@@ -59,10 +61,17 @@ Environment:
 #define KSW_L2_PRIMARY_CONTROLS 0x4002UL
 #define KSW_L2_EXCEPTION_BITMAP 0x4004UL
 #define KSW_L2_EXIT_CONTROLS 0x400CUL
+/* Exit control 15: let the processor answer the physical interrupt controller. */
+#define KSW_L2_EXIT_ACK_INTERRUPT 0x00008000UL
 #define KSW_L2_ENTRY_CONTROLS 0x4012UL
 #define KSW_L2_SECONDARY_CONTROLS 0x401EUL
 #define KSW_L2_EXIT_REASON 0x4402UL
 #define KSW_L2_EXIT_INTR_INFO 0x4404UL
+/* VM-entry interruption information: the event L1 asks us to deliver. */
+#define KSW_L2_ENTRY_INTR_INFO 0x4016UL
+/* Its two companions, needed only when re-delivering an interrupted event. */
+#define KSW_L2_ENTRY_INTR_ERROR 0x4018UL
+#define KSW_L2_ENTRY_INSTRUCTION_LENGTH 0x401AUL
 #define KSW_L2_EXIT_INTR_ERROR 0x4406UL
 #define KSW_L2_IDT_VECTORING_INFO 0x4408UL
 #define KSW_L2_IDT_VECTORING_ERROR 0x440AUL
@@ -82,6 +91,17 @@ Environment:
 
 /* Name the secondary control that turns on EPT for L2. */
 #define KSW_L2_SECONDARY_ENABLE_EPT 0x00000002UL
+/*
+ * Name the secondary control that lets L2 run unpaged or in real mode.
+ *
+ * Intel requires enable-EPT alongside it; a VMCS with one and not the other
+ * fails VM entry with nothing but an error number to explain it.
+ */
+#define KSW_L2_SECONDARY_UNRESTRICTED_GUEST 0x00000080UL
+/* Name the primary control that makes CR8 read and write a guest page. */
+#define KSW_L2_PRIMARY_USE_TPR_SHADOW 0x00200000UL
+/* Name the vmcs field holding the page that control points at. */
+#define KSW_L2_VIRTUAL_APIC_ADDRESS 0x2012UL
 /* Name the primary control that activates the secondary controls. */
 #define KSW_L2_PRIMARY_ACTIVATE_SECONDARY 0x80000000UL
 
@@ -135,8 +155,22 @@ static const ULONG g_KswordL2CopiedControlFields[] = {
     0x4004UL, 0x4006UL, 0x4008UL,
     /* Event injection. */
     0x4016UL, 0x4018UL, 0x401AUL,
-    /* TPR threshold. */
-    0x401CUL,
+    /*
+     * TPR shadow: the threshold and the page it is compared against.
+     *
+     * These two must travel together.  The threshold was copied here long
+     * before the address was, which was harmless only because the control that
+     * consumes them was never advertised - the moment "use TPR shadow" became
+     * advertisable, a copied threshold with an uncopied address would have sent
+     * the processor to read a virtual-APIC page at physical zero.  That is the
+     * same split that once made USE_MSR_BITMAPS live with no bitmap address,
+     * and it is invisible from every status bit.
+     *
+     * The address is one of L1's guest-physical addresses and goes into vmcs02
+     * unchanged, which is sound for the same reason the MSR-area addresses
+     * above it are: our EPT identity-maps RAM.
+     */
+    0x401CUL, 0x2012UL,
     /* TSC offset. */
     0x2010UL,
     /* Control-register masks and read shadows. */
@@ -243,6 +277,7 @@ KswordARKHvmNestedL2Enter(
      */
     if (nested->L2FuseTripped) {
         /* Return the refusal L1 can read a number from. */
+        nested->L2LastRefusalSite = 1UL;
         return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
     }
     /* Refuse an entry whose launch state does not match the instruction. */
@@ -259,6 +294,7 @@ KswordARKHvmNestedL2Enter(
         Context->Resource->Vmcs02Virtual == NULL ||
         Context->PhysWindow == NULL) {
         /* Return the exact unavailable-resource error. */
+        nested->L2LastRefusalSite = 2UL;
         return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
     }
     vmcs01Physical = (ULONGLONG)Context->Resource->VmcsPhysical.QuadPart;
@@ -291,6 +327,7 @@ KswordARKHvmNestedL2Enter(
                 &nested->ShadowEpt,
                 value))) {
             /* Return the exact unusable-EPT-pointer error. */
+            nested->L2LastRefusalSite = 3UL;
             return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
         }
         eptPointer = nested->ShadowEpt.ComposedEptPointer;
@@ -303,6 +340,7 @@ KswordARKHvmNestedL2Enter(
     /* Refuse rather than enter L2 without a hierarchy to run it under. */
     if (eptPointer == 0ULL) {
         /* Return the exact unusable-EPT-pointer error. */
+        nested->L2LastRefusalSite = 4UL;
         return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
     }
     /*
@@ -327,8 +365,60 @@ KswordARKHvmNestedL2Enter(
          * everything - but a missing *page* is not, because there is nothing
          * to point the control at.
          */
+        nested->L2LastRefusalSite = 5UL;
         return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
     }
+    /*
+     * The virtual-APIC page check, kept and switched off.
+     *
+     * Added alongside the TPR-shadow advertisement, refusing a zero or
+     * misaligned address on the grounds that the processor would otherwise
+     * treat physical page zero as a virtual APIC.  It became the only thing
+     * standing between VMware and its first VM entry, and it is wrong on its
+     * own terms: zero is four-kilobyte aligned and inside the physical-address
+     * width, so the architecture accepts it.  The check invents a rule the
+     * processor does not have.
+     *
+     * Left in place rather than deleted because the observation behind it is
+     * still unexplained and still worth returning to: VMware sets the TPR
+     * shadow control (vmcs12 primary = 0xB5A07DFA, bit 21 on) and, in every
+     * VMWRITE we captured, never writes 0x2012.  Turn this on to stop at that
+     * moment again.
+     *
+     * Off by default, so the address travels into vmcs02 through the copied
+     * control table like every other field L1 owns, and VM entry validates it
+     * the way it validates the rest.  The processor's error number then reaches
+     * L1 unchanged, which is both more accurate than one we made up and the
+     * answer L1 is written to handle.
+     */
+#define KSW_L2_ENFORCE_VIRTUAL_APIC_PAGE 0
+#if KSW_L2_ENFORCE_VIRTUAL_APIC_PAGE
+    if ((primary & KSW_L2_PRIMARY_USE_TPR_SHADOW) != 0UL) {
+        ULONGLONG virtualApic = 0ULL;
+
+        (void)KswordARKHvmNestedVmcs12Read(
+            vmcs12,
+            KSW_L2_VIRTUAL_APIC_ADDRESS,
+            &virtualApic);
+        /*
+         * Zero and misaligned are two sites on purpose: they mean opposite
+         * things about where the fault is.  Zero is also what a field reads
+         * when L1 never wrote it, because the cache has no never-written
+         * state; misaligned means the write did reach us and we are reading
+         * something wrong.
+         */
+        if (virtualApic == 0ULL) {
+            /* Return the exact missing-virtual-APIC-page error. */
+            nested->L2LastRefusalSite = 6UL;
+            return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
+        }
+        if ((virtualApic & 0xFFFULL) != 0ULL) {
+            /* Return the exact misaligned-virtual-APIC-page error. */
+            nested->L2LastRefusalSite = 8UL;
+            return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
+        }
+    }
+#endif
     /* Capture our host state while vmcs01 is still the loaded VMCS. */
     for (index = 0UL;
          index < RTL_NUMBER_OF(g_KswordL2HostFields);
@@ -346,6 +436,7 @@ KswordARKHvmNestedL2Enter(
     /* Load vmcs02 and make every subsequent access address it. */
     if (__vmx_vmptrld(&vmcs02Physical) != 0) {
         /* Return the exact control-field error for an unusable vmcs02. */
+        nested->L2LastRefusalSite = 7UL;
         return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
     }
     /* Host state is always ours, never L1's. */
@@ -365,6 +456,53 @@ KswordARKHvmNestedL2Enter(
             vmcs12,
             g_KswordL2GuestFields[index],
             &value);
+        /*
+         * What this loop hands vmcs02 for the IDTR base - see the field.
+         *
+         * Note the read is ignored: a miss leaves value at zero and the write
+         * below still happens, so a field the cache does not hold is actively
+         * zeroed in vmcs02 rather than left alone.  That is the one way this
+         * loop can destroy a base the processor itself put there.
+         */
+        if (g_KswordL2GuestFields[index] == 0x6818UL) {
+            ULONG region = 0UL;
+
+            nested->L2IdtrBaseLoadedLast = value;
+            nested->L2IdtrBaseLoadCount += 1UL;
+            if (value != 0ULL) {
+                nested->L2IdtrBaseLoadedNonZeroCount += 1UL;
+            }
+            /* A zero over a base the last exit still had is ours, not L2's. */
+            for (region = 0UL; region < 4UL; ++region) {
+                if (nested->L2Vmcs12Regions[region] != nested->CurrentVmcs) {
+                    continue;
+                }
+                if (value == 0ULL && nested->L2RegionIdtrBase[region] != 0ULL) {
+                    nested->L2RegionIdtrCacheLost[region] += 1UL;
+                    /* And the backing store's state right now - see the fields. */
+                    nested->L2IdtrLostEntryRip = 0ULL;
+                    /*
+                     * From vmcs12, not vmcs02: this loop has not reached the
+                     * RIP field yet, so vmcs02 still holds the previous exit's.
+                     * 0x681E is the guest RIP.
+                     */
+                    (void)KswordARKHvmNestedVmcs12Read(
+                        vmcs12,
+                        0x681EUL,
+                        &nested->L2IdtrLostEntryRip);
+                    nested->L2IdtrLostVmcs = nested->CurrentVmcs;
+                    nested->L2IdtrLostHeader = nested->RegionLastLoadHeader;
+                    nested->L2IdtrLostSerial = vmcs12->WriteSerial;
+                    nested->L2IdtrLostStoreFail = nested->RegionStoreFailCount;
+                    nested->L2IdtrLostLoadMiss = nested->RegionLoadMissCount;
+                    nested->L2IdtrLostRefused = nested->RegionLoadRefusedFields;
+                    nested->L2IdtrLostEntries = nested->RegionStoreEntries;
+                    nested->L2IdtrLostEvictions = nested->Vmcs12EvictionCount;
+                }
+                nested->L2RegionIdtrLoaded[region] = value;
+                break;
+            }
+        }
         KswordARKHvmNestedL2Write(g_KswordL2GuestFields[index], value);
     }
     /* Controls that cannot cost us control are L1's verbatim. */
@@ -401,24 +539,144 @@ KswordARKHvmNestedL2Enter(
         KswordARKHvmNestedL2ClampControl(
             primary | Context->Runtime->ActiveControls.Primary,
             Context->Runtime->ActiveControls.PrimaryCapability));
-    KswordARKHvmNestedL2Write(
-        KSW_L2_SECONDARY_CONTROLS,
-        KswordARKHvmNestedL2ClampControl(
-            secondary | Context->Runtime->ActiveControls.Secondary,
-            Context->Runtime->ActiveControls.SecondaryCapability));
+    {
+        /*
+         * L1 gets the secondary controls we advertised, and nothing else.
+         *
+         * The clamp below uses this processor's capability, which is what the
+         * hardware would allow - not what we told L1 it could have.  Those are
+         * different sets, and the gap is a control L1 may set and we never
+         * implemented.  "Advertised but not implemented" is a defect this code
+         * already guards against; this is the same defect mirrored, and it is
+         * worse, because nothing anywhere reports it.
+         *
+         * Measured: VMware asked for enable-VPID, which is not in
+         * KSWORD_ARK_HVM_VMX_PROC2_ALLOWED and which nothing here maintains.
+         * It survived the merge, and vmcs02 then carried enable-VPID with a
+         * VPID of zero - which the architecture forbids.  Every VM entry after
+         * that failed with "invalid control field", we handed the error back,
+         * and VMware died with "VM-entry failed; VMCS valid (error code 7)".
+         * Its guest had already drawn its boot menu, so the screen simply
+         * stopped: no countdown, no keystrokes, and a processor at full load.
+         *
+         * Our own bits are added after the mask, not before: they are what we
+         * need for the guest to run at all, and they are not L1's to ask for.
+         */
+        ULONG mergedSecondary = KswordARKHvmNestedL2ClampControl(
+            (secondary & KSWORD_ARK_HVM_VMX_PROC2_ALLOWED) |
+                Context->Runtime->ActiveControls.Secondary,
+            Context->Runtime->ActiveControls.SecondaryCapability);
+
+        /*
+         * Unrestricted guest without enable-EPT is an illegal pair that fails
+         * VM entry, exactly like virtual NMIs without NMI exiting.  Drop the
+         * dependent bit rather than send a control pair we did not verify into
+         * VMLAUNCH - the failure would arrive as a bare error number on a path
+         * where L1, not us, looks responsible.
+         *
+         * The clamp above can produce this on its own: L1 may legitimately ask
+         * for unrestricted guest while its own EPT bit is cleared by the
+         * capability clamp, and then the two disagree through no fault of L1's.
+         */
+        if ((mergedSecondary & KSW_L2_SECONDARY_ENABLE_EPT) == 0UL) {
+            mergedSecondary &= ~(ULONG)KSW_L2_SECONDARY_UNRESTRICTED_GUEST;
+        }
+        /*
+         * A guest with paging or protection off cannot be entered without it.
+         *
+         * The processor requires CR0.PE and CR0.PG to be one unless this
+         * control is set, so a vmcs02 carrying a real-mode guest without it is
+         * not a VMCS the hardware will accept - and the guest state is L1's,
+         * copied field by field from vmcs12, so this is about making the VMCS
+         * self-consistent rather than granting L1 anything.
+         *
+         * Measured need: VMware's launch arrived with guest CR0 = 0x30 (PE and
+         * PG both clear, the architectural reset state, CS:RIP = F000:FFF0) and
+         * a vmcs12 whose secondary controls were entirely zero - the merged
+         * value equalled our own set exactly.  Its guest is a BIOS starting in
+         * real mode; without this bit there is no legal way to run it.
+         *
+         * Conditional on the guest state rather than always on, because the bit
+         * changes what the processor accepts and nothing should change for the
+         * paged guests that make up every other entry.
+         */
+        {
+            ULONGLONG guestCr0 = 0ULL;
+
+            (void)KswordARKHvmNestedVmcs12Read(
+                vmcs12,
+                KSW_L2_GUEST_CR0,
+                &guestCr0);
+            if (((guestCr0 & 0x1ULL) == 0ULL ||
+                 (guestCr0 & 0x80000000ULL) == 0ULL) &&
+                (mergedSecondary & KSW_L2_SECONDARY_ENABLE_EPT) != 0UL) {
+                mergedSecondary |= KSW_L2_SECONDARY_UNRESTRICTED_GUEST;
+            }
+        }
+        KswordARKHvmNestedL2Write(
+            KSW_L2_SECONDARY_CONTROLS,
+            mergedSecondary);
+    }
     value = 0ULL;
     (void)KswordARKHvmNestedVmcs12Read(vmcs12, KSW_L2_EXIT_CONTROLS, &value);
+    /*
+     * Acknowledge-interrupt-on-exit (bit 15) passes through, and **must**.
+     *
+     * It was stripped here once, on the theory that the vector it reports is a
+     * host vector being handed to L1 as if it were L1's guest's.  VMware's
+     * monitor stopped dead:
+     *
+     *   MONITOR PANIC: VERIFY vmcore/monitor/common/platform/common/x86/irq.c:111
+     *
+     * Once L1 has asked for this control it reads the vector unconditionally,
+     * and an invalid one trips its own assertion.  A control L1 set cannot be
+     * quietly withheld - if it ever has to go, it has to go from what L1 is
+     * allowed to ask for, and that is not reachable either: the capability
+     * filter can only narrow within what the host offers and re-adds every
+     * must-be-one bit, of which this is one.
+     *
+     * The reading that prompted the attempt was misread.  The injected vector
+     * came from L2LastEntryIntrInfo, which is kept **per physical processor**
+     * while both of L1's virtual processors run on the same one - so it could
+     * not say which of them the injection belonged to.  Same mistake as the
+     * PIC mask and the region guard: a per-processor record answering a
+     * per-virtual-processor question.
+     */
     KswordARKHvmNestedL2Write(
         KSW_L2_EXIT_CONTROLS,
         KswordARKHvmNestedL2ClampControl(
             (ULONG)value | Context->Runtime->ActiveControls.Exit,
             Context->Runtime->ActiveControls.ExitCapability));
+    /*
+     * Entry controls are L1's alone - the union that is right everywhere else
+     * is wrong here.
+     *
+     * Pin, primary, secondary and exit controls decide who intercepts what and
+     * what host state an exit restores, so our bits have to survive.  Entry
+     * controls decide nothing of ours: every one of them describes the guest
+     * being entered, and that guest is L1's, copied field by field from
+     * vmcs12.  Carrying ours across states something about L1's guest that L1
+     * never said.
+     *
+     * "IA-32e mode guest" is where that turns fatal.  It is a description, not
+     * a permission: the processor requires CR0.PG and CR4.PAE when it is set.
+     * Ours is set because the guest we run is 64-bit Windows, so the union put
+     * it on a vmcs02 whose guest CR0 was 0x30 - VMware's BIOS at the reset
+     * vector, protection and paging both off - and VM entry failed with
+     * "invalid guest state" (exit reason 0x80000021, read back out of vmcs02).
+     * Every other bit is a load-this-guest-MSR request, and honouring one L1
+     * did not make loads a guest register out of a vmcs02 field L1 never
+     * wrote.
+     *
+     * The clamp still applies, so the architectural reserved bits are set and
+     * nothing L1 asked for outruns this processor.
+     */
     value = 0ULL;
     (void)KswordARKHvmNestedVmcs12Read(vmcs12, KSW_L2_ENTRY_CONTROLS, &value);
     KswordARKHvmNestedL2Write(
         KSW_L2_ENTRY_CONTROLS,
         KswordARKHvmNestedL2ClampControl(
-            (ULONG)value | Context->Runtime->ActiveControls.Entry,
+            (ULONG)value,
             Context->Runtime->ActiveControls.EntryCapability));
     /*
      * Point vmcs02 at bitmaps that actually exist.
@@ -509,6 +767,256 @@ KswordARKHvmNestedL2Enter(
         (ULONG)KswordARKHvmNestedL2Read(KSW_L2_PRIMARY_CONTROLS);
     nested->LastEntrySecondaryControls =
         (ULONG)KswordARKHvmNestedL2Read(KSW_L2_SECONDARY_CONTROLS);
+    /*
+     * Which vmcs12 this entry came from, and the guest state it carries.
+     *
+     * Without the physical address there is no way to tell afterwards which of
+     * the pooled vmcs12 structures the entry used, and the pool keeps changing
+     * underneath.  Without the guest state there is no way to tell an entry we
+     * built wrongly from one L1 configured to die.
+     */
+    nested->LastEntryVmcs12Physical = nested->CurrentVmcs;
+    /* And which vCPU of L1's this entry belongs to - see the field comment. */
+    {
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 4UL; ++slot) {
+            if (nested->L2Vmcs12Regions[slot] == nested->CurrentVmcs) {
+                break;
+            }
+            if (nested->L2Vmcs12Regions[slot] == 0ULL) {
+                nested->L2Vmcs12Regions[slot] = nested->CurrentVmcs;
+                break;
+            }
+        }
+        if (slot < 4UL) {
+            nested->L2Vmcs12RegionEntries[slot] += 1ULL;
+            /*
+             * Read from vmcs02 rather than from LastEntryGuestRip: that field
+             * is assigned a few lines below, so using it here would record the
+             * *previous* entry's address against this region.
+             */
+            nested->L2Vmcs12RegionLastRip[slot] =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+        } else {
+            nested->L2Vmcs12RegionMissCount += 1ULL;
+        }
+    }
+    nested->LastEntryPinControls =
+        (ULONG)KswordARKHvmNestedL2Read(KSW_L2_PIN_CONTROLS);
+    nested->LastEntryExitControls =
+        (ULONG)KswordARKHvmNestedL2Read(KSW_L2_EXIT_CONTROLS);
+    nested->LastEntryEntryControls =
+        (ULONG)KswordARKHvmNestedL2Read(KSW_L2_ENTRY_CONTROLS);
+    nested->LastEntryEptPointer =
+        KswordARKHvmNestedL2Read(KSW_L2_EPT_POINTER);
+    nested->LastEntryGuestCr0 =
+        KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR0);
+    nested->LastEntryGuestCr4 =
+        KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR4);
+    nested->LastEntryGuestRip =
+        KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+    nested->LastEntryGuestCsAr =
+        (ULONG)KswordARKHvmNestedL2Read(0x4816UL);
+    nested->LastEntryGuestActivity =
+        (ULONG)KswordARKHvmNestedL2Read(KSW_L2_GUEST_ACTIVITY_STATE);
+    /*
+     * Whether this entry is carrying an event L1 asked to be delivered.
+     *
+     * Read back from vmcs02 rather than from vmcs12, so it counts what the
+     * processor will act on.  An injection L1 requested and we failed to
+     * propagate is invisible everywhere else: L1 believes its guest took the
+     * interrupt, the guest never did, and both keep running.
+     */
+    {
+        const ULONGLONG entryEvent = KswordARKHvmNestedL2Read(0x4016UL);
+
+        ULONG region = 0UL;
+
+        /* Kept whether valid or not: "nothing was injected" is an answer. */
+        nested->L2LastEntryIntrInfo = (ULONG)entryEvent;
+        /* And kept per region, because the per-processor copy cannot say whose. */
+        for (region = 0UL; region < 4UL; ++region) {
+            if (nested->L2Vmcs12Regions[region] == nested->CurrentVmcs) {
+                nested->L2Vmcs12RegionLastEntryIntrInfo[region] =
+                    (ULONG)entryEvent;
+                /*
+                 * This path is the merge from vmcs12, so whatever the field
+                 * holds now is L1's, not a re-delivery of ours.
+                 */
+                nested->L2Vmcs12RegionEntryWasRedeliver[region] = FALSE;
+                nested->L2Vmcs12RegionLastEntryRflags[region] =
+                    KswordARKHvmNestedL2Read(0x6820UL);
+                nested->L2Vmcs12RegionLastEntryIntbl[region] =
+                    (ULONG)KswordARKHvmNestedL2Read(0x4824UL);
+                break;
+            }
+        }
+        /*
+         * What resumed a halted L2, and where it lands - see the fields.
+         *
+         * Reason 12 is HLT.  The trail's newest entry is the address that HLT
+         * exited from, and LastEntryGuestRip is where this entry resumes; the
+         * two being equal means the halt survived, and differing means it did
+         * not.
+         */
+        if (region < 4UL &&
+            nested->L2Vmcs12RegionLastExitReason[region] == 12UL) {
+            const ULONG newest =
+                (nested->L2Vmcs12RegionTrailIndex[region] - 1UL) & 0x3UL;
+
+            if ((entryEvent & 0x80000000ULL) != 0ULL) {
+                nested->L2ResumeAfterHaltWithEvent += 1ULL;
+            } else {
+                nested->L2ResumeAfterHaltNoEvent += 1ULL;
+            }
+            nested->L2ResumeAfterHaltRip = nested->LastEntryGuestRip;
+            nested->L2ResumeAfterHaltExitRip =
+                nested->L2Vmcs12RegionTrailRip[region][newest];
+        }
+        /*
+         * The whole distribution, and whether L2 was halted - see the fields.
+         *
+         * LastEntryGuestActivity was read out of vmcs02 just above, so it is
+         * the state the processor is about to resume in: one means halted.
+         */
+        if (nested->LastEntryGuestActivity == 1UL) {
+            nested->L2EntryHaltedCount += 1ULL;
+        }
+        if ((entryEvent & 0x80000000ULL) != 0ULL) {
+            nested->L2InjectVectorCount[(ULONG)(entryEvent & 0xFFULL)] += 1UL;
+            if (region < 4UL) {
+                nested->L2RegionInjectVector[region]
+                    [(ULONG)(entryEvent & 0xFFULL)] += 1UL;
+            }
+            /* Bit 13 of the CS access rights is long mode - see the field. */
+            if ((nested->LastEntryGuestCsAr & 0x2000UL) != 0UL) {
+                nested->L2InjectVector64[(ULONG)(entryEvent & 0xFFULL)] += 1UL;
+            }
+            if (nested->LastEntryGuestActivity == 1UL) {
+                nested->L2InjectWhileHaltedCount += 1ULL;
+            }
+            nested->L2InjectionCount += 1ULL;
+            if (region < 4UL) {
+                nested->L2Vmcs12RegionInjections[region] += 1ULL;
+            }
+            /*
+             * And the mode it is landing in - see the field comment.  Taken
+             * from the fields captured just above, which were read out of
+             * vmcs02 and are therefore what the processor is about to use.
+             */
+            if (nested->L2InjectStateIndex < 8UL) {
+                const ULONG slot = nested->L2InjectStateIndex;
+
+                nested->L2InjectStateVector[slot] = (ULONG)entryEvent;
+                nested->L2InjectStateCr0[slot] =
+                    (ULONG)nested->LastEntryGuestCr0;
+                nested->L2InjectStateRflags[slot] =
+                    (ULONG)KswordARKHvmNestedL2Read(0x6820UL);
+                nested->L2InjectStateCsAr[slot] = nested->LastEntryGuestCsAr;
+                nested->L2InjectStateIndex += 1UL;
+            }
+        }
+        /*
+         * And whether this entry is the triple fault's shape - see the fields.
+         *
+         * 0x4812 is the IDTR limit, 0x6818 its base, and bit 13 of the CS
+         * access rights is the long-mode bit.  All read back from vmcs02, so
+         * this is the state the processor is about to run in rather than
+         * anything L1 asked for.
+         */
+        if ((nested->LastEntryGuestCsAr & 0x2000UL) != 0UL &&
+            KswordARKHvmNestedL2Read(0x6818UL) == 0ULL &&
+            (KswordARKHvmNestedL2Read(0x4812UL) & 0xFFFFULL) == 0x0FFFULL) {
+            nested->L2Idt0In64Count += 1ULL;
+            /*
+             * The same field out of all three stores it passes through.
+             *
+             * Cheap enough to do on every one of these - there have only ever
+             * been fourteen - and it is the whole answer: whichever store
+             * still holds the base, the loss is downstream of it.
+             */
+            nested->L2Idt0In64FromCache = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(
+                vmcs12,
+                0x6818UL,
+                &nested->L2Idt0In64FromCache);
+            nested->L2Idt0In64FromPool = 0ULL;
+            if (nested->Vmcs12Pool != NULL) {
+                ULONG pooled = 0UL;
+
+                for (pooled = 0UL;
+                     pooled < nested->Vmcs12Pool->Count;
+                     ++pooled) {
+                    if (nested->Vmcs12Pool->Slots[pooled].PhysicalAddress !=
+                            nested->CurrentVmcs) {
+                        continue;
+                    }
+                    (void)KswordARKHvmNestedVmcs12Read(
+                        &nested->Vmcs12Pool->Slots[pooled],
+                        0x6818UL,
+                        &nested->L2Idt0In64FromPool);
+                    break;
+                }
+            }
+            nested->L2Idt0In64FromRegion = 0ULL;
+            nested->L2Idt0In64RegionEntries = 0UL;
+            /* And what this processor last saved for this region. */
+            nested->L2Idt0In64LastSaved = 0ULL;
+            {
+                ULONG known = 0UL;
+
+                for (known = 0UL; known < 4UL; ++known) {
+                    if (nested->L2Vmcs12Regions[known] == nested->CurrentVmcs) {
+                        nested->L2Idt0In64LastSaved =
+                            nested->L2RegionIdtrBase[known];
+                        break;
+                    }
+                }
+            }
+            {
+                volatile VOID* mapped = NULL;
+
+                if (nested->PhysWindow != NULL &&
+                    nested->CurrentVmcs != 0ULL &&
+                    KswordARKHvmPhysWindowMap(
+                        nested->PhysWindow,
+                        nested->CurrentVmcs,
+                        4096UL,
+                        &mapped) == KSW_HVM_PHYS_WINDOW_OK &&
+                    mapped != NULL) {
+                    volatile ULONGLONG* words = (volatile ULONGLONG*)mapped;
+                    const ULONGLONG header = words[1];
+
+                    /* Same layout the spill writes: magic and count, then pairs. */
+                    if ((ULONG)(header & 0xFFFFFFFFULL) == 0x5657534BUL) {
+                        const ULONGLONG count = header >> 32;
+                        ULONGLONG entry = 0ULL;
+
+                        nested->L2Idt0In64RegionEntries = (ULONG)count;
+                        for (entry = 0ULL; entry < count && entry < 254ULL;
+                             ++entry) {
+                            const ULONGLONG base = (24ULL + entry * 16ULL) / 8ULL;
+
+                            if ((ULONG)words[base] == 0x6818UL) {
+                                nested->L2Idt0In64FromRegion = words[base + 1ULL];
+                                break;
+                            }
+                        }
+                    }
+                    KswordARKHvmPhysWindowUnmap(nested->PhysWindow);
+                }
+            }
+            if ((entryEvent & 0x80000000ULL) != 0ULL) {
+                nested->L2Idt0In64InjectedCount += 1ULL;
+                nested->L2Idt0In64Rip = nested->LastEntryGuestRip;
+                nested->L2Idt0In64Vmcs = nested->CurrentVmcs;
+                nested->L2Idt0In64Entry = (ULONG)entryEvent;
+                nested->L2Idt0In64Rflags =
+                    (ULONG)KswordARKHvmNestedL2Read(0x6820UL);
+            }
+        }
+    }
     nested->LastEntryMsrBitmap =
         KswordARKHvmNestedL2Read(KSW_L2_MSR_BITMAP);
     nested->LastEntryIoBitmapA =
@@ -572,6 +1080,113 @@ KswordARKHvmNestedL2Enter(
 #define KSW_L2_OWNER_US_NEEDS_SERVICE 2UL
 
 /*
+ * Deliver again the event whose delivery this exit interrupted.
+ *
+ * A VM exit can happen while the processor is still delivering an event - it
+ * is reading the IDT or pushing the fault frame when the access faults.  The
+ * event is then *not* delivered, and the processor says so in the
+ * IDT-vectoring information field.  Whoever handles the exit is the one that
+ * has to deliver it again; nothing else in the machine remembers it.
+ *
+ * Only the exits this driver answers itself need this.  A reflected exit
+ * carries the field into vmcs12 and L1 does the re-delivery, which is what
+ * real hardware would report to it.  An exit we resolve and resume from has no
+ * L1 in the loop at all - and that is the overwhelming majority: composing a
+ * shadow EPT leaf resolves 99% of L2's exits, and a cold shadow hierarchy
+ * faults exactly where event delivery touches memory.
+ *
+ * What it cost to not do this: L1 acknowledges its virtual interrupt
+ * controller *before* asking for the injection, so an event destroyed here is
+ * an interrupt already taken off the controller with no handler and therefore
+ * no EOI.  An 8259 will not assert INTR again while an interrupt of the same
+ * or lower priority is in service, and IRQ 0 is the highest priority there
+ * is.  Measured in the guest: ISR stuck at 0x03, IRR stuck at 0x41, BIOS tick
+ * frozen for the entire run, zero injections requested in a 40-second window
+ * because from L1's side there was nothing left to ask for.  Two lost
+ * interrupts, early, and the machine never took another one.
+ *
+ * Not done here: merging a fault that arrived during delivery into #DF.  That
+ * rule applies to an exception raised while delivering another exception, and
+ * exception exits are L1's - they never reach this path.  If that routing ever
+ * changes, this is the second half that has to come with it.
+ */
+static void
+KswordARKHvmNestedL2RedeliverInterruptedEvent(
+    _Inout_ KSW_HVM_NESTED_VCPU* Nested
+    )
+{
+    const ULONGLONG vectoring =
+        KswordARKHvmNestedL2Read(KSW_L2_IDT_VECTORING_INFO);
+    ULONGLONG entry = 0ULL;
+    ULONG type = 0UL;
+
+    if ((vectoring & 0x80000000ULL) == 0ULL) {
+        return;
+    }
+    Nested->L2IdtVectoringSeenCount += 1ULL;
+
+    /*
+     * Vector, type and the error-code flag carry over unchanged; that is bits
+     * 11:0.  Bit 12 is the NMI-unblocking report, which exists only on exit
+     * and is reserved on entry, and bits 30:13 are reserved in both.  Copying
+     * the field wholesale would set a reserved bit and fail the entry.
+     */
+    entry = (vectoring & 0x00000FFFULL) | 0x80000000ULL;
+    type = (ULONG)((vectoring >> 8) & 0x7ULL);
+
+    if ((entry & 0x00000800ULL) != 0ULL) {
+        KswordARKHvmNestedL2Write(
+            KSW_L2_ENTRY_INTR_ERROR,
+            KswordARKHvmNestedL2Read(KSW_L2_IDT_VECTORING_ERROR));
+    }
+    /*
+     * Types 4, 5 and 6 are the software-originated ones - INT n, INT1, INT3
+     * and INTO.  Re-delivering those needs the length of the instruction that
+     * raised them, so the processor can set the return address past it; a
+     * hardware interrupt or fault carries no length and must not have one.
+     */
+    if (type == 4UL || type == 5UL || type == 6UL) {
+        KswordARKHvmNestedL2Write(
+            KSW_L2_ENTRY_INSTRUCTION_LENGTH,
+            KswordARKHvmNestedL2Read(KSW_L2_EXIT_INSTRUCTION_LENGTH));
+    }
+    /*
+     * Put CR2 back before re-delivering.
+     *
+     * A page fault carries its address in CR2, not in the VMCS, so a
+     * re-delivered #PF is only as good as CR2 still being what it was when the
+     * delivery was interrupted.  Anything this driver did in between - a fault
+     * of its own in root mode, the emulator arming a #PF - has overwritten it,
+     * and the guest would be handed an address that is ours.
+     *
+     * Restored for every re-delivery rather than only for vector 14: writing
+     * back the value the processor already had is a no-op for every other
+     * event, and a condition here would be one more thing to get wrong.
+     */
+    __writecr2((ULONG_PTR)Nested->L2ExitCr2);
+    KswordARKHvmNestedL2Write(KSW_L2_ENTRY_INTR_INFO, entry);
+    Nested->L2IdtVectoringLastInfo = (ULONG)vectoring;
+    Nested->L2IdtVectoringReinjectedCount += 1ULL;
+    Nested->L2IdtVectoringLastExitOrdinal = Nested->L2ExitTotalCount;
+    /*
+     * Mark the field as ours for this region, so a fault on the next entry can
+     * say whether it was L1's injection or our re-delivery.  Cleared again by
+     * the next merge from vmcs12.
+     */
+    {
+        ULONG region = 0UL;
+
+        for (region = 0UL; region < 4UL; ++region) {
+            if (Nested->L2Vmcs12Regions[region] == Nested->CurrentVmcs) {
+                Nested->L2Vmcs12RegionEntryWasRedeliver[region] = TRUE;
+                Nested->L2Vmcs12RegionLastEntryIntrInfo[region] = (ULONG)entry;
+                break;
+            }
+        }
+    }
+}
+
+/*
  * Decide who owns one L2 exit, and if it is ours, whether anything remains.
  *
  * Two questions, not one.  Ownership asks whether this exit happened because
@@ -592,6 +1207,53 @@ KswordARKHvmNestedL2ExitOwner(
     KSW_HVM_NESTED_VCPU* nested = &Context->Nested;
 
     switch (ExitReason) {
+    case 0UL: {
+        /*
+         * An NMI we sent ourselves is ours, wherever it lands.
+         *
+         * We broadcast an NMI to pull sibling processors out of non-root so
+         * their stale translations go with the VM entry that follows.  A
+         * sibling running L2 takes that NMI as an ordinary exception-or-NMI
+         * exit, and reflecting it hands L1 a physical NMI that never happened
+         * to its guest.  VMware's answer to one is to pass it to the host, so
+         * the interrupt we created for our own bookkeeping arrives at Windows
+         * with nothing to attribute it to - bugcheck 0x80, reproduced twice,
+         * about twenty seconds into a guest boot and never before L2 actually
+         * ran.  The ledger entry is also left unclaimed, so the next genuine
+         * NMI on that processor is swallowed in its place.
+         *
+         * Only NMIs, and only credited ones.  An exception - L1 sets an
+         * exception bitmap and its guest faults constantly - stays L1's, and
+         * so does an NMI nobody in this driver asked for.
+         */
+        const ULONGLONG interruptionInfo =
+            KswordARKHvmNestedL2Read(KSW_L2_EXIT_INTR_INFO);
+
+        /* Which exception, and where - see the ring's field comment. */
+        {
+            const ULONG slot = nested->L2ExceptionRingIndex & 0x7UL;
+
+            nested->L2ExceptionInfoRing[slot] = (ULONG)interruptionInfo;
+            nested->L2ExceptionErrorRing[slot] =
+                (ULONG)KswordARKHvmNestedL2Read(KSW_L2_EXIT_INTR_ERROR);
+            nested->L2ExceptionRipRing[slot] =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+            /* 0x802 is the guest CS selector. */
+            nested->L2ExceptionCsRing[slot] =
+                (ULONG)KswordARKHvmNestedL2Read(0x802UL);
+            nested->L2ExceptionRingIndex += 1UL;
+        }
+
+        if ((interruptionInfo & 0x80000000ULL) != 0ULL &&
+            ((interruptionInfo >> 8) & 0x7ULL) == 2ULL &&
+            KswordARKHvmResidentClaimTlbNmi(Context->ApicId)) {
+            nested->L2NmiClaimedCount += 1ULL;
+            /* Report it as ours; the VM entry that follows is the flush. */
+            return KSW_L2_OWNER_US_RESOLVED;
+        }
+        /* Report every other exception or NMI as L1's. */
+        return KSW_L2_OWNER_L1;
+    }
     case 48UL: {
         /*
          * An EPT violation is ours exactly when composing the leaf resolves
@@ -600,9 +1262,65 @@ KswordARKHvmNestedL2ExitOwner(
          */
         const ULONGLONG guestPhysical =
             KswordARKHvmNestedL2Read(KSW_L2_GUEST_PHYSICAL_ADDRESS);
-        const ULONG access =
-            (ULONG)(KswordARKHvmNestedL2Read(KSW_L2_EXIT_QUALIFICATION) &
-                0x7ULL);
+        const ULONGLONG qualification =
+            KswordARKHvmNestedL2Read(KSW_L2_EXIT_QUALIFICATION);
+        const ULONG access = (ULONG)(qualification & 0x7ULL);
+
+        /*
+         * Device registers start above where this guest's RAM ends.  See the
+         * field comment for why this is a probe threshold and not a boundary.
+         */
+        const BOOLEAN isDeviceSpace =
+            (guestPhysical >= 0xC0000000ULL) ? TRUE : FALSE;
+        /*
+         * And which of the two interrupt-hardware pages, if either.
+         *
+         * Two rather than the whole device range because these are the only
+         * two where composing a leaf silently disarms the guest's timer - see
+         * the field comment.  Anything else in device space is a device L1
+         * emulates and the reflected/composed totals already cover it.
+         */
+        const ULONG apicPage =
+            ((guestPhysical & ~0xFFFULL) == 0xFEC00000ULL) ? 1UL :
+            (((guestPhysical & ~0xFFFULL) == 0xFEE00000ULL) ? 2UL :
+             (((guestPhysical & ~0xFFFULL) == 0xFED00000ULL) ? 3UL : 0UL));
+
+        if (apicPage != 0UL) {
+            const BOOLEAN isWrite = ((qualification & 0x2ULL) != 0ULL);
+
+            nested->L2ApicMmio[apicPage - 1UL][0] += 1UL;
+            /* Which register, for the two pages a tick device lives on. */
+            if (apicPage == 3UL) {
+                if (isWrite) {
+                    nested->L2HpetWrites += 1ULL;
+                } else {
+                    nested->L2HpetReads += 1ULL;
+                }
+            } else if (apicPage == 2UL && isWrite) {
+                if ((guestPhysical & 0xFFFULL) == 0x320ULL) {
+                    nested->L2ApicTimerLvtWrites += 1ULL;
+                } else if ((guestPhysical & 0xFFFULL) == 0x380ULL) {
+                    nested->L2ApicTimerCountWrites += 1ULL;
+                }
+            }
+            /*
+             * A write to offset 0xB0 of the local APIC page is the xAPIC
+             * end-of-interrupt - see the field.  Qualification bit 1 is the
+             * write flag.
+             */
+            if (apicPage == 2UL &&
+                (guestPhysical & 0xFFFULL) == 0xB0ULL &&
+                (qualification & 0x2ULL) != 0ULL) {
+                nested->L2EoiMmioCount += 1ULL;
+            }
+        }
+        /* Keep the address and the access, whatever is decided below. */
+        nested->L2LastEptGuestPhysical = guestPhysical;
+        nested->L2LastEptQualification = qualification;
+        if (isDeviceSpace) {
+            nested->L2LastMmioGuestPhysical = guestPhysical;
+            nested->L2LastMmioQualification = qualification;
+        }
 
         if (!nested->ShadowEpt.Active) {
             /*
@@ -615,6 +1333,8 @@ KswordARKHvmNestedL2ExitOwner(
              * resuming re-executes the same access against the same leaf, and
              * the processor faults again with no error and no progress.
              */
+            nested->L2LastEptDisposition = 3UL;
+            if (isDeviceSpace) { nested->L2LastMmioDisposition = 3UL; }
             return KSW_L2_OWNER_US_NEEDS_SERVICE;
         }
         if (KswordARKHvmNestedEptFill(
@@ -624,11 +1344,179 @@ KswordARKHvmNestedL2ExitOwner(
                 guestPhysical,
                 access)) {
             /* Report the satisfied violation as needing nothing further. */
+            nested->L2LastEptDisposition = 1UL;
+            if (isDeviceSpace) {
+                nested->L2LastMmioDisposition = 1UL;
+                nested->L2MmioComposedCount += 1ULL;
+            }
+            if (apicPage != 0UL) {
+                nested->L2ApicMmio[apicPage - 1UL][1] += 1UL;
+            }
             return KSW_L2_OWNER_US_RESOLVED;
         }
         /* Report the refused violation as L1's. */
+        nested->L2LastEptDisposition = 2UL;
+        if (isDeviceSpace) {
+            nested->L2LastMmioDisposition = 2UL;
+            nested->L2MmioReflectedCount += 1ULL;
+        }
+        if (apicPage != 0UL) {
+            nested->L2ApicMmio[apicPage - 1UL][2] += 1UL;
+        }
         return KSW_L2_OWNER_L1;
     }
+    case 2UL: {
+        /*
+         * A triple fault is L1's - it is the one that resets the processor -
+         * but the scene has to be copied out first.
+         *
+         * Reflecting comes second because L1's response is to reset the vCPU,
+         * and after that nothing about how the guest got here exists anywhere.
+         * See the field comment for why the first one is the only one kept.
+         */
+        if (nested->L2TripleFaultCount == 0ULL) {
+            ULONG back = 0UL;
+
+            nested->L2TripleFaultRip =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+            nested->L2TripleFaultCr0 =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR0);
+            nested->L2TripleFaultCr3 = KswordARKHvmNestedL2Read(0x6802UL);
+            nested->L2TripleFaultCr4 =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR4);
+            nested->L2TripleFaultEfer = KswordARKHvmNestedL2Read(0x2806UL);
+            nested->L2TripleFaultCsAr =
+                (ULONG)KswordARKHvmNestedL2Read(0x4816UL);
+            nested->L2TripleFaultActivity =
+                (ULONG)KswordARKHvmNestedL2Read(KSW_L2_GUEST_ACTIVITY_STATE);
+            /*
+             * The four exits before this one, newest first.  The ring index
+             * already counts this exit, so step back from it.
+             */
+            for (back = 0UL; back < 4UL; ++back) {
+                const ULONG slot =
+                    (nested->L2ExitRingIndex - 1UL - back) & 0xFUL;
+
+                nested->L2TripleFaultPrevRip[back] =
+                    nested->L2ExitRipRing[slot];
+                nested->L2TripleFaultPrevReason[back] =
+                    nested->L2ExitReasonRing[slot];
+            }
+            nested->L2TripleFaultExitOrdinal = nested->L2ExitTotalCount;
+            nested->L2TripleFaultReinjectOrdinal =
+                nested->L2IdtVectoringLastExitOrdinal;
+            nested->L2TripleFaultLastVectoringInfo =
+                nested->L2IdtVectoringLastInfo;
+            /*
+             * The delivery this fault is about, taken from **this region's**
+             * record.  The per-processor one is whichever of L1's processors
+             * entered last, which is not necessarily the one that died.
+             */
+            {
+                ULONG region = 0UL;
+
+                nested->L2TripleFaultEntryIntrInfo = 0UL;
+                nested->L2TripleFaultEntryWasRedeliver = 0UL;
+                nested->L2TripleFaultEntryRflags = 0ULL;
+                nested->L2TripleFaultEntryIntbl = 0UL;
+                for (region = 0UL; region < 4UL; ++region) {
+                    if (nested->L2Vmcs12Regions[region] ==
+                            nested->CurrentVmcs) {
+                        nested->L2TripleFaultEntryIntrInfo =
+                            nested->L2Vmcs12RegionLastEntryIntrInfo[region];
+                        nested->L2TripleFaultEntryWasRedeliver =
+                            nested->L2Vmcs12RegionEntryWasRedeliver[region]
+                                ? 1UL : 0UL;
+                        nested->L2TripleFaultEntryRflags =
+                            nested->L2Vmcs12RegionLastEntryRflags[region];
+                        nested->L2TripleFaultEntryIntbl =
+                            nested->L2Vmcs12RegionLastEntryIntbl[region];
+                        break;
+                    }
+                }
+            }
+            nested->L2TripleFaultIdtVectoring =
+                (ULONG)KswordARKHvmNestedL2Read(KSW_L2_IDT_VECTORING_INFO);
+            nested->L2TripleFaultRsp =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_RSP);
+            /*
+             * The three tables the delivery had to read, taken from vmcs02 -
+             * what the processor actually used - and compared field by field
+             * against what L1 wrote in vmcs12.  See the field comment.
+             */
+            {
+                static const ULONG fields[8] = {
+                    0x6818UL,  /* IDTR base    */
+                    0x4812UL,  /* IDTR limit   */
+                    0x6816UL,  /* GDTR base    */
+                    0x4810UL,  /* GDTR limit   */
+                    0x6814UL,  /* TR base      */
+                    0x480EUL,  /* TR limit     */
+                    0x481EUL,  /* TR access    */
+                    0x080EUL   /* TR selector  */
+                };
+                ULONG which = 0UL;
+
+                nested->L2TripleFaultDescMismatch = 0UL;
+                for (which = 0UL; which < 8UL; ++which) {
+                    ULONGLONG fromL1 = 0ULL;
+                    const ULONGLONG loaded =
+                        KswordARKHvmNestedL2Read(fields[which]);
+
+                    if (!NT_SUCCESS(KswordARKHvmNestedVmcs12Read(
+                            &nested->Vmcs12, fields[which], &fromL1)) ||
+                        fromL1 != loaded) {
+                        nested->L2TripleFaultDescMismatch |= (1UL << which);
+                    }
+                }
+                nested->L2TripleFaultIdtrBase =
+                    KswordARKHvmNestedL2Read(0x6818UL);
+                nested->L2TripleFaultGdtrBase =
+                    KswordARKHvmNestedL2Read(0x6816UL);
+                nested->L2TripleFaultTrBase =
+                    KswordARKHvmNestedL2Read(0x6814UL);
+                nested->L2TripleFaultIdtrLimit =
+                    (ULONG)KswordARKHvmNestedL2Read(0x4812UL);
+                nested->L2TripleFaultGdtrLimit =
+                    (ULONG)KswordARKHvmNestedL2Read(0x4810UL);
+                nested->L2TripleFaultTrLimit =
+                    (ULONG)KswordARKHvmNestedL2Read(0x480EUL);
+                nested->L2TripleFaultTrAr =
+                    (ULONG)KswordARKHvmNestedL2Read(0x481EUL);
+            }
+            /* 0x4818 is the guest SS access rights. */
+            nested->L2TripleFaultSsAr =
+                KswordARKHvmNestedL2Read(0x4818UL);
+        }
+        nested->L2TripleFaultCount += 1ULL;
+        /* Report the triple fault as L1's. */
+        return KSW_L2_OWNER_L1;
+    }
+    case 1UL:
+        /*
+         * An external interrupt during L2 is L1's, and this one is not allowed
+         * to fall through to the default.
+         *
+         * Every other reason reaches the default and is reflected because
+         * reflecting is the conservative direction - the cost of guessing wrong
+         * is a spurious exit L1 resumes from.  Here the cost is different in
+         * kind.  L1 may set "acknowledge interrupt on exit", and then the
+         * processor has already taken the vector off the interrupt controller
+         * by the time we look at it: nothing will ever re-deliver it.  Handling
+         * such an exit ourselves does not cost L1 an exit, it destroys an
+         * interrupt, and the symptom is a hang with nothing written down.
+         *
+         * Counted, because this is the first of the two places an interrupt
+         * bound for L1's guest can go missing, and the other one cannot be
+         * read without knowing whether anything arrived here at all.
+         *
+         * We never request external-interrupt exiting for ourselves, so a
+         * reason of one can only exist because L1 asked for it.  Stating that
+         * here rather than leaning on the default is the point: someone adding
+         * a case for their own reasons should have to read this first.
+         */
+        nested->L2ExternalInterruptCount += 1ULL;
+        return KSW_L2_OWNER_L1;
     case 18UL:
         /*
          * VMCALL from L2 is L1's.
@@ -652,6 +1540,113 @@ KswordARKHvmNestedL2ExitOwner(
         const ULONG port = (ULONG)((qualification >> 16) & 0xFFFFULL);
         const ULONG bytes = (ULONG)((qualification & 0x7ULL) + 1ULL);
 
+        /* Record which device this was, before deciding whose exit it is. */
+        {
+            const ULONG slot =
+                (port == 0x60UL || port == 0x64UL) ? 0UL :
+                ((port >= 0x170UL && port <= 0x177UL) || port == 0x376UL) ? 1UL :
+                ((port >= 0x1F0UL && port <= 0x1F7UL) || port == 0x3F6UL) ? 2UL :
+                (port >= 0x3B0UL && port <= 0x3DFUL) ? 3UL :
+                (port >= 0x3F8UL && port <= 0x3FFUL) ? 4UL :
+                (port >= 0x40UL && port <= 0x43UL) ? 5UL :
+                (port == 0x70UL || port == 0x71UL) ? 6UL : 7UL;
+
+            nested->L2PortCounts[slot] += 1ULL;
+            /*
+             * The interrupt controller specifically, with the byte written.
+             *
+             * 0x20/0x21 are the master PIC's command and data ports, 0xA0/0xA1
+             * the slave's.  An OUT carries its data in AL, which is the low
+             * byte of the frame's RAX - string forms carry it in memory
+             * instead, and are excluded rather than silently mis-read
+             * (qualification bit 4 marks a string instruction).
+             */
+            if (port >= 0x40UL && port <= 0x43UL &&
+                (qualification & 0x8ULL) == 0ULL &&
+                (qualification & 0x10ULL) == 0ULL &&
+                Frame != NULL) {
+                nested->L2PitWriteTotal += 1ULL;
+                if (nested->L2PitWriteIndex < 16UL) {
+                    nested->L2PitWrites[nested->L2PitWriteIndex] =
+                        (port << 16) | (ULONG)(Frame->Rax & 0xFFULL);
+                    nested->L2PitWriteIndex += 1UL;
+                }
+            }
+            if ((port == 0x20UL || port == 0x21UL ||
+                 port == 0xA0UL || port == 0xA1UL) &&
+                (qualification & 0x8ULL) == 0ULL &&
+                (qualification & 0x10ULL) == 0ULL &&
+                Frame != NULL) {
+                const ULONG datum = (ULONG)(Frame->Rax & 0xFFULL);
+
+                nested->L2PicWriteTotal += 1ULL;
+                if (nested->L2PicWriteIndex < 16UL) {
+                    nested->L2PicWrites[nested->L2PicWriteIndex] =
+                        (port << 16) | datum;
+                    nested->L2PicWriteIndex += 1UL;
+                }
+                /*
+                 * A write to the data port with no initialisation in progress
+                 * is OCW1, the mask.  Keeping the latest is the whole point -
+                 * see the field comment.  0x0100 marks the value as set so a
+                 * mask of zero is distinguishable from never having written.
+                 */
+                if (port == 0x21UL) {
+                    nested->L2PicLastMaster = datum | 0x0100UL;
+                    nested->L2PicMaskWrites += 1ULL;
+                    InterlockedExchange(
+                        &Context->Runtime->L2PicMaskMaster,
+                        (LONG)(datum | 0x0100UL));
+                } else if (port == 0xA1UL) {
+                    nested->L2PicLastSlave = datum | 0x0100UL;
+                    nested->L2PicMaskWrites += 1ULL;
+                    InterlockedExchange(
+                        &Context->Runtime->L2PicMaskSlave,
+                        (LONG)(datum | 0x0100UL));
+                }
+            }
+            /*
+             * And the port itself - but only the ones no bucket names.
+             *
+             * The first version sampled every port and filled all sixteen
+             * slots with 0x3D4, a port whose own bucket had counted seventeen
+             * hundred accesses against ninety-three thousand in the catch-all.
+             * Sampling the tail of a stream tells you what happened last, not
+             * what happens most, and those differed by a factor of fifty here.
+             * Restricting the ring to the unnamed bucket makes it sample the
+             * thing it was built to identify.
+             *
+             * Direction and width ride along in the high half: the same port
+             * read and written are different events, and "the guest is reading
+             * a status register that never changes" is precisely the shape
+             * this is meant to be able to show.
+             */
+            if (slot == 7UL) {
+                const ULONG key =
+                    port |
+                    ((ULONG)bytes << 16) |
+                    (((qualification & 0x8ULL) != 0ULL) ? 0x80000000UL : 0UL);
+                ULONG probe = 0UL;
+
+                nested->L2PortRing[nested->L2PortRingIndex & 0xFUL] = key;
+                nested->L2PortRingIndex += 1UL;
+                /* Port zero is the empty key; nothing here talks to it. */
+                for (probe = 0UL; probe < 32UL; ++probe) {
+                    if (nested->L2PortKeys[probe] == key) {
+                        nested->L2PortKeyCounts[probe] += 1ULL;
+                        break;
+                    }
+                    if (nested->L2PortKeys[probe] == 0UL) {
+                        nested->L2PortKeys[probe] = key;
+                        nested->L2PortKeyCounts[probe] = 1ULL;
+                        break;
+                    }
+                }
+                if (probe == 32UL) {
+                    nested->L2PortKeyMissCount += 1ULL;
+                }
+            }
+        }
         if (KswordARKHvmNestedBitmapL1WantsPort(Context, port, bytes)) {
             nested->L2IoExitsReflected += 1ULL;
             /* Report the port access as L1's. */
@@ -678,6 +1673,46 @@ KswordARKHvmNestedL2ExitOwner(
             : 0ULL);
         const BOOLEAN isWrite = (ExitReason == 32UL);
 
+        /* Which MSR, and for a write the value, before deciding whose it is. */
+        {
+            const ULONG slot = nested->L2MsrRingIndex & 0x7UL;
+
+            nested->L2MsrRing[slot] =
+                (msrIndex & 0x7FFFFFFFUL) | (isWrite ? 0x80000000UL : 0UL);
+            nested->L2MsrRingIndex += 1UL;
+            if (isWrite && Frame != NULL) {
+                const ULONGLONG value =
+                    ((Frame->Rdx & 0xFFFFFFFFULL) << 32) |
+                    (Frame->Rax & 0xFFFFFFFFULL);
+
+                nested->L2LastMsrWriteIndex = msrIndex;
+                nested->L2LastMsrWriteValue = value;
+                /*
+                 * The acknowledgement and the re-arm - see the fields.
+                 *
+                 * 0x80B is the x2APIC end-of-interrupt register.  0x6E0 is the
+                 * TSC deadline and 0x838 the local APIC initial count; either
+                 * one is the guest asking for the next tick.
+                 */
+                if (msrIndex == 0x80BUL) {
+                    nested->L2EoiMsrCount += 1ULL;
+                } else if (msrIndex == 0x6E0UL || msrIndex == 0x838UL) {
+                    nested->L2TimerArmCount += 1ULL;
+                    nested->L2TimerArmLastValue = value;
+                }
+                /*
+                 * 0x830 is the x2APIC interrupt-command register: one write is
+                 * one inter-processor interrupt, destination and vector
+                 * included.  Kept separately because it is rare and the MSR
+                 * ring is saturated by the timer pair.
+                 */
+                if (msrIndex == 0x830UL) {
+                    nested->L2IcrRing[nested->L2IcrRingIndex & 0x3UL] = value;
+                    nested->L2IcrRingIndex += 1UL;
+                    nested->L2IcrWriteCount += 1ULL;
+                }
+            }
+        }
         if (KswordARKHvmNestedBitmapL1WantsMsr(Context, msrIndex, isWrite)) {
             nested->L2MsrExitsReflected += 1ULL;
             /* Report the MSR access as L1's. */
@@ -720,12 +1755,37 @@ KswordARKHvmNestedL2ExitOwner(
 static BOOLEAN
 KswordARKHvmNestedL2FuseTrips(
     _Inout_ KSW_HVM_NESTED_VCPU* Nested,
+    _Inout_ KSW_HVM_RUNTIME* Runtime,
     _In_ const struct _KSW_HVM_GPR_FRAME* Frame,
     _In_ ULONG ExitReason
     )
 {
     const ULONGLONG rip = KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
     const ULONGLONG rcx = (Frame != NULL) ? Frame->Rcx : 0ULL;
+    /*
+     * For a memory fault, which address faulted is part of "did anything
+     * move".
+     *
+     * Without it this fuse cannot tell a loop from a loop that is working.  A
+     * kernel bringing up its memory runs one instruction over hundreds of
+     * thousands of pages, faulting once per page: same RIP, same RCX, same
+     * reason 48, and a different address every time.  That tripped the fuse
+     * after a thousand pages, and from then on every entry was refused with
+     * "invalid control field" - VMware's monitor panicked with error 7 and the
+     * guest went away, a hundred and ninety thousand pages short of booting.
+     *
+     * Measured: three consecutive samples of the refused violation gave
+     * 0x2CFE0000, 0x2F8F8000 and 0x02D57FF8.  Three different pages is
+     * progress; the fuse saw one RIP repeated.
+     *
+     * Only for reasons 48 and 49, because the guest-physical address field is
+     * only defined for those - reading it after any other exit would key the
+     * fuse on a stale value and stop it tripping at all.
+     */
+    const ULONGLONG faultAddress =
+        (ExitReason == 48UL || ExitReason == 49UL)
+            ? KswordARKHvmNestedL2Read(KSW_L2_GUEST_PHYSICAL_ADDRESS)
+            : 0ULL;
 
     if (Nested->L2FuseTripped) {
         /* Report the latched trip without re-measuring anything. */
@@ -733,11 +1793,13 @@ KswordARKHvmNestedL2FuseTrips(
     }
     if (rip == Nested->L2ProgressRip &&
         rcx == Nested->L2ProgressRcx &&
+        faultAddress == Nested->L2ProgressFaultAddress &&
         ExitReason == Nested->L2ProgressReason) {
         Nested->L2NoProgressCount += 1UL;
     } else {
         Nested->L2ProgressRip = rip;
         Nested->L2ProgressRcx = rcx;
+        Nested->L2ProgressFaultAddress = faultAddress;
         Nested->L2ProgressReason = ExitReason;
         Nested->L2NoProgressCount = 1UL;
         /* Report that something moved. */
@@ -758,6 +1820,10 @@ KswordARKHvmNestedL2FuseTrips(
     Nested->L2FuseRip = rip;
     Nested->L2FuseReason = ExitReason;
     Nested->L2FuseCount = Nested->L2NoProgressCount;
+    /* And durably, where a reader who is not our probe can find it. */
+    if (Runtime != NULL) {
+        InterlockedIncrement(&Runtime->NestedFuseTripCount);
+    }
     /* Report the trip. */
     return TRUE;
 }
@@ -778,6 +1844,280 @@ KswordARKHvmNestedL2Reflect(
     if (!nested->InL2) {
         /* Report that the caller owns this exit. */
         return KSW_HVM_L2_ROUTE_NOT_L2;
+    }
+    /*
+     * Record where L2 stopped and whether it could have taken an interrupt.
+     *
+     * vmcs02 is the loaded VMCS here, so these describe L2 itself rather than
+     * anything about L1.  Taken before any routing decision, because the
+     * routing is what the next hypothesis would be about and this is meant to
+     * be evidence that does not depend on one.
+     */
+    {
+        const ULONG slot = nested->L2ExitRingIndex & 0xFUL;
+
+        nested->L2ExitRipRing[slot] =
+            KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+        nested->L2ExitReasonRing[slot] = ExitReason;
+        nested->L2ExitRingIndex += 1UL;
+        nested->L2LastRflags = KswordARKHvmNestedL2Read(0x6820UL);
+        nested->L2LastInterruptibility =
+            KswordARKHvmNestedL2Read(0x4824UL);
+        /*
+         * And L2's CR2, which nothing else will keep - see the field comment.
+         * Here because this block is the first thing that runs after the exit.
+         */
+        nested->L2ExitCr2 = (ULONGLONG)__readcr2();
+        /*
+         * Charge this exit to the vmcs12 it came out of - see the region
+         * fields for why a per-processor breakdown is what the question needs.
+         */
+        {
+            ULONG region = 0UL;
+
+            for (region = 0UL; region < 4UL; ++region) {
+                if (nested->L2Vmcs12Regions[region] == nested->CurrentVmcs) {
+                    const ULONG trail =
+                        nested->L2Vmcs12RegionTrailIndex[region] & 0x3UL;
+
+                    nested->L2Vmcs12RegionLastExitReason[region] = ExitReason;
+                    nested->L2Vmcs12RegionLastRflags[region] =
+                        nested->L2LastRflags;
+                    nested->L2Vmcs12RegionTrailRip[region][trail] =
+                        nested->L2ExitRipRing[slot];
+                    nested->L2Vmcs12RegionTrailReason[region][trail] =
+                        ExitReason;
+                    nested->L2Vmcs12RegionTrailIndex[region] += 1UL;
+                    nested->L2Vmcs12RegionLastCr0[region] =
+                        KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR0);
+                    nested->L2Vmcs12RegionLastCsAr[region] =
+                        (ULONG)KswordARKHvmNestedL2Read(0x4816UL);
+                    break;
+                }
+            }
+        }
+        /*
+         * Has L2 ever run with interrupts enabled at all?
+         *
+         * The ring says what L2 is doing now and is dominated by whatever
+         * repeats; every sample in it showed RFLAGS.IF clear, which is exactly
+         * what a mode-switch stub looks like and says nothing about the rest
+         * of the run.  A running total does: if this stays at zero then no
+         * timer tick could ever have been delivered whatever L1 did, and if it
+         * does not, then the guest was interruptible and the injection is
+         * still the thing to explain.
+         */
+        if ((nested->L2LastRflags & 0x200ULL) != 0ULL) {
+            nested->L2ExitIfSetCount += 1ULL;
+        } else {
+            nested->L2ExitIfClearCount += 1ULL;
+        }
+        /* And the reason, so the ring's bias stops standing in for a total. */
+        nested->L2ExitReasonCounts[(ExitReason < 63UL) ? ExitReason : 63UL] +=
+            1ULL;
+        /*
+         * And how wide the loop is, keyed by address rather than sampled.
+         *
+         * A RIP of zero is used as the empty key, which costs nothing here: an
+         * L2 exiting at address zero has already gone wrong in a way this
+         * table is not needed to see.
+         */
+        {
+            const ULONGLONG rip = nested->L2ExitRipRing[slot];
+            ULONG probe = 0UL;
+
+            for (probe = 0UL; probe < 32UL; ++probe) {
+                if (nested->L2RipKeys[probe] == rip) {
+                    nested->L2RipCounts[probe] += 1ULL;
+                    break;
+                }
+                if (nested->L2RipKeys[probe] == 0ULL) {
+                    nested->L2RipKeys[probe] = rip;
+                    nested->L2RipCounts[probe] = 1ULL;
+                    break;
+                }
+            }
+            if (probe == 32UL) {
+                /* Full: count the misses so a spread loop is not read as narrow. */
+                nested->L2RipMissCount += 1ULL;
+            }
+        }
+        /*
+         * A control-register exit also records which register and whose mask.
+         *
+         * The ring above showed L2 alternating between two instructions that
+         * both take reason 28, forever, with interrupts disabled.  Which
+         * register that is decides what the fix is, and there is no way to
+         * infer it: CR3 accesses exit on a primary control we merge by union,
+         * CR0 and CR4 accesses exit on the guest-host masks we copy from
+         * vmcs12, and those two lead to opposite conclusions.  Both sides'
+         * masks are taken here so "whose exit is this" is answered from
+         * readings rather than from the merge code's intent.
+         */
+        if (ExitReason == 28UL) {
+            ULONGLONG mask = 0ULL;
+
+            nested->L2LastCrQualification =
+                KswordARKHvmNestedL2Read(KSW_L2_EXIT_QUALIFICATION);
+            /*
+             * Which register, and what kind of access, over the whole run.
+             *
+             * The single last qualification said CR0 / MOV-to / RAX, which is
+             * one sample out of a hundred and thirty thousand.  Bucketing says
+             * whether that is the whole story or whether the loop also touches
+             * CR4 or CR8 - and those route differently.
+             *
+             * Qualification bits 3:0 are the register number and bits 5:4 the
+             * access type (0 MOV to, 1 MOV from, 2 CLTS, 3 LMSW).
+             */
+            {
+                const ULONG number =
+                    (ULONG)(nested->L2LastCrQualification & 0xFULL);
+                const ULONG access =
+                    (ULONG)((nested->L2LastCrQualification >> 4) & 0x3ULL);
+                const ULONG bucket =
+                    (number == 0UL) ? 0UL :
+                    (number == 3UL) ? 1UL :
+                    (number == 4UL) ? 2UL :
+                    (number == 8UL) ? 3UL : 4UL;
+
+                nested->L2CrCounts[bucket][access] += 1ULL;
+                /*
+                 * For a MOV to CR0, keep the value beside the result.
+                 *
+                 * Read through the shared helper rather than indexing the
+                 * frame here: the register numbering has a hole where RSP
+                 * would be, and a second copy of that mapping is a second
+                 * chance to get it wrong.
+                 */
+                if (bucket == 0UL && access == 0UL && Frame != NULL) {
+                    const ULONG number2 =
+                        (ULONG)((nested->L2LastCrQualification >> 8) & 0xFULL);
+                    const ULONGLONG rip = nested->L2ExitRipRing[slot];
+                    ULONGLONG written = 0ULL;
+                    ULONG probe = 0UL;
+
+                    if (KswordARKHvmNestedReadGpr(Frame, number2, &written) == 0) {
+                        /*
+                         * Both companions are read here rather than taken from
+                         * the fields below, which are assigned after this block
+                         * and would therefore describe the previous exit - the
+                         * one difference that would make this row say the write
+                         * did take when it did not.
+                         */
+                        ULONGLONG shadow = 0ULL;
+
+                        (void)KswordARKHvmNestedVmcs12Read(
+                            vmcs12, 0x6004UL, &shadow);
+                        for (probe = 0UL; probe < 4UL; ++probe) {
+                            if (nested->L2CrWriteCount[probe] != 0ULL &&
+                                nested->L2CrWriteRip[probe] != rip) {
+                                continue;
+                            }
+                            nested->L2CrWriteRip[probe] = rip;
+                            nested->L2CrWriteValue[probe] = written;
+                            nested->L2CrWriteGuestCr0[probe] =
+                                KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR0);
+                            nested->L2CrWriteShadow[probe] = shadow;
+                            nested->L2CrWriteCount[probe] += 1ULL;
+                            break;
+                        }
+                    }
+                }
+            }
+            nested->L2Vmcs02Cr0Mask = KswordARKHvmNestedL2Read(0x6000UL);
+            nested->L2Vmcs02Cr4Mask = KswordARKHvmNestedL2Read(0x6002UL);
+            nested->L2LastGuestCr0 =
+                KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR0);
+            mask = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(vmcs12, 0x6000UL, &mask);
+            nested->L2Vmcs12Cr0Mask = mask;
+            mask = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(vmcs12, 0x6004UL, &mask);
+            nested->L2Vmcs12Cr0Shadow = mask;
+            mask = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(vmcs12, 0x6002UL, &mask);
+            nested->L2Vmcs12Cr4Mask = mask;
+            nested->L2Vmcs02Primary =
+                (ULONG)KswordARKHvmNestedL2Read(KSW_L2_PRIMARY_CONTROLS);
+            mask = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(
+                vmcs12,
+                KSW_L2_PRIMARY_CONTROLS,
+                &mask);
+            nested->L2Vmcs12Primary = (ULONG)mask;
+            /*
+             * Exit controls on both sides, for acknowledge-interrupt-on-exit.
+             *
+             * vmcs02 carries it - bit 15 of the merged value - and we never
+             * request it, so it should be L1's.  "Should be" is the problem:
+             * the merge is a union, and if that bit is ours by any route then
+             * every external interrupt taken during L2 is removed from the
+             * interrupt controller by the processor while L1, which did not
+             * ask for that, waits for a delivery that can no longer happen.
+             * Four hundred lost interrupts look exactly like a guest whose
+             * clock never ticks.
+             */
+            nested->L2Vmcs02Exit =
+                (ULONG)KswordARKHvmNestedL2Read(KSW_L2_EXIT_CONTROLS);
+            mask = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(
+                vmcs12,
+                KSW_L2_EXIT_CONTROLS,
+                &mask);
+            nested->L2Vmcs12Exit = (ULONG)mask;
+            /*
+             * Pin controls from L1, for the VMX-preemption timer.
+             *
+             * vmcs02 runs with pin = 0x3F, which has bit 6 clear.  A
+             * hypervisor that schedules its virtual timer on the preemption
+             * timer and does not get it will never be woken to deliver a tick,
+             * and the clamp can remove the bit without anything reporting it -
+             * the same shape as the VPID defect, in the other direction.
+             */
+            mask = 0ULL;
+            (void)KswordARKHvmNestedVmcs12Read(
+                vmcs12,
+                KSW_L2_PIN_CONTROLS,
+                &mask);
+            nested->L2Vmcs12Pin = (ULONG)mask;
+        }
+    }
+    /*
+     * The event L1 asked to inject has been delivered, so retire its request.
+     *
+     * The processor clears the valid bit of the VM-entry interruption
+     * information field in the VMCS it loaded - vmcs02 - and nothing clears
+     * L1's.  L1 reads its own, sees the request it made still standing, and
+     * concludes the injection has not happened yet.  Measured: VMware asked
+     * for four events across four minutes and then stopped asking, its guest's
+     * BIOS tick never advanced, and its boot menu sat at "60 seconds"
+     * indefinitely while the processor ran flat out.  Four thousand seven
+     * hundred interrupts had reached this routine in the same window.
+     *
+     * Cleared here rather than at the copy, because here the entry is a fact:
+     * reaching this routine at all means L2 ran.  Clearing at the copy would
+     * retire an event on an entry that then failed, which the architecture
+     * does not do.
+     *
+     * Same family as the rest of this module's defects - state L0 has to
+     * maintain on L1's behalf, left unmaintained, with every counter on both
+     * sides reading healthy.
+     */
+    {
+        ULONGLONG injected = 0ULL;
+
+        if (NT_SUCCESS(KswordARKHvmNestedVmcs12Read(
+                vmcs12,
+                KSW_L2_ENTRY_INTR_INFO,
+                &injected)) &&
+            (injected & 0x80000000ULL) != 0ULL) {
+            (void)KswordARKHvmNestedVmcs12Write(
+                vmcs12,
+                KSW_L2_ENTRY_INTR_INFO,
+                injected & ~0x80000000ULL);
+            nested->L2InjectionRetiredCount += 1ULL;
+        }
     }
     /*
      * Count it before deciding whose it is.
@@ -813,17 +2153,43 @@ KswordARKHvmNestedL2Reflect(
          * control back and the machine keeps running.
          */
         const ULONG owner =
-            KswordARKHvmNestedL2FuseTrips(nested, Frame, ExitReason)
+            KswordARKHvmNestedL2FuseTrips(
+                nested, Context->Runtime, Frame, ExitReason)
                 ? KSW_L2_OWNER_L1
                 : KswordARKHvmNestedL2ExitOwner(Context, Frame, ExitReason);
 
         if (owner == KSW_L2_OWNER_US_RESOLVED) {
+            /*
+             * Ours to resume, so ours to finish delivering.
+             *
+             * Both of these returns lead back into L2 on vmcs02 without L1
+             * ever seeing the exit, which makes this driver the only VMM that
+             * can re-deliver an event the exit interrupted.  Written into
+             * vmcs02 here and consumed by the entry that follows - see the
+             * routine for what dropping it cost.
+             */
+            KswordARKHvmNestedL2RedeliverInterruptedEvent(nested);
             /* Report that the exit needs nothing further before resuming. */
             return KSW_HVM_L2_ROUTE_HANDLED;
         }
         if (owner == KSW_L2_OWNER_US_NEEDS_SERVICE) {
+            KswordARKHvmNestedL2RedeliverInterruptedEvent(nested);
             /* Report that the ordinary handling must run on vmcs02. */
             return KSW_HVM_L2_ROUTE_SERVICE_LOCALLY;
+        }
+        /*
+         * Reflected: L1 re-delivers, because the field reaches it in vmcs12
+         * below.  Counted anyway so the pair says whether an interrupted
+         * delivery happened at all before it says who dealt with it.
+         */
+        {
+            const ULONGLONG vectoring =
+                KswordARKHvmNestedL2Read(KSW_L2_IDT_VECTORING_INFO);
+
+            if ((vectoring & 0x80000000ULL) != 0ULL) {
+                nested->L2IdtVectoringSeenCount += 1ULL;
+                nested->L2IdtVectoringReflectedCount += 1ULL;
+            }
         }
     }
     /*
@@ -840,14 +2206,105 @@ KswordARKHvmNestedL2Reflect(
     (void)KswordARKHvmNestedEptPropagateAccessedDirty(
         &nested->ShadowEpt,
         Context->PhysWindow);
-    /* Record where L2 got to so L1 can inspect and later resume it. */
+    /*
+     * Record where L2 got to so L1 can inspect and later resume it.
+     *
+     * This once also mirrored every field into the shared pool's copy, on the
+     * reasoning that the working copy is this processor's and only reaches the
+     * pool when this processor gives the region up - so a processor picking
+     * the same vmcs12 up elsewhere would load state older than this exit.
+     * That gap is real, but the reading offered for it was not: the per-region
+     * IDTR base this driver publishes is each processor's record of what *it*
+     * last saved, so two processors holding different values for one region
+     * only means one of them has not run it lately.  Mirrored, it cost fifty
+     * extra writes per exit, ran three hundred and fifty thousand times, and
+     * the triple faults and the boot both came out exactly where they were.
+     * Reverted for want of a reading that asks for it.
+     */
     for (index = 0UL;
          index < RTL_NUMBER_OF(g_KswordL2GuestFields);
          ++index) {
+        const ULONGLONG saved =
+            KswordARKHvmNestedL2Read(g_KswordL2GuestFields[index]);
+
+        /* What vmcs02 held for the IDTR base as L1 took over - see the field. */
+        if (g_KswordL2GuestFields[index] == 0x6818UL) {
+            ULONG region = 0UL;
+
+            nested->L2IdtrBaseSavedLast = saved;
+            nested->L2IdtrBaseSaveCount += 1UL;
+            if (saved != 0ULL) {
+                nested->L2IdtrBaseSavedNonZeroCount += 1UL;
+            }
+            /*
+             * L2 threw its own IDT away while running - see the fields.
+             *
+             * Against L2IdtrBaseLoadedLast rather than the per-region record,
+             * because that is what this processor put into vmcs02 at the entry
+             * this exit belongs to; nothing can have moved in between.
+             */
+            /* L2 executed LIDT: the exit carries a base we did not put there. */
+            if (saved != 0ULL && nested->L2IdtrBaseLoadedLast == 0ULL) {
+                nested->L2IdtrGainedValue = saved;
+                nested->L2IdtrGainedRip =
+                    KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+                nested->L2IdtrGainedVmcs = nested->CurrentVmcs;
+                nested->L2IdtrGainedReason = ExitReason;
+                nested->L2IdtrGainedCount += 1UL;
+                {
+                    ULONG gained = 0UL;
+
+                    for (gained = 0UL; gained < 4UL; ++gained) {
+                        if (nested->L2Vmcs12Regions[gained] ==
+                                nested->CurrentVmcs) {
+                            nested->L2RegionIdtrGained[gained] += 1UL;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (saved == 0ULL && nested->L2IdtrBaseLoadedLast != 0ULL) {
+                /* 0x4816 is the CS access rights; bit 13 is long mode. */
+                const ULONG csAr =
+                    (ULONG)KswordARKHvmNestedL2Read(0x4816UL);
+
+                if ((csAr & 0x2000UL) != 0UL) {
+                    nested->L2Idt64ZeroedRip =
+                        KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+                    nested->L2Idt64ZeroedLoaded = nested->L2IdtrBaseLoadedLast;
+                    nested->L2Idt64ZeroedReason = ExitReason;
+                    nested->L2Idt64ZeroedLimit =
+                        (ULONG)KswordARKHvmNestedL2Read(0x4812UL);
+                    nested->L2Idt64ZeroedCsAr = csAr;
+                    nested->L2Idt64ZeroedCount += 1UL;
+                }
+            }
+            /* And per region, where a transition to zero is visible. */
+            for (region = 0UL; region < 4UL; ++region) {
+                if (nested->L2Vmcs12Regions[region] != nested->CurrentVmcs) {
+                    continue;
+                }
+                if (saved == 0ULL && nested->L2RegionIdtrBase[region] != 0ULL) {
+                    nested->L2RegionIdtrLostRip[region] =
+                        KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+                    nested->L2RegionIdtrLostReason[region] = ExitReason;
+                    nested->L2RegionIdtrLostCount[region] += 1UL;
+                    /*
+                     * The entry handed L2 a base and the exit does not have
+                     * it, so L2 is the one that changed it.
+                     */
+                    if (nested->L2RegionIdtrLoaded[region] != 0ULL) {
+                        nested->L2RegionIdtrGuestZeroed[region] += 1UL;
+                    }
+                }
+                nested->L2RegionIdtrBase[region] = saved;
+                break;
+            }
+        }
         (void)KswordARKHvmNestedVmcs12Write(
             vmcs12,
             g_KswordL2GuestFields[index],
-            KswordARKHvmNestedL2Read(g_KswordL2GuestFields[index]));
+            saved);
     }
     /* Record the exit itself in the fields L1 will read. */
     (void)KswordARKHvmNestedVmcs12Write(

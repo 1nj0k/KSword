@@ -91,6 +91,15 @@ KswordARKHvmNestedWriteGpr(
     );
 
 /*
+ * Forward declaration of the per-processor physical window.
+ *
+ * Declared rather than included so this header keeps naming only what the
+ * decoder needs; the definition lives in hvm_phys_window.h, which the
+ * implementation includes.
+ */
+struct _KSW_HVM_PHYS_WINDOW;
+
+/*
  * Read or write eight bytes of guest memory at a guest linear address.
  *
  * Returns STATUS_SUCCESS only when the access was actually performed.
@@ -100,9 +109,22 @@ KswordARKHvmNestedWriteGpr(
  * KeAcquireSpinLock, and taking a spin lock in VMX root means either an IRQL
  * claim we cannot honour or a wait on a processor that may itself be in root
  * mode.  That module belongs to the IOCTL path.
+ *
+ * Window is the calling processor's physical window.  It is not optional in
+ * practice - without one there is no way to resolve the address and the call
+ * refuses - but it is typed optional because the resident context is allowed
+ * to come up without a window, and a caller that lost the race must get a
+ * refusal rather than a fault.
+ *
+ * The address is resolved through the **guest's** page tables, not by
+ * dereferencing it.  A guest that runs its own address space - which is what
+ * every hypervisor underneath us does - has kernel-half addresses that exist
+ * in no Windows address space, and dereferencing one from root mode is a
+ * bugcheck.  That is not hypothetical; see the walk's own comment.
  */
 NTSTATUS
 KswordARKHvmNestedReadGuestQword(
+    _Inout_opt_ struct _KSW_HVM_PHYS_WINDOW* Window,
     _In_ ULONGLONG LinearAddress,
     _Out_ ULONGLONG* Value
     );
@@ -110,6 +132,7 @@ KswordARKHvmNestedReadGuestQword(
 /* Write eight bytes of guest memory at a guest linear address. */
 NTSTATUS
 KswordARKHvmNestedWriteGuestQword(
+    _Inout_opt_ struct _KSW_HVM_PHYS_WINDOW* Window,
     _In_ ULONGLONG LinearAddress,
     _In_ ULONGLONG Value
     );

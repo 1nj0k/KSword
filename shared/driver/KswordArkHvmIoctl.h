@@ -450,6 +450,34 @@
  */
 #define KSWORD_ARK_HVM_CONTROL_FLAG_TRACE_ROUTINE_EXITS 0x00001000UL
 
+/*
+ * 对**用户态**的 CPUID 隐藏"有 hypervisor 在下面"这件事。
+ *
+ * 为什么需要这一位：真机上量到的第一个拦路读数不是能力不够，是**身份**。
+ * VMware Workstation 17.6 在初始化时先用 CPUID 认出外层是 Hyper-V，然后去要
+ * Windows Hypervisor Platform；这台来宾里没装 WHP，两边对不上，它就在装载
+ * 任何虚拟机之前拒绝启动：
+ *
+ *     IOPL_Init: Hyper-V detected by CPUID
+ *     WHP_CanBeInstalled: Hyper-V is not present, function should not be called.
+ *     [msg.vmx.nestedHyperV] ... not compatible ...
+ *     Module 'IOPL' initialization failed.
+ *
+ * 它看到的那个身份不是我们选的 —— 是 L0 的 Hyper-V 透过我们传上去的。常驻起来
+ * 之后 CPUID 每一条都退出到我们手里，报什么由我们决定，而"把外层的身份原样转
+ * 给我们自己的来宾"本来就谈不上正确。
+ *
+ * 影响面被刻意压到最小：**只在来宾 CPL=3 时改**。Windows 内核自己的 Hyper-V
+ * enlightenment 走的是 CPL=0 的 CPUID 与 hypercall 页，那条路一个位都不动。
+ * 做这个区分不是优化，是因为开机时就绑定了外层 hypervisor 的内核如果中途被告知
+ * "没有 hypervisor"，后果无法预期，而我们要骗的那一个（vmware-vmx.exe）恰好
+ * 完全在用户态。
+ *
+ * 这不是"完美伪装成裸机"，也不打算是：它只解决按身份拒绝这一件事。任何在内核
+ * 里做同样检查的软件都仍然会看到真相 —— 那时读数会直接告诉我们，再谈要不要放宽。
+ */
+#define KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR 0x00002000UL
+
 #define KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN 0x48564D43UL
 
 #define KSWORD_ARK_HVM_CONTROL_STATUS_OK                    0UL
@@ -694,9 +722,30 @@ typedef struct _KSWORD_ARK_QUERY_HVM_RESPONSE
     unsigned long nestedState;
     unsigned long evmcsState;
     unsigned short evmcsVersion;
-    unsigned short reservedVersion;
+    /*
+     * 最后一次 L2 进入被哪一处拒绝，1..7；0 表示没有拒绝过。
+     *
+     * 占用原先的 reservedVersion 槽位（没有任何读写方），结构大小不变。
+     *
+     * 存在的理由：七处不同的条件返回**同一个**架构错误码 7（invalid control
+     * field），因为架构只有这一个号码、没有第二个字段说明是哪一处。L1 拿到 7、
+     * 报出 7，从外面看七种情况一模一样 —— 而唯一真正需要知道的就是哪一处。
+     * 编号的含义见 hvm_nested_l2.c 里各个赋值点。
+     */
+    unsigned short nestedLastRefusalSite;
     unsigned long evmcsFlags;
-    unsigned long reservedEvmcs;
+    /*
+     * 无进展熔断跳闸的次数，整机累计。
+     *
+     * 熔断本身在别处**看不见**：它的读数一直只在嵌套探针的行里，而真正的 L1
+     * （VMware 的 VMM、别人的 hypervisor）不会去跑我们的探针。于是"L2 打转被我们
+     * 拦下来了"这件事，在真实场景里没有任何地方读得到 —— 而那恰恰是最需要知道的
+     * 时候：机器没挂，但某个 hypervisor 的来宾被我们停了。
+     *
+     * 占用原先的 reservedEvmcs 槽位（没有任何读写方），结构大小不变，旧 GUI 读到的
+     * 每个字段都不移位。
+     */
+    unsigned long nestedFuseTripCount;
     unsigned long long evmcsVpAssistMsr;
     unsigned long eptPageCount;
     unsigned long eptPml4Entries;

@@ -1,0 +1,222 @@
+﻿# 在来宾里跑：起隐藏模式常驻 -> 取基线 -> 开 VMware 的虚拟机 -> 收读数。
+#
+# 每一步都立刻追加到 C:\ksword\vmwarerun.log 并关闭句柄。整机挂死时最后一条
+# 记录就是现场 —— 这条线上的失败方式是蓝屏，而蓝屏会把内存里的缓冲一起带走。
+$log = 'C:\ksword\vmwarerun.log'
+function Note($s) {
+    $line = ('[{0:HH:mm:ss}] {1}' -f (Get-Date), $s)
+    [IO.File]::AppendAllText($log, $line + [Environment]::NewLine)
+}
+function Run($a) {
+    $o = 'C:\ksword\ro.txt'
+    $e = 'C:\ksword\re.txt'
+    $p = Start-Process 'C:\ksword\hvm_ctl.exe' -ArgumentList $a -NoNewWindow -Wait -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
+    $out = ''
+    if (Test-Path $o) { $out = [IO.File]::ReadAllText($o) }
+    return @{ Exit = $p.ExitCode; Out = $out }
+}
+
+[IO.File]::WriteAllText($log, '')
+Note '=== 开始 ==='
+
+$r = Run @('--json','status')
+$st = $null
+try { $st = $r.Out | ConvertFrom-Json } catch { }
+Note ('status exit=' + $r.Exit + ' 状态位=' + ($st.stateNames -join ' '))
+
+# 常驻已经在跑就先停。nested 与 hidehv 在状态位上完全一样，沿用一个来历不明的
+# 常驻，等于让整轮测量在一个没人选过的模式下跑完并报读数。
+if ($st.stateNames -contains 'RESIDENT_ACTIVE') {
+    $r = Run @('stop'); Note ('stop（先清掉模式不可知的常驻）exit=' + $r.Exit)
+    $r = Run @('--json','status')
+    try { $st = $r.Out | ConvertFrom-Json } catch { }
+}
+if ($st.stateNames -contains 'FAULTED' -or $st.stateNames -contains 'ROLLBACK_REQUIRED') {
+    $r = Run @('reset-fault'); Note ('reset-fault exit=' + $r.Exit)
+}
+if (-not ($st.stateNames -contains 'RESOURCES_READY')) {
+    $r = Run @('prepare'); Note ('prepare exit=' + $r.Exit)
+    $r = Run @('--json','status')
+    try { $st = $r.Out | ConvertFrom-Json } catch { }
+}
+if (-not ($st.stateNames -contains 'SELF_TEST_PASSED')) {
+    $r = Run @('self-test'); Note ('self-test exit=' + $r.Exit)
+    $r = Run @('--json','status')
+    try { $st = $r.Out | ConvertFrom-Json } catch { }
+}
+Note ('起常驻前的状态位 ' + ($st.stateNames -join ' '))
+$r = Run @('resident-nested-hidehv')
+Note ('resident-nested-hidehv exit=' + $r.Exit)
+if ($r.Exit -ne 0) { Note '常驻起不来，停止'; exit 1 }
+
+$r = Run @('--json','cpuid-view')
+Note ('cpuid-view ' + $r.Out.Trim())
+
+$r = Run @('--json','status')
+[IO.File]::WriteAllText('C:\ksword\base.json', $r.Out)
+$b = $null
+try { $b = $r.Out | ConvertFrom-Json } catch { }
+Note ('基线 vmExits=' + $b.vmExitCount + ' 拒绝=' + $b.nestedL2LaunchRefusedCount + ' 熔断=' + $b.nestedFuseTripCount)
+
+# 被测的虚拟机是 VMware 自己的向导建出来的那一台。
+#
+# 之前跑的是一份手写 .vmx，光驱挂在 IDE、没有硬盘控制器、没有 USB HID 设备，
+# 结果是 `Operating System not found`——一个完全在虚拟化链路之外的故障，却被
+# 当成链路故障查了很久。向导生成的那台用同一个 ISO、同样在常驻底下，能进
+# isolinux 菜单，所以它才是这条线上的已知良品。
+$vmDir = 'C:\Users\felix\Documents\Virtual Machines\Other Linux 6.x kernel 64-bit'
+$vmLog = Join-Path $vmDir 'vmware.log'
+
+foreach ($f in @($vmLog, 'C:\vmware\vmrun_start.txt')) {
+    if (Test-Path $f) { [IO.File]::Delete($f) }
+}
+Get-ChildItem 'C:\Users\felix\AppData\Local\Temp\vmware-felix' -File -ErrorAction SilentlyContinue | ForEach-Object { try { [IO.File]::Delete($_.FullName) } catch { } }
+
+# 让 VMware 的驱动重新采样能力 MSR。
+#
+# vmx86.sys 在来宾开机时就把 IA32_VMX_* 缓存下来了，那时我们的常驻还不存在，
+# 所以 vmware-vmx 拿到的是**原始主机能力**（实测 0x48b=0x065018AE，里面有 VPID
+# 和 unrestricted guest），照着它配 VMCS 就必然撞上我们没实现的东西。
+# 我们的能力过滤器没有错，是从来没被问到。重启这个驱动是唯一能让它重新问的办法。
+Note '--- 重启 vmx86 让它重新采样能力 MSR ---'
+foreach ($svc in @('VMAuthdService','VMwareHostd','VMnetDHCP','VMware NAT Service')) {
+    $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
+    if ($s -and $s.Status -eq 'Running') { try { Stop-Service -Name $svc -Force -ErrorAction Stop; Note ('  停 ' + $svc) } catch { Note ('  停 ' + $svc + ' 失败: ' + $_.Exception.Message) } }
+}
+foreach ($drv in @('vmx86')) {
+    $r1 = & sc.exe stop $drv 2>&1
+    Start-Sleep -Seconds 2
+    $r2 = & sc.exe start $drv 2>&1
+    $st = (Get-Service -Name $drv -ErrorAction SilentlyContinue).Status
+    Note ('  ' + $drv + ' 重启后状态=' + $st)
+}
+foreach ($svc in @('VMAuthdService')) {
+    try { Start-Service -Name $svc -ErrorAction Stop; Note ('  起 ' + $svc) } catch { Note ('  起 ' + $svc + ' 失败: ' + $_.Exception.Message) }
+}
+
+# 清掉上一轮留下的锁目录，**但只在确认没有 vmware-vmx 在跑的时候**。
+#
+# 我们每轮都靠重启来宾来卸掉常驻，VMware 是被硬断电的，锁目录会留在虚拟机目录里，
+# 下一轮 vmrun 就只回一句 `Error: Unknown error`，而采样照跑、读数照出、
+# `vmx进程=0` 藏在一行里——整整一轮测量与 VMware 无关。
+#
+# 门必须在这儿：上次我打印了进程数却没有拿它做判断，直接删掉了一个**活着的**
+# vmware-vmx 正持有的锁。判断在前，删除在后。
+$live = @(Get-Process -Name 'vmware-vmx' -ErrorAction SilentlyContinue)
+if ($live.Count -ne 0) {
+    Note ('  有 ' + $live.Count + ' 个 vmware-vmx 在跑，不动锁目录')
+} else {
+    $locks = @(Get-ChildItem -LiteralPath $vmDir -Filter '*.lck' -Directory -ErrorAction SilentlyContinue)
+    foreach ($lock in $locks) {
+        try { [IO.Directory]::Delete($lock.FullName, $true); Note ('  删除残留锁 ' + $lock.Name) }
+        catch { Note ('  删除锁失败 ' + $lock.Name + ': ' + $_.Exception.Message) }
+    }
+    if ($locks.Count -eq 0) { Note '  没有残留锁目录' }
+}
+
+Note '>>> 启动 VMware 的虚拟机'
+# 交互会话不在的时候 Start-ScheduledTask 是**静默空操作** —— 上一轮整整 60 秒的
+# 采样都是在测一个没启动的 VMware。所以先把会话记下来，跑完再把任务的实际执行
+# 时间读回来对一遍。
+$expl = @(Get-Process -Name explorer -ErrorAction SilentlyContinue)
+Note ('  交互桌面 explorer=' + $expl.Count + ' session=' + $(if ($expl.Count) { $expl[0].SessionId } else { 'N/A' }))
+$before = (Get-ScheduledTaskInfo -TaskName 'KswordVmStart').LastRunTime
+Start-ScheduledTask -TaskName 'KswordVmStart'
+
+# VMware 上一轮在开机后 **2 秒** 就把机器带崩了，日志一行都没捞到。所以先抓日志
+# 再采样：它放弃得比任何采样窗口都快，而它自己的日志是唯一说明"为什么放弃"的东西。
+function DumpVmwareLogs($tag) {
+    Note ('--- VMware 日志 (' + $tag + ') ---')
+    if (Test-Path 'C:\vmware\vmrun_start.txt') { Note ('  vmrun: ' + ([IO.File]::ReadAllText('C:\vmware\vmrun_start.txt')).Trim()) }
+    if (Test-Path $vmLog) {
+        (([IO.File]::ReadAllText($vmLog)) -split "`r?`n" |
+            Select-String -Pattern 'Hyper-V|VT-x|VMX|MONITOR|Monitor Mode|msg\.|IOPL|not compatible|PowerOn|poweredOn|EPT|MMU|monitor|Failed|unsupported|Unsupported') |
+            Select-Object -First 40 | ForEach-Object { Note ('  ' + $_) }
+    } else { Note '  vmware.log 还不存在' }
+    $vx = Get-ChildItem 'C:\Users\felix\AppData\Local\Temp\vmware-felix' -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match 'vmx' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($vx) {
+        Note ('  --- ' + $vx.Name + ' ---')
+        (([IO.File]::ReadAllText($vx.FullName)) -split "`r?`n" |
+            Select-String -Pattern 'Hyper-V|VT-x|MONITOR|msg\.|IOPL|not compatible|Failed|monitor|MMU|unsupported') |
+            Select-Object -First 30 | ForEach-Object { Note ('  ' + $_) }
+    }
+}
+
+Start-Sleep -Seconds 8
+DumpVmwareLogs '开机后 8 秒'
+
+for ($i = 1; $i -le 6; $i++) {
+    Start-Sleep -Seconds 5
+    $r = Run @('--json','status')
+    $s = $null
+    try { $s = $r.Out | ConvertFrom-Json } catch { }
+    $vmx = @(Get-Process -Name 'vmware-vmx' -ErrorAction SilentlyContinue)
+    $rc = ($s.exitReasonCount.PSObject.Properties | Where-Object { [int]$_.Name -ge 19 -and [int]$_.Name -le 27 } | ForEach-Object { $_.Name + '=' + $_.Value }) -join ' '
+    Note ('采样' + $i + ' vmExits=' + $s.vmExitCount + ' 拒绝=' + $s.nestedL2LaunchRefusedCount + ' 熔断=' + $s.nestedFuseTripCount + ' 末次错误=' + $s.lastVmInstructionError + ' vmx进程=' + $vmx.Count + ' VMX族[' + $rc + ']')
+}
+
+$r = Run @('--json','status')
+[IO.File]::WriteAllText('C:\ksword\final.json', $r.Out)
+Note '=== 采样结束 ==='
+
+# 任务到底跑没跑。LastRunTime 没动就说明 Start-ScheduledTask 空转了，
+# 那一轮所有读数都与 VMware 无关 —— 这一条必须在读计数器之前先看。
+$after = (Get-ScheduledTaskInfo -TaskName 'KswordVmStart')
+Note ('任务 LastRunTime ' + $before + ' -> ' + $after.LastRunTime + '  LastTaskResult=0x' + ('{0:X}' -f $after.LastTaskResult))
+if ($after.LastRunTime -eq $before) { Note '**任务没有执行 —— 本轮与 VMware 无关**' }
+# 任务跑过不等于虚拟机起来了：vmrun 可以返回 `Error: Unknown error` 而任务照样算
+# 执行过。判据是进程在不在，而且这一行要显眼，别埋在采样行的末尾。
+if (@(Get-Process -Name 'vmware-vmx' -ErrorAction SilentlyContinue).Count -eq 0) {
+    Note '**没有 vmware-vmx 进程 —— 本轮所有读数与 VMware 无关，不要据此下结论**'
+}
+
+DumpVmwareLogs '收尾'
+
+# 事件环的尾巴，两次调用读完。
+#
+# 上一版按 64 行一批、最多二百批地读，每批起一个进程——在一台慢五十倍的来宾里
+# 那是几分钟。要的只是最后一段：先问最新序号，再从"最新减 N"读一次。
+Note '--- 事件环尾部 ---'
+$r = Run @('--json','events','0')
+$head = $null
+try { $head = $r.Out | ConvertFrom-Json } catch { }
+if ($head -eq $null) {
+    Note ('events 头读失败 exit=' + $r.Exit)
+} else {
+    $newest = [int64]$head.newestSequence
+    $from = [Math]::Max(0, $newest - 400)
+    Note ('newestSequence=' + $newest + ' available=' + $head.availableRows + ' dropped=' + $head.droppedRows + ' 从 ' + $from + ' 读起')
+    $r = Run @('--json','events',"$from")
+    [IO.File]::WriteAllText('C:\ksword\events.json', $r.Out)
+    $ev = $null
+    try { $ev = $r.Out | ConvertFrom-Json } catch { }
+    if ($ev -ne $null) {
+        Note ('取回 ' + $ev.returnedRows + ' 行')
+        # 只把这一轮要看的几种行写进日志，其余留在 events.json 里。
+        foreach ($row in $ev.rows) {
+            $rid = $row.ruleId
+            if ($rid -eq $null) { continue }
+            # 这个 CLI 的数值字段有的带 0x 前缀有的不带，两种都得认：把带前缀的
+            # 当十六进制、不带的当十进制，是唯一不会把 243 读成 0x243 的写法。
+            $txt = ([string]$rid).Trim()
+            if ($txt -match '^0[xX]') {
+                $id = [Convert]::ToInt64($txt.Substring(2), 16)
+            } else {
+                $id = [int64]$txt
+            }
+            if ($id -lt 0xF3 -or $id -gt 0xF9) { continue }
+            Note ('  rule=0x' + ('{0:X2}' -f $id) +
+                ' reason=' + $row.exitReason +
+                ' qual=' + $row.qualification +
+                ' gpa=' + $row.guestPhysicalAddress +
+                ' gla=' + $row.guestLinearAddress +
+                ' rip=' + $row.guestRip +
+                ' status=' + $row.status +
+                ' cpu=' + $row.access)
+        }
+    } else {
+        Note ('events 尾读失败 exit=' + $r.Exit)
+    }
+}
+Note '=== 完 ==='

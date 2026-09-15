@@ -494,14 +494,32 @@ KswordArkHvmIsVmxCapabilityMsr(
  * 清掉 bit 6（VMX 抢占计时器，要 0x482E 与退出控制 22）与 bit 7（posted
  * interrupt，要 0x2016 描述符地址 + 通知向量），两者的字段我们都不拷。
  */
+/*
+ * 2026-09-14：bit 6 曾被临时加进这张表，想看看"宣告了抢占计时器，VMware 会不会
+ * 去配一个真的监控器定时器"。**那次实验是空操作，什么都没验到。**
+ *
+ * 这张表是白名单，下面的过滤器做的是 `高半部 &= 本表`——它只能收窄。宿主
+ * （Hyper-V）的 pin allowed-1 是 0x3F，bit 6 本来就不在里面，所以无论这里写
+ * 0x29 还是 0x69，交给来宾的都是同一个 0x3F，VMware 的能力转储照旧是
+ * `Activate VMX-preemption timer { 0 }`。
+ *
+ * **判据：想让 L1 看见一个新能力，改白名单不够，得让过滤器去合成它**——那就
+ * 不再是过滤而是伪造，必须连同字段（0x482E）与退出语义（原因 52）一起实现。
+ * 在这之前，这里只放我们真的会往 vmcs02 里合并的位。
+ */
 #define KSWORD_ARK_HVM_VMX_PIN_ALLOWED 0x00000029UL
 
 /*
  * primary processor-based 控制里允许宣告的位。
  *
  * 清掉的几个都是"要一个配套地址字段而我们不写"的：
- *   bit 21 use TPR shadow  -> 0x2012 virtual-APIC 页
  *   bit 27 monitor trap flag -> 我们没为 L2 实现 MTF
+ *
+ * bit 21（use TPR shadow）曾在这一行里，理由正是"要 0x2012 而我们不写"。现在写了：
+ * 0x2012 与 0x401C 一起进了 hvm_nested_l2.c 的被拷控制字段表，进入前还会校验这一页
+ * 的地址非零且页对齐。加它是因为 VMware Workstation 17.6 点名要它
+ * （`True Primary Processor-Based VM-Execution Controls: Use TPR shadow`）。
+ * 注意它与 secondary 的 virtualize-APIC-accesses（bit 0）是两件事，后者仍然不宣告。
  * 保留 bit 25 使用 I/O 位图与 bit 28 使用 MSR 位图（这两条路已经端到端验过），
  * 以及 bit 31 激活 secondary。
  *
@@ -510,20 +528,34 @@ KswordArkHvmIsVmxCapabilityMsr(
  * 一次自己造出来的倒退。判断一位该不该留，**去 hvm_nested_l2.c 的字段表里查，
  * 不要 grep 宏名**：那三张表是循环应用的，表里的字段一个宏都没有。
  */
-#define KSWORD_ARK_HVM_VMX_PROC_ALLOWED 0xF3D99E8CUL
+#define KSWORD_ARK_HVM_VMX_PROC_ALLOWED 0xF3F99E8CUL
 
 /*
- * secondary 控制里允许宣告的位：只有 EPT。
+ * secondary 控制里允许宣告的位：EPT 与 unrestricted guest。
  *
- * 这是整份白名单里最窄的一条，也是最诚实的一条 —— secondary 控制里几乎每一位
- * 都要一个我们没拷进 vmcs02 的字段：VPID 要 VPID 字段与 INVVPID 处理、VMFUNC 要
- * 0x2018、VMCS shadowing 要 0x2026/0x2028、PML 要 0x200E、#VE 要 0x202A、
- * EPTP 切换要 0x2024、TSC scaling 要 0x2032。
+ * 其余每一位都要一个我们没拷进 vmcs02 的字段：VPID 要 VPID 字段与 INVVPID 处理、
+ * VMFUNC 要 0x2018、VMCS shadowing 要 0x2026/0x2028、PML 要 0x200E、#VE 要
+ * 0x202A、EPTP 切换要 0x2024、TSC scaling 要 0x2032。
  *
- * 后果要说清楚：这么窄的一份能力，很多 hypervisor 会直接拒绝启动。那正是想要的
- * 结果 —— 干净地拒绝，好过答应了再静默地做不到。
+ * bit 7（unrestricted guest）**不需要任何新字段**，这是它与上面那些的根本区别：
+ * 它只是放宽处理器对来宾 CR0.PE/PG 的要求，让 L2 可以跑在实模式或未分页保护模式。
+ * 来宾 CR0、段属性、CR0 掩码与读影子本来就逐字段从 vmcs12 拷过来，进入路径也没有
+ * 任何一处校验 CR0.PE —— 也就是说这一位所需要的东西**全都已经在了**。
+ *
+ * 加它是因为真机上量到的需求：VMware Workstation 17.6 在自己的日志里点名
+ * `The Intel "VMX Unrestricted Guest" feature is necessary to run this virtual
+ * machine` —— 它的来宾从**实模式**启动，没有这一位一定起不来。这是四项缺件里
+ * 唯一无法绕开的一项（另外三项是 TPR shadow、ack-interrupt-on-exit、INVVPID）。
+ *
+ * 依赖关系必须由代码保证而不是靠 L1 自觉：Intel 规定 unrestricted guest = 1 时
+ * enable EPT 也必须为 1，否则 VM entry 失败。合并 vmcs02 控制时会把 EPT 关着的
+ * unrestricted guest 位丢掉 —— 与 pin 控制里"虚拟 NMI 不能没有 NMI 退出"同一种
+ * 处理，理由也一样：**不把一对没验过的控制送进 VMLAUNCH**。
+ *
+ * 后果仍然要说清楚：这份能力依旧很窄，很多 hypervisor 会直接拒绝启动。那正是想要
+ * 的结果 —— 干净地拒绝，好过答应了再静默地做不到。
  */
-#define KSWORD_ARK_HVM_VMX_PROC2_ALLOWED 0x00000002UL
+#define KSWORD_ARK_HVM_VMX_PROC2_ALLOWED 0x00000082UL
 
 /*
  * VM-exit 控制里允许宣告的位。
@@ -536,9 +568,31 @@ KswordArkHvmIsVmxCapabilityMsr(
  *   bit 20 保存 guest EFER -> 0x2806 同上
  *   bit 21 装载 host EFER  -> 0x2C02 同上
  * 清掉的：12 PERF_GLOBAL_CTRL（0x2808 **不在**任何表里）、22 抢占计时器
- * （0x482E 同样不在）、15 退出时应答中断（改变退出语义，我们不模拟）。
+ * （0x482E 同样不在）。
+ *
+ * bit 15（退出时应答中断）：置位时处理器**自己**去应答中断控制器并把向量写进
+ * 0x4404，而 0x4404 与 0x4406 在反射时本来就逐字段写进 vmcs12。
+ * VMware Workstation 17.6 点名要它（`True VM-Exit Controls: Acknowledge interrupt
+ * on exit`），是它四项缺件里的最后一项。
+ *
+ * 这一位的危险不在语义而在**路由**：被应答的中断已经从控制器上取走了，谁都不再会
+ * 重新投递它，所以这个退出**必须**到达 L1。保证它的是三件事，缺一不可：
+ *   1. 我们自己从不请求外部中断退出，所以 reason 1 只可能因为 L1 要了才发生；
+ *   2. 我们自己的退出控制里没有 bit 15，vmcs02 里的这一位只会来自 vmcs12；
+ *   3. 退出归属里 reason 1 被**显式**判给 L1（不是靠 default 兜底）——
+ *      见 hvm_nested_l2.c，那里写明了为什么这一条不能跟着默认走。
+ * 三条里任何一条被后来的改动破坏，症状都是丢中断导致的静默挂死。
+ *
+ * **两次实测确认这一位既扣不下、也不能在合并时剥掉**（2026-09-14）：
+ *   - 从这张表里去掉它是空操作。过滤器只能在宿主给的范围内收窄，而且
+ *     `high |= low` 会把每个"必须为一"的位加回来，bit 15 正是其中之一 ——
+ *     去掉之后来宾读到的 vmcs12 里它照旧置位。
+ *   - 在合并进 vmcs02 时剥掉它，VMware 的监控器当场倒下：
+ *     `MONITOR PANIC: VERIFY vmcore/monitor/common/platform/common/x86/irq.c:111`。
+ *     L1 一旦要了这一位就会无条件去读那个向量，读到无效值就触发它自己的断言。
+ * **L1 设了的控制位不能悄悄扣下**，要么它根本不该能设，要么就得如实兑现。
  */
-#define KSWORD_ARK_HVM_VMX_EXIT_ALLOWED 0x003C0204UL
+#define KSWORD_ARK_HVM_VMX_EXIT_ALLOWED 0x003C8204UL
 
 /*
  * VM-entry 控制里允许宣告的位。
@@ -564,7 +618,19 @@ KswordArkHvmIsVmxCapabilityMsr(
  * 叶、INVEPT 及其两种上下文，外加 bit 21 accessed/dirty —— A/D 是这条线上唯一
  * 一个已经实测折回过 L1 表的能力位。
  *
- * 全部 VPID 位清零（bit 32 与 40-43）：我们没开 VPID，INVVPID 也没实现。
+ * VPID 那一族只宣告 **bit 32（支持 INVVPID）与 bit 40/41/42（类型 0/1/2）**，
+ * 恰好是 VMware Workstation 17.6 在自己日志里点名要的那四位。注意它要的是**指令
+ * 能力**，不是 secondary 里的 enable-VPID 控制位（那一位仍然不宣告，见
+ * KSWORD_ARK_HVM_VMX_PROC2_ALLOWED）—— 这两件事在架构上本来就是分开的。
+ *
+ * 我们**不开 VPID**，所以 vmcs02 里 L2 用的是 VPID 0000H，而处理器在每一次 VM entry
+ * 与 VM exit 上都会失效 VPID 0000H 的线性映射。也就是说 L1 想让 INVVPID 去掉的那些
+ * 翻译，到下一次进出之前必然已经没了 —— 服务这条指令的正确动作是**什么都不做**，
+ * 不是去刷影子 EPT（那是 INVEPT 的事，而且每次 INVVPID 重建一遍影子会很贵）。
+ *
+ * bit 43（类型 3，单上下文保留全局）不宣告：VMware 没要，我们也没有理由去承诺一个
+ * 更精细的粒度。
+ *
  * bit 0 execute-only 也清掉 —— 影子合成是否逐位保留 execute-only 没有验过，
  * 没验过的位不宣告。
  *
@@ -577,7 +643,7 @@ KswordArkHvmIsVmxCapabilityMsr(
  * bit 17 起初不在这份表里，那会让探针的 EPT12 装不起来、整行判 FAIL —— 故障现象
  * 跟"嵌套坏了"一模一样，而真因是我们把自己要用的能力给自己屏蔽了。
  */
-#define KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED 0x0000000006334140ULL
+#define KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED 0x0000070106334140ULL
 
 /* MISC 里 CR3-target 个数字段的位置；我们不拷 CR3-target 字段，所以必须报 0。 */
 #define KSWORD_ARK_HVM_VMX_MISC_CR3_TARGET_MASK 0x01FF0000ULL
