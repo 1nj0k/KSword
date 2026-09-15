@@ -40,7 +40,7 @@ $rows = Invoke-Command -Session $s -ArgumentList $Depth -ScriptBlock {
         $cur = [int64]$r[-1].sequence
     }
     return ($all | Where-Object {
-        $_.ruleId -in @(202, 203, 204, 205, 206, 207, 208, 209, 210, 211) })
+        $_.ruleId -in @(201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211) })
 }
 
 Remove-PSSession $s
@@ -180,4 +180,17 @@ foreach ($r in (@($rows | Where-Object { $_.ruleId -eq 202 }) |
     Write-Output ("  进入时我们装的是 0x{0:X16}" -f ([uint64]$r.guestPhysicalAddress))
     Write-Output ("  当时 IDTR 界限 = 0x{0:X}   CS.AR = 0x{1:X}" -f `
         ($g -band 0xFFFFFFFFL), ($g -shr 32))
+}
+
+# 向上的那一跳：退出时带回了一个不是我们写进去的基址 —— 也就是 L2 执行过 LIDT。
+foreach ($r in (@($rows | Where-Object { $_.ruleId -eq 201 }) |
+                Sort-Object { [int64]$_.sequence } | Select-Object -Last 2)) {
+    Write-Output ''
+    Write-Output ("0xC9 L2 自己装上 IDT 基址  核{0}  序号 {1}" -f $r.access, $r.sequence)
+    Write-Output ("  发生 {0} 次   最后一次值 = 0x{1:X16}" -f `
+        ([uint32]$r.status), ([uint64]$r.qualification))
+    Write-Output ("  最后一次退出 RIP = 0x{0:X}   原因 = {1}   区域 = 0x{2:X}" -f `
+        ([uint64]$r.guestPhysicalAddress), ([uint32]$r.exitReason), ([uint64]$r.guestLinearAddress))
+    Write-Output ("  出问题那次进入时，本核对该区域最后一次存出的是 0x{0:X16}" -f `
+        ([uint64]$r.guestRip))
 }

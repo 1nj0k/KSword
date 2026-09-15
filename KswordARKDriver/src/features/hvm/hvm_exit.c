@@ -1635,6 +1635,18 @@ KswordARKHvmExitPublishCost(
         row.access = (ULONG)Context->ApicId;
         row.ruleId = 0xCAu;
         KswordARKHvmEventPublish(&row);
+        /* The transition upwards: an exit carrying a base we did not set. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2IdtrGainedValue;
+        row.guestPhysicalAddress = Context->Nested.L2IdtrGainedRip;
+        row.guestLinearAddress = Context->Nested.L2IdtrGainedVmcs;
+        row.guestRip = Context->Nested.L2Idt0In64LastSaved;
+        row.exitReason = Context->Nested.L2IdtrGainedReason;
+        row.status = (LONG)Context->Nested.L2IdtrGainedCount;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xC9u;
+        KswordARKHvmEventPublish(&row);
     }
     {
         /*

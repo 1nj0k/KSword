@@ -578,6 +578,24 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONG L2Idt64ZeroedCount;
     ULONG L2Idt64ZeroedLimit;
     ULONG L2Idt64ZeroedCsAr;
+    /*
+     * And the transition upwards, which is the one nothing has counted.
+     *
+     * The processor writes the guest IDTR base into the VMCS on every exit -
+     * the limit it does not, which is why L1 writes the limit twelve hundred
+     * times and the base never.  So an L2 that executes LIDT shows up here as
+     * an exit carrying a base we did not put there, and its absence for one
+     * virtual processor would mean that processor's LIDT never reached vmcs02
+     * at all.  That is the fork the downward counters cannot resolve: "never
+     * had one" and "had one and lost it" both end at zero.
+     */
+    ULONGLONG L2IdtrGainedValue;
+    ULONGLONG L2IdtrGainedRip;
+    ULONGLONG L2IdtrGainedVmcs;
+    ULONG L2IdtrGainedReason;
+    ULONG L2IdtrGainedCount;
+    /* What this processor last saved for the region the bad entry names. */
+    ULONGLONG L2Idt0In64LastSaved;
     ULONGLONG L2IdtrLostEntryRip;
     ULONGLONG L2IdtrLostVmcs;
     ULONGLONG L2IdtrLostHeader;

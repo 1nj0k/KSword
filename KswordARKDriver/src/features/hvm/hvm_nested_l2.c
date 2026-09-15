@@ -918,6 +918,19 @@ KswordARKHvmNestedL2Enter(
             }
             nested->L2Idt0In64FromRegion = 0ULL;
             nested->L2Idt0In64RegionEntries = 0UL;
+            /* And what this processor last saved for this region. */
+            nested->L2Idt0In64LastSaved = 0ULL;
+            {
+                ULONG known = 0UL;
+
+                for (known = 0UL; known < 4UL; ++known) {
+                    if (nested->L2Vmcs12Regions[known] == nested->CurrentVmcs) {
+                        nested->L2Idt0In64LastSaved =
+                            nested->L2RegionIdtrBase[known];
+                        break;
+                    }
+                }
+            }
             {
                 volatile VOID* mapped = NULL;
 
@@ -2113,6 +2126,15 @@ KswordARKHvmNestedL2Reflect(
              * because that is what this processor put into vmcs02 at the entry
              * this exit belongs to; nothing can have moved in between.
              */
+            /* L2 executed LIDT: the exit carries a base we did not put there. */
+            if (saved != 0ULL && nested->L2IdtrBaseLoadedLast == 0ULL) {
+                nested->L2IdtrGainedValue = saved;
+                nested->L2IdtrGainedRip =
+                    KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
+                nested->L2IdtrGainedVmcs = nested->CurrentVmcs;
+                nested->L2IdtrGainedReason = ExitReason;
+                nested->L2IdtrGainedCount += 1UL;
+            }
             if (saved == 0ULL && nested->L2IdtrBaseLoadedLast != 0ULL) {
                 /* 0x4816 is the CS access rights; bit 13 is long mode. */
                 const ULONG csAr =
