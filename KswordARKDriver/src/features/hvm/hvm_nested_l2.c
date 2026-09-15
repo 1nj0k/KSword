@@ -863,6 +863,14 @@ KswordARKHvmNestedL2Enter(
         }
         if ((entryEvent & 0x80000000ULL) != 0ULL) {
             nested->L2InjectVectorCount[(ULONG)(entryEvent & 0xFFULL)] += 1UL;
+            if (region < 4UL) {
+                nested->L2RegionInjectVector[region]
+                    [(ULONG)(entryEvent & 0xFFULL)] += 1UL;
+            }
+            /* Bit 13 of the CS access rights is long mode - see the field. */
+            if ((nested->LastEntryGuestCsAr & 0x2000UL) != 0UL) {
+                nested->L2InjectVector64[(ULONG)(entryEvent & 0xFFULL)] += 1UL;
+            }
             if (nested->LastEntryGuestActivity == 1UL) {
                 nested->L2InjectWhileHaltedCount += 1ULL;
             }
@@ -1242,7 +1250,21 @@ KswordARKHvmNestedL2ExitOwner(
          */
         const BOOLEAN isDeviceSpace =
             (guestPhysical >= 0xC0000000ULL) ? TRUE : FALSE;
+        /*
+         * And which of the two interrupt-hardware pages, if either.
+         *
+         * Two rather than the whole device range because these are the only
+         * two where composing a leaf silently disarms the guest's timer - see
+         * the field comment.  Anything else in device space is a device L1
+         * emulates and the reflected/composed totals already cover it.
+         */
+        const ULONG apicPage =
+            ((guestPhysical & ~0xFFFULL) == 0xFEC00000ULL) ? 1UL :
+            (((guestPhysical & ~0xFFFULL) == 0xFEE00000ULL) ? 2UL : 0UL);
 
+        if (apicPage != 0UL) {
+            nested->L2ApicMmio[apicPage - 1UL][0] += 1UL;
+        }
         /* Keep the address and the access, whatever is decided below. */
         nested->L2LastEptGuestPhysical = guestPhysical;
         nested->L2LastEptQualification = qualification;
@@ -1278,6 +1300,9 @@ KswordARKHvmNestedL2ExitOwner(
                 nested->L2LastMmioDisposition = 1UL;
                 nested->L2MmioComposedCount += 1ULL;
             }
+            if (apicPage != 0UL) {
+                nested->L2ApicMmio[apicPage - 1UL][1] += 1UL;
+            }
             return KSW_L2_OWNER_US_RESOLVED;
         }
         /* Report the refused violation as L1's. */
@@ -1285,6 +1310,9 @@ KswordARKHvmNestedL2ExitOwner(
         if (isDeviceSpace) {
             nested->L2LastMmioDisposition = 2UL;
             nested->L2MmioReflectedCount += 1ULL;
+        }
+        if (apicPage != 0UL) {
+            nested->L2ApicMmio[apicPage - 1UL][2] += 1UL;
         }
         return KSW_L2_OWNER_L1;
     }

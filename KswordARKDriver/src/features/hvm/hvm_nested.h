@@ -1191,6 +1191,52 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONG L2InjectVectorCount[256];
     ULONGLONG L2InjectWhileHaltedCount;
     ULONGLONG L2EntryHaltedCount;
+    /*
+     * The same distribution per region, because the one above cannot say
+     * whose.
+     *
+     * With two virtual processors and nosmp, Linux parks the second one in
+     * firmware, where it takes the legacy PIC's tick forever.  A
+     * processor-wide histogram then shows vector 8 arriving one-for-one with
+     * the halts and says nothing at all about the processor running Linux -
+     * which is the only one the question is about.  Four regions times a
+     * byte-wide vector is four kilobytes, against a vmcs12 that is already
+     * sixteen.
+     */
+    ULONG L2RegionInjectVector[4][256];
+    /*
+     * The same vectors again, counted only when L2 is in sixty-four-bit mode.
+     *
+     * A region's histogram accumulates across that virtual processor's whole
+     * life - firmware, then the loader, then Linux, and after a triple fault
+     * VMware soft-resets it and the same vmcs12 page starts again at the
+     * firmware.  So vector 8 appearing against a region whose last exit was in
+     * kernel code proves nothing: the BIOS takes IRQ 0 as vector 8 through the
+     * 8259 and that is entirely correct there.
+     *
+     * In sixty-four-bit mode it is not correct anywhere.  Linux's gate 8 is
+     * the double fault, gate 9 is unused, and an external interrupt delivered
+     * on either is a guest running its double-fault handler for an event that
+     * was supposed to be a timer tick.  Splitting on the mode is the only way
+     * to tell "the firmware is ticking normally" from that.
+     */
+    ULONG L2InjectVector64[256];
+    /*
+     * Violations on the two pages a guest programs its interrupt hardware
+     * through, and what we did with each.
+     *
+     * Composing a leaf for either of these is the quiet way to break a guest:
+     * the access then succeeds against ordinary memory, L1 never sees the
+     * write, its emulated IOAPIC or local APIC is never programmed, and every
+     * counter on both sides stays healthy while the timer it was arming never
+     * fires.  Reflecting is the correct answer for both - EPT12 leaves them
+     * unmapped precisely so L1 gets the exit - so a non-zero composed count
+     * here is a defect on its face, not something to interpret.
+     *
+     * Index 0 is the IOAPIC at 0xFEC00000, index 1 the local APIC at
+     * 0xFEE00000; the three counts are seen, composed and reflected.
+     */
+    ULONG L2ApicMmio[2][3];
     /* Preserve explicit partial vmcs02 merge state. */
     KSW_HVM_VMCS02_STATE Vmcs02;
     /* Preserve explicit partial shadow-EPT composition state. */

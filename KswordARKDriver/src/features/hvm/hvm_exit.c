@@ -1680,6 +1680,81 @@ KswordARKHvmExitPublishCost(
         }
     }
     {
+        /* The same per region, so the parked firmware one can be told apart. */
+        ULONG slot = 0UL;
+
+        for (slot = 0UL; slot < 4UL; ++slot) {
+            ULONG vector = 0UL;
+
+            if (Context->Nested.L2Vmcs12Regions[slot] == 0ULL) {
+                continue;
+            }
+            for (vector = 0UL; vector < 256UL; ++vector) {
+                if (Context->Nested.L2RegionInjectVector[slot][vector] == 0UL) {
+                    continue;
+                }
+                RtlZeroMemory(&row, sizeof(row));
+                row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+                row.exitReason = (slot << 16) | vector;
+                row.qualification = (ULONGLONG)
+                    Context->Nested.L2RegionInjectVector[slot][vector];
+                row.guestPhysicalAddress =
+                    Context->Nested.L2Vmcs12Regions[slot];
+                row.guestLinearAddress =
+                    Context->Nested.L2Vmcs12RegionLastRip[slot];
+                row.guestRip = Context->Nested.L2Vmcs12RegionInjections[slot];
+                row.status =
+                    (LONG)Context->Nested.L2Vmcs12RegionLastCsAr[slot];
+                row.access = (ULONG)Context->ApicId;
+                row.ruleId = 0xC6u;
+                KswordARKHvmEventPublish(&row);
+            }
+        }
+    }
+    {
+        /* What we did with the two interrupt-hardware pages - see the fields. */
+        ULONG page = 0UL;
+
+        for (page = 0UL; page < 2UL; ++page) {
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = page;
+            row.qualification =
+                (ULONGLONG)Context->Nested.L2ApicMmio[page][0];
+            row.guestPhysicalAddress =
+                (ULONGLONG)Context->Nested.L2ApicMmio[page][1];
+            row.guestLinearAddress =
+                (ULONGLONG)Context->Nested.L2ApicMmio[page][2];
+            row.guestRip = Context->Nested.L2LastMmioGuestPhysical;
+            row.status = (LONG)Context->Nested.L2LastMmioDisposition;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xC5u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
+        /* Vectors injected while L2 was in long mode - see the fields. */
+        ULONG vector = 0UL;
+
+        for (vector = 0UL; vector < 256UL; ++vector) {
+            if (Context->Nested.L2InjectVector64[vector] == 0UL) {
+                continue;
+            }
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = vector;
+            row.qualification =
+                (ULONGLONG)Context->Nested.L2InjectVector64[vector];
+            row.guestPhysicalAddress =
+                (ULONGLONG)Context->Nested.L2InjectVectorCount[vector];
+            row.guestLinearAddress = Context->Nested.LastEntryGuestRip;
+            row.guestRip = (ULONGLONG)Context->Nested.LastEntryGuestCsAr;
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xC4u;
+            KswordARKHvmEventPublish(&row);
+        }
+    }
+    {
         /*
          * The flags at each region's last exit, and the last four IPIs.
          *
