@@ -1636,6 +1636,67 @@ KswordARKHvmExitPublishCost(
         row.access = (ULONG)Context->ApicId;
         row.ruleId = 0xD6u;
         KswordARKHvmEventPublish(&row);
+        /*
+         * And the three tables the delivery read.  The mismatch mask is the
+         * criterion: zero means vmcs02 carried exactly what L1 wrote, and any
+         * set bit names the field that did not survive the merge.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2TripleFaultIdtrBase;
+        row.guestPhysicalAddress = Context->Nested.L2TripleFaultGdtrBase;
+        row.guestLinearAddress = Context->Nested.L2TripleFaultTrBase;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.L2TripleFaultIdtrLimit & 0xFFFFULL) |
+            (((ULONGLONG)Context->Nested.L2TripleFaultGdtrLimit & 0xFFFFULL)
+                << 16) |
+            (((ULONGLONG)Context->Nested.L2TripleFaultTrLimit & 0xFFFFFFFFULL)
+                << 32);
+        row.exitReason = Context->Nested.L2TripleFaultDescMismatch;
+        row.status = (LONG)Context->Nested.L2TripleFaultTrAr;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xD3u;
+        KswordARKHvmEventPublish(&row);
+        /*
+         * What L1 ever passed for that IDTR base, beside what vmcs02 carried.
+         *
+         * A count of zero says L1 never wrote the field and the zero is its
+         * own; a non-zero value against a zero in vmcs02 says the value was
+         * lost between the two, which is ours.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2IdtrBaseLastWritten;
+        row.guestPhysicalAddress = Context->Nested.L2TripleFaultIdtrBase;
+        row.guestLinearAddress = (ULONGLONG)Context->Nested.L2IdtrBaseWriteCount;
+        row.guestRip = Context->Nested.CurrentVmcs;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xD2u;
+        KswordARKHvmEventPublish(&row);
+        /*
+         * And the same field seen from our own two copy loops.
+         *
+         * L2 loads its IDT with LIDT, which nothing intercepts, so the base
+         * can be correct in vmcs02 without any VMWRITE above ever counting it.
+         * These say whether it was ever there, and which of the two copies
+         * dropped it.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2IdtrBaseSavedLast;
+        row.guestPhysicalAddress = Context->Nested.L2IdtrBaseLoadedLast;
+        row.guestLinearAddress =
+            ((ULONGLONG)Context->Nested.L2IdtrBaseSavedNonZeroCount << 32) |
+            (ULONGLONG)Context->Nested.L2IdtrBaseLoadedNonZeroCount;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.L2IdtrBaseSaveCount << 32) |
+            (ULONGLONG)Context->Nested.L2IdtrBaseLoadCount;
+        row.exitReason =
+            ((ULONGLONG)Context->Nested.L2IdtrLimitWriteCount << 32) |
+            (ULONGLONG)Context->Nested.L2GdtrBaseWriteCount;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xD1u;
+        KswordARKHvmEventPublish(&row);
         {
             ULONG back = 0UL;
 

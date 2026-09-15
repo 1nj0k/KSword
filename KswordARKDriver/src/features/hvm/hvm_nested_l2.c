@@ -456,6 +456,21 @@ KswordARKHvmNestedL2Enter(
             vmcs12,
             g_KswordL2GuestFields[index],
             &value);
+        /*
+         * What this loop hands vmcs02 for the IDTR base - see the field.
+         *
+         * Note the read is ignored: a miss leaves value at zero and the write
+         * below still happens, so a field the cache does not hold is actively
+         * zeroed in vmcs02 rather than left alone.  That is the one way this
+         * loop can destroy a base the processor itself put there.
+         */
+        if (g_KswordL2GuestFields[index] == 0x6818UL) {
+            nested->L2IdtrBaseLoadedLast = value;
+            nested->L2IdtrBaseLoadCount += 1UL;
+            if (value != 0ULL) {
+                nested->L2IdtrBaseLoadedNonZeroCount += 1UL;
+            }
+        }
         KswordARKHvmNestedL2Write(g_KswordL2GuestFields[index], value);
     }
     /* Controls that cannot cost us control are L1's verbatim. */
@@ -1203,6 +1218,51 @@ KswordARKHvmNestedL2ExitOwner(
                 (ULONG)KswordARKHvmNestedL2Read(KSW_L2_IDT_VECTORING_INFO);
             nested->L2TripleFaultRsp =
                 KswordARKHvmNestedL2Read(KSW_L2_GUEST_RSP);
+            /*
+             * The three tables the delivery had to read, taken from vmcs02 -
+             * what the processor actually used - and compared field by field
+             * against what L1 wrote in vmcs12.  See the field comment.
+             */
+            {
+                static const ULONG fields[8] = {
+                    0x6818UL,  /* IDTR base    */
+                    0x4812UL,  /* IDTR limit   */
+                    0x6816UL,  /* GDTR base    */
+                    0x4810UL,  /* GDTR limit   */
+                    0x6814UL,  /* TR base      */
+                    0x480EUL,  /* TR limit     */
+                    0x481EUL,  /* TR access    */
+                    0x080EUL   /* TR selector  */
+                };
+                ULONG which = 0UL;
+
+                nested->L2TripleFaultDescMismatch = 0UL;
+                for (which = 0UL; which < 8UL; ++which) {
+                    ULONGLONG fromL1 = 0ULL;
+                    const ULONGLONG loaded =
+                        KswordARKHvmNestedL2Read(fields[which]);
+
+                    if (!NT_SUCCESS(KswordARKHvmNestedVmcs12Read(
+                            &nested->Vmcs12, fields[which], &fromL1)) ||
+                        fromL1 != loaded) {
+                        nested->L2TripleFaultDescMismatch |= (1UL << which);
+                    }
+                }
+                nested->L2TripleFaultIdtrBase =
+                    KswordARKHvmNestedL2Read(0x6818UL);
+                nested->L2TripleFaultGdtrBase =
+                    KswordARKHvmNestedL2Read(0x6816UL);
+                nested->L2TripleFaultTrBase =
+                    KswordARKHvmNestedL2Read(0x6814UL);
+                nested->L2TripleFaultIdtrLimit =
+                    (ULONG)KswordARKHvmNestedL2Read(0x4812UL);
+                nested->L2TripleFaultGdtrLimit =
+                    (ULONG)KswordARKHvmNestedL2Read(0x4810UL);
+                nested->L2TripleFaultTrLimit =
+                    (ULONG)KswordARKHvmNestedL2Read(0x480EUL);
+                nested->L2TripleFaultTrAr =
+                    (ULONG)KswordARKHvmNestedL2Read(0x481EUL);
+            }
             /* 0x4818 is the guest SS access rights. */
             nested->L2TripleFaultSsAr =
                 KswordARKHvmNestedL2Read(0x4818UL);
@@ -1916,10 +1976,21 @@ KswordARKHvmNestedL2Reflect(
     for (index = 0UL;
          index < RTL_NUMBER_OF(g_KswordL2GuestFields);
          ++index) {
+        const ULONGLONG saved =
+            KswordARKHvmNestedL2Read(g_KswordL2GuestFields[index]);
+
+        /* What vmcs02 held for the IDTR base as L1 took over - see the field. */
+        if (g_KswordL2GuestFields[index] == 0x6818UL) {
+            nested->L2IdtrBaseSavedLast = saved;
+            nested->L2IdtrBaseSaveCount += 1UL;
+            if (saved != 0ULL) {
+                nested->L2IdtrBaseSavedNonZeroCount += 1UL;
+            }
+        }
         (void)KswordARKHvmNestedVmcs12Write(
             vmcs12,
             g_KswordL2GuestFields[index],
-            KswordARKHvmNestedL2Read(g_KswordL2GuestFields[index]));
+            saved);
     }
     /* Record the exit itself in the fields L1 will read. */
     (void)KswordARKHvmNestedVmcs12Write(

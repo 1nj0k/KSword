@@ -414,6 +414,79 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONGLONG L2TripleFaultEntryRflags;
     ULONG L2TripleFaultEntryIntbl;
     /*
+     * The three tables interrupt delivery has to read, and whether vmcs02
+     * carries what vmcs12 said.
+     *
+     * Delivering an interrupt in 64-bit mode reads the gate out of the IDT
+     * through IDTR, loads the code segment through GDTR, and - if the gate
+     * names an IST - reads the stack pointer out of the TSS through TR.  A
+     * base or limit that does not match what L1 wrote makes every one of those
+     * reads land somewhere else, and the fault that follows is handled by a
+     * handler found the same wrong way: #DF, then shutdown.  It leaves no exit
+     * behind, which is the same signature the shadow-mapping hypothesis had
+     * and the reason this is what remains after that one was ruled out.
+     *
+     * The mask is what makes it a criterion rather than a pile of numbers: one
+     * bit per field that differs from vmcs12, so "all zero" is a clean answer
+     * and anything else names the field.
+     */
+    ULONGLONG L2TripleFaultIdtrBase;
+    ULONGLONG L2TripleFaultGdtrBase;
+    ULONGLONG L2TripleFaultTrBase;
+    ULONG L2TripleFaultIdtrLimit;
+    ULONG L2TripleFaultGdtrLimit;
+    ULONG L2TripleFaultTrLimit;
+    ULONG L2TripleFaultTrAr;
+    ULONG L2TripleFaultDescMismatch;
+    /*
+     * What L1 ever wrote to the guest IDTR base, and how often.
+     *
+     * The cache has no "never written" state, so a field reading back as zero
+     * is indistinguishable from one L1 never set - and the two point at
+     * opposite halves of the code.  This field specifically, because the
+     * triple fault happens while the processor reads a gate out of the IDT and
+     * vmcs02 carried base zero with limit 0x0FFF: a correct limit and an
+     * address of nothing.
+     *
+     * Linux puts its IDT at the entry area, 0xFFFFFE0000000000, whose low
+     * thirty-two bits are all zero - so "truncated somewhere" and "never
+     * written" produce the same zero, and only the count and the value L1
+     * actually passed can separate them.
+     */
+    ULONGLONG L2IdtrBaseLastWritten;
+    ULONG L2IdtrBaseWriteCount;
+    /*
+     * The two fields beside it, as the control for that count.
+     *
+     * A count of zero on its own does not say "L1 never writes descriptor
+     * tables" - it could equally say the counter is looking at the wrong
+     * thing.  The IDTR limit and the GDTR base are written by the same kind of
+     * code at the same time, and both were correct in the scene, so if they
+     * count and the base does not, the base really is the odd one out.
+     */
+    ULONG L2IdtrLimitWriteCount;
+    ULONG L2GdtrBaseWriteCount;
+    /*
+     * And what our own two copy loops moved, which is the other way in.
+     *
+     * L2 loads its own IDT with LIDT, and nothing intercepts that: the
+     * processor updates the base in whichever VMCS is current, with no exit
+     * and no VMWRITE for the count above to see.  So the value has to survive
+     * two copies that are ours - vmcs02 out to vmcs12 when the exit is handed
+     * to L1, and vmcs12 back into vmcs02 when L1 resumes.  Recording both ends
+     * says which copy lost it, or that it was never there to lose.
+     *
+     * The non-zero counts matter more than the last value: a single zero at
+     * the end is what both a working round trip and a broken one look like
+     * once the guest has already been reset by the triple fault.
+     */
+    ULONGLONG L2IdtrBaseSavedLast;
+    ULONGLONG L2IdtrBaseLoadedLast;
+    ULONG L2IdtrBaseSaveCount;
+    ULONG L2IdtrBaseLoadCount;
+    ULONG L2IdtrBaseSavedNonZeroCount;
+    ULONG L2IdtrBaseLoadedNonZeroCount;
+    /*
      * Where L2 actually is, and whether it can take an interrupt there.
      *
      * Three times now a mechanism has been reasoned about, found genuinely

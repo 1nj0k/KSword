@@ -1380,6 +1380,26 @@ KswordARKHvmNestedDispatchVmcsField(
      * 0x4016 is the VM-entry interruption-information field; bit 31 is its
      * valid bit.
      */
+    /*
+     * And the guest IDTR base, which the cache cannot otherwise account for.
+     *
+     * 0x6818 specifically: a triple fault was measured while the processor
+     * read a gate out of an IDT whose base in vmcs02 was zero and whose limit
+     * was a correct 0x0FFF.  Zero there means either L1 never wrote the field
+     * or the value was lost, and the cache reports both the same way - see the
+     * field comment for why Linux's own base makes the two identical.
+     */
+    if (NT_SUCCESS(writeStatus) && (ULONG)encoding == 0x6818UL) {
+        Nested->L2IdtrBaseLastWritten = value;
+        Nested->L2IdtrBaseWriteCount += 1UL;
+    }
+    /* 0x4812 is the IDTR limit and 0x6816 the GDTR base - the control. */
+    if (NT_SUCCESS(writeStatus) && (ULONG)encoding == 0x4812UL) {
+        Nested->L2IdtrLimitWriteCount += 1UL;
+    }
+    if (NT_SUCCESS(writeStatus) && (ULONG)encoding == 0x6816UL) {
+        Nested->L2GdtrBaseWriteCount += 1UL;
+    }
     if (NT_SUCCESS(writeStatus) &&
         (ULONG)encoding == 0x4016UL &&
         (value & 0x80000000ULL) != 0ULL) {
