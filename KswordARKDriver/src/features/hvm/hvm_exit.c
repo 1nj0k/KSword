@@ -1550,6 +1550,54 @@ KswordARKHvmExitPublishCost(
         }
     }
     {
+        /* The scene at the last loss our own entry caused - see the fields. */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification = Context->Nested.L2IdtrLostEntryRip;
+        row.guestPhysicalAddress = Context->Nested.L2IdtrLostVmcs;
+        row.guestLinearAddress = Context->Nested.L2IdtrLostHeader;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.L2IdtrLostStoreFail << 48) |
+            (((ULONGLONG)Context->Nested.L2IdtrLostLoadMiss & 0xFFFFULL)
+                << 32) |
+            (((ULONGLONG)Context->Nested.L2IdtrLostRefused & 0xFFFFULL)
+                << 16) |
+            ((ULONGLONG)Context->Nested.L2IdtrLostEvictions & 0xFFFFULL);
+        row.exitReason = Context->Nested.L2IdtrLostSerial;
+        row.status = (LONG)Context->Nested.L2IdtrLostEntries;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xCEu;
+        KswordARKHvmEventPublish(&row);
+        /*
+         * And the backing store's running totals, which nothing has ever
+         * published.
+         *
+         * A spill that could not map its page leaves the region holding an
+         * older vmcs12 and says so nowhere; a restore that took fewer fields
+         * than were spilled says so nowhere either.  Both are silent exactly
+         * where a lost field would come from.
+         */
+        RtlZeroMemory(&row, sizeof(row));
+        row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+        row.qualification =
+            ((ULONGLONG)Context->Nested.RegionStoreOkCount << 32) |
+            (ULONGLONG)Context->Nested.RegionStoreFailCount;
+        row.guestPhysicalAddress = Context->Nested.RegionStoreSkippedCount;
+        row.guestLinearAddress =
+            ((ULONGLONG)Context->Nested.RegionLoadOkCount << 32) |
+            (ULONGLONG)Context->Nested.RegionLoadMissCount;
+        row.guestRip =
+            ((ULONGLONG)Context->Nested.RegionLoadRefusedFields << 32) |
+            (ULONGLONG)Context->Nested.Vmcs12EvictionCount;
+        /* The entry count the last restore read out of a region header. */
+        row.exitReason =
+            (ULONG)(Context->Nested.RegionLastLoadHeader >> 32);
+        row.status = (LONG)Context->Nested.RegionStoreEntries;
+        row.access = (ULONG)Context->ApicId;
+        row.ruleId = 0xCDu;
+        KswordARKHvmEventPublish(&row);
+    }
+    {
         /*
          * The flags at each region's last exit, and the last four IPIs.
          *
@@ -1726,9 +1774,15 @@ KswordARKHvmExitPublishCost(
         row.guestRip =
             ((ULONGLONG)Context->Nested.L2IdtrBaseSaveCount << 32) |
             (ULONGLONG)Context->Nested.L2IdtrBaseLoadCount;
+        /*
+         * exitReason is thirty-two bits wide, so the two control counts are
+         * packed sixteen and sixteen rather than thirty-two and thirty-two.
+         * The first version shifted one of them straight off the end and the
+         * reader dutifully reported zero for it.
+         */
         row.exitReason =
-            ((ULONGLONG)Context->Nested.L2IdtrLimitWriteCount << 32) |
-            (ULONGLONG)Context->Nested.L2GdtrBaseWriteCount;
+            ((Context->Nested.L2IdtrLimitWriteCount & 0xFFFFUL) << 16) |
+            (Context->Nested.L2GdtrBaseWriteCount & 0xFFFFUL);
         row.access = (ULONG)Context->ApicId;
         row.ruleId = 0xD1u;
         KswordARKHvmEventPublish(&row);

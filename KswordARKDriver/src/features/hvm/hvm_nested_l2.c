@@ -479,6 +479,25 @@ KswordARKHvmNestedL2Enter(
                 }
                 if (value == 0ULL && nested->L2RegionIdtrBase[region] != 0ULL) {
                     nested->L2RegionIdtrCacheLost[region] += 1UL;
+                    /* And the backing store's state right now - see the fields. */
+                    nested->L2IdtrLostEntryRip = 0ULL;
+                    /*
+                     * From vmcs12, not vmcs02: this loop has not reached the
+                     * RIP field yet, so vmcs02 still holds the previous exit's.
+                     * 0x681E is the guest RIP.
+                     */
+                    (void)KswordARKHvmNestedVmcs12Read(
+                        vmcs12,
+                        0x681EUL,
+                        &nested->L2IdtrLostEntryRip);
+                    nested->L2IdtrLostVmcs = nested->CurrentVmcs;
+                    nested->L2IdtrLostHeader = nested->RegionLastLoadHeader;
+                    nested->L2IdtrLostSerial = vmcs12->WriteSerial;
+                    nested->L2IdtrLostStoreFail = nested->RegionStoreFailCount;
+                    nested->L2IdtrLostLoadMiss = nested->RegionLoadMissCount;
+                    nested->L2IdtrLostRefused = nested->RegionLoadRefusedFields;
+                    nested->L2IdtrLostEntries = nested->RegionStoreEntries;
+                    nested->L2IdtrLostEvictions = nested->Vmcs12EvictionCount;
                 }
                 nested->L2RegionIdtrLoaded[region] = value;
                 break;

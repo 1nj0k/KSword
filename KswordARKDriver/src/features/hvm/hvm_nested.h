@@ -517,6 +517,27 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONG L2RegionIdtrCacheLost[4];
     ULONG L2RegionIdtrGuestZeroed[4];
     /*
+     * The scene at the last one of those our entry caused.
+     *
+     * Fifteen of them against a hundred and sixty thousand round trips, so a
+     * counter alone leaves nothing to act on: it says the cache handed back a
+     * zero for a field the previous exit still had, and every candidate
+     * mechanism - a spill that could not map its page, a restore from a
+     * region written before that save, a pooled copy evicted and reloaded
+     * short - produces exactly that count and nothing else.  The backing
+     * store's own health has never been published anywhere, so it is captured
+     * here at the instant it matters rather than read as a total afterwards.
+     */
+    ULONGLONG L2IdtrLostEntryRip;
+    ULONGLONG L2IdtrLostVmcs;
+    ULONGLONG L2IdtrLostHeader;
+    ULONG L2IdtrLostSerial;
+    ULONG L2IdtrLostStoreFail;
+    ULONG L2IdtrLostLoadMiss;
+    ULONG L2IdtrLostRefused;
+    ULONG L2IdtrLostEntries;
+    ULONG L2IdtrLostEvictions;
+    /*
      * Where L2 actually is, and whether it can take an interrupt there.
      *
      * Three times now a mechanism has been reasoned about, found genuinely
