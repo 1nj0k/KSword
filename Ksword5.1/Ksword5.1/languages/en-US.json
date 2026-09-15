@@ -26637,6 +26637,7 @@
     "默认主题色无需重新着色 SVG 图标。": "The default theme color does not require SVG recoloring.",
     "PID 筛选：%1 个进程": "PID filter: %1 process(es)",
     "PID 筛选：无": "PID filter: none",
+    "搜索 PID / 进程 / 端点 / 状态 / 来源 / 明细 / 摘要": "Search PID / Process / Endpoint / State / Source / Details / Summary",
     "TCP=%1，UDP=%2，WFP=%3": "TCP=%1, UDP=%2, WFP=%3",
     "TCP=%1；UDP=%2；WFP=%3": "TCP=%1; UDP=%2; WFP=%3",
     "分组：%13\n": "Grouping: %13\n",

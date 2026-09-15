@@ -35,6 +35,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMetaObject>
@@ -885,6 +886,16 @@ void NetworkAuditPage::initializeUi()
     crossLayout->setSpacing(6);
 
     // 连接管理动作已合并到 Cross-View，不再单独占用顶层 Tab。
+    QHBoxLayout* crossSearchLayout = new QHBoxLayout();
+    crossSearchLayout->setContentsMargins(0, 0, 0, 0);
+    crossSearchLayout->setSpacing(6);
+    m_crossSearchEdit = new QLineEdit(m_crossViewPage);
+    m_crossSearchEdit->setClearButtonEnabled(true);
+    m_crossSearchEdit->setPlaceholderText(QStringLiteral("搜索 PID / 进程 / 端点 / 状态 / 来源 / 明细 / 摘要"));
+    m_crossSearchEdit->setMinimumWidth(220);
+    crossSearchLayout->addWidget(m_crossSearchEdit, 1);
+    crossLayout->addLayout(crossSearchLayout);
+
     m_crossControlLayout = new QHBoxLayout();
     m_crossControlLayout->setContentsMargins(0, 0, 0, 0);
     m_crossControlLayout->setSpacing(6);
@@ -1103,6 +1114,11 @@ void NetworkAuditPage::initializeConnections()
     {
         m_crossAutoRefreshTimer->start();
     }
+
+    connect(m_crossSearchEdit, &QLineEdit::textChanged, this, [this](const QString&)
+    {
+        applyCrossViewSearchFilter();
+    });
 
     connect(m_crossTerminateButton, &QPushButton::clicked, this, [this]()
     {
@@ -2258,6 +2274,50 @@ void NetworkAuditPage::refreshCrossViewTable(const AuditSnapshot& snapshot)
                 .arg(aggregate.udpR0Summary.isEmpty() ? QStringLiteral("<无>") : aggregate.udpR0Summary)));
         }
     }
+    applyCrossViewSearchFilter();
+    updateCrossViewActionState();
+}
+
+void NetworkAuditPage::applyCrossViewSearchFilter()
+{
+    const QString filterText = m_crossSearchEdit != nullptr
+        ? m_crossSearchEdit->text().trimmed()
+        : QString();
+
+    const auto applyToTable = [&filterText](QTableWidget* tableWidget)
+    {
+        if (tableWidget == nullptr)
+        {
+            return;
+        }
+
+        for (int rowIndex = 0; rowIndex < tableWidget->rowCount(); ++rowIndex)
+        {
+            bool matched = filterText.isEmpty();
+            if (!matched)
+            {
+                for (int columnIndex = 0; columnIndex < tableWidget->columnCount(); ++columnIndex)
+                {
+                    if (tableWidget->isColumnHidden(columnIndex))
+                    {
+                        continue;
+                    }
+
+                    const QTableWidgetItem* item = tableWidget->item(rowIndex, columnIndex);
+                    if (item != nullptr && item->text().contains(filterText, Qt::CaseInsensitive))
+                    {
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+            tableWidget->setRowHidden(rowIndex, !matched);
+        }
+    };
+
+    applyToTable(m_tcpTable);
+    applyToTable(m_udpTable);
+    applyToTable(m_crossSummaryTable);
     updateCrossViewActionState();
 }
 
@@ -2346,7 +2406,9 @@ void NetworkAuditPage::applyProcessIconResolutionResult(
 void NetworkAuditPage::updateCrossViewActionState()
 {
     bool canTerminateSelection = false;
-    if (m_tcpTable != nullptr && m_tcpTable->currentRow() >= 0)
+    if (m_tcpTable != nullptr
+        && m_tcpTable->currentRow() >= 0
+        && !m_tcpTable->isRowHidden(m_tcpTable->currentRow()))
     {
         const QTableWidgetItem* pidItem = m_tcpTable->item(m_tcpTable->currentRow(), 0);
         bool cacheIndexOk = false;
