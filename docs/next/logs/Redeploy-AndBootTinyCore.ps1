@@ -107,24 +107,35 @@ Invoke-Command -Session $s -ScriptBlock {
     # 而 VMware 的身份门排在能力门前面：CPUID 一看见 Microsoft Hv 就弹
     # "VMware Workstation and Hyper-V are not compatible"，连能力 MSR 都不会读。
     # 实测踩过：状态位一切正常，VMware 就是不启动。
-    $needStart = $true
+    # 必须是 prepare-eptpsw，不是 prepare。
+    #
+    # 两者的区别是 ENABLE_EPTP_SWITCH。这台机器多核且没有 Monitor Trap Flag，
+    # 私有 EPT 那条路**永远武装不上**（view-probe 会如实回 NOT_APPLICABLE），
+    # 所以 CLOAK 视图在这里只能靠 EPTP 切换后端。用普通 prepare 起来的常驻，
+    # 状态位一切正常、VMware 也照跑，而 `view-effect` 会回"视图装不上"——
+    # 也就是**虚拟化这条线在推进，EPT 功能却一直是关着的**，且没有任何读数会提。
+    #
+    # 而且旧写法在 RESOURCES_READY 已置位时跳过 prepare，于是一旦机器曾被普通
+    # prepare 起过，后面每次部署都沿用那一份，永远补不上这个位。判据要看
+    # EPTP_SWITCH_ARMED 这个能力位本身，不是 RESOURCES_READY。
     $st = (Run @('--json', 'status')).Out | ConvertFrom-Json
+    $armed = ($st.featureNames -contains 'EPTP_SWITCH_ARMED')
+    $hidden = $false
     if ($st.stateNames -contains 'RESIDENT_ACTIVE') {
-        $view = $null
-        try { $view = (Run @('--json', 'cpuid-view')).Out | ConvertFrom-Json } catch { }
-        if ($view -and $view.hidden) {
-            $needStart = $false
-        } else {
-            Write-Output '常驻在跑但没有隐藏 hypervisor，停掉重起'
+        try { $hidden = ((Run @('--json', 'cpuid-view')).Out | ConvertFrom-Json).hidden } catch { }
+    }
+    if (-not ($hidden -and $armed)) {
+        if ($st.stateNames -contains 'RESIDENT_ACTIVE') {
+            Write-Output ("常驻在跑但不满足要求（隐藏=$hidden EPTP切换已武装=$armed），停掉重起")
             $r = Run @('stop')
             if ($r.Exit -ne 0) { throw "stop 退出码 $($r.Exit)" }
         }
-    }
-    if ($needStart) {
-        $st = (Run @('--json', 'status')).Out | ConvertFrom-Json
-        foreach ($cmd in 'prepare', 'self-test', 'resident-nested-hidehv') {
-            if ($cmd -eq 'prepare' -and
-                ($st.stateNames -contains 'RESOURCES_READY')) { continue }
+        if (-not $armed) {
+            # 已经 prepare 过的资源要先拆，否则 prepare-eptpsw 会被当成重复 prepare。
+            $r = Run @('teardown')
+            if ($r.Exit -ne 0) { throw "teardown 退出码 $($r.Exit)" }
+        }
+        foreach ($cmd in 'prepare-eptpsw', 'self-test', 'resident-nested-hidehv') {
             $r = Run @($cmd)
             if ($r.Exit -ne 0) { throw "$cmd 退出码 $($r.Exit)" }
         }
@@ -136,6 +147,12 @@ Invoke-Command -Session $s -ScriptBlock {
     }
     "状态位 = " + ($st.stateNames -join ' ')
     "cpuid-view hidden = " + $view.hidden + "（VMware 的身份门看的就是这个）"
+    # EPT 功能的判据独立于虚拟化那条线，每次部署都打出来。
+    # 没有这一位，CLOAK 视图在这台机器上装不上，而其它读数一个都不会变。
+    if (-not ($st.featureNames -contains 'EPTP_SWITCH_ARMED')) {
+        throw "EPTP_SWITCH_ARMED 未置位：EPT 视图在这台机器上装不上"
+    }
+    "EPTP_SWITCH_ARMED = True（EPT 视图的判据；缺了它 view-effect 会回'装不上'）"
     # vmx86 重启：VMware 只在这个驱动起来时问一次能力 MSR
     & sc.exe stop vmx86 | Out-Null
     Start-Sleep -Seconds 1
