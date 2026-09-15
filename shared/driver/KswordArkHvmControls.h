@@ -737,3 +737,67 @@ KswordArkHvmFilterVmxCapabilityMsr(
         return HostValue;
     }
 }
+
+
+/* ------------------------------------------------------------------ */
+/* Nested EPT: L2 GPA -> L1 GPA -> KSword backing page.                 */
+/* Return ownership separately: an outer denial is not an L1 fault.    */
+/* ------------------------------------------------------------------ */
+#define KSWORD_ARK_HVM_NEPT_COMPOSE_OK 0UL
+#define KSWORD_ARK_HVM_NEPT_COMPOSE_L1_DENIED 1UL
+#define KSWORD_ARK_HVM_NEPT_COMPOSE_OUTER_DENIED 2UL
+#define KSWORD_ARK_HVM_NEPT_COMPOSE_INVALID 3UL
+
+static __inline unsigned long
+KswordArkHvmNestedEptComposeLeaf(
+    unsigned long long L1Physical,
+    unsigned long long L1Leaf,
+    unsigned long long OuterLeaf,
+    unsigned long OuterShift,
+    unsigned long Access,
+    unsigned long long* Composed)
+{
+    unsigned long long offsetMask;
+    unsigned long long permissions;
+    unsigned long innerType;
+    unsigned long outerType;
+    unsigned long memoryType;
+
+    if (Composed == 0) { return KSWORD_ARK_HVM_NEPT_COMPOSE_INVALID; }
+    *Composed = 0ULL;
+    if (Access == 0UL || (Access & ~7UL) != 0UL) {
+        return KSWORD_ARK_HVM_NEPT_COMPOSE_INVALID;
+    }
+    if ((L1Leaf & Access) != Access) {
+        return KSWORD_ARK_HVM_NEPT_COMPOSE_L1_DENIED;
+    }
+    if (OuterShift != 12UL && OuterShift != 21UL && OuterShift != 30UL) {
+        return KSWORD_ARK_HVM_NEPT_COMPOSE_INVALID;
+    }
+    offsetMask = (1ULL << OuterShift) - 1ULL;
+    if ((L1Physical & ~(KSWORD_ARK_HVM_EPT_PHYSICAL_MASK | 0xFFFULL)) != 0ULL ||
+        (OuterLeaf & KSWORD_ARK_HVM_EPT_PHYSICAL_MASK & offsetMask) != 0ULL ||
+        (((OuterLeaf & 0x80ULL) != 0ULL) != (OuterShift != 12UL)) ||
+        ((OuterLeaf & 3ULL) == 2ULL) || ((L1Leaf & 3ULL) == 2ULL)) {
+        return KSWORD_ARK_HVM_NEPT_COMPOSE_INVALID;
+    }
+    permissions = L1Leaf & OuterLeaf & 7ULL;
+    if ((permissions & Access) != Access) {
+        return KSWORD_ARK_HVM_NEPT_COMPOSE_OUTER_DENIED;
+    }
+    innerType = (unsigned long)((L1Leaf >> 3) & 7ULL);
+    outerType = (unsigned long)((OuterLeaf >> 3) & 7ULL);
+    if (innerType == 2UL || innerType == 3UL || innerType == 7UL ||
+        outerType == 2UL || outerType == 3UL || outerType == 7UL) {
+        return KSWORD_ARK_HVM_NEPT_COMPOSE_INVALID;
+    }
+    /* UC wins; unlike non-WB types use conservative UC, never forced WB. */
+    memoryType = innerType == outerType ? innerType :
+        (innerType == 6UL ? outerType : (outerType == 6UL ? innerType : 0UL));
+    *Composed = (OuterLeaf & KSWORD_ARK_HVM_EPT_PHYSICAL_MASK) |
+        (L1Physical & offsetMask & KSWORD_ARK_HVM_EPT_PHYSICAL_MASK) |
+        permissions | ((unsigned long long)memoryType << 3) |
+        (L1Leaf & 0x40ULL) | 0x8000000000000000ULL;
+    /* A/D starts clear; the shadow's existing accounting owns these bits. */
+    return KSWORD_ARK_HVM_NEPT_COMPOSE_OK;
+}

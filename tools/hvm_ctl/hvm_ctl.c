@@ -4504,6 +4504,8 @@ static const char* NestedProbeStatusName(unsigned long s)
         return "NO_RESOURCES";
     case KSWORD_ARK_HVM_NESTED_PROBE_STATUS_VMXE_REFUSED:
         return "VMXE_REFUSED（CR4.VMXE 置不上）";
+    case KSWORD_ARK_HVM_NESTED_PROBE_STATUS_CONFIGURATION_FAILED:
+        return "CONFIGURATION_FAILED（VMCS12 配置未通过，未进入 L2）";
     default: return "UNKNOWN";
     }
 }
@@ -4786,20 +4788,16 @@ static int NestedProbeRowPassed(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
              */
             r->vmcsSwitchMatched == 1UL &&
             /*
-             * 池子的深度是量出来的，而且驱逐得按最近最少用来挑。
-             *
-             * 探针比池子深度多写两份，所以正好该活下来 regions-2 份，而且活的
-             * 必须是**最后写的那几份** —— 掩码低两位清、其余置。只看个数不够：
-             * FIFO 或随机驱逐能给出一样的个数，挤掉的却可能正是 L1 正在用的那份。
-             *
-             * 还要求驱逐计数真的动过。这个数在别处永远是 0，一个从没被人见过
-             * 动的计数器，跟一个坏掉的计数器在读数上分不开。
+             * Cache eviction must preserve every region in its backing page.
+             * The probe writes distinct values to more regions than the pool
+             * holds and reloads all of them. Losing even an evicted region is
+             * a failure; the eviction count proves the cache overflow ran.
              */
             r->vmcs12DepthRegions > 2UL &&
-            r->vmcs12DepthSurvived == r->vmcs12DepthRegions - 2UL &&
+            r->vmcs12DepthRegions <= 64UL &&
+            r->vmcs12DepthSurvived == r->vmcs12DepthRegions &&
             r->vmcs12DepthMask ==
-                ((((1ULL << r->vmcs12DepthSurvived) - 1ULL) << 2) &
-                 ((1ULL << r->vmcs12DepthRegions) - 1ULL)) &&
+                (~0ULL >> (64UL - r->vmcs12DepthRegions)) &&
             r->vmcs12EvictionDelta >= 1UL &&
             /*
              * 我们宣告的能力必须等于我们实现了的能力。
@@ -4834,7 +4832,7 @@ static int NestedProbeRowPassed(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
             r->vmcs02ExitMsrStoreAddress != 0ULL &&
             r->guestVmxEptVpidCap != 0ULL &&
             (r->guestVmxEptVpidCap &
-                ((1ULL << 32) | (0xFULL << 40))) == 0ULL &&
+                ~KSWORD_ARK_HVM_VMX_EPT_CAP_ALLOWED) == 0ULL &&
             ((r->guestVmxProcbased2 >> 32) &
                 ((1ULL << 5) | (1ULL << 13) | (1ULL << 14))) == 0ULL &&
             r->l1UsesMsrBitmap == 1UL &&
@@ -4844,11 +4842,13 @@ static int NestedProbeRowPassed(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
             /* 位图地址必须真的写进了 vmcs02。 */
             r->vmcs02MsrBitmap != 0ULL &&
             r->inveptResult == 0UL &&
-            r->shadowGenerationAdvanced == 1UL) ? 1 : 0;
+            r->shadowGenerationAdvanced == 1UL &&
+            r->hostStateChecks == 0x3FUL) ? 1 : 0;
 }
 
 static void PrintNestedProbeRow(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
 {
+    printf("  L1 host 状态与内存操作数实测：0x%02lX（完整通过 = 0x3F）\n", r->hostStateChecks);
     printf("  --- CPU %lu ---   status %lu (%s)\n",
            r->processorIndex, r->status,
            NestedProbeStatusName(r->status));
@@ -4929,13 +4929,7 @@ static void PrintNestedProbeRow(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
                       ? "**两份各自的字段都还在**"
                       : "**字段丢了 —— 只建模了一份 vmcs12**"),
            r->vmcsSwitchValueA, r->vmcsSwitchValueB);
-    /*
-     * 池子实际有多深，以及溢出有没有被记下来。
-     *
-     * 上一行只回答"不止一份"。这一行回答"几份" —— 而且是量出来的，不是从头
-     * 文件里那个常量抄来的。存活掩码比个数重要：LRU / FIFO / 随机驱逐能给出
-     * 一样的存活个数，但挤掉的是哪几份完全不同。
-     */
+    /* Cache overflow must keep every VMCS recoverable from its region. */
     if (r->vmcs12DepthRegions != 0UL) {
         unsigned long slot = 0UL;
 
@@ -4950,7 +4944,7 @@ static void PrintNestedProbeRow(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
         for (slot = 0UL; slot < r->vmcs12DepthRegions; ++slot) {
             printf("%c", ((r->vmcs12DepthMask >> slot) & 1ULL) ? '#' : '.');
         }
-        printf("   （左=最先写，右=最后写；'.' 是被挤掉的）\n");
+        printf("   （左=最先写，右=最后写；'.' 是丢失的字段，全部应为 '#'）\n");
     }
     /*
      * 来宾读到的 VMX 能力 —— 能力过滤唯一能被证伪的地方。
@@ -4973,7 +4967,8 @@ static void PrintNestedProbeRow(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
                ((secondary >> 5) & 1ULL) ? "**还宣告着**" : "已收",
                ((secondary >> 13) & 1ULL) ? "**还宣告着**" : "已收",
                ((secondary >> 14) & 1ULL) ? "**还宣告着**" : "已收",
-               (vpidBits != 0ULL) ? "**还宣告着**" : "已收");
+               (vpidBits & (1ULL << 43)) != 0ULL
+                   ? "**错误宣告类型 3**" : "类型 0/1/2 按能力保留");
     }
     printf("    MSR 路由     L1 用位图 %s   合并 %s   L2 停在 +%llu %s\n",
            r->l1UsesMsrBitmap ? "是" : "否",
@@ -5096,6 +5091,7 @@ static int SelfVirtRowPassed(const KSWORD_ARK_HVM_NESTED_PROBE_ROW* r)
             r->selfVirtReachedL2 == 1UL &&
             r->selfVirtSlotMarker == 1UL &&
             r->selfVirtReturnedToL1 == 1UL &&
+            r->hostStateChecks == 0x7FUL &&
             r->selfVirtCpuidPassedThrough == 0UL &&
             (r->selfVirtExitReason & 0xFFFFULL) == 10ULL &&
             /*
@@ -5182,7 +5178,7 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson, int allProcessors)
                 const KSWORD_ARK_HVM_NESTED_PROBE_ROW* q = &rsp.rows[row];
 
                 printf("  CPU %lu: 进 L2 %s  写入 %s/%s  往返 %lu  "
-                       "投递 %lu/%lu  原因 %llu  => %s\n",
+                       "投递 %lu/%lu  原因 %llu  状态/SSE 0x%02lX  => %s\n",
                        q->processorIndex,
                        q->selfVirtReachedL2 ? "是" : "**否**",
                        q->selfVirtReachedL2 ? "到" : "**丢**",
@@ -5190,6 +5186,7 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson, int allProcessors)
                        q->selfVirtResumeCount,
                        q->selfVirtReflectCount, q->selfVirtTotalExitCount,
                        q->selfVirtExitReason & 0xFFFFULL,
+                       q->hostStateChecks,
                        SelfVirtRowPassed(q) ? "**PASS**" : "FAIL");
             }
             printf("\n  判据：每一行都要过。每核有自己的 vmcs02、影子层次与映射窗口，\n"
@@ -5209,6 +5206,7 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson, int allProcessors)
                "\"vmlaunch\":%lu,\"lastInstructionError\":%lu,"
                "\"fuseTripped\":%lu,\"fuseReason\":%lu,\"fuseCount\":%lu,"
                "\"fuseRip\":\"0x%016llX\","
+               "\"hostStateChecks\":%lu,"
                "\"pass\":%d}\n",
                r->selfVirtAttempted, r->selfVirtReachedL2,
                r->selfVirtReturnedToL1, r->selfVirtCpuidPassedThrough,
@@ -5219,7 +5217,7 @@ static int DoNestedSelfVirtualize(HANDLE h, int asJson, int allProcessors)
                r->selfVirtTotalExitCount, r->selfVirtResumeCount,
                r->vmlaunchResult, r->lastInstructionError,
                r->l2FuseTripped, r->l2FuseReason, r->l2FuseCount,
-               r->l2FuseRip, passed);
+               r->l2FuseRip, r->hostStateChecks, passed);
     } else {
         printf("\n=== 嵌套自虚拟化（L1 把自己变成来宾）===\n");
         printf("  L2 的写入   : 全局标记 %s   经槽位 %s\n",
@@ -5478,6 +5476,8 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                    "\"vmcs02EntryMsrLoadCount\":%lu,"
                    "\"vmcs02ExitMsrStoreAddress\":\"0x%016llX\","
                    "\"vmcs02ExitMsrStoreCount\":%lu,"
+                   "\"inveptResult\":%lu,\"shadowGenerationAdvanced\":%lu,"
+                   "\"hostStateChecks\":%lu,"
                    "\"pass\":%d}",
                    (i == 0) ? "" : ",",
                    r->processorIndex, r->status, r->vmxonResult,
@@ -5501,6 +5501,7 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                    r->vmcs02TscOffset,
                    r->vmcs02EntryMsrLoadAddress, r->vmcs02EntryMsrLoadCount,
                    r->vmcs02ExitMsrStoreAddress, r->vmcs02ExitMsrStoreCount,
+                   r->inveptResult, r->shadowGenerationAdvanced, r->hostStateChecks,
                    NestedProbeRowPassed(r));
         }
         printf("]}\n");
@@ -5524,15 +5525,16 @@ static int DoNestedProbe(HANDLE h, int asJson, int allProcessors)
                "        读 A、读 B，只建模一份的派发器会把 B 的值或零当成 A 的还回来。\n"
                "        真 hypervisor 每个 vCPU 至少一份 VMCS 且不停 VMPTRLD 切换，\n"
                "        字段活不过一次切换就托不住它们。\n"
-               "        再往下一格量的是**深度**：写比池子多两份，倒着读回来，该有\n"
-               "        regions-2 份还在，且活下来的必须是最后写的那几份（掩码低两位\n"
-               "        清）——个数一样而挤错人的驱逐策略，只有掩码能看出来。驱逐\n"
-               "        计数也必须动过，否则这个数与一个坏掉的计数器读起来一模一样。\n"
+               "        还要超出缓存容量并逐份读回：缓存挤出计数必须增长，所有区域的\n"
+               "        独有字段都必须保留，存活掩码全部置位。区域页负责保存状态，\n"
+               "        缓存被挤出不能让 VMCS 的字段丢失。\n"
                "        最后一格是**能力过滤**：来宾自己 RDMSR 读回来的能力里，VPID、\n"
                "        VMFUNC、VMCS shadowing 必须已经收掉 —— 这三样的 vmcs02 字段我们\n"
                "        一个都不拷，宣告了就是答应做不到的事，而 L1 照着开之后整条路\n"
                "        上不会有任何一处报错。对照 status 里的 EPT/VPID cap（那是驱动\n"
                "        加载时采的硬件真值），两个数不一样才说明过滤是活的。\n"
+               "        INVVPID 指令的类型 0/1/2 按白名单保留，与 enable-VPID 控制位\n"
+               "        分开判定；类型 3 和白名单以外的 EPT 能力不得宣告。\n"
                "        还要求 L1 写进 vmcs12 的 **TSC 偏移与 MSR 载入表真的到了\n"
                "        vmcs02**：偏移比的是具体常量而非非零，载入表是真表且计数为 1\n"
                "        ——这一行 PASS 就意味着 VM entry 带着这张表成功了，也就是处理器\n"
@@ -5681,6 +5683,64 @@ static int DoProcess(HANDLE h, unsigned long op, unsigned long pid,
     return (rsp.status == KSWORD_ARK_HVM_PROCESS_STATUS_OK) ? 0 : 2;
 }
 
+static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
+                        unsigned long long eptp, unsigned long long gpa,
+                        unsigned char fill)
+{
+    KSWORD_ARK_HVM_NESTED_PAGE_REQUEST request = { 0 };
+    KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE response = { 0 };
+    DWORD returned = 0;
+    unsigned long index;
+    request.version = KSWORD_ARK_HVM_NESTED_PAGE_VERSION;
+    request.size = sizeof(request);
+    if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_NESTED_PAGE,
+                         &request, sizeof(request), &response, sizeof(response),
+                         &returned, NULL) || returned != sizeof(response)) {
+        fprintf(stderr, "nested-page query failed: Win32 %lu\n", GetLastError());
+        return 1;
+    }
+    if (operation != KSWORD_ARK_HVM_NESTED_PAGE_QUERY) {
+        if (response.status != 0UL) { return 2; }
+        request.operation = operation;
+        request.flags = KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED;
+        request.confirmationToken = KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN;
+        request.expectedGeneration = response.generation;
+        request.ept12Pointer = eptp;
+        request.guestPhysicalPage = gpa;
+        memset(request.shadow, fill, sizeof(request.shadow));
+        if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_NESTED_PAGE,
+                             &request, sizeof(request), &response, sizeof(response),
+                             &returned, NULL) || returned != sizeof(response)) {
+            fprintf(stderr, "nested-page operation failed: Win32 %lu\n", GetLastError());
+            return 1;
+        }
+    }
+    if (asJson) {
+        printf("{\"kind\":\"nested-page\",\"status\":%lu,\"lastStatus\":\"0x%08lX\","
+               "\"generation\":%lu,\"active\":%lu,\"retired\":%lu,\"residentProcessors\":%lu,"
+               "\"ept12Pointer\":\"0x%016llX\",\"guestPhysicalPage\":\"0x%016llX\","
+               "\"shadowPhysicalPage\":\"0x%016llX\",\"originalPhysicalPage\":\"0x%016llX\","
+               "\"composedCount\":%llu,\"roots\":[",
+               response.status, response.lastStatus, response.generation, response.active,
+               response.retired, response.residentProcessors, response.ept12Pointer,
+               response.guestPhysicalPage, response.shadowPhysicalPage,
+               response.originalPhysicalPage, response.composedCount);
+    } else {
+        printf("nested-page status=%lu nt=0x%08lX generation=%lu active=%lu retired=%lu cpus=%lu\n"
+               "EPT12=0x%016llX GPA=0x%016llX shadow=0x%016llX original=0x%016llX composed=%llu\n",
+               response.status, response.lastStatus, response.generation, response.active,
+               response.retired, response.residentProcessors, response.ept12Pointer,
+               response.guestPhysicalPage, response.shadowPhysicalPage,
+               response.originalPhysicalPage, response.composedCount);
+    }
+    for (index = 0UL; index < response.rootCount && index < KSWORD_ARK_HVM_MAX_PROCESSORS; ++index) {
+        if (asJson) { printf("%s\"0x%016llX\"", index ? "," : "", response.ept12Roots[index]); }
+        else { printf("EPT12 root[%lu]=0x%016llX\n", index, response.ept12Roots[index]); }
+    }
+    if (asJson) { printf("]}\n"); }
+    return response.status == 0UL ? 0 : 2;
+}
+
 static void PrintUsage(void)
 {
     size_t i;
@@ -5726,6 +5786,9 @@ static void PrintUsage(void)
     printf("  tlb-probe-exit   同上，但每次读之前先执行 CPUID 强制一次 VM exit"
            "（验证「打出去一次就够」这个前提）\n");
     printf("  view-query       列出已安装的 EPT 分离视图（只读，无需确认）\n");
+    printf("  nested-page-query  查询正在运行的 EPT12 根和单页替换状态\n");
+    printf("  nested-page-map EPTP GPA BYTE  将指定 L2 页替换为填充 BYTE 的影子页（参数均为十六进制）\n");
+    printf("  nested-page-remove  撤销单页替换，等待所有处理器完成失效\n");
     printf("  view-probe       分离视图安装期**归因**探针（前提：prepare 过、"
            "常驻没在跑；装上会立刻卸掉）\n");
     printf("  view-effect      分离视图**是否真的生效**（装 CLOAK→起常驻→"
@@ -5806,6 +5869,27 @@ int main(int argc, char** argv)
 
     if (strcmp(cmd, "status") == 0) {
         rc = DoQuery(h, asJson);
+    } else if (strcmp(cmd, "nested-page-query") == 0) {
+        rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_QUERY, 0ULL, 0ULL, 0U);
+    } else if (strcmp(cmd, "nested-page-remove") == 0) {
+        rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_REMOVE, 0ULL, 0ULL, 0U);
+    } else if (strcmp(cmd, "nested-page-map") == 0) {
+        unsigned long long values[3] = { 0ULL, 0ULL, 0ULL };
+        int valid = argc - argi == 3;
+        int index;
+        for (index = 0; valid && index < 3; ++index) {
+            char* end = NULL;
+            const char* input = argv[argi + index];
+            values[index] = _strtoui64(input, &end, 16);
+            if (input[0] == '\0' || input[0] == '-' || *end != '\0') { valid = 0; }
+        }
+        if (!valid || values[2] > 0xFFULL || (values[1] & 0xFFFULL) != 0ULL) {
+            fprintf(stderr, "usage: nested-page-map EPTP GPA BYTE (hex; GPA page aligned)\n");
+            rc = 2;
+        } else {
+            rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP,
+                              values[0], values[1], (unsigned char)values[2]);
+        }
     } else if (strcmp(cmd, "acl-probe") == 0) {
         rc = DoAclProbe(h, asJson);
     } else if (strcmp(cmd, "nested-probe") == 0) {

@@ -399,4 +399,6 @@ KswordARKHvmAsmHostNmiStub(
     VOID
     );
 
+VOID KswordARKHvmResidentNestedRoots(KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE* Response);
+
 EXTERN_C_END

@@ -19,6 +19,7 @@ Environment:
 
 #include "hvm_internal.h"
 #include "hvm_phys_window.h"
+#include "driver/KswordArkHvmEptSwitch.h"
 
 /*
  * Bound the table pages one processor's shadow hierarchy may consume.
@@ -59,6 +60,11 @@ Environment:
  */
 #define KSW_HVM_NEPT_TRACKED_PAGES 32UL
 
+/* Fill result distinguishes an inner denial from our own inability to map. */
+#define KSW_HVM_NEPT_FILL_RESOLVED 0UL
+#define KSW_HVM_NEPT_FILL_L1_DENIED 1UL
+#define KSW_HVM_NEPT_FILL_FAILED 2UL
+
 /* Preserve one processor's shadow-EPT composition state. */
 typedef struct _KSW_HVM_SHADOW_EPT_STATE
 {
@@ -85,6 +91,12 @@ typedef struct _KSW_HVM_SHADOW_EPT_STATE
      * case a reader most needs to tell apart.
      */
     BOOLEAN AccessedDirtyActive;
+    /* Faults stay latched until the resident resources are recreated. */
+    BOOLEAN Faulted;
+    UCHAR ReservedFault[3];
+    /* This selection belongs to L2; it never changes vmcs01's EPTP. */
+    ULONG OuterViewIndex;
+    KSWORD_ARK_HVM_EPTSW_PROGRESS OuterViewProgress;
     /* Preserve the shadow-EPT generation. */
     ULONG Generation;
     /* Preserve the last invalidated generation. */
@@ -319,17 +331,23 @@ KswordARKHvmNestedEptInvalidateChecked(
 /*
  * Compose one leaf for an L2 guest physical address.  VM-exit safe.
  *
- * Returns TRUE when a mapping now exists and the faulting instruction may be
- * retried; FALSE when the violation belongs to L1 - either because EPT12 does
- * not permit the access or because no table page remained.
+ * RESOLVED permits retry. L1_DENIED reflects EPT12's refusal to L1.
+ * FAILED must stop this L2 context, without treating its GPA as a Windows GPA
+ * or handing VMware an EPT12 fault its own tables cannot explain.
  */
-BOOLEAN
+ULONG
 KswordARKHvmNestedEptFill(
     _Inout_ struct _KSW_HVM_RUNTIME* Runtime,
     _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow,
     _Inout_ KSW_HVM_PHYS_WINDOW* Window,
     _In_ ULONGLONG GuestPhysicalAddress,
-    _In_ ULONG Access
+    _In_ ULONG Access,
+    _In_ ULONGLONG GuestRip
     );
+
+NTSTATUS KswordARKHvmNestedPageControl(
+    const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST* Request,
+    KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE* Response);
+VOID KswordARKHvmNestedPageResetLocked(KSW_HVM_RUNTIME* Runtime);
 
 EXTERN_C_END

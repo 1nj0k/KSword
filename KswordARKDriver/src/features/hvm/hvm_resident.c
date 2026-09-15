@@ -2625,7 +2625,33 @@ KswordARKHvmResidentInvalidateEpt(
         NULL);
 }
 
+VOID KswordARKHvmResidentNestedRoots(KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE* Response)
+{
+    ULONG index;
+    Response->rootCount = 0UL;
+    for (index = 0UL; index < KSWORD_ARK_HVM_MAX_PROCESSORS; ++index) {
+        KSW_HVM_RESIDENT_VCPU* context = &g_KswordHvmResident.Processors[index];
+        ULONGLONG root;
+        ULONG existing;
+        if (InterlockedCompareExchange(&context->Active, 0L, 0L) == 0L) { continue; }
+        root = (ULONGLONG)InterlockedCompareExchange64(
+            (volatile LONG64*)&context->Nested.ShadowEpt.L1EptPointer, 0LL, 0LL);
+        if (root == 0ULL) { continue; }
+        for (existing = 0UL; existing < Response->rootCount; ++existing) {
+            if (Response->ept12Roots[existing] == root) { break; }
+        }
+        if (existing == Response->rootCount) {
+            Response->ept12Roots[Response->rootCount++] = root;
+        }
+    }
+}
+
 #else
+
+VOID KswordARKHvmResidentNestedRoots(KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE* Response)
+{
+    Response->rootCount = 0UL;
+}
 
 NTSTATUS
 KswordARKHvmResidentStart(

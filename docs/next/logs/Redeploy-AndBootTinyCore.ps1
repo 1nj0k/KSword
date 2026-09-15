@@ -25,6 +25,14 @@ $cred = New-Object PSCredential('felix',
 $s = New-PSSession -VMName $VMName -Credential $cred
 
 Invoke-Command -Session $s -ScriptBlock {
+    # 先证明所有处理器退出常驻，再拆 VMware。驱动更新允许重启测试来宾。
+    & 'C:\ksword\hvm_ctl.exe' stop | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw '常驻停止失败，禁止拆除 VMware' }
+    $state = (& 'C:\ksword\hvm_ctl.exe' --json status) | ConvertFrom-Json
+    if ($null -eq $state.residentProcessorCount -or $state.residentProcessorCount -ne 0 -or
+        $state.stateNames -contains 'ROLLBACK_REQUIRED') {
+        throw '常驻仍有活动处理器或待回滚状态，保持 Windows 运行并停止部署'
+    }
     Get-Process -Name 'vmware', 'vmware-vmx' -ErrorAction SilentlyContinue |
         Stop-Process -Force
     Start-Sleep -Seconds 3

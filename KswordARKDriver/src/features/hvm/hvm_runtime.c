@@ -1145,6 +1145,7 @@ KswordARKHvmFreeResourcesLocked(
      * 就指向一张不存在的视图，摘不掉也报不出来，影子页跟着泄露。
      */
     KswordARKHvmInjectResetLocked(Runtime);
+    KswordARKHvmNestedPageResetLocked(Runtime);
     /* Restore view leaves and free shadows before rules touch the same pages. */
     KswordARKHvmEptViewResetLocked(Runtime);
     /* Restore baseline EPT leaves before releasing split table pages. */

@@ -16,6 +16,8 @@ Environment:
 
 #include "hvm_nested_ept.h"
 #include "hvm_ept.h"
+#include "hvm_ept_switch.h"
+#include "hvm_resident.h"
 
 #if defined(_M_AMD64)
 
@@ -42,6 +44,163 @@ Environment:
 #define KSW_HVM_NEPT_EPTP_ENABLE_AD (1ULL << 6)
 /* Name the two leaf bits the processor maintains: accessed (8), dirty (9). */
 #define KSW_HVM_NEPT_AD_BITS ((1ULL << 8) | (1ULL << 9))
+
+static VOID KswordARKHvmNestedPageFree(KSW_HVM_NESTED_PAGE* Page)
+{
+    if (Page == NULL) { return; }
+    if (Page->ShadowVirtual != NULL) { MmFreeContiguousMemory(Page->ShadowVirtual); }
+    ExFreePoolWithTag(Page, KSW_HVM_NEPT_POOL_TAG);
+}
+
+VOID KswordARKHvmNestedPageResetLocked(KSW_HVM_RUNTIME* Runtime)
+{
+    /* Only the stopped resource teardown may reclaim without a rendezvous. */
+    if (Runtime->ResidentProcessorCount != 0L) { return; }
+    KswordARKHvmNestedPageFree((KSW_HVM_NESTED_PAGE*)InterlockedExchangePointer(
+        (PVOID volatile*)&Runtime->NestedPage, NULL));
+    KswordARKHvmNestedPageFree(Runtime->NestedPageRetired);
+    Runtime->NestedPageRetired = NULL;
+    Runtime->NestedPageGeneration += 1UL;
+}
+
+NTSTATUS KswordARKHvmNestedPageControl(
+    const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST* Request,
+    KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE* Response)
+{
+    KSW_HVM_RUNTIME* runtime = KswordARKHvmGetRuntime();
+    KSW_HVM_NESTED_PAGE* page;
+    NTSTATUS status = STATUS_SUCCESS;
+    ULONG index;
+
+    if (Request == NULL || Response == NULL || runtime == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    RtlZeroMemory(Response, sizeof(*Response));
+    Response->version = KSWORD_ARK_HVM_NESTED_PAGE_VERSION;
+    Response->size = sizeof(*Response);
+    KeEnterCriticalRegion();
+    ExAcquirePushLockExclusive(&runtime->Lock);
+    KswordARKHvmResidentNestedRoots(Response);
+    if (Request->version != KSWORD_ARK_HVM_NESTED_PAGE_VERSION ||
+        Request->size != sizeof(*Request) || Request->reserved != 0UL ||
+        Request->operation > KSWORD_ARK_HVM_NESTED_PAGE_REMOVE ||
+        (Request->flags & ~KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED) != 0UL) {
+        status = STATUS_INVALID_PARAMETER;
+        goto complete;
+    }
+    if (Request->operation == KSWORD_ARK_HVM_NESTED_PAGE_QUERY) { goto complete; }
+    if (Request->confirmationToken != KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN ||
+        (Request->flags & KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED) == 0UL) {
+        status = STATUS_ACCESS_DENIED;
+        goto complete;
+    }
+    if (!runtime->Initialized || runtime->Busy) {
+        status = STATUS_DEVICE_BUSY;
+        goto complete;
+    }
+    if ((runtime->StateFlags & (KSWORD_ARK_HVM_STATE_FAULTED |
+                               KSWORD_ARK_HVM_STATE_ROLLBACK_REQUIRED)) != 0UL) {
+        status = STATUS_INVALID_DEVICE_STATE;
+        goto complete;
+    }
+    if (Request->expectedGeneration != runtime->NestedPageGeneration) {
+        status = STATUS_REVISION_MISMATCH;
+        goto complete;
+    }
+    if (Request->operation == KSWORD_ARK_HVM_NESTED_PAGE_REMOVE) {
+        if (runtime->NestedPageRetired == NULL) {
+            runtime->NestedPageRetired = (KSW_HVM_NESTED_PAGE*)InterlockedExchangePointer(
+                (PVOID volatile*)&runtime->NestedPage, NULL);
+            runtime->NestedPageGeneration += 1UL;
+        }
+        status = KswordARKHvmResidentInvalidateEpt(runtime->EptPointer);
+        if (NT_SUCCESS(status)) {
+            KswordARKHvmNestedPageFree(runtime->NestedPageRetired);
+            runtime->NestedPageRetired = NULL;
+        }
+        goto complete;
+    }
+    if (runtime->ResidentProcessorCount == 0L || runtime->NestedPage != NULL ||
+        runtime->NestedPageRetired != NULL) {
+        status = STATUS_DEVICE_BUSY;
+        goto complete;
+    }
+    if ((Request->guestPhysicalPage & ~KSW_HVM_NEPT_FRAME_MASK) != 0ULL) {
+        status = STATUS_INVALID_PARAMETER;
+        goto complete;
+    }
+    for (index = 0UL; index < Response->rootCount; ++index) {
+        if (Response->ept12Roots[index] == Request->ept12Pointer) { break; }
+    }
+    if (index == Response->rootCount) {
+        status = STATUS_NOT_FOUND;
+        goto complete;
+    }
+    page = (KSW_HVM_NESTED_PAGE*)KswordARKAllocateNonPagedPool(
+        sizeof(*page), KSW_HVM_NEPT_POOL_TAG);
+    if (page == NULL) { status = STATUS_INSUFFICIENT_RESOURCES; goto complete; }
+    RtlZeroMemory(page, sizeof(*page));
+    {
+        PHYSICAL_ADDRESS low = { 0 }, high, boundary = { 0 };
+        high.QuadPart = MAXLONGLONG;
+        page->ShadowVirtual = MmAllocateContiguousMemorySpecifyCache(
+            PAGE_SIZE, low, high, boundary, MmCached);
+    }
+    if (page->ShadowVirtual == NULL) {
+        KswordARKHvmNestedPageFree(page);
+        status = STATUS_INSUFFICIENT_RESOURCES;
+        goto complete;
+    }
+    RtlCopyMemory(page->ShadowVirtual, Request->shadow, PAGE_SIZE);
+    page->ShadowPhysicalPage = (ULONGLONG)MmGetPhysicalAddress(page->ShadowVirtual).QuadPart;
+    page->Ept12Pointer = Request->ept12Pointer;
+    page->GuestPhysicalPage = Request->guestPhysicalPage;
+    /* Publication is atomic; root readers only see a fully initialized record. */
+    (void)InterlockedExchangePointer((PVOID volatile*)&runtime->NestedPage, page);
+    runtime->NestedPageGeneration += 1UL;
+    /* On failure keep the record and its backing pinned, and report the failure. */
+    status = KswordARKHvmResidentInvalidateEpt(runtime->EptPointer);
+complete:
+    page = runtime->NestedPage != NULL ? runtime->NestedPage : runtime->NestedPageRetired;
+    Response->status = NT_SUCCESS(status) ? 0UL : 1UL;
+    Response->lastStatus = (ULONG)status;
+    Response->generation = runtime->NestedPageGeneration;
+    Response->active = runtime->NestedPage != NULL;
+    Response->retired = runtime->NestedPageRetired != NULL;
+    Response->residentProcessors = (ULONG)runtime->ResidentProcessorCount;
+    if (page != NULL) {
+        Response->ept12Pointer = page->Ept12Pointer;
+        Response->guestPhysicalPage = page->GuestPhysicalPage;
+        Response->shadowPhysicalPage = page->ShadowPhysicalPage;
+        Response->originalPhysicalPage = (ULONGLONG)InterlockedCompareExchange64(
+            &page->OriginalPhysicalPage, 0LL, 0LL);
+        Response->composedCount = (ULONGLONG)InterlockedCompareExchange64(
+            &page->ComposedCount, 0LL, 0LL);
+    }
+    ExReleasePushLockExclusive(&runtime->Lock);
+    KeLeaveCriticalRegion();
+    return STATUS_SUCCESS;
+}
+
+static ULONGLONG KswordARKHvmNestedPageLeaf(
+    KSW_HVM_RUNTIME* Runtime, KSW_HVM_SHADOW_EPT_STATE* Shadow,
+    ULONGLONG GuestPhysical, ULONGLONG OriginalLeaf, BOOLEAN Count)
+{
+    KSW_HVM_NESTED_PAGE* page = (KSW_HVM_NESTED_PAGE*)InterlockedCompareExchangePointer(
+        (PVOID volatile*)&Runtime->NestedPage, NULL, NULL);
+    if (page == NULL || page->Ept12Pointer != Shadow->L1EptPointer ||
+        page->GuestPhysicalPage != (GuestPhysical & KSW_HVM_NEPT_FRAME_MASK)) {
+        return OriginalLeaf;
+    }
+    /* The replacement is ordinary RAM. Preserve both levels' permissions. */
+    if ((OriginalLeaf & 0x38ULL) != KSW_HVM_NEPT_MEMORY_TYPE_WB) { return OriginalLeaf; }
+    if (Count) {
+        (void)InterlockedCompareExchange64(&page->OriginalPhysicalPage,
+            (LONG64)(OriginalLeaf & KSW_HVM_NEPT_FRAME_MASK), 0LL);
+        (void)InterlockedIncrement64(&page->ComposedCount);
+    }
+    return (OriginalLeaf & ~KSW_HVM_NEPT_FRAME_MASK) | page->ShadowPhysicalPage;
+}
 
 /*
  * Answer whether this processor can maintain EPT accessed/dirty flags.
@@ -390,7 +549,10 @@ KswordARKHvmNestedEptInvalidate(
      * nothing, so nothing later will contradict the stale entry either.
      */
     if (Shadow->ComposedEptPointer != 0ULL) {
-        (void)KswordARKHvmAsmInveptSingle(Shadow->ComposedEptPointer);
+        if (KswordARKHvmAsmInveptSingle(Shadow->ComposedEptPointer) != 0U) {
+            Shadow->Faulted = TRUE;
+            Shadow->LastStatus = STATUS_UNSUCCESSFUL;
+        }
     }
     Shadow->InvalidationGeneration = Shadow->Generation;
     Shadow->Generation += 1UL;
@@ -407,6 +569,7 @@ KswordARKHvmNestedEptSetL1Pointer(
         /* Return the exact caller-contract failure. */
         return STATUS_INVALID_PARAMETER;
     }
+    if (Shadow->Faulted) { return Shadow->LastStatus; }
     /* Refuse to arm composition without a reserved hierarchy. */
     if (Shadow->RootVirtual == NULL) {
         Shadow->LastStatus = STATUS_INSUFFICIENT_RESOURCES;
@@ -455,6 +618,9 @@ KswordARKHvmNestedEptSetL1Pointer(
     /* Drop every mapping composed against a different EPT12. */
     if (Shadow->L1EptPointer != L1EptPointer) {
         KswordARKHvmNestedEptInvalidate(Shadow);
+        if (Shadow->Faulted) { return Shadow->LastStatus; }
+        Shadow->OuterViewIndex = 0UL;
+        KswordArkHvmEptSwProgressReset(&Shadow->OuterViewProgress);
         Shadow->L1EptPointer = L1EptPointer;
     }
     /*
@@ -595,7 +761,10 @@ KswordARKHvmNestedEptInvalidateChecked(
      * which is the part INVEPT genuinely always means.
      */
     if (Shadow->ComposedEptPointer != 0ULL) {
-        (void)KswordARKHvmAsmInveptSingle(Shadow->ComposedEptPointer);
+        if (KswordARKHvmAsmInveptSingle(Shadow->ComposedEptPointer) != 0U) {
+            Shadow->Faulted = TRUE;
+            Shadow->LastStatus = STATUS_UNSUCCESSFUL;
+        }
     }
     Shadow->InvalidationGeneration = Shadow->Generation;
     Shadow->InvalidateKeptCount += 1UL;
@@ -648,7 +817,9 @@ KswordARKHvmNestedEptWalkL1(
                 Window,
                 entryAddress,
                 &entry))) {
-            /* Report that EPT12 could not be walked at all. */
+            Shadow->LastDenySite = 6UL;
+            Shadow->LastStatus = STATUS_INVALID_ADDRESS;
+            /* This is our read failure, not a missing EPT12 mapping. */
             return FALSE;
         }
         /*
@@ -697,7 +868,9 @@ KswordARKHvmNestedEptWalkL1(
             *L1Physical =
                 ((entry & KSW_HVM_NEPT_FRAME_MASK) & ~offsetMask) |
                 (GuestPhysicalAddress & offsetMask);
-            *Permissions = permissions & KSW_HVM_NEPT_PERMISSIONS;
+            /* Retain EPT12's cache type and ignore-PAT policy as well as RWX. */
+            *Permissions = (permissions & KSW_HVM_NEPT_PERMISSIONS) |
+                (entry & 0x78ULL);
             /* Report a complete EPT12 translation. */
             return TRUE;
         }
@@ -707,13 +880,88 @@ KswordARKHvmNestedEptWalkL1(
     return FALSE;
 }
 
-BOOLEAN
+
+/* Resolve the selected KSword backing page without assuming identity. */
+static BOOLEAN
+KswordARKHvmNestedEptReadOuter(
+    _Inout_ KSW_HVM_RUNTIME* Runtime,
+    _In_ const KSW_HVM_SHADOW_EPT_STATE* Shadow,
+    _In_ ULONGLONG L1Physical,
+    _Out_ ULONGLONG* Leaf,
+    _Out_ ULONG* Shift
+    )
+{
+    const KSW_HVM_EPTSW_HIERARCHY* selected = NULL;
+
+    if (!KswordARKHvmEptReadLeaf(Runtime, L1Physical, Leaf, Shift)) {
+        return FALSE;
+    }
+    if (Shadow->OuterViewIndex == 0UL) { return TRUE; }
+    if (!Runtime->EptSwitch.Active ||
+        Shadow->OuterViewIndex > Runtime->EptSwitch.LeafCapacity ||
+        Shadow->OuterViewIndex > KSWORD_ARK_HVM_MAX_VIEWS) {
+        return FALSE;
+    }
+    selected = &Runtime->EptSwitch.Hierarchies[Shadow->OuterViewIndex - 1UL];
+    if (!selected->Active) { return FALSE; }
+    if (selected->LeafPhysical == (L1Physical & KSW_HVM_NEPT_FRAME_MASK)) {
+        *Leaf = selected->SecondaryEntry;
+        *Shift = 12UL;
+    }
+    return TRUE;
+}
+
+/* Reuse the existing view planner; only this processor's shadow is rebuilt. */
+static NTSTATUS
+KswordARKHvmNestedEptSwitchOuter(
+    _Inout_ KSW_HVM_RUNTIME* Runtime,
+    _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow,
+    _Inout_ KSW_HVM_PHYS_WINDOW* Window,
+    _In_ ULONGLONG L1Physical,
+    _In_ ULONGLONG GuestPhysical,
+    _In_ ULONGLONG GuestRip,
+    _In_ ULONG Access
+    )
+{
+    ULONG index = 0UL;
+
+    for (index = 0UL; index < KSWORD_ARK_HVM_MAX_VIEWS; ++index) {
+        KSW_HVM_EPT_VIEW_SLOT* view = &Runtime->EptViews[index];
+        ULONG next = 0UL;
+        ULONGLONG outerEptp = 0ULL;
+        NTSTATUS status;
+
+        if (!view->Active ||
+            view->PhysicalAddress != (L1Physical & KSW_HVM_NEPT_FRAME_MASK)) {
+            continue;
+        }
+        /* A nested view requires the backend that does not depend on MTF. */
+        if (view->EptSwitchIndex == 0UL) { return STATUS_NOT_SUPPORTED; }
+        status = KswordARKHvmEptSwitchPlanViolation(
+            Runtime, &Shadow->OuterViewProgress, Shadow->OuterViewIndex,
+            view->EptSwitchIndex - 1UL, Access, view->Kind,
+            GuestRip, GuestPhysical, &next, &outerEptp);
+        if (!NT_SUCCESS(status)) { return status; }
+        /* Fold before retiring the mappings. Aliases all change together. */
+        (void)KswordARKHvmNestedEptPropagateAccessedDirty(Shadow, Window);
+        KswordARKHvmNestedEptInvalidate(Shadow);
+        if (Shadow->Faulted) { return Shadow->LastStatus; }
+        Shadow->OuterViewIndex = next;
+        InterlockedIncrement64(&view->FlipCount);
+        /* outerEptp is a planner identity, never a vmcs02 EPT pointer. */
+        return STATUS_SUCCESS;
+    }
+    return STATUS_ACCESS_DENIED;
+}
+
+ULONG
 KswordARKHvmNestedEptFill(
     _Inout_ struct _KSW_HVM_RUNTIME* Runtime,
     _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow,
     _Inout_ KSW_HVM_PHYS_WINDOW* Window,
     _In_ ULONGLONG GuestPhysicalAddress,
-    _In_ ULONG Access
+    _In_ ULONG Access,
+    _In_ ULONGLONG GuestRip
     )
 {
     /* Index shifts for PML4, PDPT, PD and PT in walk order. */
@@ -723,15 +971,27 @@ KswordARKHvmNestedEptFill(
     /* Where EPT12's own leaf for this page lives, for folding A/D back. */
     ULONGLONG l1EntryAddress = 0ULL;
     volatile ULONGLONG* table = NULL;
-    const volatile ULONGLONG* hostLeaf = NULL;
+    ULONGLONG hostLeaf = 0ULL;
+    ULONGLONG composedLeaf = 0ULL;
+    ULONG hostShift = 0UL;
+    ULONG composition = 0UL;
+    BOOLEAN switched = FALSE;
     ULONG level = 0UL;
 
     /* Refuse composition without an armed hierarchy or a usable window. */
-    if (Shadow == NULL || Window == NULL ||
+    if (Runtime == NULL || Shadow == NULL || Window == NULL ||
+        Shadow->Faulted ||
         !Shadow->Active || Shadow->RootVirtual == NULL) {
         /* Report that this violation is not ours to satisfy. */
-        return FALSE;
+        return KSW_HVM_NEPT_FILL_FAILED;
     }
+    Shadow->LastStatus = STATUS_SUCCESS;
+    Shadow->LastDenySite = 0UL;
+    if (Access == 0UL || (Access & ~7UL) != 0UL) {
+        Shadow->LastStatus = STATUS_INVALID_PARAMETER;
+        return KSW_HVM_NEPT_FILL_FAILED;
+    }
+retryTranslation:
     /* Translate through L1's own hierarchy first. */
     if (!KswordARKHvmNestedEptWalkL1(
             Shadow,
@@ -741,8 +1001,8 @@ KswordARKHvmNestedEptFill(
             &permissions,
             &l1EntryAddress)) {
         Shadow->DenyCount += 1UL;
-        /* Report that EPT12 itself refuses this access. */
-        return FALSE;
+        return Shadow->LastDenySite == 1UL
+            ? KSW_HVM_NEPT_FILL_L1_DENIED : KSW_HVM_NEPT_FILL_FAILED;
     }
     /*
      * Refuse when EPT12 grants less than the access needs.
@@ -760,31 +1020,40 @@ KswordARKHvmNestedEptFill(
         Shadow->LastDenyPermissions = permissions;
         Shadow->LastDenyGuestPhysical = GuestPhysicalAddress;
         /* Report the violation as L1's to handle. */
-        return FALSE;
+        return KSW_HVM_NEPT_FILL_L1_DENIED;
     }
-    /*
-     * Intersect with our own leaf for the same page.
-     *
-     * EPT01 is an identity map, so the frame is unchanged - but a view or a
-     * rule may have narrowed the permissions of that exact page, and L2 must
-     * not be handed more than L1-as-a-guest already has.  A page we never
-     * split has no four-KiB leaf and keeps the identity default.
-     */
-    hostLeaf = KswordARKHvmEptFindLeafEntry(Runtime, l1Physical);
-    if (hostLeaf != NULL) {
-        permissions &= (*hostLeaf & KSW_HVM_NEPT_PERMISSIONS);
-        if (((ULONGLONG)Access & permissions) !=
-                ((ULONGLONG)Access & KSW_HVM_NEPT_PERMISSIONS)) {
-            Shadow->DenyCount += 1UL;
-            Shadow->LastDenySite = 3UL;
-            Shadow->LastDenyAccess = Access;
-            Shadow->LastDenyPermissions = permissions;
-            Shadow->LastDenyGuestPhysical = GuestPhysicalAddress;
-            Shadow->LastDenyEntry = *hostLeaf;
-            /* Report a violation our own hierarchy refuses. */
-            return FALSE;
+    if (!KswordARKHvmNestedEptReadOuter(
+            Runtime, Shadow, l1Physical, &hostLeaf, &hostShift)) {
+        Shadow->LastDenySite = 3UL;
+        Shadow->LastStatus = STATUS_INVALID_ADDRESS;
+        return KSW_HVM_NEPT_FILL_FAILED;
+    }
+    composition = KswordArkHvmNestedEptComposeLeaf(
+        l1Physical, permissions, hostLeaf, hostShift, Access, &composedLeaf);
+    if (composition == KSWORD_ARK_HVM_NEPT_COMPOSE_OUTER_DENIED && !switched) {
+        Shadow->LastStatus = KswordARKHvmNestedEptSwitchOuter(
+            Runtime, Shadow, Window, l1Physical, GuestPhysicalAddress,
+            GuestRip, Access);
+        if (NT_SUCCESS(Shadow->LastStatus)) {
+            switched = TRUE;
+            /* Invalidation retired EPT12 snapshots too; take them again. */
+            goto retryTranslation;
         }
     }
+    if (composition != KSWORD_ARK_HVM_NEPT_COMPOSE_OK) {
+        Shadow->DenyCount += 1UL;
+        Shadow->LastDenySite = 3UL;
+        Shadow->LastDenyAccess = Access;
+        Shadow->LastDenyPermissions = permissions & hostLeaf & 7ULL;
+        Shadow->LastDenyGuestPhysical = GuestPhysicalAddress;
+        Shadow->LastDenyEntry = hostLeaf;
+        if (NT_SUCCESS(Shadow->LastStatus)) {
+            Shadow->LastStatus = STATUS_NOT_SUPPORTED;
+        }
+        return KSW_HVM_NEPT_FILL_FAILED;
+    }
+    composedLeaf = KswordARKHvmNestedPageLeaf(
+        Runtime, Shadow, GuestPhysicalAddress, composedLeaf, TRUE);
     /* Build the shadow path down to the four-KiB leaf. */
     table = (volatile ULONGLONG*)Shadow->RootVirtual;
     for (level = 0UL; level < 3UL; ++level) {
@@ -806,7 +1075,7 @@ KswordARKHvmNestedEptFill(
                 Shadow->LastDenyLevel = level;
                 Shadow->LastDenyGuestPhysical = GuestPhysicalAddress;
                 /* Report that no mapping could be composed. */
-                return FALSE;
+                return KSW_HVM_NEPT_FILL_FAILED;
             }
             /*
              * Interior entries carry full permissions.
@@ -828,14 +1097,11 @@ KswordARKHvmNestedEptFill(
             Shadow->LastDenyEntry = entry;
             Shadow->LastDenyGuestPhysical = GuestPhysicalAddress;
             /* Report that the hierarchy could not be navigated. */
-            return FALSE;
+            return KSW_HVM_NEPT_FILL_FAILED;
         }
     }
     {
-        const ULONGLONG leaf =
-            (l1Physical & KSW_HVM_NEPT_FRAME_MASK) |
-            (permissions & KSW_HVM_NEPT_PERMISSIONS) |
-            KSW_HVM_NEPT_MEMORY_TYPE_WB;
+        const ULONGLONG leaf = composedLeaf;
         const ULONGLONG leafIndex =
             (GuestPhysicalAddress >> shifts[3]) & 0x1FFULL;
 
@@ -905,8 +1171,14 @@ KswordARKHvmNestedEptFill(
                         &freshPermissions,
                         NULL)) {
                     Shadow->VerifyUnresolvedCount += 1UL;
+                } else if (!KswordARKHvmNestedEptReadOuter(
+                               Runtime, Shadow, freshPhysical, &hostLeaf, &hostShift)) {
+                    Shadow->VerifyUnresolvedCount += 1UL;
                 } else if ((shadowLeaf & KSW_HVM_NEPT_FRAME_MASK) !=
-                               (freshPhysical & KSW_HVM_NEPT_FRAME_MASK)) {
+                           (KswordARKHvmNestedPageLeaf(Runtime, Shadow, pending,
+                                hostLeaf | (freshPhysical & ((1ULL << hostShift) - 1ULL) &
+                                            KSW_HVM_NEPT_FRAME_MASK), FALSE) &
+                            KSW_HVM_NEPT_FRAME_MASK)) {
                     /*
                      * Recorded only on a mismatch.  Recording every sample
                      * overwrites the one case worth looking at with the
@@ -918,7 +1190,9 @@ KswordARKHvmNestedEptFill(
                     Shadow->VerifyLastShadowFrame =
                         shadowLeaf & KSW_HVM_NEPT_FRAME_MASK;
                     Shadow->VerifyLastL1Frame =
-                        freshPhysical & KSW_HVM_NEPT_FRAME_MASK;
+                        (hostLeaf & KSW_HVM_NEPT_FRAME_MASK) |
+                        (freshPhysical & ((1ULL << hostShift) - 1ULL) &
+                         KSW_HVM_NEPT_FRAME_MASK);
                     Shadow->VerifyMismatchCount += 1UL;
                 }
             }
@@ -981,10 +1255,28 @@ KswordARKHvmNestedEptFill(
     Shadow->FillCount += 1UL;
     Shadow->LastStatus = STATUS_SUCCESS;
     /* Report that the faulting access may now be retried. */
-    return TRUE;
+    return KSW_HVM_NEPT_FILL_RESOLVED;
 }
 
 #else
+
+VOID KswordARKHvmNestedPageResetLocked(KSW_HVM_RUNTIME* Runtime)
+{
+    UNREFERENCED_PARAMETER(Runtime);
+}
+
+NTSTATUS KswordARKHvmNestedPageControl(
+    const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST* Request,
+    KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE* Response)
+{
+    UNREFERENCED_PARAMETER(Request);
+    RtlZeroMemory(Response, sizeof(*Response));
+    Response->version = KSWORD_ARK_HVM_NESTED_PAGE_VERSION;
+    Response->size = sizeof(*Response);
+    Response->status = 1UL;
+    Response->lastStatus = (ULONG)STATUS_NOT_SUPPORTED;
+    return STATUS_SUCCESS;
+}
 
 VOID
 KswordARKHvmNestedEptInitialize(
@@ -1049,13 +1341,14 @@ KswordARKHvmNestedEptInvalidateChecked(
     return FALSE;
 }
 
-BOOLEAN
+ULONG
 KswordARKHvmNestedEptFill(
     _Inout_ struct _KSW_HVM_RUNTIME* Runtime,
     _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow,
     _Inout_ KSW_HVM_PHYS_WINDOW* Window,
     _In_ ULONGLONG GuestPhysicalAddress,
-    _In_ ULONG Access
+    _In_ ULONG Access,
+    _In_ ULONGLONG GuestRip
     )
 {
     UNREFERENCED_PARAMETER(Runtime);
@@ -1063,8 +1356,9 @@ KswordARKHvmNestedEptFill(
     UNREFERENCED_PARAMETER(Window);
     UNREFERENCED_PARAMETER(GuestPhysicalAddress);
     UNREFERENCED_PARAMETER(Access);
+    UNREFERENCED_PARAMETER(GuestRip);
     /* Report that no mapping could be composed. */
-    return FALSE;
+    return KSW_HVM_NEPT_FILL_FAILED;
 }
 
 #endif

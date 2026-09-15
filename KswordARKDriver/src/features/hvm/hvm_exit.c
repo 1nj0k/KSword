@@ -2448,6 +2448,12 @@ KswordARKHvmResidentVmExitDispatchBody(
                 Frame->Rax =
                     KswordARKHvmAsmInveptSingle(
                         Frame->Rdx);
+                if (Frame->Rax == 0ULL && Context->Nested.ShadowEpt.RootVirtual != NULL) {
+                    (void)KswordARKHvmNestedEptPropagateAccessedDirty(
+                        &Context->Nested.ShadowEpt, Context->PhysWindow);
+                    KswordARKHvmNestedEptInvalidate(&Context->Nested.ShadowEpt);
+                    if (Context->Nested.ShadowEpt.Faulted) { Frame->Rax = 1ULL; }
+                }
             }
             /* Advance past the fully decoded private VMCALL. */
             handled = KswordARKHvmExitAdvanceRip(

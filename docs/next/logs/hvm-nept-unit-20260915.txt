@@ -1,0 +1,107 @@
+hvm_unit_tests.c
+hvm_unit_tests - KswordArkHvmControls.h
+================================================
+
+[VMX 控制位夹取]
+  ok    不请求任何位时仍保留 allowed-0 必须位
+  ok    被允许的请求位保留，必须位一并保留
+  ok    硬件不允许的请求位被剔除，不会带进 VMCS
+  ok    外层不暴露 secondary controls 时该位被剔除
+  ok    同时必须位仍然完整保留
+  ok    全允许时请求原样通过
+  ok    全不允许时结果为零
+
+[MSR 位图寻址]
+  ok    索引 0 在覆盖范围内
+  ok    低段读位图从页首开始
+  ok    索引 0 对应 bit0
+  ok    低段写位图从 0x800 开始
+  ok    IA32_LSTAR 在覆盖范围内
+  ok    高段读位图先减基址再定位
+  ok    IA32_LSTAR 的位掩码按相对索引算
+  ok    同一 MSR 的读写位于不同区
+  ok    读区与写区相距正好 0x800
+  ok    低段末尾索引仍在覆盖范围内
+  ok    低段末尾的写偏移不越出位图页
+  ok    低段末尾正好落在写区最后一字节
+  ok    高段末尾索引仍在覆盖范围内
+  ok    高段末尾正好落在页的最后一字节
+  ok    低段之上的索引被拒绝
+  ok    高段之下的索引被拒绝
+  ok    高段之上的索引被拒绝
+  ok    两段全部 16384 个索引的偏移都在页内
+
+[页表自映射寻址]
+  ok    槽位 0x1ED 推出的自映射基址与历史固定值一致
+  ok    内核地址的叶项地址与逐步验算一致
+  ok    内核地址的叶项落在自映射区内
+  ok    用户地址的叶项落在自映射区内
+  ok    同一页内的地址映射到同一个叶项
+  ok    相邻页的叶项相差 8 字节
+  ok    512 个候选槽位的叶项都落在各自的自映射区内
+
+[EPTP 校验]
+  ok    典型合法 EPTP 被接受
+  ok    全零 EPTP 被拒绝——list 的空槽不能留零
+  ok    未定义的内存类型编码被拒绝
+  ok    硬件未报告支持 UC 时 UC 被拒绝
+  ok    三级页遍历被拒绝
+  ok    硬件不支持时开启 accessed/dirty 被拒绝
+  ok    硬件支持时开启 accessed/dirty 被接受
+  ok    低位保留域非零被拒绝
+  ok    超出 MAXPHYADDR 的页帧位被拒绝
+  ok    MAXPHYADDR 之内的高位页帧被接受
+  ok    硬件不支持四级页遍历时被拒绝
+
+[EPT 层次索引分解]
+  ok    物理地址 0 落在三级 0 号槽
+  ok    跨一个 2MiB 只推进 PD 索引
+  ok    1 GiB 边界推进 PDPT 且 PD 归零
+  ok    512 GiB 边界推进 PML4 且下两级归零
+  ok    512 GiB 前最后一字节落在 511/511 槽
+  ok    同一 2MiB 叶项内所有偏移索引相同
+  ok    取整到叶项基址后对齐且索引不变
+  ok    已对齐地址取整后不变
+
+[域限制只减不增]
+  ok    拿掉写权限后剩读与执行
+  ok    同一限制重复施加是幂等的
+  ok    限制不影响 suppress-#VE 与内存类型
+  ok    任意组合下结果权限都是原权限的子集
+
+[私有 EPT 构造算术]
+  ok    非叶项保留页对齐后的物理地址
+  ok    非叶项三种权限齐备
+  ok    非叶项不携带大页位、内存类型与 suppress-#VE
+  ok    rebase 换掉了物理地址
+  ok    rebase 之外的每一位都逐位存活
+  ok    rebase 保住了 suppress-#VE 与内存类型
+  ok    私有 EPTP 的内存类型/walk 长度/AD 位与共享的完全一致
+  ok    私有 EPTP 的 EPTRTA 与共享的不同
+  ok    表内 512 个槽的基址/偏移拆分全部往返一致
+  ok    四KiB 槽索引在叶内推进、跨叶归零
+  ok    单核单叶最小情形是 4 页
+  ok    128 核 8 叶共 1408 页
+  ok    恰好等于上限时接受
+  ok    超出上限一页即拒绝
+  ok    零页成本被拒绝：那说明叶集合是空的
+
+[Nested EPT composition]
+  ok    nonidentity outer mapping resolves
+  ok    L2 maps the replacement frame, not the L1 frame
+  ok    large outer mapping resolves
+  ok    2 MiB mapping retains the page offset and intersects permissions
+  ok    1 GiB mapping resolves
+  ok    1 GiB offset is preserved
+  ok    outer MMIO UC is never converted to WB
+  ok    inner MMIO UC is retained
+  ok    ignore PAT retained; A/D not preclaimed
+  ok    448 permission combinations preserve ownership and never widen access
+  ok    misaligned large frame refused
+  ok    large bit in 4 KiB leaf refused
+  ok    zero access refused
+  ok    unknown access refused
+  ok    reserved memory type refused
+
+================================================
+85 项检查，0 项失败

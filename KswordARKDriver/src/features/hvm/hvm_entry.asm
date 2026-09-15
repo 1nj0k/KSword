@@ -50,6 +50,7 @@ PUBLIC KswordARKHvmResidentVmExitEntry
 PUBLIC KswordARKHvmAsmInveptSingle
 PUBLIC KswordARKHvmAsmHostNmiStub
 PUBLIC KswordARKHvmAsmNestedL2Enter
+PUBLIC KswordARKHvmAsmProbeVmcsMemory
 PUBLIC KswordARKHvmAsmProbeLaunchL2
 PUBLIC KswordARKHvmAsmProbeL2ResumePoint
 EXTERN g_KswordHvmOriginalNmiHandler:QWORD
@@ -304,7 +305,7 @@ KswordARKHvmAsmLaunchResidentConfigFailed:
 KswordARKHvmAsmLaunchResident ENDP
 
 ;------------------------------------------------------------------------------
-; UCHAR KswordARKHvmAsmNestedL2Enter(KSW_HVM_GPR_FRAME* Frame, ULONG IsResume)
+; UCHAR KswordARKHvmAsmNestedL2Enter(Frame, IsResume, GuestFxState)
 ;
 ; Enter L2 with L1's general-purpose registers actually in the registers.
 ;
@@ -336,6 +337,11 @@ KswordARKHvmAsmNestedL2Enter PROC
     push r13
     push r14
     push r15
+    ; L2 inherits x87/SSE state as well as GPRs. Preserve C's state for VMfail.
+    ; Eight pushes leave RSP at 8 mod 16; this allocation aligns FXSAVE.
+    sub rsp, 208h
+    fxsave64 [rsp]
+    fxrstor64 [r8]
     ; Branch on the selector before loading, since loading destroys it.
     test dl, dl
     jnz KswordARKHvmAsmNestedL2Resume
@@ -378,6 +384,8 @@ KswordARKHvmAsmNestedL2Resume:
     vmresume
 KswordARKHvmAsmNestedL2Failed:
     ; Reached only when the entry did not happen; RSP is still ours.
+    fxrstor64 [rsp]
+    add rsp, 208h
     pop r15
     pop r14
     pop r13
@@ -390,6 +398,19 @@ KswordARKHvmAsmNestedL2Failed:
     mov eax, 1
     ret
 KswordARKHvmAsmNestedL2Enter ENDP
+
+; ULONG ProbeVmcsMemory(Field, Source, Destination): force both memory forms.
+KswordARKHvmAsmProbeVmcsMemory PROC
+    vmwrite rcx, QWORD PTR [rdx]
+    jbe KswordARKHvmAsmProbeVmcsMemoryFailed
+    vmread QWORD PTR [r8], rcx
+    jbe KswordARKHvmAsmProbeVmcsMemoryFailed
+    xor eax, eax
+    ret
+KswordARKHvmAsmProbeVmcsMemoryFailed:
+    mov eax, 1
+    ret
+KswordARKHvmAsmProbeVmcsMemory ENDP
 
 ;------------------------------------------------------------------------------
 ; ULONG KswordARKHvmAsmProbeLaunchL2(VOID)
@@ -416,6 +437,9 @@ KswordARKHvmAsmNestedL2Enter ENDP
 ; C side never has to ask memory where it is.
 ;------------------------------------------------------------------------------
 KswordARKHvmAsmProbeLaunchL2 PROC
+    ; RCX points at this CPU's result, carried through the actual L2 entry.
+    mov r9, rcx
+    mov DWORD PTR [r9], 0
     ; Aim vmcs12's guest RIP at the resume stub.  RIP-relative, so it is the
     ; runtime address rather than a link-time one.
     lea rdx, KswordARKHvmProbeL2Resume
@@ -429,6 +453,9 @@ KswordARKHvmAsmProbeLaunchL2 PROC
     jbe KswordARKHvmAsmProbeLaunchFailed
     ; Enter.  On success this does not return here - it returns through the
     ; stub below, as L2.
+    mov rax, 04B535746584C3231h
+    movq xmm0, rax
+    movq xmm5, rax
     vmlaunch
 KswordARKHvmAsmProbeLaunchFailed:
     ; Reached only when the entry did not happen.
@@ -440,6 +467,15 @@ KswordARKHvmAsmProbeLaunchL2 ENDP
 ; The address L2 resumes at: return zero to the C caller of the launcher.
 ;------------------------------------------------------------------------------
 KswordARKHvmProbeL2Resume PROC
+    mov rcx, 04B535746584C3231h
+    movq rax, xmm0
+    cmp rax, rcx
+    jne KswordARKHvmProbeL2FxChecked
+    movq rax, xmm5
+    cmp rax, rcx
+    jne KswordARKHvmProbeL2FxChecked
+    mov DWORD PTR [r9], 1
+KswordARKHvmProbeL2FxChecked:
     xor eax, eax
     ret
 KswordARKHvmProbeL2Resume ENDP

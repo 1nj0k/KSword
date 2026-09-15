@@ -292,32 +292,62 @@ KswordARKHvmNestedTranslateGuestLinear(
     return STATUS_UNSUCCESSFUL;
 }
 
-/*
- * Check that one guest linear address may be accessed from the exit handler.
- *
- * Only alignment is left here.  An eight-byte access that straddles a page
- * boundary needs two translations, and the second page can be absent while the
- * first is present - one refusal turning into a half-completed read.  Refusing
- * the straddle keeps every access to exactly one walk.
- *
- * The kernel-half rule that used to live here is gone, and deliberately.  It
- * existed only to keep the direct dereference inside the half Windows maps the
- * same way in every address space; now that the walk uses GUEST_CR3, the
- * guest's own tables decide, and a user-half operand from a ring-0 guest is
- * simply an address the walk can resolve like any other.
- */
-static BOOLEAN
-KswordARKHvmNestedIsGuestAccessAllowed(
-    _In_ ULONGLONG LinearAddress
+/* VMX memory operands need not be aligned, including packed GDTR/IDTR bases. */
+static NTSTATUS
+KswordARKHvmNestedAccessGuestQword(
+    _Inout_opt_ KSW_HVM_PHYS_WINDOW* Window,
+    _In_ ULONGLONG LinearAddress,
+    _Inout_ ULONGLONG* Value,
+    _In_ BOOLEAN Write
     )
 {
-    /* Reject an unaligned eight-byte access. */
-    if ((LinearAddress & 0x7ULL) != 0ULL) {
-        /* Report the address as not accessible from here. */
-        return FALSE;
+    ULONGLONG physical[2] = { 0ULL, 0ULL };
+    ULONG bytes[2] = { 8UL, 0UL };
+    ULONG count = 1UL;
+    ULONG part = 0UL;
+    ULONG offset = 0UL;
+    ULONGLONG transfer = Write ? *Value : 0ULL;
+    const ULONGLONG last = LinearAddress + 7ULL;
+    NTSTATUS status;
+
+    /* The walker supports four-level paging; reject a noncanonical range. */
+    if (last < LinearAddress ||
+        ((LinearAddress >> 47) != 0ULL && (LinearAddress >> 47) != 0x1FFFFULL) ||
+        ((last >> 47) != 0ULL && (last >> 47) != 0x1FFFFULL)) {
+        return STATUS_ACCESS_VIOLATION;
     }
-    /* Report that the access may proceed. */
-    return TRUE;
+    if ((LinearAddress & 0xFFFULL) > 0xFF8ULL) {
+        bytes[0] = (ULONG)(0x1000ULL - (LinearAddress & 0xFFFULL));
+        bytes[1] = 8UL - bytes[0];
+        count = 2UL;
+    }
+    /* Resolve both pages before a write so a missing second page changes neither. */
+    for (part = 0UL; part < count; ++part) {
+        status = KswordARKHvmNestedTranslateGuestLinear(
+            Window, LinearAddress + offset, &physical[part]);
+        if (!NT_SUCCESS(status)) { return status; }
+        offset += bytes[part];
+    }
+    offset = 0UL;
+    for (part = 0UL; part < count; ++part) {
+        volatile VOID* mapped = NULL;
+        ULONG index;
+        if (KswordARKHvmPhysWindowMap(Window, physical[part], bytes[part], &mapped) !=
+            KSW_HVM_PHYS_WINDOW_OK) {
+            return STATUS_UNSUCCESSFUL;
+        }
+        for (index = 0UL; index < bytes[part]; ++index) {
+            if (Write) {
+                ((volatile UCHAR*)mapped)[index] = ((UCHAR*)&transfer)[offset + index];
+            } else {
+                ((UCHAR*)&transfer)[offset + index] = ((volatile UCHAR*)mapped)[index];
+            }
+        }
+        KswordARKHvmPhysWindowUnmap(Window);
+        offset += bytes[part];
+    }
+    if (!Write) { *Value = transfer; }
+    return STATUS_SUCCESS;
 }
 
 NTSTATUS
@@ -327,33 +357,13 @@ KswordARKHvmNestedReadGuestQword(
     _Out_ ULONGLONG* Value
     )
 {
-    ULONGLONG guestPhysical = 0ULL;
-    NTSTATUS status = STATUS_UNSUCCESSFUL;
-
     /* Reject an incomplete caller contract before any translation. */
     if (Value == NULL) {
         /* Return the exact caller-contract failure. */
         return STATUS_INVALID_PARAMETER;
     }
     *Value = 0ULL;
-    /* Refuse an access this context cannot complete in one walk. */
-    if (!KswordARKHvmNestedIsGuestAccessAllowed(LinearAddress)) {
-        /* Return the explicit access refusal. */
-        return STATUS_ACCESS_VIOLATION;
-    }
-    status = KswordARKHvmNestedTranslateGuestLinear(
-        (KSW_HVM_PHYS_WINDOW*)Window,
-        LinearAddress,
-        &guestPhysical);
-    if (!NT_SUCCESS(status)) {
-        /* Return the exact translation failure. */
-        return status;
-    }
-    /* Return the guest read performed through the physical window. */
-    return KswordARKHvmPhysWindowReadQword(
-        (KSW_HVM_PHYS_WINDOW*)Window,
-        guestPhysical,
-        Value);
+    return KswordARKHvmNestedAccessGuestQword(Window, LinearAddress, Value, FALSE);
 }
 
 NTSTATUS
@@ -363,34 +373,8 @@ KswordARKHvmNestedWriteGuestQword(
     _In_ ULONGLONG Value
     )
 {
-    ULONGLONG guestPhysical = 0ULL;
-    NTSTATUS status = STATUS_UNSUCCESSFUL;
-
-    /* Refuse an access this context cannot complete in one walk. */
-    if (!KswordARKHvmNestedIsGuestAccessAllowed(LinearAddress)) {
-        /* Return the explicit access refusal. */
-        return STATUS_ACCESS_VIOLATION;
-    }
-    status = KswordARKHvmNestedTranslateGuestLinear(
-        (KSW_HVM_PHYS_WINDOW*)Window,
-        LinearAddress,
-        &guestPhysical);
-    if (!NT_SUCCESS(status)) {
-        /* Return the exact translation failure. */
-        return status;
-    }
-    /*
-     * A write walks read-only structures and then writes the target page.
-     *
-     * The dirty and accessed bits the processor would have set are not set
-     * here.  Nothing in this driver reads them for these pages, and setting
-     * them would mean writing the guest's paging structures from root mode -
-     * a larger promise than any caller needs.
-     */
-    return KswordARKHvmPhysWindowWriteQword(
-        (KSW_HVM_PHYS_WINDOW*)Window,
-        guestPhysical,
-        Value);
+    /* As before, this software access does not update guest paging A/D bits. */
+    return KswordARKHvmNestedAccessGuestQword(Window, LinearAddress, &Value, TRUE);
 }
 
 /* Translate the encoded address-size field into a width in bytes. */

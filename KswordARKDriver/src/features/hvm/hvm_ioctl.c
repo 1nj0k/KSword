@@ -20,6 +20,7 @@ Environment:
 #include "hvm_ept_view.h"
 #include "hvm_inject.h"
 #include "hvm_nested_probe.h"
+#include "hvm_nested_ept.h"
 #include "hvm_process.h"
 #include "hvm_memory.h"
 #include "hvm_msr_policy.h"
@@ -725,6 +726,53 @@ KswordARKHvmIoctlMemory(
     /* Publish the fixed completion size on protocol-level results. */
     *BytesReturned = sizeof(*memoryResponse);
     /* Return the complete ring -1 memory operation result. */
+    return status;
+}
+
+NTSTATUS KswordARKHvmIoctlNestedPage(
+    WDFDEVICE Device, WDFREQUEST Request, size_t InputBufferLength,
+    size_t OutputBufferLength, size_t* BytesReturned)
+{
+    PVOID input = NULL, output = NULL;
+    KSWORD_ARK_HVM_NESTED_PAGE_REQUEST* snapshot;
+    size_t inputBytes = 0U, outputBytes = 0U;
+    NTSTATUS status;
+    if (BytesReturned == NULL) { return STATUS_INVALID_PARAMETER; }
+    *BytesReturned = 0U;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) { return STATUS_INVALID_DEVICE_STATE; }
+    status = KswordARKValidateDeviceIoControlWriteAccess(Request);
+    if (!NT_SUCCESS(status)) { return status; }
+    status = WdfRequestRetrieveInputBuffer(Request,
+        sizeof(KSWORD_ARK_HVM_NESTED_PAGE_REQUEST), &input, &inputBytes);
+    if (!NT_SUCCESS(status)) { return status; }
+    status = WdfRequestRetrieveOutputBuffer(Request,
+        sizeof(KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE), &output, &outputBytes);
+    if (!NT_SUCCESS(status)) { return status; }
+    if (InputBufferLength < sizeof(*snapshot) || inputBytes < sizeof(*snapshot) ||
+        OutputBufferLength < sizeof(KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE) ||
+        outputBytes < sizeof(KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE)) {
+        return STATUS_INFO_LENGTH_MISMATCH;
+    }
+    snapshot = (KSWORD_ARK_HVM_NESTED_PAGE_REQUEST*)KswordARKAllocateNonPagedPool(
+        sizeof(*snapshot), KSWORD_ARK_HVM_VIEW_IOCTL_POOL_TAG);
+    if (snapshot == NULL) { return STATUS_INSUFFICIENT_RESOURCES; }
+    RtlCopyMemory(snapshot, input, sizeof(*snapshot));
+    if (snapshot->operation != KSWORD_ARK_HVM_NESTED_PAGE_QUERY) {
+        KSWORD_ARK_SAFETY_CONTEXT safety = { 0 };
+        safety.Operation = KSWORD_ARK_SAFETY_OPERATION_KERNEL_PATCH;
+        safety.ContextFlags =
+            (snapshot->flags & KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED) != 0UL
+                ? KSWORD_ARK_SAFETY_CONTEXT_FLAG_UI_CONFIRMED : 0UL;
+        safety.TargetText = L"Replace one nested guest EPT page";
+        safety.TargetTextChars = (USHORT)(RTL_NUMBER_OF(L"Replace one nested guest EPT page") - 1U);
+        status = KswordARKSafetyEvaluate(Device, &safety);
+    }
+    if (NT_SUCCESS(status)) {
+        status = KswordARKHvmNestedPageControl(snapshot,
+            (KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE*)output);
+        *BytesReturned = sizeof(KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE);
+    }
+    ExFreePoolWithTag(snapshot, KSWORD_ARK_HVM_VIEW_IOCTL_POOL_TAG);
     return status;
 }
 

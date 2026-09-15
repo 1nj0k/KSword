@@ -56,7 +56,8 @@ KswordARKHvmNestedL2Enter(
 UCHAR
 KswordARKHvmAsmNestedL2Enter(
     _In_ const struct _KSW_HVM_GPR_FRAME* Frame,
-    _In_ ULONG IsResume
+    _In_ ULONG IsResume,
+    _In_reads_bytes_(512) const VOID* GuestFxState
     );
 
 /*

@@ -1935,6 +1935,8 @@ typedef struct _KSWORD_ARK_HVM_INJECT_RESPONSE
 #define KSWORD_ARK_HVM_NESTED_PROBE_STATUS_NO_RESOURCES 4UL
 /* CR4.VMXE 置不上，后续每一步都不执行。 */
 #define KSWORD_ARK_HVM_NESTED_PROBE_STATUS_VMXE_REFUSED 5UL
+/* A required VMCS12 configuration write failed; L2 was not entered. */
+#define KSWORD_ARK_HVM_NESTED_PROBE_STATUS_CONFIGURATION_FAILED 6UL
 
 /* 这一步根本没有执行到。 */
 #define KSWORD_ARK_HVM_NESTED_PROBE_STEP_SKIPPED 3UL
@@ -2281,7 +2283,8 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
     unsigned long l2FuseTripped;
     unsigned long l2FuseReason;
     unsigned long l2FuseCount;
-    unsigned long l2FuseReserved;
+    /* Formerly reserved: host bits 0..4, memory operands bit 5, L2 SSE bit 6. */
+    unsigned long hostStateChecks;
     unsigned long long l2FuseRip;
 } KSWORD_ARK_HVM_NESTED_PROBE_ROW;
 
@@ -2305,3 +2308,28 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE
     KSWORD_ARK_HVM_NESTED_PROBE_ROW rows[
         KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS];
 } KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE;
+
+/* One live L2 page override, keyed by EPT12 root and L2 GPA. */
+#define KSWORD_ARK_IOCTL_FUNCTION_HVM_NESTED_PAGE 0x915UL
+#define IOCTL_KSWORD_ARK_HVM_NESTED_PAGE \
+    CTL_CODE(KSWORD_ARK_IOCTL_DEVICE_TYPE, KSWORD_ARK_IOCTL_FUNCTION_HVM_NESTED_PAGE, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+#define KSWORD_ARK_HVM_NESTED_PAGE_VERSION 1UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_QUERY 0UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_MAP 1UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_REMOVE 2UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED 1UL
+typedef struct _KSWORD_ARK_HVM_NESTED_PAGE_REQUEST {
+    unsigned long version, size, operation, flags;
+    unsigned long long confirmationToken;
+    unsigned long long ept12Pointer, guestPhysicalPage;
+    unsigned long expectedGeneration, reserved;
+    unsigned char shadow[4096];
+} KSWORD_ARK_HVM_NESTED_PAGE_REQUEST;
+typedef struct _KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE {
+    unsigned long version, size, status, lastStatus;
+    unsigned long generation, active, retired, residentProcessors;
+    unsigned long long ept12Pointer, guestPhysicalPage, shadowPhysicalPage;
+    unsigned long long originalPhysicalPage, composedCount;
+    unsigned long rootCount, reserved;
+    unsigned long long ept12Roots[KSWORD_ARK_HVM_MAX_PROCESSORS];
+} KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE;

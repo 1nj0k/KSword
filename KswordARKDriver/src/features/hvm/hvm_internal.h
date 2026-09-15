@@ -574,6 +574,13 @@ typedef struct _KSW_HVM_MSR_POLICY_SLOT
 } KSW_HVM_MSR_POLICY_SLOT;
 
 /* Own the serialized HVM capability, lifecycle, EPT, and telemetry state. */
+/* Immutable while published; counters are written atomically from VMX root. */
+typedef struct _KSW_HVM_NESTED_PAGE {
+    PVOID ShadowVirtual;
+    ULONGLONG Ept12Pointer, GuestPhysicalPage, ShadowPhysicalPage;
+    volatile LONG64 OriginalPhysicalPage, ComposedCount;
+} KSW_HVM_NESTED_PAGE;
+
 typedef struct _KSW_HVM_RUNTIME
 {
     /* Serialize PASSIVE_LEVEL lifecycle and protocol operations. */
@@ -876,6 +883,10 @@ typedef struct _KSW_HVM_RUNTIME
      * otherwise, so an unarmed runtime carries the storage but never a page.
      */
     KSW_HVM_EPTSW EptSwitch;
+    KSW_HVM_NESTED_PAGE* volatile NestedPage;
+    /* Failed unpublication retains its backing until invalidation is retried. */
+    KSW_HVM_NESTED_PAGE* NestedPageRetired;
+    ULONG NestedPageGeneration;
     /* 每条 R-1 进程处置。表只在常驻停着时被改，退出路径不加锁读。 */
     KSW_HVM_PROCESS_SLOT ProcessDispositions[KSWORD_ARK_HVM_MAX_PROCESS_DISPOSITIONS];
     /* 表里当前有多少条。 */
