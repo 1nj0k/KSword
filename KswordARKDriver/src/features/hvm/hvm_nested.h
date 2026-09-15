@@ -503,6 +503,20 @@ typedef struct _KSW_HVM_NESTED_VCPU
     ULONG L2RegionIdtrLostReason[4];
     ULONG L2RegionIdtrLostCount[4];
     /*
+     * And which of the two put the zero there, because the count above does
+     * not say and the two are opposite findings.
+     *
+     * A transition happens either because the entry wrote a zero out of
+     * vmcs12 over a base the processor already had - the cache lost it, and
+     * that is ours - or because L2 itself loaded an IDT with a zero base
+     * between two of our exits, which is the guest's own business and happens
+     * legitimately all through early boot.  Counting them apart makes the
+     * total decomposable: lost should be the sum of these two.
+     */
+    ULONGLONG L2RegionIdtrLoaded[4];
+    ULONG L2RegionIdtrCacheLost[4];
+    ULONG L2RegionIdtrGuestZeroed[4];
+    /*
      * Where L2 actually is, and whether it can take an interrupt there.
      *
      * Three times now a mechanism has been reasoned about, found genuinely

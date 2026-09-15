@@ -465,10 +465,23 @@ KswordARKHvmNestedL2Enter(
          * loop can destroy a base the processor itself put there.
          */
         if (g_KswordL2GuestFields[index] == 0x6818UL) {
+            ULONG region = 0UL;
+
             nested->L2IdtrBaseLoadedLast = value;
             nested->L2IdtrBaseLoadCount += 1UL;
             if (value != 0ULL) {
                 nested->L2IdtrBaseLoadedNonZeroCount += 1UL;
+            }
+            /* A zero over a base the last exit still had is ours, not L2's. */
+            for (region = 0UL; region < 4UL; ++region) {
+                if (nested->L2Vmcs12Regions[region] != nested->CurrentVmcs) {
+                    continue;
+                }
+                if (value == 0ULL && nested->L2RegionIdtrBase[region] != 0ULL) {
+                    nested->L2RegionIdtrCacheLost[region] += 1UL;
+                }
+                nested->L2RegionIdtrLoaded[region] = value;
+                break;
             }
         }
         KswordARKHvmNestedL2Write(g_KswordL2GuestFields[index], value);
@@ -1998,6 +2011,13 @@ KswordARKHvmNestedL2Reflect(
                         KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP);
                     nested->L2RegionIdtrLostReason[region] = ExitReason;
                     nested->L2RegionIdtrLostCount[region] += 1UL;
+                    /*
+                     * The entry handed L2 a base and the exit does not have
+                     * it, so L2 is the one that changed it.
+                     */
+                    if (nested->L2RegionIdtrLoaded[region] != 0ULL) {
+                        nested->L2RegionIdtrGuestZeroed[region] += 1UL;
+                    }
                 }
                 nested->L2RegionIdtrBase[region] = saved;
                 break;

@@ -39,7 +39,7 @@ $rows = Invoke-Command -Session $s -ArgumentList $Depth -ScriptBlock {
         $all += $r
         $cur = [int64]$r[-1].sequence
     }
-    return ($all | Where-Object { $_.ruleId -in @(208, 209, 210, 211) })
+    return ($all | Where-Object { $_.ruleId -in @(207, 208, 209, 210, 211) })
 }
 
 Remove-PSSession $s
@@ -97,4 +97,17 @@ foreach ($r in ($perRegion | Sort-Object { [int64]$_.sequence } | Select-Object 
     Write-Output ("  当前基址 = 0x{0:X16}" -f ([uint64]$r.qualification))
     Write-Output ("  归零次数 = {0}   归零时 RIP = 0x{1:X}   归零时退出原因 = {2}" -f `
         ([uint64]$r.guestLinearAddress), ([uint64]$r.guestPhysicalAddress), ([uint32]$r.status))
+}
+
+# 归零次数的分解：是我们的装入把它抹了，还是 L2 自己重载了 IDT。
+$blame = @($rows | Where-Object { $_.ruleId -eq 207 })
+if ($blame.Count -eq 0) { Write-Output ''; Write-Output '0xCF（归零归因）：(没有这一行)' }
+foreach ($r in ($blame | Sort-Object { [int64]$_.sequence } | Select-Object -Last 4)) {
+    Write-Output ''
+    Write-Output ("0xCF 归零归因  核{0}  区{1}  vmcs12=0x{2:X}  序号 {3}" -f `
+        $r.access, [uint64]$r.exitReason, ([uint64]$r.guestRip), $r.sequence)
+    Write-Output ("  归零总数 = {0}" -f ([uint32]$r.status))
+    Write-Output ("    其中我们装入抹掉的 = {0}" -f ([uint64]$r.guestPhysicalAddress))
+    Write-Output ("    其中 L2 自己重载的 = {0}" -f ([uint64]$r.guestLinearAddress))
+    Write-Output ("  上次装入值 = 0x{0:X16}" -f ([uint64]$r.qualification))
 }

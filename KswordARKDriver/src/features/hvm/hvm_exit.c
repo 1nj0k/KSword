@@ -1533,6 +1533,20 @@ KswordARKHvmExitPublishCost(
             row.access = (ULONG)Context->ApicId;
             row.ruleId = 0xD0u;
             KswordARKHvmEventPublish(&row);
+            /* And the decomposition of that count - see the fields. */
+            RtlZeroMemory(&row, sizeof(row));
+            row.type = KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE;
+            row.exitReason = slot;
+            row.qualification = Context->Nested.L2RegionIdtrLoaded[slot];
+            row.guestPhysicalAddress =
+                (ULONGLONG)Context->Nested.L2RegionIdtrCacheLost[slot];
+            row.guestLinearAddress =
+                (ULONGLONG)Context->Nested.L2RegionIdtrGuestZeroed[slot];
+            row.guestRip = Context->Nested.L2Vmcs12Regions[slot];
+            row.status = (LONG)Context->Nested.L2RegionIdtrLostCount[slot];
+            row.access = (ULONG)Context->ApicId;
+            row.ruleId = 0xCFu;
+            KswordARKHvmEventPublish(&row);
         }
     }
     {
