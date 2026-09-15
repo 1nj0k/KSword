@@ -416,9 +416,6 @@ KswordARKHvmExitPublishTelemetry(
     basicReason =
         Telemetry->Reason &
         KSW_HVM_VMEXIT_REASON_BASIC_MASK;
-    /* Increment the process-wide VM-exit count atomically. */
-    InterlockedIncrement64(
-        &Context->Runtime->VmExitCount);
     /* Publish the last exit qualification atomically. */
     InterlockedExchange64(
         &Context->Runtime->LastExitQualification,
@@ -443,10 +440,6 @@ KswordARKHvmExitPublishTelemetry(
     InterlockedExchange(
         &Context->Runtime->LastVmInstructionError,
         (LONG)Telemetry->VmInstructionError);
-    /* Increment the processor-local VM-exit count atomically. */
-    InterlockedIncrement64(
-        (volatile LONG64*)&Context->Resource->
-            Row.vmExitCount);
     /* Publish the processor-local last exit reason. */
     Context->Resource->Row.lastExitReason =
         basicReason;
@@ -2131,6 +2124,10 @@ KswordARKHvmResidentVmExitDispatchBody(
         /* Request a bounded fatal trap with no unsafe continuation. */
         return KSW_HVM_EXIT_ACTION_FATAL;
     }
+    /* Count every resident dispatcher entry, including early L2 reflection. */
+    InterlockedIncrement64(&Context->Runtime->VmExitCount);
+    /* A valid processor context owns exactly one count for this entry. */
+    InterlockedIncrement64((volatile LONG64*)&Context->Resource->Row.vmExitCount);
     {
         const ULONGLONG readStart = __rdtsc();
 
@@ -2179,8 +2176,15 @@ KswordARKHvmResidentVmExitDispatchBody(
             ? KSW_HVM_EXIT_ACTION_DEVIRTUALIZE
             : KSW_HVM_EXIT_ACTION_FATAL;
     }
+    /* Classify the original exit before nested reflection changes the VMCS. */
+    basicReason = telemetry.Reason & KSW_HVM_VMEXIT_REASON_BASIC_MASK;
+    /* Per-CPU histograms have one writer; concurrent queries are observational. */
+    if (basicReason < KSWORD_ARK_HVM_EXIT_REASON_SLOTS) {
+        /* Unreadable reasons remain in the total count without inventing a class. */
+        Context->Resource->ExitReasonCount[basicReason] += 1UL;
+    }
     /*
-     * Route an L2 exit before anything else looks at it.
+     * Route an L2 exit before anything else services it.
      *
      * While L2 runs, every field this handler reads describes L2, not the
      * guest we host directly - so the ordinary handling below would act on the
@@ -2220,28 +2224,6 @@ KswordARKHvmResidentVmExitDispatchBody(
             /* Resume whichever guest routing left loaded. */
             return KSW_HVM_EXIT_ACTION_RESUME;
         }
-    }
-    /* Decode the Intel basic VM-exit reason. */
-    basicReason =
-        telemetry.Reason &
-        KSW_HVM_VMEXIT_REASON_BASIC_MASK;
-    /*
-     * Count the exit here, before anything can decide to leave.
-     *
-     * Placed immediately after the reason is decoded so the histogram counts
-     * exits by what they *were*, independent of how they were later serviced -
-     * including the ones that devirtualize a few lines below and never reach
-     * the servicing switch at all.  An exit the driver refused to handle is
-     * exactly the kind worth having a count of.
-     *
-     * Plain increment, no interlocked: this array belongs to the processor
-     * executing this handler and no other writer exists.  Nothing reads it
-     * concurrently either - the protocol path sums the columns while reporting,
-     * where a torn count would cost a slightly stale diagnostic number and
-     * nothing else.
-     */
-    if (basicReason < KSWORD_ARK_HVM_EXIT_REASON_SLOTS) {
-        Context->Resource->ExitReasonCount[basicReason] += 1UL;
     }
     /*
      * Optional VMREAD load, for measuring what a VMCS field access costs here.

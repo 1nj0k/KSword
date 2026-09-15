@@ -1300,6 +1300,15 @@
       "notes": "只读查询 VT-x 生命周期状态；不做 VMXON/VMXOFF。"
     },
     {
+      "id": "r0.hvm-metrics",
+      "tier": "probe",
+      "ioctls": ["HVM_METRICS"],
+      "steps": [["r0", "hvm-metrics"]],
+      "expect": "graceful",
+      "timeoutSeconds": 120,
+      "notes": "Read-only timing/counter snapshot; does not enter VMX or allocate mappings."
+    },
+    {
       "id": "r0.hvm-platform",
       "tier": "probe",
       "ioctls": [
@@ -2940,6 +2949,16 @@
       "ioctl": "HVM_INJECT",
       "reason": "code-injection",
       "detail": "在目标已有的可执行页上装 KIND_HOOK 视图，把外壳与载荷写进影子页的空隙，再在取指违规时劫持 RIP。崩溃取决于载荷而不是驱动；且与 HVM_PROCESS 同样要求常驻已起、CR3 追踪与 EPTP 切换后端都就位，CI 机器上凑不齐。"
+    },
+    {
+      "ioctl": "HVM_NESTED_PAGE",
+      "reason": "virtualization-lifecycle",
+      "detail": "Requires a dedicated resident nested-VMX target and a guest-reserved physical page. Mutation and reclamation are covered by tools/hvm_paper, not by the general CI runner."
+    },
+    {
+      "ioctl": "HVM_NESTED_PROBE",
+      "reason": "virtualization-lifecycle",
+      "detail": "Runs nested VMX instructions on a dedicated target; capability and failure handling depend on the outer hypervisor. General CI cannot assume VMX ownership."
     },
     {
       "ioctl": "HWID_DISPATCH_CONTROL",

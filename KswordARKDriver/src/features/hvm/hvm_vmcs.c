@@ -16,6 +16,7 @@ Environment:
 --*/
 
 #include "hvm_vmcs.h"
+#include "hvm_metrics.h"
 
 #include "driver/KswordArkHvmControls.h"
 /* KSWORD_ARK_HVM_VMCS_DIAG_*：配置失败判别码的编码，与用户态工具共用同一份定义。 */
@@ -1295,6 +1296,11 @@ KswordARKHvmConfigureVmcs(
             { KSW_VMCS_HOST_EFER, (SIZE_T)efer }
         };
 
+        /* The ledger now contains all captured state and selected controls. */
+        if (Input->ResidentMode != 0U) {
+            /* This boundary precedes the first write from the fixed ledger. */
+            KswordARKHvmMetricsCpuStamp(Input->MetricsCpuIndex, KSW_HVM_TIME_STATE_CAPTURED);
+        }
         /* 先写入所有处理器都实现的基础字段。 */
         status = KswordARKHvmWriteVmcs(
             writes,

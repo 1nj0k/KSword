@@ -24,6 +24,7 @@ Environment:
 #include "hvm_process.h"
 #include "hvm_memory.h"
 #include "hvm_msr_policy.h"
+#include "hvm_metrics.h"
 #include "../../dispatch/ioctl_validation.h"
 #include "../../platform/pool_compat.h"
 
@@ -31,6 +32,48 @@ Environment:
 #define KSWORD_ARK_HVM_MEMORY_IOCTL_POOL_TAG 'IvHK'
 /* Tag the view request snapshot, which carries a full shadow page. */
 #define KSWORD_ARK_HVM_VIEW_IOCTL_POOL_TAG 'VvHK'
+
+/* Read-only measurement query; it never performs a VMX transition. */
+NTSTATUS KswordARKHvmIoctlMetrics(
+    WDFDEVICE Device, WDFREQUEST Request, size_t InputBufferLength,
+    size_t OutputBufferLength, size_t* BytesReturned)
+{
+    /* Validate METHOD_BUFFERED input before overwriting its shared buffer. */
+    PVOID input = NULL, output = NULL;
+    size_t inputBytes = 0U, outputBytes = 0U;
+    KSWORD_ARK_HVM_METRICS_REQUEST* query;
+    NTSTATUS status;
+    /* This query needs no mutable device context. */
+    UNREFERENCED_PARAMETER(Device);
+    /* Every rejected request reports zero completed bytes. */
+    if (BytesReturned == NULL) { return STATUS_INVALID_PARAMETER; }
+    /* Initialize completion before retrieving buffers. */
+    *BytesReturned = 0U;
+    /* Retrieve the complete versioned query. */
+    status = WdfRequestRetrieveInputBuffer(Request, sizeof(*query), &input, &inputBytes);
+    /* Reject truncation before reading any query member. */
+    if (!NT_SUCCESS(status)) { return status; }
+    /* Check both the dispatcher and WDF input lengths. */
+    if (InputBufferLength < sizeof(*query) || inputBytes < sizeof(*query)) { return STATUS_INFO_LENGTH_MISMATCH; }
+    /* Interpret the validated fixed input. */
+    query = (KSWORD_ARK_HVM_METRICS_REQUEST*)input;
+    /* Preserve independent protocol-version negotiation. */
+    if (query->version != KSWORD_ARK_HVM_METRICS_VERSION || query->size != sizeof(*query)) { return STATUS_REVISION_MISMATCH; }
+    /* Refuse unknown flags before producing output. */
+    if (query->flags != 0UL || query->reserved != 0UL) { return STATUS_INVALID_PARAMETER; }
+    /* Retrieve fixed-capacity output without using the kernel stack. */
+    status = WdfRequestRetrieveOutputBuffer(Request, sizeof(KSWORD_ARK_HVM_METRICS_RESPONSE), &output, &outputBytes);
+    /* Propagate retrieval failure without touching output. */
+    if (!NT_SUCCESS(status)) { return status; }
+    /* Partial per-processor timing is not an authoritative response. */
+    if (OutputBufferLength < sizeof(KSWORD_ARK_HVM_METRICS_RESPONSE) || outputBytes < sizeof(KSWORD_ARK_HVM_METRICS_RESPONSE)) { return STATUS_BUFFER_TOO_SMALL; }
+    /* Copy observations without resetting counters or changing residency. */
+    status = KswordARKHvmMetricsQuery((KSWORD_ARK_HVM_METRICS_RESPONSE*)output);
+    /* Report completed bytes only on success. */
+    if (NT_SUCCESS(status)) { *BytesReturned = sizeof(KSWORD_ARK_HVM_METRICS_RESPONSE); }
+    /* Return the authoritative query result. */
+    return status;
+}
 
 NTSTATUS
 KswordARKHvmIoctlPlatform(

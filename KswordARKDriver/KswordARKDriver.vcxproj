@@ -143,6 +143,12 @@
     <ClCompile Include="src\features\hvm\hvm_descriptor.c">
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
+    <ClCompile Include="src\features\hvm\hvm_metrics.c">
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
+    <ClCompile Include="src\features\hvm\hvm_nested_page.c">
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
     <ClCompile Include="src\features\hvm\hvm_guest.c">
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
@@ -503,6 +509,8 @@
     <ClInclude Include="src\features\hvm\hvm_resident.h" />
     <ClInclude Include="src\features\hvm\hvm_vmcs.h" />
     <ClInclude Include="src\features\hvm\hvm_descriptor.h" />
+    <ClInclude Include="src\features\hvm\hvm_metrics.h" />
+    <ClInclude Include="..\shared\driver\KswordArkHvmMetricsIoctl.h" />
     <ClInclude Include="src\features\hvm\hvm_guest.h" />
     <ClInclude Include="..\shared\driver\KswordArkHvmIoctl.h" />
     <ClInclude Include="..\shared\driver\KswordArkSlatIommuAuditIoctl.h" />

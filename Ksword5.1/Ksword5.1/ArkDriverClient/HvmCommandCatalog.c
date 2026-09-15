@@ -9,6 +9,8 @@
 #include "../../../shared/driver/KswordArkHvmIoctl.h"
 
 static const HVM_COMMAND_SPEC g_commands[] = {
+    { "metrics", "虚拟化测量", "查询与观测", "读取逐核转换时间、INVEPT 和替换页资源计数。", HvmMetrics, 1, 0UL, 0UL, 0,
+      { { NULL, HvmDecimal32, NULL } } },
     { "status", "运行状态", "查询与观测", "读取完整能力、处理器状态与退出计数。", HvmStatus, 1, 0UL, 0UL, 0,
       { { NULL, HvmDecimal32, NULL } } },
     { "cpuid-view", "CPUID 可见性", "查询与观测", "读取当前进程看到的 Hypervisor 身份；无需加载驱动。", HvmCpuid, 1, 0UL, 0UL, 0,
@@ -121,6 +123,10 @@ static const HVM_COMMAND_SPEC g_commands[] = {
       { { "EPT12 指针（十六进制）", HvmHex64, NULL }, { "来宾物理页（十六进制，4 KiB 对齐）", HvmPageAddress, NULL }, { "影子页填充值（00–FF）", HvmByte, NULL } } },
     { "nested-page-remove", "撤销 TinyCore 换页", "TinyCore 换页", "取消替换并等待全部处理器失效；retired 非零表示仍有保留页。", HvmPageRemove, 0, 0UL, 0UL, 0,
       { { NULL, HvmDecimal32, NULL } } },
+    { "nested-page-map-test", "换页故障注入", "TinyCore 换页", "仅用于专用测试页：1 分配失败，2 提交前取消，3 提交后回滚，4 提交失效失败。", HvmPageMapTest, 0, 0UL, 0UL, 4,
+      { { "EPT12 指针（十六进制）", HvmHex64, NULL }, { "来宾物理页（十六进制，4 KiB 对齐）", HvmPageAddress, NULL }, { "影子页填充值（00–FF）", HvmByte, NULL }, { "故障阶段（1–4）", HvmDecimal32, NULL } } },
+    { "nested-page-remove-test", "撤销失效故障注入", "TinyCore 换页", "模拟撤销时失效失败，保留 retired 页；随后用正常撤销命令重试回收。", HvmPageRemoveTest, 0, 0UL, 0UL, 0,
+      { { NULL, HvmDecimal32, NULL } } },
     { "msr-log", "记录指定 MSR", "寄存器策略", "添加指定 MSR 的日志策略；编号为十六进制。", HvmMsrLog, 0, 0UL, 0UL, 1,
       { { "MSR 编号（十六进制）", HvmHex32, "10" } } },
     { "msr-clear", "清空 MSR 策略", "寄存器策略", "清空已安装的 MSR 策略。", HvmMsrClear, 0, 0UL, 0UL, 0,
@@ -229,6 +235,9 @@ int KswordHvmValidateArguments(const HVM_COMMAND_SPEC* command, int count,
     }
     if (command->handler == HvmGdt && values[0] > INT_MAX) {
         return HvmArgumentError(error, errorSize, command->arguments[0].name);
+    }
+    if (command->handler == HvmPageMapTest && (values[3] < 1 || values[3] > 4)) {
+        return HvmArgumentError(error, errorSize, command->arguments[3].name);
     }
     return 0;
 }

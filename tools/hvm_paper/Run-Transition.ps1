@@ -4,7 +4,7 @@ if(@(Get-Process -Name vmware-vmx -ErrorAction SilentlyContinue).Count){throw 'M
 $driver=(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\KswordARK').ImagePath -replace '^\\\?\?\\',''
 $driverHash=(Get-FileHash -LiteralPath $driver).Hash
 $probe=Join-Path $OutputDirectory 'transition_probe.exe'
-$probeHash=(Get-FileHash -LiteralPath $probe).Hash
+$probeHash=if($WithoutGapObserver){$null}else{(Get-FileHash -LiteralPath $probe).Hash}
 function Save($Object,$Path) {
     $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($Object | ConvertTo-Json -Depth 24))
     $stream=[IO.File]::Open($Path,[IO.FileMode]::Create,[IO.FileAccess]::Write,[IO.FileShare]::Read)
@@ -39,6 +39,9 @@ function Transition([string]$Command,[int]$Iteration) {
         $record.probeRaw=(& $probe $Command 2>&1 | Out-String)
         $record.probeExitCode=$LASTEXITCODE
     }
+    $record.metricsRaw=(& C:\ksword\hvm_ctl.exe --json metrics 2>&1 | Out-String)
+    $record.metricsExitCode=$LASTEXITCODE
+    Save $record $path
     $record.after=State
     $record.eventsRaw=(& C:\ksword\hvm_ctl.exe --json events 0 256 2>&1 | Out-String)
     $record.endedUtc=[DateTime]::UtcNow.ToString('o')

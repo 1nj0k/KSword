@@ -4,7 +4,8 @@ param(
     [string]$VMName='KSword-HVM-Target',
     [string]$GuestDirectory='C:\ksword\paper',
     [int]$Repetitions=7,
-    [int]$TransitionPairs=7
+    [int]$TransitionPairs=7,
+    [bool]$WithoutGapObserver=$true
 )
 $ErrorActionPreference='Stop'
 $env:COMPUTERNAME=[Environment]::MachineName
@@ -27,22 +28,22 @@ try {
         }
         $final=(& C:\ksword\hvm_ctl.exe --json status | Out-String);$s=$final | ConvertFrom-Json
         if($s.featureNames -notcontains 'EPTP_SWITCH_ARMED' -or $s.selfTestPassedProcessorCount -ne 2){throw 'Require EPTP switch and two self-tested processors.'}
-        [ordered]@{kind='ab-setup';utc=[DateTime]::UtcNow.ToString('o');initialRaw=$initial;commands=$commands;finalRaw=$final}
+        [ordered]@{kind='ab-setup';utc=[DateTime]::UtcNow.ToString('o');initialRaw=$initial;commands=$commands;finalRaw=$final;prepareMetricsRaw=(& C:\ksword\hvm_ctl.exe --json metrics | Out-String)}
     }
     $setup | ConvertTo-Json -Depth 18 | Set-Content -LiteralPath (Join-Path $OutputDirectory ('ab-preflight-'+$sessionStarted.ToString('yyyyMMddTHHmmssZ')+'.json')) -Encoding utf8
     $bench=Join-Path $PSScriptRoot 'Run-WindowsBenchmarks.ps1'
     $transition=Join-Path $PSScriptRoot 'Run-Transition.ps1'
     Invoke-Command -Session $session -FilePath $bench -ArgumentList 'off-pre-no-vmware',$GuestDirectory,$Repetitions
-    Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'resident-nested-hidehv',0
+    Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'resident-nested-hidehv',0,$WithoutGapObserver
     Invoke-Command -Session $session -FilePath $bench -ArgumentList 'on-no-vmware',$GuestDirectory,$Repetitions
-    Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'stop',0
+    Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'stop',0,$WithoutGapObserver
     Invoke-Command -Session $session -FilePath $bench -ArgumentList 'off-post-no-vmware',$GuestDirectory,$Repetitions
     for($i=1;$i -le $TransitionPairs;$i++) {
-        Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'resident-nested-hidehv',$i
-        Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'stop',$i
+        Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'resident-nested-hidehv',$i,$WithoutGapObserver
+        Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'stop',$i,$WithoutGapObserver
     }
 }finally {
-    $files=Invoke-Command -Session $session -ArgumentList $GuestDirectory -ScriptBlock {param($dir) Get-ChildItem -LiteralPath $dir -Filter '*.json' | Where-Object {$_.Name -like 'windows1-*' -or $_.Name -like 'transition-*'} | Select-Object -ExpandProperty FullName}
+    $files=Invoke-Command -Session $session -ArgumentList $GuestDirectory,$sessionStarted -ScriptBlock {param($dir,$since) Get-ChildItem -LiteralPath $dir -Filter '*.json' | Where-Object {($_.Name -like 'windows1-*' -or $_.Name -like 'transition-*') -and $_.LastWriteTimeUtc -ge $since} | Select-Object -ExpandProperty FullName}
     foreach($file in $files){Copy-Item -FromSession $session -LiteralPath $file -Destination $OutputDirectory -Force}
     Remove-PSSession $session
 }

@@ -18,6 +18,7 @@ Environment:
 --*/
 
 #include "hvm_internal.h"
+#include "hvm_metrics.h"
 // KswordARKAllocateNonPagedPool：L1 位图副本不进硬件，用普通池即可。
 #include "../../platform/pool_compat.h"
 
@@ -1699,7 +1700,11 @@ KswordARKHvmPrepareLocked(
         KswordARKHvmFreeResourcesLocked(Runtime);
         return status;
     }
+    /* Base EPT construction belongs to prepare, before resident insertion. */
+    KswordARKHvmMetricsStamp(KSW_HVM_TIME_EPT_BEGIN);
     status = KswordARKHvmBuildEptLocked(Runtime);
+    /* Record failures as well as successful hierarchy construction. */
+    KswordARKHvmMetricsStamp(KSW_HVM_TIME_EPT_END);
     if (!NT_SUCCESS(status)) {
         KswordARKHvmFreeResourcesLocked(Runtime);
         return status;
@@ -3205,9 +3210,13 @@ KswordARKHvmControl(
     g_KswordHvm.Busy = TRUE;
     KswordARKHvmStateSet(&g_KswordHvm, KSWORD_ARK_HVM_STATE_BUSY);
     if (Request->command == KSWORD_ARK_HVM_CONTROL_PREPARE) {
+        /* Measure preparation separately from resident insertion. */
+        KswordARKHvmMetricsBegin(Request->command);
         status = KswordARKHvmPrepareLocked(
             &g_KswordHvm,
             Request);
+        /* Preserve both successful and failed preparation intervals. */
+        KswordARKHvmMetricsEnd(status);
     } else if (Request->command ==
         KSWORD_ARK_HVM_CONTROL_SELF_TEST) {
         status = KswordARKHvmSelfTestLocked(
@@ -3225,14 +3234,20 @@ KswordARKHvmControl(
             &g_KswordHvm,
             Request->vmreadBenchIterations);
         /* Enter resident VMX only through the all-processor rendezvous. */
+        KswordARKHvmMetricsBegin(Request->command);
         status = KswordARKHvmResidentStart(
             &g_KswordHvm,
             Request->flags);
+        /* Finalize after complete startup or its rollback. */
+        KswordARKHvmMetricsEnd(status);
     } else if (Request->command ==
         KSWORD_ARK_HVM_CONTROL_STOP_RESIDENT) {
         /* Leave resident VMX through the all-processor rollback path. */
+        KswordARKHvmMetricsBegin(Request->command);
         status = KswordARKHvmResidentStop(
             &g_KswordHvm);
+        /* Preserve timing after the per-CPU contexts have been released. */
+        KswordARKHvmMetricsEnd(status);
     } else if (Request->command ==
         KSWORD_ARK_HVM_CONTROL_SOAK) {
         /* Hold residency for a bounded window and report whether it held. */

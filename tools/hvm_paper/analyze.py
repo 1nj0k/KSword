@@ -244,6 +244,11 @@ def stability(root, derived):
     results, rows = [], []
     for path in sorted(root.glob("stability-*.jsonl")):
         samples = [json.loads(s) for s in path.read_text(encoding="utf-8-sig").splitlines() if s.strip()]
+        if samples and samples[0].get('schemaVersion', 1) >= 2:
+            from stability_v2 import summarize_samples
+            result, new_rows = summarize_samples(samples, path.name)
+            results.append(result); rows.extend(new_rows)
+            continue
         good = [s for s in samples if s["status"] == "ok"]
         if len(good) < 2:
             results.append({"source": path.name, "status": "insufficient_samples"});continue

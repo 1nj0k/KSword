@@ -2,8 +2,8 @@ param(
     [Parameter(Mandatory)][PSCredential]$Credential,
     [string]$VMName='KSword-HVM-Target',
     [Parameter(Mandatory)][string]$OutputDirectory,
-    [int]$Seconds=600,
-    [int]$IntervalSeconds=30
+    [ValidateRange(1,86400)][int]$Seconds=600,
+    [ValidateRange(1,300)][int]$IntervalSeconds=30
 )
 $ErrorActionPreference='Stop'
 $env:COMPUTERNAME=[Environment]::MachineName
@@ -19,7 +19,7 @@ try {
     do {
         $start=[DateTime]::UtcNow.ToString('o')
         $sampleWatch=[Diagnostics.Stopwatch]::StartNew()
-        $sample=[ordered]@{schemaVersion=1;runId=$runId;sequence=$sequence;startedUtc=$start;hostElapsedSeconds=$watch.Elapsed.TotalSeconds;kind='stability-sample';status='ok'}
+        $sample=[ordered]@{schemaVersion=2;runId=$runId;sequence=$sequence;startedUtc=$start;hostElapsedSeconds=$watch.Elapsed.TotalSeconds;kind='stability-sample';status='ok';counterScope='all-resident-dispatch-entries';requestedSeconds=$Seconds}
         try {
             $sample.vm=Get-VM -Name $VMName | Select-Object Id,State,Uptime,MemoryAssigned,CPUUsage
             $sample.windows1=Invoke-Command -Session $session -ScriptBlock {
@@ -32,10 +32,16 @@ try {
                 $statusExit=$LASTEXITCODE
                 $pageRaw=(& C:\ksword\hvm_ctl.exe --json nested-page-query 2>&1 | Out-String)
                 $pageExit=$LASTEXITCODE
+                $metricsRaw=(& C:\ksword\hvm_ctl.exe --json metrics 2>&1 | Out-String)
+                $metricsExit=$LASTEXITCODE
+                $driverPath=(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\KswordARK').ImagePath -replace '^\\\?\?\\',''
+                $driverSha256=(Get-FileHash -LiteralPath $driverPath).Hash
                 $fs=[IO.File]::Open('C:\vmware\hltprobe.log',[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::ReadWrite)
+                $serialLength=$fs.Length
+                $null=$fs.Seek([Math]::Max(0,$serialLength-65536),[IO.SeekOrigin]::Begin)
                 $reader=New-Object IO.StreamReader($fs)
                 try {$serial=$reader.ReadToEnd()} finally {$reader.Dispose();$fs.Dispose()}
-                [ordered]@{capturedUtc=[DateTime]::UtcNow.ToString('o');bootUtc=$os.LastBootUpTime.ToUniversalTime().ToString('o');uptimeSeconds=([DateTime]::UtcNow-$os.LastBootUpTime.ToUniversalTime()).TotalSeconds;memory=$memory;processes=$processes;hvmStatusExit=$statusExit;hvmStatusRaw=$statusRaw;pageStatusExit=$pageExit;pageStatusRaw=$pageRaw;serialLength=$serial.Length;serialTail=$serial.Substring([Math]::Max(0,$serial.Length-6000))}
+                [ordered]@{capturedUtc=[DateTime]::UtcNow.ToString('o');bootUtc=$os.LastBootUpTime.ToUniversalTime().ToString('o');uptimeSeconds=([DateTime]::UtcNow-$os.LastBootUpTime.ToUniversalTime()).TotalSeconds;driverSha256=$driverSha256;memory=$memory;processes=$processes;hvmStatusExit=$statusExit;hvmStatusRaw=$statusRaw;pageStatusExit=$pageExit;pageStatusRaw=$pageRaw;metricsExit=$metricsExit;metricsRaw=$metricsRaw;serialLength=$serialLength;serialTail=$serial.Substring([Math]::Max(0,$serial.Length-6000))}
             }
         } catch {
             $failures++

@@ -36,6 +36,7 @@
 #include "../../../shared/driver/KswordArkKernelBaselineIoctl.h"
 #include "../../../shared/driver/KswordArkPiDdbIoctl.h"
 #include "../../../shared/driver/KswordArkHvmIoctl.h"
+#include "../../../shared/driver/KswordArkHvmMetricsIoctl.h"
 #include "../../../shared/driver/KswordArkSlatIommuAuditIoctl.h"
 #include "../../../shared/driver/KswordArkSecurityAuditIoctl.h"
 #include "../../../shared/driver/KswordArkTrustIoctl.h"
@@ -1612,6 +1613,14 @@ namespace ksword::ark
         IoResult io;
         bool unsupported = false;
         KSWORD_ARK_QUERY_HVM_RESPONSE response{};
+    };
+
+    // Metrics are independently versioned; validity flags define usable intervals.
+    struct HvmMetricsResult
+    {
+        IoResult io;
+        bool unsupported = false;
+        KSWORD_ARK_HVM_METRICS_RESPONSE response{};
     };
 
     // HvmControlResult carries one generation-bound prepare, self-test, or

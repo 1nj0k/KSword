@@ -1,7 +1,8 @@
 # HVM paper evidence tools
 
-This collector measures the existing HVM command engine. It does not add driver
-IOCTLs or change the GUI. The checked-in pilot is documented in
+These collectors measure the shared HVM command engine. The `metrics` command
+adds an independently versioned, read-only driver snapshot and appears in the
+main program's existing command catalog. The checked-in pilot is documented in
 [the evidence report](../../docs/next/hvm-paper-evidence.md).
 
 ## Recompute the archived pilot
@@ -77,8 +78,15 @@ Invoke-Command -Session $session -FilePath tools/hvm_paper/Run-Transition.ps1 `
   -ArgumentList 'C:\ksword\paper','resident-nested-hidehv',1,$true
 ```
 
-The final boolean disables the busy observer. All reported command durations include
-process creation and CLI work; neither mode exposes exact VMX phase durations.
+The final boolean disables the busy observer; this is now the default in
+`Run-WindowsAB.ps1`. Command durations include process creation and CLI work.
+New records also retain `metricsRaw`: driver QPC boundaries for resource setup,
+EPT construction, IPI rendezvous, and each CPU's capture/control selection, VMCS
+programming and entry continuation. Run `transition_metrics.py <directory>` to
+validate ordering, completeness, command identity and CPU identity before deriving
+intervals. The rendezvous envelope bounds disruption; it is not exact application
+pause, and simultaneous entry is not claimed. INVEPT counters count actual wrapper
+calls, whereas resource counters cover only nested-page objects/replacement pages.
 The collector does not kill an in-flight HVM command at its timeout. Inspect saved
 state and remaining command processes before further mutations.
 
@@ -86,8 +94,10 @@ state and remaining command processes before further mutations.
 
 Use only the diagnostic page explicitly reserved at GPA `0x07000000`, seeded with
 A5 in the guest. Query the current EPT12 root; do not reuse a root across guest boots.
-The pilot cycle script requires exactly two resident KSword CPUs, one known nested
-root, and no active/retired mapping. It does not prove guest multicore behavior.
+The cycle script requires exactly two resident KSword CPUs, one known nested
+root, and no active/retired mapping. The older pilot uses one guest CPU; the newer
+SMP experiment pins one observer to each of two guest CPUs and checks all 4096 bytes
+with MD5 as well as a four-byte read. See `analyze_smp.py` and its per-run tables.
 
 Before cycles, start the bounded guest reader through the existing VNC helper:
 
@@ -111,11 +121,25 @@ pages. Remove mappings and verify both active/retired clear before fixture teard
 - UTC, Windows QPC and guest uptime are distinct time domains. No direct subtraction
   across uncalibrated clocks. Physical-page addresses also retain their layer scope.
 - Active/retired slots are not total outstanding-allocation or leak counters.
-- Existing normal-exit counters omit early-reflected/handled L2 exits. Histogram
-  50/53 counts instruction exits, not all INVEPT/INVVPID operations executed.
-- No deterministic allocation-failure, precommit-cancel or invalidation-failure
-  injection API was added. Missing cases are null with reasons in `coverage.json`.
+- Historical pilot counters omit early-reflected/handled L2 exits. The metrics-v1
+  build counts every resident dispatch entry and actual INVEPT calls separately.
+  Histogram 50/53 still counts nested instruction exits. Do not merge these scopes.
+- `Test-NestedPageFaults.ps1` exercises five request-local fault modes, retains
+  each attempted run, and paginates the event ring. `analyze_smp.py` requires fresh
+  readback on both CPUs, complete operation traces and balanced allocation ledgers.
+  The initial short-observation records remain incomplete instead of being dropped.
 - Orchestration uses Hyper-V PowerShell Direct and VMware VNC. The EPT control path
   itself is separate; EPT12 A/D metadata writeback also prevents an absolute claim
   that no VMM-owned memory is ever modified.
 - Win10 LTSC and further GUI tests were skipped at the user's request.
+
+`Watch-Stability.ps1` schema 2 adds deployed-driver identity, actual INVEPT/resource
+counters and bounded serial reads. `stability_v2.py` rejects stale per-CPU observers,
+changed boot/process identity, reset counters and incomplete requested durations.
+The default is a ten-minute sample; set `-Seconds 3600` for an hour. Monitoring itself
+adds work, and total Windows pool usage cannot isolate a driver memory leak.
+
+`Run-LinuxBenchmarks.sh` and `Serve-LinuxBench.ps1` are prepared transfer/collection
+helpers. The native Linux executable compiled successfully, but the attempted
+transfer was blocked by automatic approval review; it was **not executed** in
+TinyCore. This is not additional Linux performance evidence.

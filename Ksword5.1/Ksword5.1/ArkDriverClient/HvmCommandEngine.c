@@ -48,6 +48,7 @@
 
 /* 协议的唯一真值来源。手抄一份就等于给自己埋一个静默的漂移。 */
 #include "../../../shared/driver/KswordArkHvmIoctl.h"
+#include "../../../shared/driver/KswordArkHvmMetricsIoctl.h"
 /* 能力过滤的白名单常量，判据与驱动引用同一份。 */
 #include "../../../shared/driver/KswordArkHvmControls.h"
 /* acl-probe 要对这两条破坏性 IOCTL 验访问位闸门，取它们的控制码。 */
@@ -2657,6 +2658,7 @@ static const char* EventTypeName(unsigned long t)
     case KSWORD_ARK_HVM_EVENT_TYPE_NESTED_VMX:    return "NESTED_VMX";
     case KSWORD_ARK_HVM_EVENT_TYPE_FATAL_EXIT:    return "FATAL_EXIT";
     case KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE:     return "LIFECYCLE";
+    case KSWORD_ARK_HVM_EVENT_TYPE_NESTED_PAGE:   return "NESTED_PAGE";
     default:                                      return "<未知>";
     }
 }
@@ -2747,7 +2749,7 @@ static int DoEvents(HANDLE h, unsigned long long afterSequence, unsigned long ma
                    "\"ruleId\":%lu,\"guestPhysicalAddress\":\"0x%016llX\","
                    "\"guestLinearAddress\":\"0x%016llX\",\"guestRip\":\"0x%016llX\","
                    "\"qualification\":\"0x%016llX\",\"status\":\"0x%08lX\","
-                   "\"processor\":%u,\"processorGroup\":%u,\"timestampQpc\":%llu}",
+                   "\"processor\":%u,\"processorGroup\":%u,\"timestampQpc\":%llu",
                    (i == 0UL) ? "" : ",",
                    rsp.rows[i].sequence, rsp.rows[i].type,
                    EventTypeName(rsp.rows[i].type),
@@ -2757,6 +2759,16 @@ static int DoEvents(HANDLE h, unsigned long long afterSequence, unsigned long ma
                    rsp.rows[i].qualification, (unsigned long)rsp.rows[i].status,
                    (unsigned)rsp.rows[i].processorNumber,
                    (unsigned)rsp.rows[i].processorGroup, rsp.rows[i].timestamp);
+            if (rsp.rows[i].type == KSWORD_ARK_HVM_EVENT_TYPE_NESTED_PAGE) {
+                /* Typed aliases disambiguate fields reused by the fixed event ABI. */
+                printf(",\"pageOperationId\":%lu,\"pageStage\":%lu,\"pageOperation\":%lu,"
+                       "\"faultMode\":%llu,\"ept12Pointer\":\"0x%016llX\","
+                       "\"replacementBacking\":\"0x%016llX\"",
+                       rsp.rows[i].ruleId, rsp.rows[i].exitReason, rsp.rows[i].access,
+                       (rsp.rows[i].qualification & KSWORD_ARK_HVM_NESTED_PAGE_FAULT_MASK) >> KSWORD_ARK_HVM_NESTED_PAGE_FAULT_SHIFT,
+                       rsp.rows[i].guestLinearAddress, rsp.rows[i].guestRip);
+            }
+            putchar('}');
         }
         printf("]}\n");
         return 0;
@@ -5483,9 +5495,94 @@ static int DoProcess(HANDLE h, unsigned long op, unsigned long pid,
     return (rsp.status == KSWORD_ARK_HVM_PROCESS_STATUS_OK) ? 0 : 2;
 }
 
+static int DoMetrics(HANDLE h, int asJson)
+{
+    static const char* const globalNames[KSW_HVM_TIME_GLOBAL_STAGES] = {
+        "resourcesBegin", "resourcesEnd", "eptBegin", "eptEnd", "rendezvousBegin", "rendezvousEnd"
+    };
+    static const char* const cpuNames[KSW_HVM_TIME_CPU_STAGES] = {
+        "ipiEnter", "ipiLeave", "vmcsBegin", "stateCaptured", "vmcsWritten", "entryBefore", "entryAfter"
+    };
+    KSWORD_ARK_HVM_METRICS_REQUEST request = { 0 };
+    KSWORD_ARK_HVM_METRICS_RESPONSE* response;
+    DWORD returned = 0;
+    unsigned long i, j;
+    response = (KSWORD_ARK_HVM_METRICS_RESPONSE*)calloc(1, sizeof(*response));
+    if (!response) { fprintf(stderr, "metrics: allocation failed\n"); return 1; }
+    request.version = KSWORD_ARK_HVM_METRICS_VERSION;
+    request.size = sizeof(request);
+    if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_METRICS,
+                         &request, (DWORD)sizeof(request), response, (DWORD)sizeof(*response),
+                         &returned, NULL)) {
+        fprintf(stderr, "metrics query failed: Win32 %lu\n", GetLastError());
+        free(response);
+        return 1;
+    }
+    if (returned != sizeof(*response) || response->size != sizeof(*response) ||
+        response->version != KSWORD_ARK_HVM_METRICS_VERSION ||
+        response->processorCount > KSWORD_ARK_HVM_MAX_PROCESSORS || response->qpcFrequency == 0) {
+        fprintf(stderr, "metrics: incompatible or incomplete response\n");
+        free(response);
+        return 1;
+    }
+    if (asJson) {
+        /* Decimal strings preserve every bit in JavaScript and JSON consumers. */
+        printf("{\"kind\":\"hvm-metrics\",\"version\":%lu,\"transitionCoherent\":%s,"
+               "\"transitionSequence\":%lu,\"command\":%lu,\"lastStatus\":\"0x%08lX\","
+               "\"processorCount\":%lu,\"qpcFrequency\":\"%llu\","
+               "\"snapshotBeginQpc\":\"%llu\",\"snapshotEndQpc\":\"%llu\","
+               "\"commandBeginQpc\":\"%llu\",\"commandEndQpc\":\"%llu\","
+               "\"inveptAttempts\":\"%llu\",\"inveptSucceeded\":\"%llu\",\"inveptFailed\":\"%llu\","
+               "\"ruleAllocations\":\"%llu\",\"ruleFrees\":\"%llu\","
+               "\"replacementAllocations\":\"%llu\",\"replacementFrees\":\"%llu\","
+               "\"globalValidMask\":%lu,\"globalQpc\":{",
+               response->version, response->transitionCoherent ? "true" : "false",
+               response->transitionSequence, response->command, response->lastStatus,
+               response->processorCount, response->qpcFrequency,
+               response->snapshotBeginQpc, response->snapshotEndQpc,
+               response->commandBeginQpc, response->commandEndQpc,
+               response->inveptAttempts, response->inveptSucceeded, response->inveptFailed,
+               response->ruleAllocations, response->ruleFrees,
+               response->replacementAllocations, response->replacementFrees,
+               response->globalValidMask);
+    } else {
+        printf("metrics version=%lu coherent=%lu sequence=%lu command=%lu nt=0x%08lX cpus=%lu\n"
+               "QPC frequency=%llu snapshot=[%llu,%llu] command=[%llu,%llu]\n"
+               "INVEPT attempts=%llu success=%llu failure=%llu\n"
+               "nested-page objects allocated=%llu freed=%llu; replacement pages allocated=%llu freed=%llu\n"
+               "global validMask=0x%lX\n",
+               response->version, response->transitionCoherent, response->transitionSequence,
+               response->command, response->lastStatus, response->processorCount,
+               response->qpcFrequency, response->snapshotBeginQpc, response->snapshotEndQpc,
+               response->commandBeginQpc, response->commandEndQpc,
+               response->inveptAttempts, response->inveptSucceeded, response->inveptFailed,
+               response->ruleAllocations, response->ruleFrees,
+               response->replacementAllocations, response->replacementFrees, response->globalValidMask);
+    }
+    for (i = 0; i < KSW_HVM_TIME_GLOBAL_STAGES; ++i) {
+        if (asJson) { printf("%s\"%s\":\"%llu\"", i ? "," : "", globalNames[i], response->globalQpc[i]); }
+        else { printf("  %s=%llu\n", globalNames[i], response->globalQpc[i]); }
+    }
+    if (asJson) { printf("},\"processors\":["); }
+    for (i = 0; i < response->processorCount; ++i) {
+        const KSWORD_ARK_HVM_METRICS_CPU* cpu = &response->processors[i];
+        if (asJson) { printf("%s{\"group\":%u,\"number\":%u,\"validMask\":%lu,\"qpc\":{",
+                            i ? "," : "", (unsigned)cpu->group, (unsigned)cpu->number, cpu->validMask); }
+        else { printf("cpu=%u:%u validMask=0x%lX\n", (unsigned)cpu->group, (unsigned)cpu->number, cpu->validMask); }
+        for (j = 0; j < KSW_HVM_TIME_CPU_STAGES; ++j) {
+            if (asJson) { printf("%s\"%s\":\"%llu\"", j ? "," : "", cpuNames[j], cpu->qpc[j]); }
+            else { printf("  %s=%llu\n", cpuNames[j], cpu->qpc[j]); }
+        }
+        if (asJson) { printf("}}"); }
+    }
+    if (asJson) { printf("]}\n"); }
+    free(response);
+    return 0;
+}
+
 static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
                         unsigned long long eptp, unsigned long long gpa,
-                        unsigned char fill)
+                        unsigned char fill, unsigned long faultMode)
 {
     KSWORD_ARK_HVM_NESTED_PAGE_REQUEST request = { 0 };
     KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE response = { 0 };
@@ -5502,7 +5599,8 @@ static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
     if (operation != KSWORD_ARK_HVM_NESTED_PAGE_QUERY) {
         if (response.status != 0UL) { return 2; }
         request.operation = operation;
-        request.flags = KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED;
+        request.flags = KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED |
+            (faultMode << KSWORD_ARK_HVM_NESTED_PAGE_FAULT_SHIFT);
         request.confirmationToken = KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN;
         request.expectedGeneration = response.generation;
         request.ept12Pointer = eptp;
@@ -5516,12 +5614,12 @@ static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
         }
     }
     if (asJson) {
-        printf("{\"kind\":\"nested-page\",\"status\":%lu,\"lastStatus\":\"0x%08lX\","
+        printf("{\"kind\":\"nested-page\",\"operationId\":%lu,\"faultMode\":%lu,\"status\":%lu,\"lastStatus\":\"0x%08lX\","
                "\"generation\":%lu,\"active\":%lu,\"retired\":%lu,\"residentProcessors\":%lu,"
                "\"ept12Pointer\":\"0x%016llX\",\"guestPhysicalPage\":\"0x%016llX\","
                "\"shadowPhysicalPage\":\"0x%016llX\",\"originalPhysicalPage\":\"0x%016llX\","
                "\"composedCount\":%llu,\"roots\":[",
-               response.status, response.lastStatus, response.generation, response.active,
+               response.operationId, faultMode, response.status, response.lastStatus, response.generation, response.active,
                response.retired, response.residentProcessors, response.ept12Pointer,
                response.guestPhysicalPage, response.shadowPhysicalPage,
                response.originalPhysicalPage, response.composedCount);
@@ -5604,9 +5702,12 @@ int KswordHvmCommandMain(int argc, char** argv)
     switch (spec->handler) {
     case HvmControl: rc = DoControl(h, spec, (unsigned long)v[0], asJson); break;
     case HvmStatus: rc = DoQuery(h, asJson); break;
-    case HvmPageQuery: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_QUERY, 0, 0, 0); break;
-    case HvmPageMap: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], (unsigned char)v[2]); break;
-    case HvmPageRemove: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_REMOVE, 0, 0, 0); break;
+    case HvmMetrics: rc = DoMetrics(h, asJson); break;
+    case HvmPageQuery: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_QUERY, 0, 0, 0, 0); break;
+    case HvmPageMap: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], (unsigned char)v[2], 0); break;
+    case HvmPageMapTest: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], (unsigned char)v[2], (unsigned long)v[3]); break;
+    case HvmPageRemove: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_REMOVE, 0, 0, 0, 0); break;
+    case HvmPageRemoveTest: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_REMOVE, 0, 0, 0, KSWORD_ARK_HVM_NESTED_PAGE_FAULT_REMOVE_FLUSH); break;
     case HvmAcl: rc = DoAclProbe(h, asJson); break;
     case HvmNestedProbe: rc = DoNestedProbe(h, asJson, 0); break;
     case HvmNestedProbeAll: rc = DoNestedProbe(h, asJson, 1); break;

@@ -50,6 +50,39 @@ namespace ksword::ark
         return result;
     }
 
+    HvmMetricsResult DriverClient::queryHvmMetrics() const
+    {
+        HvmMetricsResult result{};
+        KSWORD_ARK_HVM_METRICS_REQUEST request{};
+        request.version = KSWORD_ARK_HVM_METRICS_VERSION;
+        request.size = sizeof(request);
+        result.io = deviceIoControl(IOCTL_KSWORD_ARK_HVM_METRICS,
+            &request, sizeof(request), &result.response, sizeof(result.response));
+        result.unsupported = !result.io.ok && isUnsupportedHvmError(result.io.win32Error);
+        if (result.io.ok && (result.io.bytesReturned != sizeof(result.response) ||
+            result.response.version != KSWORD_ARK_HVM_METRICS_VERSION ||
+            result.response.size != sizeof(result.response) ||
+            result.response.processorCount > KSWORD_ARK_HVM_MAX_PROCESSORS ||
+            result.response.qpcFrequency == 0))
+        {
+            result.io.ok = false;
+            result.io.win32Error = ERROR_INVALID_DATA;
+        }
+        std::ostringstream stream;
+        stream << "HVM metrics coherent=" << result.response.transitionCoherent
+            << ", sequence=" << result.response.transitionSequence
+            << ", qpcFrequency=" << result.response.qpcFrequency
+            << ", processors=" << result.response.processorCount
+            << ", inveptAttempts=" << result.response.inveptAttempts
+            << ", inveptFailed=" << result.response.inveptFailed
+            << ", ruleAllocations=" << result.response.ruleAllocations
+            << ", ruleFrees=" << result.response.ruleFrees
+            << ", replacementAllocations=" << result.response.replacementAllocations
+            << ", replacementFrees=" << result.response.replacementFrees;
+        result.io.message = stream.str();
+        return result;
+    }
+
     HvmControlResult DriverClient::controlHvm(
         const unsigned long command,
         const unsigned long expectedGeneration,

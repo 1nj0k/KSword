@@ -16,7 +16,7 @@ typedef enum HVM_COMMAND_HANDLER {
     HvmEptLeaf, HvmEvents, HvmCrOn, HvmCrOff,
     HvmInjectQuery, HvmInjectTest, HvmInjectDll, HvmInjectRelease, HvmInjectClear,
     HvmProcQuery, HvmProcFreeze, HvmProcTerminate, HvmProcRelease, HvmProcClear,
-    HvmPageQuery, HvmPageMap, HvmPageRemove,
+    HvmPageQuery, HvmPageMap, HvmPageRemove, HvmMetrics, HvmPageMapTest, HvmPageRemoveTest,
     HvmHelp, HvmCommands
 } HVM_COMMAND_HANDLER;
 

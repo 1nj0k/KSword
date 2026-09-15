@@ -455,6 +455,7 @@ namespace ksword::ark
         // queryHvmStatus/controlHvm：读取 VT-x/EPT 能力并执行准备、自检、
         // 一次性 VMCALL 来宾、VM-exit 采集或资源释放。
         HvmStatusResult queryHvmStatus() const;
+        HvmMetricsResult queryHvmMetrics() const;
         HvmControlResult controlHvm(
             unsigned long command,
             unsigned long expectedGeneration,

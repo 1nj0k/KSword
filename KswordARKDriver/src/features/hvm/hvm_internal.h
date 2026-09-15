@@ -262,7 +262,8 @@ typedef struct _KSW_HVM_CPU_RESOURCE
      * exits a second wraps after about five days - acceptable for a diagnostic
      * counter, and the protocol widens to 64 bits before summing.
      */
-    ULONG ExitReasonCount[KSWORD_ARK_HVM_EXIT_REASON_SLOTS];
+    /* Long nested runs can exceed 32-bit counts; match the protocol width. */
+    ULONGLONG ExitReasonCount[KSWORD_ARK_HVM_EXIT_REASON_SLOTS];
 } KSW_HVM_CPU_RESOURCE;
 
 /* Track one contiguous page allocated for an EPT hierarchy. */

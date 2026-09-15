@@ -38,6 +38,7 @@ def main():
         (["resident-vmreadbench"], [512]),
         (["soak"], [1000]),
         (["nested-page-map", "1234501e", "7000000", "d1"], [0x1234501E, 0x7000000, 0xD1]),
+        (["nested-page-map-test", "1234501e", "7000000", "d1", "4"], [0x1234501E, 0x7000000, 0xD1, 4]),
         (["inject-test", "42", "10000", "20000"], [42, 0x10000, 0x20000, 0x4B535744]),
         (["inject-dll", "42", "10000", "0", "C:/HVM test/中文 测试.dll"], [42, 0x10000, 0, 0]),
     ]
@@ -68,6 +69,8 @@ def main():
         ["nested-page-map", "10000000000000000", "7000000", "00"],
         ["nested-page-map", "0x", "7000000", "00"],
         ["nested-page-map", "1234501e", "7000000"],
+        ["nested-page-map-test", "1234501e", "7000000", "d1", "0"],
+        ["nested-page-map-test", "1234501e", "7000000", "d1", "5"],
         ["inject-dll", "42", "10000", "0"],
         ["proc-freeze", "42"], ["proc-terminate", "4294967296", "10000"],
         ["unknown-command"],

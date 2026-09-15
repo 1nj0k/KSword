@@ -48,7 +48,7 @@ PUBLIC KswordARKHvmAsmLaunchResident
 PUBLIC KswordARKHvmAsmResidentHypercall
 PUBLIC KswordARKHvmResidentGuestResume
 PUBLIC KswordARKHvmResidentVmExitEntry
-PUBLIC KswordARKHvmAsmInveptSingle
+PUBLIC KswordARKHvmAsmInveptSingleRaw
 PUBLIC KswordARKHvmAsmHostNmiStub
 PUBLIC KswordARKHvmAsmNestedL2Enter
 PUBLIC KswordARKHvmAsmProbeVmcsMemory
@@ -841,7 +841,7 @@ KswordARKHvmResidentFatal:
     jmp KswordARKHvmResidentFatal
 KswordARKHvmResidentVmExitEntry ENDP
 
-KswordARKHvmAsmInveptSingle PROC
+KswordARKHvmAsmInveptSingleRaw PROC
     ; Reserve one 16-byte INVEPT descriptor on the current root stack.
     sub rsp, 10h
     ; Store the caller-provided EPT pointer in descriptor qword zero.
@@ -867,7 +867,7 @@ KswordARKHvmAsmInveptSingleComplete:
     add rsp, 10h
     ; Return the exact VMX instruction result.
     ret
-KswordARKHvmAsmInveptSingle ENDP
+KswordARKHvmAsmInveptSingleRaw ENDP
 
 ; ULONG KswordARKHvmAsmForwardHypercall(KSW_HVM_GPR_FRAME* Frame, PVOID FxState)
 ;
