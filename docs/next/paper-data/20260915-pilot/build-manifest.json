@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "capturedUtc": "2026-09-15T16:43:51.9498045Z",
+  "repositoryCommit": "7af2fa6bafca3d54a9ef90d69ff416e1d68ac4c3",
+  "driverSourceCommit": "7360d502",
+  "compiler": "MinGW GCC 13.1.0",
+  "compilerArguments": "-std=c11 -O2 -Wall -Wextra -static; microbench links ws2_32",
+  "rootPowerShell": "7.6.5",
+  "python": "Python 3.13.7",
+  "sourceFiles": [
+    {
+      "path": "tools/hvm_paper/analyze.py",
+      "sha256": "5232A41F2A734B4256AC8737CB5B1689F4F482872A81FC867DDECFBC417D7A8E"
+    },
+    {
+      "path": "tools/hvm_paper/Capture-Windows.ps1",
+      "sha256": "BA246E734A9B87561C117186D1E6253F41A61EF9B0F372D4251C5392F6BB751B"
+    },
+    {
+      "path": "tools/hvm_paper/microbench.c",
+      "sha256": "CBA53FC3EE16C6067AFE8360843D2ADCB34EEA6623CE2AC1DDA8CE4E3665A157"
+    },
+    {
+      "path": "tools/hvm_paper/plot.py",
+      "sha256": "5A1F7CF38199B26F631459D61243A0E1FDAAA98D32561AB6CCCF041ABCDB096B"
+    },
+    {
+      "path": "tools/hvm_paper/Run-NestedPageCycles.ps1",
+      "sha256": "3D6502464E99DDBDEE479411E741FF82A772872506676894B0FC2EABC9196603"
+    },
+    {
+      "path": "tools/hvm_paper/Run-Transition.ps1",
+      "sha256": "A4EA299344774643DBF91AD1763FE6DE8E1E615DE80F05AA5893F94B8ED57F6C"
+    },
+    {
+      "path": "tools/hvm_paper/Run-WindowsAB.ps1",
+      "sha256": "14FFDDFD7135D098C9C273081B814060773474EF7E2FFD5F72E432D174B3C94B"
+    },
+    {
+      "path": "tools/hvm_paper/Run-WindowsBenchmarks.ps1",
+      "sha256": "3BD4D4DCD7699A8099FF925AF3D2EE665D76E8C6EC81C9D68D23DE205DCCDCE6"
+    },
+    {
+      "path": "tools/hvm_paper/Run-WriteIsolation.ps1",
+      "sha256": "C2DEF4F76873703D612A47FF42EEEB79EB3BCD32D85204CFC93A3027C6549B68"
+    },
+    {
+      "path": "tools/hvm_paper/transition_probe.c",
+      "sha256": "C1AF929C171A7176B21C44DFE7F88CD6F2A0D04A2EC219811FE70EDDEBD04A60"
+    },
+    {
+      "path": "tools/hvm_paper/validate.py",
+      "sha256": "64F30140716D3E23543533DC290CD7B55EDF59C31010E119AB77D6BFC0EBE4D1"
+    },
+    {
+      "path": "tools/hvm_paper/Watch-Stability.ps1",
+      "sha256": "7AB89302664D9DB3E04D8EF4460510218A3E96C9F580DB93E383E087B2D8F15D"
+    }
+  ],
+  "binaries": [
+    {
+      "name": "microbench-linux",
+      "sha256": "0A8550B4E24094357681308BBBE34FF2F6E2061406D595FDA345CF7400001DC8",
+      "bytes": 928048,
+      "executedInGuest": false
+    },
+    {
+      "name": "microbench.exe",
+      "sha256": "A37D9D1B3FC22D5539C51C3DC364B7C1BAA0061913B72EFEF8183E020D464E0D",
+      "bytes": 92657,
+      "executedInGuest": true
+    },
+    {
+      "name": "transition_probe.exe",
+      "sha256": "FD6782785C3F311C76B6D9762B0E17BE1FACDCE2FDE554FCCD6438A30E9DB470",
+      "bytes": 86107,
+      "executedInGuest": true
+    }
+  ],
+  "sourceNote": "C sources match the measured binaries. Collector scripts include final orchestration and analysis fixes; archived raw records preserve earlier collector failures."
+}

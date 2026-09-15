@@ -1,0 +1,24 @@
+﻿schemaVersion,runId,workload,iteration,warmup,source,status,hostTimestamp,timestampNote,uptimeBracketSeconds,digest,ddReportedSeconds,MiBPerSecond
+1,paper-linux-cpu-1,sha256sum-unavailable,1,False,tinycore-serial.txt,environment_error,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.1000000000003638,,,
+1,paper-linux-cpu-2,sha256sum-unavailable,2,False,tinycore-serial.txt,environment_error,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.0999999999994543,,,
+1,paper-linux-cpu-3,sha256sum-unavailable,3,False,tinycore-serial.txt,environment_error,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.06999999999970896,,,
+1,paper-linux-cpu-4,sha256sum-unavailable,4,False,tinycore-serial.txt,environment_error,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.07999999999992724,,,
+1,paper-linux-cpu-5,sha256sum-unavailable,5,False,tinycore-serial.txt,environment_error,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.03999999999996362,,,
+1,paper-linux-cpu-6,sha256sum-unavailable,6,False,tinycore-serial.txt,environment_error,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.03999999999996362,,,
+1,paper-linux-cpu-7,sha256sum-unavailable,7,False,tinycore-serial.txt,environment_error,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.03999999999996362,,,
+1,paper-md5-0,md5-64MiB-ramfile,0,True,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.6499999999996362,7f614da9329cd3aebf59b91aadc30bf0,,
+1,paper-md5-1,md5-64MiB-ramfile,1,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.3400000000001455,7f614da9329cd3aebf59b91aadc30bf0,,
+1,paper-md5-2,md5-64MiB-ramfile,2,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.3599999999996726,7f614da9329cd3aebf59b91aadc30bf0,,
+1,paper-md5-3,md5-64MiB-ramfile,3,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.2999999999992724,7f614da9329cd3aebf59b91aadc30bf0,,
+1,paper-md5-4,md5-64MiB-ramfile,4,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.4900000000006912,7f614da9329cd3aebf59b91aadc30bf0,,
+1,paper-md5-5,md5-64MiB-ramfile,5,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.5299999999997453,7f614da9329cd3aebf59b91aadc30bf0,,
+1,paper-md5-6,md5-64MiB-ramfile,6,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.8100000000004002,7f614da9329cd3aebf59b91aadc30bf0,,
+1,paper-md5-7,md5-64MiB-ramfile,7,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.3900000000003274,7f614da9329cd3aebf59b91aadc30bf0,,
+1,paper-cdread-0,buffered-cdrom-read-32MiB,0,True,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,3.730000000000473,,3.61635,8.848701038339762
+1,paper-cdread-1,buffered-cdrom-read-32MiB,1,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,1.0499999999992724,,0.890196,35.94713973102553
+1,paper-cdread-2,buffered-cdrom-read-32MiB,2,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.819999999999709,,0.711857,44.95284867606837
+1,paper-cdread-3,buffered-cdrom-read-32MiB,3,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.8899999999994179,,0.76731,41.70413522565847
+1,paper-cdread-4,buffered-cdrom-read-32MiB,4,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.9299999999993815,,0.827718,38.66050998045228
+1,paper-cdread-5,buffered-cdrom-read-32MiB,5,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,1.0799999999999272,,0.97253,32.903869289379244
+1,paper-cdread-6,buffered-cdrom-read-32MiB,6,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.9500000000007276,,0.87407,36.610340132941296
+1,paper-cdread-7,buffered-cdrom-read-32MiB,7,False,tinycore-serial.txt,ok,,Raw serial has guest uptime only; no synchronized host timestamp per command.,0.8999999999996362,,0.82803,38.64594277985097

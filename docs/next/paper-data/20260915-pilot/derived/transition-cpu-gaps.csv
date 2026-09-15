@@ -1,0 +1,9 @@
+﻿runId,command,group,number,affinityError,samples,largestPreCommandGapMs,largestCommandOverlapGapMs,largestPostCommandGapMs
+transition-resident-nested-hidehv-20260915T164051137Z,resident-nested-hidehv,0,0,0,58052855,3.6431,16.2127,1.9465
+transition-resident-nested-hidehv-20260915T164051137Z,resident-nested-hidehv,0,1,0,60199827,4.634,0.9981,4.0004
+transition-resident-nested-hidehv-20260915T164156009Z,resident-nested-hidehv,0,0,0,156279337,2.5715,11.2936,2.6367
+transition-resident-nested-hidehv-20260915T164156009Z,resident-nested-hidehv,0,1,0,156807052,2.236,9.6894,
+transition-stop-20260915T164118600Z,stop,0,0,0,289001183,3.1816,7.8944,3.1323
+transition-stop-20260915T164118600Z,stop,0,1,0,290173251,,10.7121,
+transition-stop-20260915T164205932Z,stop,0,0,0,650041728,2.639,6.1413,3.1059
+transition-stop-20260915T164205932Z,stop,0,1,0,647666382,,3.384,

@@ -70,6 +70,11 @@ dd if=/dev/mem bs=4 skip=29360128 count=1 | od -An -tx4
 
 ## 2026-09-15 实测
 
+性能、逐次可靠性、连续性与论文证据已扩展至
+[HVM 性能与论文证据](hvm-paper-evidence.md)，原始记录位于
+[20260915-pilot](paper-data/20260915-pilot/README.md)。该报告区分 Windows 常驻平移、
+运行中来宾 EPT 替换，以及尚未测得的内部暂停时间和 nested guest 基线。
+
 最终签名驱动 SHA256：
 `3E131F93D8C3C09BAA34B486AC19BB5BC53DA85180A220642C6E872A9D20F1AC`。
 TinyCore 内核为 `6.18.35-tinycore64`，VMware 来宾使用 1 个 vCPU，Windows 使用
