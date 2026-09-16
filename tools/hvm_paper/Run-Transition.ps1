@@ -1,4 +1,4 @@
-param([string]$OutputDirectory='C:\ksword\paper',[ValidateSet("resident-nested-hidehv","stop")][string]$Command,[int]$Iteration=0,[bool]$WithoutGapObserver=$false)
+param([string]$OutputDirectory='C:\ksword\paper',[ValidateSet("resident-nested-hidehv","stop")][string]$Command,[int]$Iteration=0,[bool]$WithoutGapObserver=$false,[ValidateRange(1,64)][int]$ExpectedResidentProcessors=2)
 $ErrorActionPreference='Stop'
 if(@(Get-Process -Name vmware-vmx -ErrorAction SilentlyContinue).Count){throw 'Matched Windows A/B requires VMware absent in every block.'}
 $driver=(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\KswordARK').ImagePath -replace '^\\\?\?\\',''
@@ -41,13 +41,14 @@ function Transition([string]$Command,[int]$Iteration) {
     }
     $record.metricsRaw=(& C:\ksword\hvm_ctl.exe --json metrics 2>&1 | Out-String)
     $record.metricsExitCode=$LASTEXITCODE
+    $record.expectedResidentProcessors=$ExpectedResidentProcessors
     Save $record $path
     $record.after=State
     $record.eventsRaw=(& C:\ksword\hvm_ctl.exe --json events 0 256 2>&1 | Out-String)
     $record.endedUtc=[DateTime]::UtcNow.ToString('o')
     $record.status='recorded_requires_analysis';Save $record $path
     $after=$record.after.hvmRaw | ConvertFrom-Json
-    $wanted=if($Command -eq 'stop'){0}else{2}
+    $wanted=if($Command -eq 'stop'){0}else{$ExpectedResidentProcessors}
     if($record.probeExitCode -ne 0 -or $after.residentProcessorCount -ne $wanted -or $after.stateNames -contains 'ROLLBACK_REQUIRED' -or $after.stateNames -contains 'FAULTED') {throw 'Transition did not complete cleanly; stop the A/B sequence.'}
     Write-Output ($id+' resident='+$after.residentProcessorCount)
 }

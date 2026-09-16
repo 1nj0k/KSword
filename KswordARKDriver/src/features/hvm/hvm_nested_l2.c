@@ -432,6 +432,21 @@ KswordARKHvmNestedL2Enter(
             nested->L2LastRefusalSite = 3UL;
             return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
         }
+        /* Snapshot the epoch before invalidation; a later change remains pending. */
+        {
+            /* Read the policy published by the owner-exit or control path. */
+            const ULONG policyGeneration = (ULONG)ReadAcquire(
+                (volatile LONG*)&Context->Runtime->NestedPageGeneration);
+            /* Do not reuse a hierarchy composed under a retired process lease. */
+            if (nested->ShadowEpt.PagePolicyGeneration != policyGeneration) {
+                /* Invalidate local hardware translations before recording the epoch. */
+                KswordARKHvmNestedEptInvalidate(&nested->ShadowEpt);
+                /* Store only the generation actually processed. */
+                nested->ShadowEpt.PagePolicyGeneration = policyGeneration;
+                /* Failed invalidation must never permit stale execution. */
+                if (nested->ShadowEpt.Faulted) { return KSW_L2_ERROR_INVALID_CONTROL_FIELDS; }
+            }
+        }
         eptPointer = nested->ShadowEpt.ComposedEptPointer;
     } else {
         nested->ShadowEpt.Active = FALSE;

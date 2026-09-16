@@ -273,6 +273,9 @@
     <ClInclude Include="src\features\hvm\hvm_nested_ept.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\features\hvm\hvm_nested_ad_compare.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="src\features\hvm\hvm_nested.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -777,6 +780,9 @@
       <Filter>Source Files\Features\HVM</Filter>
     </ClCompile>
     <ClCompile Include="src\features\hvm\hvm_nested_ept.c">
+      <Filter>Source Files\Features\HVM</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\hvm\hvm_nested_ad.c">
       <Filter>Source Files\Features\HVM</Filter>
     </ClCompile>
     <ClCompile Include="src\features\hvm\hvm_nested.c">

@@ -6067,6 +6067,7 @@
     "EPT12 指针（十六进制）": "EPT12 pointer (hexadecimal)",
     "来宾物理页（十六进制，4 KiB 对齐）": "Guest physical page (hexadecimal, 4 KiB aligned)",
     "影子页填充值（00–FF）": "Shadow fill byte (00–FF)",
+    "VMM 进程 PID（0 自动选择 VMware）": "VMM process PID (0 selects the sole VMware process)",
     "撤销 TinyCore 换页": "Remove TinyCore page replacement",
     "取消替换并等待全部处理器失效；retired 非零表示仍有保留页。": "Remove the replacement and wait for invalidation on every processor; nonzero retired means a page is still retained.",
     "记录指定 MSR": "Log an MSR",

@@ -2315,7 +2315,7 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE
 #define KSWORD_ARK_IOCTL_FUNCTION_HVM_NESTED_PAGE 0x915UL
 #define IOCTL_KSWORD_ARK_HVM_NESTED_PAGE \
     CTL_CODE(KSWORD_ARK_IOCTL_DEVICE_TYPE, KSWORD_ARK_IOCTL_FUNCTION_HVM_NESTED_PAGE, METHOD_BUFFERED, FILE_WRITE_ACCESS)
-#define KSWORD_ARK_HVM_NESTED_PAGE_VERSION 1UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_VERSION 2UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_QUERY 0UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_MAP 1UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_REMOVE 2UL
@@ -2344,8 +2344,10 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PAGE_REQUEST {
     unsigned long version, size, operation, flags;
     unsigned long long confirmationToken;
     unsigned long long ept12Pointer, guestPhysicalPage;
-    unsigned long expectedGeneration, reserved;
+    unsigned long expectedGeneration, ownerProcessId;
     unsigned char shadow[4096];
+    /* Exact Windows process creation time; prevents PID reuse at map admission. */
+    unsigned long long ownerCreationTime;
 } KSWORD_ARK_HVM_NESTED_PAGE_REQUEST;
 typedef struct _KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE {
     unsigned long version, size, status, lastStatus;
@@ -2354,4 +2356,7 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE {
     unsigned long long originalPhysicalPage, composedCount;
     unsigned long rootCount, operationId;
     unsigned long long ept12Roots[KSWORD_ARK_HVM_MAX_PROCESSORS];
+    /* Process exit revokes the lease; explicit removal drains and frees backing. */
+    unsigned long ownerProcessId, ownerExited;
+    unsigned long long ownerCreationTime;
 } KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE;

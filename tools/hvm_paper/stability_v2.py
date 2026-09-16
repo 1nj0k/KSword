@@ -9,6 +9,7 @@ def summarize_samples(samples, source):
     if len(good)<2:
         return {'source':source,'result':'insufficient_samples','samples':len(samples)},[]
     first,last=good[0]['windows1'],good[-1]['windows1']
+    expected_cpus=samples[0].get('expectedResidentProcessors',2)
     rows=[];issues=[];previous=None;initial_ids=None;boots=set()
     for sample in good:
         w=sample['windows1'];c=hvm(w);p=json.loads(w['pageStatusRaw']);m=json.loads(w['metricsRaw'])
@@ -18,8 +19,9 @@ def summarize_samples(samples, source):
         current=[]
         if not continuity(first,w):current.append('Windows/process identity changed')
         if w['driverSha256']!=first['driverSha256']:current.append('driver identity changed')
-        if cpus!=initial_ids or len(cpus)!=2:current.append('CPU identity changed')
-        if c['residentProcessorCount']!=2 or {'FAULTED','ROLLBACK_REQUIRED'}.intersection(c['stateNames']):
+        if sample.get('expectedResidentProcessors',2)!=expected_cpus:current.append('declared topology changed')
+        if cpus!=initial_ids or len(cpus)!=expected_cpus:current.append('CPU identity changed')
+        if c['residentProcessorCount']!=expected_cpus or {'FAULTED','ROLLBACK_REQUIRED'}.intersection(c['stateNames']):
             current.append('unhealthy residency')
         if any(w[k]!=0 for k in ('hvmStatusExit','pageStatusExit','metricsExit')):current.append('query failed')
         if p['active'] or p['retired']:current.append('unexpected mapping/retired page')
@@ -62,7 +64,7 @@ def summarize_samples(samples, source):
     return {'source':source,'result':'pass' if not issues else 'failed_or_incomplete_evidence',
             'sampleCount':len(samples),'sampleSpanSeconds':duration,'issues':issues,
             'driverSha256':first['driverSha256'],'windowsBootUtc':first['bootUtc'],'guestBootIds':sorted(boots),
-            'cpuIdentity':initial_ids,'vmExitDelta':delta,'vmExitsPerSecond':delta/duration,
+            'cpuIdentity':initial_ids,'expectedResidentProcessors':expected_cpus,'vmExitDelta':delta,'vmExitsPerSecond':delta/duration,
             'exitReasonDelta':{k:cn['exitReasonCount'].get(k,0)-c0['exitReasonCount'].get(k,0) for k in sorted(set(cn['exitReasonCount'])|set(c0['exitReasonCount']))},
             'inveptAttemptDelta':int(mn['inveptAttempts'])-int(m0['inveptAttempts']),
             'inveptFailureDelta':int(mn['inveptFailed'])-int(m0['inveptFailed']),
@@ -71,4 +73,4 @@ def summarize_samples(samples, source):
             'sampleIntervalExitsPerSecond':distribution([r['vmExitsPerSecond'] for r in rows if r['vmExitsPerSecond'] is not None]),
             'observerDurationMs':distribution([s['captureDurationMs'] for s in good]),
             'counterScope':'All KSword resident dispatch entries, including early-return nested handling/reflection; not all exits in outer Hyper-V. Actual INVEPT calls include background work. VPID is disabled by this monitor; exit reason 53 is an intercepted nested INVVPID instruction.',
-            'limits':'One boot, two vCPUs, empty page-control slot, periodic active readback observers. Point samples cannot exclude every intervening failure. Flat page-control allocations do not prove no other driver/VMware leak.'},rows
+            'limits':'One boot, declared Windows vCPU count, two guest CPU observers, empty page-control slot. Point samples cannot exclude every intervening failure. Flat page-control allocations do not prove no other driver/VMware leak.'},rows

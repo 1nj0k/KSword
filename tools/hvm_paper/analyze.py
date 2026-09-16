@@ -73,7 +73,7 @@ def windows(root, derived):
         same = continuity(r["before"], r["after"])
         before, after = hvm(r["before"]), hvm(r["after"])
         expected_on = r["configuration"] in ("ksword-on", "on-no-vmware")
-        condition_valid = all(s.get("residentProcessorCount") == (2 if expected_on else 0)
+        condition_valid = all(s.get("residentProcessorCount") == (r.get("expectedResidentProcessors", 2) if expected_on else 0)
                               for s in (before, after))
         if "no-vmware" in r["configuration"]:
             condition_valid &= all(not any(p["name"] == "vmware-vmx" for p in side["processes"])
@@ -131,7 +131,7 @@ def nested(root, derived):
         b, a = before["page"]["parsed"], after["page"]["parsed"]
         same = continuity(before, after)
         empty = a["active"] == 0 and a["retired"] == 0
-        healthy = all(s["status"]["parsed"]["residentProcessorCount"] == 2 and
+        healthy = all(s["status"]["parsed"]["residentProcessorCount"] == r.get("expectedResidentProcessors", 2) and
                       not {"FAULTED", "ROLLBACK_REQUIRED"}.intersection(s["status"]["parsed"]["stateNames"])
                       for s in (before, after))
         row = {"runId": r["runId"], "case": r["case"], "condition": r["condition"],
@@ -301,7 +301,7 @@ def transitions(root, derived):
             rows.append({"runId":r["runId"],"result":"missing_probe","source":path.name});continue
         p=probes[-1];before,after=hvm(r["before"]),hvm(r["after"])
         same=continuity(r["before"],r["after"])
-        wanted=0 if r["command"]=="stop" else 2
+        wanted=0 if r["command"]=="stop" else r.get("expectedResidentProcessors", 2)
         valid=(same and p["commandExitCode"]==0 and after["residentProcessorCount"]==wanted
                and not {"FAULTED","ROLLBACK_REQUIRED"}.intersection(after["stateNames"]))
         outcome="pass" if valid else "command_timeout_state_reached" if p["commandExitCode"]==258 and same and after["residentProcessorCount"]==wanted else "failed"

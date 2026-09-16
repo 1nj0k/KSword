@@ -10,3 +10,6 @@ VOID KswordARKHvmMetricsStamp(ULONG Stage);
 VOID KswordARKHvmMetricsCpuStamp(ULONG Index, ULONG Stage);
 VOID KswordARKHvmMetricsAllocation(BOOLEAN Replacement, BOOLEAN Free);
 NTSTATUS KswordARKHvmMetricsQuery(KSWORD_ARK_HVM_METRICS_RESPONSE* Response);
+
+/* Caller holds the runtime resource lock; values remain observational. */
+VOID KswordARKHvmResidentMetrics(KSWORD_ARK_HVM_METRICS_RESPONSE* Response);

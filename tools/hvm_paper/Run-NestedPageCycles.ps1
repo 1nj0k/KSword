@@ -6,7 +6,8 @@ param(
     [ValidateSet('idle','guest-cpu-load')][string]$Condition='idle',
     [ValidateRange(1,30)][int]$ObserveSeconds=3,
     [string]$GuestPhysicalPage='7000000',
-    [switch]$RejectionsOnly
+    [switch]$RejectionsOnly,
+    [ValidateRange(1,64)][int]$ExpectedResidentProcessors=2
 )
 $ErrorActionPreference='Stop'
 $env:COMPUTERNAME=[Environment]::MachineName
@@ -56,8 +57,8 @@ try {
     }
     $initial=Invoke-Command -Session $session -ScriptBlock {Paper-State}
     $page=$initial.page.parsed
-    if($page.active -ne 0 -or $page.retired -ne 0 -or $page.residentProcessors -ne 2 -or @($page.roots).Count -ne 1) {
-        throw 'Require two resident CPUs, one known nested EPT root, and no existing mapping.'
+    if($page.active -ne 0 -or $page.retired -ne 0 -or $page.residentProcessors -ne $ExpectedResidentProcessors -or @($page.roots).Count -ne 1) {
+        throw "Require $ExpectedResidentProcessors resident CPUs, one known nested EPT root, and no existing mapping."
     }
     $root=[string]$page.roots[0]
     $cases=if($RejectionsOnly){@(
@@ -70,6 +71,7 @@ try {
         $path=Join-Path $OutputDirectory ($id+'.json')
         $record=[ordered]@{schemaVersion=1;runId=$id;kind='nested-page';condition=$Condition;case=$case.name;iteration=$case.iteration;targetRole='vmware-tinycore';gpa=$GuestPhysicalPage;ept12Root=$root;fill=$case.fill;startedUtc=[DateTime]::UtcNow.ToString('o');status='started';before=(Invoke-Command -Session $session -ScriptBlock {Paper-State})}
         $record.eventAnchor=Invoke-Command -Session $session -ScriptBlock {(Paper-Control @('events','0','1')).parsed.newestSequence}
+        $record.expectedResidentProcessors=$ExpectedResidentProcessors
         Save-Record $record $path
         try {
             if($RejectionsOnly) {

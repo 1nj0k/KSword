@@ -403,7 +403,7 @@ WSL silo and Linux PID/TID diagnostics.
 | `r0 image-signature` | `KswordCLI.exe r0 image-signature --path PATH [--module-base VA] [--flags 0xN]` | 读取 Authenticode 证书表和 CI 证据。 | 必填：--path。可选：--module-base、--flags。 | `IOCTL_KSWORD_ARK_QUERY_IMAGE_SIGNATURE`。 |
 | `r0 debug-output` | `KswordCLI.exe r0 debug-output [--after-sequence N] [--max-records N] [--limit N]` | 读取内核调试输出环。 | 可选：--after-sequence、--max-records、--limit。 | `IOCTL_KSWORD_ARK_DEBUG_OUTPUT_DRAIN`，不改变捕获状态。 |
 | `r0 hvm-status` | `KswordCLI.exe r0 hvm-status` | 查询 HVM/VT-x 生命周期与能力状态。 | 无。 | `IOCTL_KSWORD_ARK_QUERY_HVM`。 |
-| `r0 hvm-metrics` | `KswordCLI.exe r0 hvm-metrics` | 查询转换计时有效性及 INVEPT、替换页资源计数。 | 无。 | `IOCTL_KSWORD_ARK_HVM_METRICS`；完整逐核 JSON：`hvm_ctl --json metrics`，主程序“完整操作”使用同一引擎。 |
+| `r0 hvm-metrics` | `KswordCLI.exe r0 hvm-metrics` | 查询转换计时有效性及 INVEPT、替换页资源计数。 | 无。 | `IOCTL_KSWORD_ARK_HVM_METRICS` v2；完整逐核 JSON：`hvm_ctl --json metrics`，包括影子 EPT 缓存、A/D 维护计数。主程序“完整操作”使用同一引擎。 |
 | `r0 hvm-events` | `KswordCLI.exe r0 hvm-events [--after-sequence N] [--max-rows N]` | 读取 HVM 事件环，不清空事件。 | 可选：--after-sequence、--max-rows。 | `IOCTL_KSWORD_ARK_HVM_EVENTS`。 |
 | `r0 ioctl-registry` | `KswordCLI.exe r0 ioctl-registry [--flags 0xN] [--max-entries N]` | 查询驱动已注册的 IOCTL 分发表。 | 可选：--flags、--max-entries。 | `IOCTL_KSWORD_ARK_QUERY_IOCTL_REGISTRY`。 |
 | `r0 timer-dpc` | `KswordCLI.exe r0 timer-dpc [--max-entries N] [--max-per-bucket N]` | 枚举内核定时器与 DPC 证据。 | 可选：--max-entries、--max-per-bucket。 | `IOCTL_KSWORD_ARK_ENUM_TIMER_DPC`。 |
@@ -422,3 +422,22 @@ WSL silo and Linux PID/TID diagnostics.
 | `r0 object-types` | `KswordCLI.exe r0 object-types [--flags 0xN] [--max-entries N] [--start-index N]` | 枚举内核对象类型表。 | 可选：--flags、--max-entries、--start-index。 | `IOCTL_KSWORD_ARK_ENUM_OBJECT_TYPE_TABLE`。 |
 | `r0 win32k-timers` | `KswordCLI.exe r0 win32k-timers [--flags 0xN] [--session-id N] [--pid PID] [--tid TID] [--max-entries N]` | 查询基于 PDB 的 win32k 定时器证据。 | 可选：--flags、--session-id、--pid、--tid、--max-entries。 | `IOCTL_KSWORD_ARK_QUERY_WIN32K_TIMERS`。 |
 | `r0 win32k-events` | `KswordCLI.exe r0 win32k-events [--flags 0xN] [--session-id N] [--pid PID] [--tid TID] [--max-entries N]` | 查询基于 PDB 的 WinEvent Hook 证据。 | 可选：--flags、--session-id、--pid、--tid、--max-entries。 | `IOCTL_KSWORD_ARK_QUERY_WIN32K_EVENT_HOOKS`。 |
+
+
+### HVM 后代页控制与主程序入口
+
+主程序 HVM 面板的“完整操作”和 `hvm_ctl.exe` 编译同一份
+`HvmCommandCatalog.c`、`HvmCommandEngine.c`。`hvm_ctl --json commands`
+是命令、参数、默认值和范围的权威目录；`--parse-only` 验证参数且不打开驱动。
+
+| 命令 | 参数与结果 |
+| --- | --- |
+| `hvm_ctl --json nested-page-map <EPT12> <GPA> <fill> [ownerPID]` | 前三项为十六进制；可选 VMM PID 是十进制，默认 `0` 自动要求恰好一个 `vmware-vmx.exe`。内核校验 PID 和创建时间，拒绝已退出或被复用的进程身份。 |
+| `hvm_ctl --json nested-page-query` | 映射 ABI v2 返回 `ownerProcessId`、`ownerCreationTime`、`ownerExited`。退出后停止新组合，但替换页保持保留，直到显式移除完成全核失效。 |
+| `hvm_ctl --json nested-page-remove` | 取消发布、全核失效、回收；失败时保留 backing，不能仅凭 `active=0` 判断已经释放。 |
+| `hvm_ctl --json metrics` | metrics ABI v2 返回逐核 `shadowEpt` 数组。计数在资源重建时清零，查询是时间区间内的观察值，不是所有 CPU 的同时快照。 |
+
+旧 page v1 / metrics v1 客户端不能搭配此驱动使用；同时更新主程序、
+`KswordCLI.exe` 和 `hvm_ctl.exe`。普通 HVM 状态查询 ABI 不变。
+进程租约不能检测同一 VMM 进程内的来宾重启、快照恢复或 GPA 重用；
+调用者须在这些操作前移除映射，并在控制期间保留目标页。

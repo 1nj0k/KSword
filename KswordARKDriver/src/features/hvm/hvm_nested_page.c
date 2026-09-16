@@ -12,6 +12,95 @@
 #define KSW_HVM_PAGE_FRAME_MASK 0x000FFFFFFFFFF000ULL
 /* Operation ids survive resource teardown and reset only at driver load. */
 static volatile LONG g_PageOperationSequence;
+/* Serialize process-object publication against the process-exit callback. */
+static KSPIN_LOCK g_PageOwnerLock;
+/* Unregistration drains callbacks before driver resources are released. */
+static BOOLEAN g_PageOwnerNotifyRegistered;
+/* This documented process identity is independent of private EPROCESS offsets. */
+NTSYSAPI LONGLONG NTAPI PsGetProcessCreateTimeQuadPart(_In_ PEPROCESS Process);
+/* ntddk does not declare the documented ntifs process lookup export. */
+NTSYSAPI NTSTATUS NTAPI PsLookupProcessByProcessId(_In_ HANDLE ProcessId, _Outptr_ PEPROCESS* Process);
+
+static VOID KswordARKHvmPageOwnerNotify(PEPROCESS Process, HANDLE ProcessId,
+    PPS_CREATE_NOTIFY_INFO CreateInfo)
+{
+    KSW_HVM_RUNTIME* runtime = KswordARKHvmGetRuntime();
+    KIRQL oldIrql;
+    /* Only object identity is needed; PID reuse cannot revive an expired lease. */
+    UNREFERENCED_PARAMETER(ProcessId);
+    /* Process creation cannot invalidate an existing owner's mapping. */
+    if (CreateInfo != NULL) { return; }
+    /* Match and revoke in one bounded critical section; never wait for VM exits here. */
+    KeAcquireSpinLock(&g_PageOwnerLock, &oldIrql);
+    /* A rule remains referenced until explicit all-CPU reclamation completes. */
+    if (runtime->NestedPageOwner == Process && runtime->NestedPageOwnerExited == 0L) {
+        /* Stop new compositions from using the replacement. */
+        InterlockedExchange(&runtime->NestedPageOwnerExited, 1L);
+        /* Every subsequent L2 entry must discard its cached page policy. */
+        InterlockedIncrement((volatile LONG*)&runtime->NestedPageGeneration);
+    }
+    /* Release before returning to process teardown. */
+    KeReleaseSpinLock(&g_PageOwnerLock, oldIrql);
+}
+
+NTSTATUS KswordARKHvmNestedPageGuardInitialize(VOID)
+{
+    NTSTATUS status;
+    /* Initialize once before any page rule can be published. */
+    KeInitializeSpinLock(&g_PageOwnerLock);
+    /* Use a documented notification, without patching or injecting into the VMM. */
+    status = PsSetCreateProcessNotifyRoutineEx(KswordARKHvmPageOwnerNotify, FALSE);
+    /* Record only a registration the OS actually accepted. */
+    g_PageOwnerNotifyRegistered = NT_SUCCESS(status);
+    /* Resident admission is denied if its owner-lifetime guard is unavailable. */
+    return status;
+}
+
+VOID KswordARKHvmNestedPageGuardShutdown(VOID)
+{
+    /* Failed initialization has no callback to remove. */
+    if (g_PageOwnerNotifyRegistered) {
+        /* The OS waits for in-flight callbacks before this routine returns. */
+        (void)PsSetCreateProcessNotifyRoutineEx(KswordARKHvmPageOwnerNotify, TRUE);
+        /* Prevent a second unregistration on a partial-start cleanup path. */
+        g_PageOwnerNotifyRegistered = FALSE;
+    }
+}
+
+static NTSTATUS KswordARKHvmPageBindOwner(KSW_HVM_RUNTIME* Runtime,
+    KSW_HVM_NESTED_PAGE* Page, const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST* Request)
+{
+    PEPROCESS process = NULL;
+    KIRQL oldIrql;
+    NTSTATUS status;
+    /* A caller must identify a live owner; an EPT address is not a lifetime. */
+    if (Request->ownerProcessId <= 4UL || Request->ownerCreationTime == 0ULL) { return STATUS_INVALID_PARAMETER; }
+    /* Take the reference before exposing its pointer to the exit callback. */
+    status = PsLookupProcessByProcessId(ULongToHandle(Request->ownerProcessId), &process);
+    /* Failed lookup owns no reference. */
+    if (!NT_SUCCESS(status)) { return status; }
+    /* A reused PID must never be mistaken for the selected VMM. */
+    if ((ULONGLONG)PsGetProcessCreateTimeQuadPart(process) != Request->ownerCreationTime) {
+        /* Release the unadmitted process reference. */
+        ObDereferenceObject(process);
+        /* Distinguish identity drift from a resource failure. */
+        return STATUS_REVISION_MISMATCH;
+    }
+    /* The page record owns this reference even if subsequent admission fails. */
+    Page->OwnerProcess = process;
+    /* Retain exactly the identity validated above. */
+    Page->OwnerCreationTime = Request->ownerCreationTime;
+    /* Close the callback/publication race before checking termination status. */
+    KeAcquireSpinLock(&g_PageOwnerLock, &oldIrql);
+    /* A previous retired rule must already have been drained before mapping again. */
+    Runtime->NestedPageOwnerExited = 0L;
+    /* Publish the referenced object, not only its recyclable numeric PID. */
+    Runtime->NestedPageOwner = process;
+    /* Process exit after publication now marks the rule expired. */
+    KeReleaseSpinLock(&g_PageOwnerLock, oldIrql);
+    /* Exit before publication is caught here; exit after this check hits the callback. */
+    return PsGetProcessExitStatus(process) == STATUS_PENDING ? STATUS_SUCCESS : STATUS_PROCESS_IS_TERMINATING;
+}
 
 /* Fixed local metadata remains valid after its backing allocation is freed. */
 typedef struct _KSW_HVM_PAGE_TRACE {
@@ -58,6 +147,19 @@ static VOID KswordARKHvmNestedPageFree(KSW_HVM_NESTED_PAGE* Page)
 {
     /* Failed allocation and empty removal both permit an empty record. */
     if (Page == NULL) { return; }
+    /* Owner references remain pinned for the same lifetime as replacement backing. */
+    if (Page->OwnerProcess != NULL) {
+        KSW_HVM_RUNTIME* runtime = KswordARKHvmGetRuntime();
+        KIRQL oldIrql;
+        /* Unpublish the object before releasing its final rule reference. */
+        KeAcquireSpinLock(&g_PageOwnerLock, &oldIrql);
+        /* A single slot cannot replace another live lease. */
+        if (runtime->NestedPageOwner == Page->OwnerProcess) { runtime->NestedPageOwner = NULL; }
+        /* Finish the callback barrier before invoking the object manager. */
+        KeReleaseSpinLock(&g_PageOwnerLock, oldIrql);
+        /* No owner identity is dereferenced from VMX root. */
+        ObDereferenceObject(Page->OwnerProcess);
+    }
     /* Backing may be absent after an allocation failure. */
     if (Page->ShadowVirtual != NULL) {
         /* Caller has either never published it or drained all possible readers. */
@@ -83,7 +185,7 @@ VOID KswordARKHvmNestedPageResetLocked(KSW_HVM_RUNTIME* Runtime)
     /* Publish the empty retention slot. */
     Runtime->NestedPageRetired = NULL;
     /* Invalidate stale generation-bound user requests. */
-    Runtime->NestedPageGeneration += 1UL;
+    InterlockedIncrement((volatile LONG*)&Runtime->NestedPageGeneration);
 }
 
 static NTSTATUS KswordARKHvmPageRetire(KSW_HVM_RUNTIME* Runtime,
@@ -98,7 +200,7 @@ static NTSTATUS KswordARKHvmPageRetire(KSW_HVM_RUNTIME* Runtime,
         Runtime->NestedPageRetired = (KSW_HVM_NESTED_PAGE*)InterlockedExchangePointer(
             (PVOID volatile*)&Runtime->NestedPage, NULL);
         /* The logical mapping changes even if subsequent invalidation fails. */
-        Runtime->NestedPageGeneration += 1UL;
+        InterlockedIncrement((volatile LONG*)&Runtime->NestedPageGeneration);
         /* Delay the event until its retained allocation identity is available. */
         unpublished = TRUE;
     }
@@ -160,7 +262,7 @@ NTSTATUS KswordARKHvmNestedPageControl(const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST*
     fault = (Request->flags & KSWORD_ARK_HVM_NESTED_PAGE_FAULT_MASK) >> KSWORD_ARK_HVM_NESTED_PAGE_FAULT_SHIFT;
     /* Reject unknown versions, reserved bits and unsupported fault combinations. */
     if (Request->version != KSWORD_ARK_HVM_NESTED_PAGE_VERSION ||
-        Request->size != sizeof(*Request) || Request->reserved != 0UL ||
+        Request->size != sizeof(*Request) ||
         Request->operation > KSWORD_ARK_HVM_NESTED_PAGE_REMOVE ||
         (Request->flags & ~(KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED | KSWORD_ARK_HVM_NESTED_PAGE_FAULT_MASK)) != 0UL ||
         fault > KSWORD_ARK_HVM_NESTED_PAGE_FAULT_REMOVE_FLUSH ||
@@ -261,6 +363,10 @@ NTSTATUS KswordARKHvmNestedPageControl(const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST*
     KswordARKHvmMetricsAllocation(TRUE, FALSE);
     /* Initialize all content before root readers can discover it. */
     RtlCopyMemory(page->ShadowVirtual, Request->shadow, PAGE_SIZE);
+    /* Bind lifetime before publication; cleanup also releases failed admission. */
+    status = KswordARKHvmPageBindOwner(runtime, page, Request);
+    /* A dead or reused owner must not leave any allocated replacement behind. */
+    if (!NT_SUCCESS(status)) { KswordARKHvmNestedPageFree(page); goto complete; }
     /* Resolve the actual backing PA for EPT and evidence. */
     page->ShadowPhysicalPage = (ULONGLONG)MmGetPhysicalAddress(page->ShadowVirtual).QuadPart;
     /* Store the root identity used by the composition path. */
@@ -285,7 +391,7 @@ NTSTATUS KswordARKHvmNestedPageControl(const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST*
     /* Publish only a fully initialized rule with one release-ordered pointer swap. */
     (void)InterlockedExchangePointer((PVOID volatile*)&runtime->NestedPage, page);
     /* Invalidate stale control requests once publication occurs. */
-    runtime->NestedPageGeneration += 1UL;
+    InterlockedIncrement((volatile LONG*)&runtime->NestedPageGeneration);
     /* Record publication separately from eventual cache coherence. */
     KswordARKHvmPageTrace(&trace, KSW_HVM_PAGE_PUBLISHED, STATUS_SUCCESS);
     /* Bound the commit invalidation operation. */
@@ -297,6 +403,8 @@ NTSTATUS KswordARKHvmNestedPageControl(const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST*
     KswordARKHvmPageTrace(&trace, KSW_HVM_PAGE_FLUSH_END, status);
     /* Post-commit cancellation follows successful publication and invalidation. */
     if (NT_SUCCESS(status) && fault == KSWORD_ARK_HVM_NESTED_PAGE_FAULT_ROLLBACK) { status = STATUS_CANCELLED; }
+    /* Owner exit during commit is a failed transaction, not a successful mapping. */
+    if (NT_SUCCESS(status) && ReadAcquire(&runtime->NestedPageOwnerExited) != 0L) { status = STATUS_PROCESS_IS_TERMINATING; }
     /* A failed commit must withdraw the override instead of silently leaving it active. */
     if (!NT_SUCCESS(status)) {
         /* Keep the original error; failed rollback remains visible as retired backing. */
@@ -314,13 +422,19 @@ complete:
     /* Return the current control generation. */
     Response->generation = runtime->NestedPageGeneration;
     /* Report logical mapping occupancy. */
-    Response->active = runtime->NestedPage != NULL;
+    Response->active = runtime->NestedPage != NULL && ReadAcquire(&runtime->NestedPageOwnerExited) == 0L;
     /* Report potentially referenced, unreclaimed backing. */
-    Response->retired = runtime->NestedPageRetired != NULL;
+    Response->retired = runtime->NestedPageRetired != NULL || (runtime->NestedPage != NULL && ReadAcquire(&runtime->NestedPageOwnerExited) != 0L);
     /* Preserve resident participant count for the caller's preconditions. */
     Response->residentProcessors = (ULONG)runtime->ResidentProcessorCount;
     /* Only dereference an allocation still owned by the runtime. */
     if (page != NULL) {
+        /* Report the stable owner and the reason backing may still be retained. */
+        Response->ownerProcessId = HandleToULong(PsGetProcessId(page->OwnerProcess));
+        /* Preserve the process creation identity for both live and expired leases. */
+        Response->ownerCreationTime = page->OwnerCreationTime;
+        /* This flag does not claim that retained backing has already been freed. */
+        Response->ownerExited = ReadAcquire(&runtime->NestedPageOwnerExited) != 0L;
         /* Return its exact translation identity. */
         Response->ept12Pointer = page->Ept12Pointer;
         /* Return its exact descendant page. */
@@ -341,4 +455,9 @@ complete:
     /* A complete semantic response was produced even when the request failed. */
     return STATUS_SUCCESS;
 }
+#else
+/* HVM has no resident implementation on other architectures. */
+NTSTATUS KswordARKHvmNestedPageGuardInitialize(VOID) { return STATUS_NOT_SUPPORTED; }
+/* No notification was registered on an unsupported architecture. */
+VOID KswordARKHvmNestedPageGuardShutdown(VOID) { }
 #endif

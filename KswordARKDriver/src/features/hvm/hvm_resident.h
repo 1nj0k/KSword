@@ -270,6 +270,8 @@ typedef struct _KSW_HVM_RESIDENT_VCPU
     ULONGLONG HltBlockedWithIfSet;
     ULONGLONG HltBlockedWithPendingEvent;
     ULONG HltLastInterruptibility;
+    /* CPUID.0 has no dynamic OS state; refresh on this CPU at each insertion. */
+    int CpuidVendorLeaf[4];
 } KSW_HVM_RESIDENT_VCPU;
 
 EXTERN_C_START

@@ -43,6 +43,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <winioctl.h>
+#include <tlhelp32.h>
 /* __cpuid：tlb-probe-exit 用它强制一次无条件 VM exit。 */
 #include <intrin.h>
 
@@ -5575,14 +5576,71 @@ static int DoMetrics(HANDLE h, int asJson)
         }
         if (asJson) { printf("}}"); }
     }
+    if (asJson) { printf("],\"shadowEpt\":["); }
+    for (i = 0; i < response->shadowProcessorCount && i < KSWORD_ARK_HVM_MAX_PROCESSORS; ++i) {
+        const KSWORD_ARK_HVM_SHADOW_METRICS* row = &response->shadowProcessors[i];
+        if (asJson) {
+            printf("%s{\"index\":%lu,\"pagesUsed\":%lu,\"trackedPages\":%lu,\"trackedOverflow\":%lu,"
+                   "\"fills\":%lu,\"denied\":%lu,\"exhausted\":%lu,\"kept\":%lu,\"dropped\":%lu,"
+                   "\"adPending\":%lu,\"adPropagated\":%lu,\"adOverflow\":%lu,\"verifyMismatch\":%lu}",
+                   i ? "," : "", row->index, row->pagesUsed, row->trackedPages, row->trackedOverflow,
+                   row->fills, row->denied, row->exhausted, row->kept, row->dropped,
+                   row->adPending, row->adPropagated, row->adOverflow, row->verifyMismatch);
+        } else {
+            printf("shadow cpu=%lu fills=%lu kept=%lu dropped=%lu pages=%lu tracked=%lu overflow=%lu "
+                   "adPending=%lu adOverflow=%lu mismatch=%lu\n", row->index, row->fills,
+                   row->kept, row->dropped, row->pagesUsed, row->trackedPages, row->trackedOverflow,
+                   row->adPending, row->adOverflow, row->verifyMismatch);
+        }
+    }
     if (asJson) { printf("]}\n"); }
     free(response);
     return 0;
 }
 
+/* Resolve a process lease through Windows APIs, without calling the VMM. */
+static int ResolveNestedPageOwner(DWORD requested, DWORD* owner, ULONGLONG* created)
+{
+    HANDLE process;
+    FILETIME birth, exited, kernel, user;
+    ULARGE_INTEGER value;
+    if (requested == 0UL) {
+        PROCESSENTRY32W entry = { 0 };
+        DWORD count = 0UL;
+        HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (snapshot == INVALID_HANDLE_VALUE) { return 0; }
+        entry.dwSize = sizeof(entry);
+        if (Process32FirstW(snapshot, &entry)) {
+            do {
+                if (_wcsicmp(entry.szExeFile, L"vmware-vmx.exe") == 0) {
+                    requested = entry.th32ProcessID;
+                    ++count;
+                }
+            } while (Process32NextW(snapshot, &entry));
+        }
+        CloseHandle(snapshot);
+        if (count != 1UL) {
+            fprintf(stderr, "Select an explicit VMM owner PID when there is not exactly one vmware-vmx process.\n");
+            return 0;
+        }
+    }
+    process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, requested);
+    if (process == NULL) { return 0; }
+    if (!GetProcessTimes(process, &birth, &exited, &kernel, &user)) {
+        CloseHandle(process);
+        return 0;
+    }
+    CloseHandle(process);
+    value.LowPart = birth.dwLowDateTime;
+    value.HighPart = birth.dwHighDateTime;
+    *owner = requested;
+    *created = value.QuadPart;
+    return 1;
+}
+
 static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
                         unsigned long long eptp, unsigned long long gpa,
-                        unsigned char fill, unsigned long faultMode)
+                        unsigned char fill, unsigned long faultMode, unsigned long ownerPid)
 {
     KSWORD_ARK_HVM_NESTED_PAGE_REQUEST request = { 0 };
     KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE response = { 0 };
@@ -5606,6 +5664,11 @@ static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
         request.ept12Pointer = eptp;
         request.guestPhysicalPage = gpa;
         memset(request.shadow, fill, sizeof(request.shadow));
+        if (operation == KSWORD_ARK_HVM_NESTED_PAGE_MAP &&
+            !ResolveNestedPageOwner(ownerPid, &request.ownerProcessId, &request.ownerCreationTime)) {
+            fprintf(stderr, "Cannot establish a VMM process lifetime lease.\n");
+            return 1;
+        }
         if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_NESTED_PAGE,
                              &request, sizeof(request), &response, sizeof(response),
                              &returned, NULL) || returned != sizeof(response)) {
@@ -5618,11 +5681,12 @@ static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
                "\"generation\":%lu,\"active\":%lu,\"retired\":%lu,\"residentProcessors\":%lu,"
                "\"ept12Pointer\":\"0x%016llX\",\"guestPhysicalPage\":\"0x%016llX\","
                "\"shadowPhysicalPage\":\"0x%016llX\",\"originalPhysicalPage\":\"0x%016llX\","
-               "\"composedCount\":%llu,\"roots\":[",
+               "\"composedCount\":%llu,\"ownerProcessId\":%lu,\"ownerExited\":%lu,\"ownerCreationTime\":\"%llu\",\"roots\":[",
                response.operationId, faultMode, response.status, response.lastStatus, response.generation, response.active,
                response.retired, response.residentProcessors, response.ept12Pointer,
                response.guestPhysicalPage, response.shadowPhysicalPage,
-               response.originalPhysicalPage, response.composedCount);
+               response.originalPhysicalPage, response.composedCount, response.ownerProcessId,
+               response.ownerExited, response.ownerCreationTime);
     } else {
         printf("nested-page status=%lu nt=0x%08lX generation=%lu active=%lu retired=%lu cpus=%lu\n"
                "EPT12=0x%016llX GPA=0x%016llX shadow=0x%016llX original=0x%016llX composed=%llu\n",
@@ -5630,6 +5694,8 @@ static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
                response.retired, response.residentProcessors, response.ept12Pointer,
                response.guestPhysicalPage, response.shadowPhysicalPage,
                response.originalPhysicalPage, response.composedCount);
+        printf("ownerPid=%lu ownerCreated=%llu ownerExited=%lu\n", response.ownerProcessId,
+               response.ownerCreationTime, response.ownerExited);
     }
     for (index = 0UL; index < response.rootCount && index < KSWORD_ARK_HVM_MAX_PROCESSORS; ++index) {
         if (asJson) { printf("%s\"0x%016llX\"", index ? "," : "", response.ept12Roots[index]); }
@@ -5703,11 +5769,11 @@ int KswordHvmCommandMain(int argc, char** argv)
     case HvmControl: rc = DoControl(h, spec, (unsigned long)v[0], asJson); break;
     case HvmStatus: rc = DoQuery(h, asJson); break;
     case HvmMetrics: rc = DoMetrics(h, asJson); break;
-    case HvmPageQuery: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_QUERY, 0, 0, 0, 0); break;
-    case HvmPageMap: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], (unsigned char)v[2], 0); break;
-    case HvmPageMapTest: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], (unsigned char)v[2], (unsigned long)v[3]); break;
-    case HvmPageRemove: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_REMOVE, 0, 0, 0, 0); break;
-    case HvmPageRemoveTest: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_REMOVE, 0, 0, 0, KSWORD_ARK_HVM_NESTED_PAGE_FAULT_REMOVE_FLUSH); break;
+    case HvmPageQuery: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_QUERY, 0, 0, 0, 0, 0); break;
+    case HvmPageMap: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], (unsigned char)v[2], 0, (unsigned long)v[3]); break;
+    case HvmPageMapTest: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], (unsigned char)v[2], (unsigned long)v[3], 0); break;
+    case HvmPageRemove: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_REMOVE, 0, 0, 0, 0, 0); break;
+    case HvmPageRemoveTest: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_REMOVE, 0, 0, 0, KSWORD_ARK_HVM_NESTED_PAGE_FAULT_REMOVE_FLUSH, 0); break;
     case HvmAcl: rc = DoAclProbe(h, asJson); break;
     case HvmNestedProbe: rc = DoNestedProbe(h, asJson, 0); break;
     case HvmNestedProbeAll: rc = DoNestedProbe(h, asJson, 1); break;

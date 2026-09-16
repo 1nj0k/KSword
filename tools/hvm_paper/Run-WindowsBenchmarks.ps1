@@ -1,4 +1,4 @@
-param([string]$Mode,[string]$OutputDirectory='C:\ksword\paper', [int]$Repetitions=7)
+param([string]$Mode,[string]$OutputDirectory='C:\ksword\paper', [int]$Repetitions=7,[ValidateRange(1,64)][int]$ExpectedResidentProcessors=2)
 $ErrorActionPreference='Stop'
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $binary=Join-Path $OutputDirectory 'microbench.exe'
@@ -20,6 +20,7 @@ foreach($iteration in 0..$Repetitions) {
         $runId='windows1-'+$Mode+'-'+$workload+'-'+$iteration.ToString('D2')+'-'+[DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
         $path=Join-Path $OutputDirectory ($runId+'.json')
         $record=[ordered]@{schemaVersion=1;runId=$runId;role='windows1';configuration=$Mode;workload=$workload;iteration=$iteration;warmup=($iteration -eq 0);status='started';startedUtc=[DateTime]::UtcNow.ToString('o');binarySha256=$binaryHash;before=(Read-State)}
+        $record.expectedResidentProcessors=$ExpectedResidentProcessors
         Write-DurableJson $record $path
         $info=[Diagnostics.ProcessStartInfo]::new()
         $info.FileName=$binary

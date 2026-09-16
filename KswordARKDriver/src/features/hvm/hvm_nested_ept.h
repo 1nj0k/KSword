@@ -31,34 +31,25 @@ Environment:
  * "L2 cannot run this page" must not be "the host stops".
  */
 #define KSW_HVM_NEPT_TABLE_PAGES 192UL
-/*
- * How many composed leaves can have their A/D bits folded back into EPT12.
- *
- * One 4 KiB table page holds 512 leaves, so this is a little over a page's
- * worth - enough for the working set an L2 touches between exits, and small
- * enough that walking it on every exit stays cheap.  Overflow is handled by
- * turning A/D off rather than propagating some of it; see the record arrays.
- */
-#define KSW_HVM_NEPT_AD_RECORDS 640UL
+/* One ledger slot per possible shadow entry; allocated only for active CPUs. */
+#define KSW_HVM_NEPT_AD_RECORDS (KSW_HVM_NEPT_TABLE_PAGES * 512UL)
+/* Cover 256 MiB of fragmented 4-KiB leaves plus shared interior tables. */
+#define KSW_HVM_NEPT_TRACKED_PAGES 160UL
 
-/*
- * How many EPT12 table pages the shadow keeps a private copy of.
- *
- * These are the pages L1's own hierarchy is built out of - its PML4, its
- * PDPTs, its page directories and whatever page tables it uses - not the pages
- * it maps.  A guest of a few hundred megabytes needs a handful: one PML4, one
- * or two PDPTs, a page directory per gigabyte, plus a page table wherever L1
- * declines to use a large leaf.  Thirty-two covers that with room, and an
- * overflow is counted rather than hidden, because the consequence of
- * overflowing is losing the right to keep the shadow across an invalidation.
- *
- * Copies rather than checksums, deliberately.  The question these answer is
- * "did L1 edit its tables", and the answer decides whether L2 keeps running on
- * translations we composed earlier.  A checksum answers it with a probability;
- * a copy answers it.  Thirty-two pages is 128 KiB per processor, which is less
- * than this module already reserves for the shadow tables themselves.
- */
-#define KSW_HVM_NEPT_TRACKED_PAGES 32UL
+/* A source entry remains tracked until every writable A/D bit is published. */
+typedef struct _KSW_HVM_NEPT_AD_ENTRY
+{
+    /* Address in L1 physical memory, never a retained window pointer. */
+    ULONGLONG L1EntryAddress;
+    /* Reuse a slot without clearing the whole ledger on each invalidation. */
+    ULONG Generation;
+    /* Store hardware bits 8/9 in bits 0/1 of this byte. */
+    UCHAR PublishedBits;
+    /* Prevent duplicate pending entries when a leaf is refilled. */
+    UCHAR Pending;
+    /* Preserve natural entry alignment. */
+    USHORT Reserved;
+} KSW_HVM_NEPT_AD_ENTRY;
 
 /* Fill result distinguishes an inner denial from our own inability to map. */
 #define KSW_HVM_NEPT_FILL_RESOLVED 0UL
@@ -101,6 +92,8 @@ typedef struct _KSW_HVM_SHADOW_EPT_STATE
     ULONG Generation;
     /* Preserve the last invalidated generation. */
     ULONG InvalidationGeneration;
+    /* Drop cached replacements after a process lease is revoked on another CPU. */
+    ULONG PagePolicyGeneration;
     /* Preserve the L1-provided EPT pointer exactly as L1 wrote it. */
     ULONGLONG L1EptPointer;
     /* Preserve KSword's own EPT pointer. */
@@ -199,26 +192,15 @@ typedef struct _KSW_HVM_SHADOW_EPT_STATE
     PVOID RootVirtual;
     /* Retain the composed hierarchy root's physical address. */
     ULONGLONG RootPhysical;
-    /*
-     * Pair every composed leaf with the EPT12 entry it came from.
-     *
-     * Accessed/dirty only mean anything to L1 if they end up in L1's own
-     * tables, and the processor sets them in ours.  Folding them back needs
-     * the address of the EPT12 leaf, which is known during the walk and
-     * nowhere afterwards - recomputing it later would mean walking EPT12 again
-     * from a VM exit, for every page, every time.
-     *
-     * Bounded and allowed to fill up.  On overflow A/D maintenance is turned
-     * off and said so, because a partial propagation is worse than none: L1
-     * would read back "these pages were written and those were not" and the
-     * second half would be a lie.
-     */
+    /* Pending slots refer directly to PageBlock, with no repeated page walk. */
     ULONG AdRecordCount;
-    ULONGLONG AdLeafGuestPhysical[KSW_HVM_NEPT_AD_RECORDS];
-    ULONGLONG AdL1EntryAddress[KSW_HVM_NEPT_AD_RECORDS];
-    /* Count A/D bits actually folded back into EPT12. */
+    /* Allocate once during prepare; VM exits never allocate or drop records. */
+    KSW_HVM_NEPT_AD_ENTRY* AdEntries;
+    /* Dense work list packed after the entries in the same pool allocation. */
+    ULONG* AdPendingSlots;
+    /* Count source entries whose A/D bits were changed by atomic OR. */
     ULONG AdPropagatedCount;
-    /* Count records dropped because the table was full. */
+    /* Count impossible ledger bounds or allocation failures, never silent drops. */
     ULONG AdOverflowCount;
     /*
      * Every EPT12 table page this hierarchy was composed out of, with a copy.
@@ -239,6 +221,8 @@ typedef struct _KSW_HVM_SHADOW_EPT_STATE
     ULONG TrackedCount;
     ULONG TrackedOverflowCount;
     ULONGLONG TrackedFrame[KSW_HVM_NEPT_TRACKED_PAGES];
+    /* Distinguish leaf dirty bits from reserved bits in an interior entry. */
+    UCHAR TrackedLevel[KSW_HVM_NEPT_TRACKED_PAGES];
     /* One page of private copy per tracked frame, in walk order. */
     PVOID TrackedCopyBlock;
     /* Count invalidations that kept the hierarchy, and that dropped it. */
@@ -272,9 +256,8 @@ KswordARKHvmNestedEptPrepare(
  * walks name leaves that invalidation destroys.
  *
  * Does nothing when L1 did not ask for A/D, when the processor cannot maintain
- * it, or when the record table overflowed.  That last one is deliberate: a
- * partial fold would have L1 read back "these pages were written and those
- * were not" with the second half untrue and undetectable.
+ * it. The ledger covers every possible shadow leaf and never discards a
+ * pending dirty-bit observation to make room for another mapping.
  *
  * Returns how many entries were updated, which is the only evidence that any
  * of this happened - L1 cannot tell a propagated bit from one it set itself.
@@ -284,6 +267,16 @@ KswordARKHvmNestedEptPropagateAccessedDirty(
     _Inout_ KSW_HVM_SHADOW_EPT_STATE* Shadow,
     _Inout_ KSW_HVM_PHYS_WINDOW* Window
     );
+
+/* Reserve/release the per-active-CPU A/D ledger outside VMX root. */
+NTSTATUS KswordARKHvmNestedAdPrepare(KSW_HVM_SHADOW_EPT_STATE* Shadow);
+VOID KswordARKHvmNestedAdRelease(KSW_HVM_SHADOW_EPT_STATE* Shadow);
+/* Pair one published shadow leaf with its source without losing later writes. */
+BOOLEAN KswordARKHvmNestedAdRecord(KSW_HVM_SHADOW_EPT_STATE* Shadow,
+    volatile ULONGLONG* Leaf, ULONGLONG L1EntryAddress);
+/* Compare exact entries, accepting only monotonic hardware A/D sets. */
+BOOLEAN KswordARKHvmNestedAdCompare(KSW_HVM_SHADOW_EPT_STATE* Shadow,
+    ULONG TrackedIndex, const volatile ULONGLONG* Current);
 
 /* Release the reserved block.  Legal at DISPATCH_LEVEL. */
 VOID
@@ -349,5 +342,8 @@ NTSTATUS KswordARKHvmNestedPageControl(
     const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST* Request,
     KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE* Response);
 VOID KswordARKHvmNestedPageResetLocked(KSW_HVM_RUNTIME* Runtime);
+/* These callbacks only publish revocation; no allocation is freed at process exit. */
+NTSTATUS KswordARKHvmNestedPageGuardInitialize(VOID);
+VOID KswordARKHvmNestedPageGuardShutdown(VOID);
 
 EXTERN_C_END

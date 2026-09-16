@@ -3,7 +3,8 @@ param(
     [string]$VMName='KSword-HVM-Target',
     [Parameter(Mandatory)][string]$OutputDirectory,
     [ValidateRange(1,86400)][int]$Seconds=600,
-    [ValidateRange(1,300)][int]$IntervalSeconds=30
+    [ValidateRange(1,300)][int]$IntervalSeconds=30,
+    [ValidateRange(1,64)][int]$ExpectedResidentProcessors=2
 )
 $ErrorActionPreference='Stop'
 $env:COMPUTERNAME=[Environment]::MachineName
@@ -19,7 +20,7 @@ try {
     do {
         $start=[DateTime]::UtcNow.ToString('o')
         $sampleWatch=[Diagnostics.Stopwatch]::StartNew()
-        $sample=[ordered]@{schemaVersion=2;runId=$runId;sequence=$sequence;startedUtc=$start;hostElapsedSeconds=$watch.Elapsed.TotalSeconds;kind='stability-sample';status='ok';counterScope='all-resident-dispatch-entries';requestedSeconds=$Seconds}
+        $sample=[ordered]@{schemaVersion=2;runId=$runId;sequence=$sequence;startedUtc=$start;hostElapsedSeconds=$watch.Elapsed.TotalSeconds;kind='stability-sample';status='ok';counterScope='all-resident-dispatch-entries';requestedSeconds=$Seconds;expectedResidentProcessors=$ExpectedResidentProcessors}
         try {
             $sample.vm=Get-VM -Name $VMName | Select-Object Id,State,Uptime,MemoryAssigned,CPUUsage
             $sample.windows1=Invoke-Command -Session $session -ScriptBlock {

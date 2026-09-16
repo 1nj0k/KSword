@@ -136,6 +136,48 @@ typedef struct _KSW_HVM_RENDEZVOUS
 /* Own the process-wide resident contexts under the runtime lifecycle lock. */
 static KSW_HVM_RESIDENT_STATE g_KswordHvmResident;
 
+VOID KswordARKHvmResidentMetrics(KSWORD_ARK_HVM_METRICS_RESPONSE* Response)
+{
+    /* Resource locking prevents prepare/free from replacing these contexts. */
+    ULONG index;
+    /* Timing rows may describe an older stop, so use a separate current count. */
+    Response->shadowProcessorCount = g_KswordHvmResident.ProcessorCount;
+    /* Each CPU publishes its own naturally aligned observational counters. */
+    for (index = 0UL; index < Response->shadowProcessorCount; ++index) {
+        /* Read static per-CPU storage without dereferencing its heap allocations. */
+        const KSW_HVM_SHADOW_EPT_STATE* shadow = &g_KswordHvmResident.Processors[index].Nested.ShadowEpt;
+        /* Select the separately versioned wire row. */
+        KSWORD_ARK_HVM_SHADOW_METRICS* row = &Response->shadowProcessors[index];
+        /* Preserve stable processor-array identity. */
+        row->index = index;
+        /* Sample PageUsed; the enclosing QPC interval bounds this observation. */
+        row->pagesUsed = shadow->PageUsed;
+        /* Sample TrackedCount; the enclosing QPC interval bounds this observation. */
+        row->trackedPages = shadow->TrackedCount;
+        /* Sample TrackedOverflowCount; the enclosing QPC interval bounds this observation. */
+        row->trackedOverflow = shadow->TrackedOverflowCount;
+        /* Sample FillCount; the enclosing QPC interval bounds this observation. */
+        row->fills = shadow->FillCount;
+        /* Sample DenyCount; the enclosing QPC interval bounds this observation. */
+        row->denied = shadow->DenyCount;
+        /* Sample ExhaustionCount; the enclosing QPC interval bounds this observation. */
+        row->exhausted = shadow->ExhaustionCount;
+        /* Sample InvalidateKeptCount; the enclosing QPC interval bounds this observation. */
+        row->kept = shadow->InvalidateKeptCount;
+        /* Sample InvalidateDroppedCount; the enclosing QPC interval bounds this observation. */
+        row->dropped = shadow->InvalidateDroppedCount;
+        /* Sample AdRecordCount; the enclosing QPC interval bounds this observation. */
+        row->adPending = shadow->AdRecordCount;
+        /* Sample AdPropagatedCount; the enclosing QPC interval bounds this observation. */
+        row->adPropagated = shadow->AdPropagatedCount;
+        /* Sample AdOverflowCount; the enclosing QPC interval bounds this observation. */
+        row->adOverflow = shadow->AdOverflowCount;
+        /* Sample VerifyMismatchCount; the enclosing QPC interval bounds this observation. */
+        row->verifyMismatch = shadow->VerifyMismatchCount;
+    }
+}
+
+
 /* Keep assembly offsets synchronized with the resident context contract. */
 C_ASSERT(FIELD_OFFSET(
     KSW_HVM_RESIDENT_VCPU,
@@ -1371,6 +1413,8 @@ KswordARKHvmResidentStartCurrent(
          * is the point where that is guaranteed to be this context's own.
          */
         Context->ApicId = KswordARKHvmReadInitialApicId();
+        /* Cache only the invariant vendor/max-basic leaf on its owning CPU. */
+        __cpuidex(Context->CpuidVendorLeaf, 0, 0);
         /* Publish active ownership before any valid VM exit can occur. */
         InterlockedExchange(&Context->Active, 1L);
         /*
@@ -2712,6 +2756,13 @@ VOID KswordARKHvmResidentNestedRoots(KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE* Respon
 }
 
 #else
+
+VOID KswordARKHvmResidentMetrics(KSWORD_ARK_HVM_METRICS_RESPONSE* Response)
+{
+    /* Nested VMX counters are unavailable on this architecture. */
+    Response->shadowProcessorCount = 0UL;
+}
+
 
 VOID KswordARKHvmResidentNestedRoots(KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE* Response)
 {

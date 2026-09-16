@@ -4,7 +4,9 @@ param(
     [string]$VMName = 'KSword-HVM-Target',
     [Parameter(Mandatory=$true)][PSCredential]$Credential,
     [Parameter(Mandatory=$true)][string]$OutputDirectory,
-    [string]$VmxPath = 'C:\Users\felix\Documents\Virtual Machines\Other Linux 6.x kernel 64-bit\Other Linux 6.x kernel 64-bit.vmx'
+    [string]$VmxPath = 'C:\Users\felix\Documents\Virtual Machines\Other Linux 6.x kernel 64-bit\Other Linux 6.x kernel 64-bit.vmx',
+    [ValidateRange(1,64)][int]$ExpectedResidentProcessors=2,
+    [ValidateSet(0,1)][int]$ExpectedActiveMapping=0
 )
 $ErrorActionPreference = 'Stop'
 $env:COMPUTERNAME = [Environment]::MachineName
@@ -12,7 +14,7 @@ New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $id = 'vmware-teardown-'+[DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 $path = Join-Path $OutputDirectory ($id+'.json')
 $started = Get-Date
-$record = [ordered]@{schemaVersion=1;runId=$id;target=$VMName;vmxPath=$VmxPath;status='started';startedUtc=$started.ToUniversalTime().ToString('o')}
+$record = [ordered]@{schemaVersion=1;runId=$id;target=$VMName;vmxPath=$VmxPath;status='started';expectedResidentProcessors=$ExpectedResidentProcessors;expectedActiveMapping=$ExpectedActiveMapping;startedUtc=$started.ToUniversalTime().ToString('o')}
 function Save-Record {
     $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($record | ConvertTo-Json -Depth 30))
     $stream = [IO.File]::Open($path,'Create','Write','Read')
@@ -41,8 +43,8 @@ $session = New-PSSession -VMName $VMName -Credential $Credential
 try {
     $record.before = Read-State
     Save-Record
-    if($record.before.vmx.Count -ne 1 -or $record.before.hvm.residentProcessorCount -ne 2 -or $record.before.page.active -ne 0) {
-        throw 'Require one VMware VM, two resident processors, and no active replacement mapping.'
+    if($record.before.vmx.Count -ne 1 -or $record.before.hvm.residentProcessorCount -ne $ExpectedResidentProcessors -or $record.before.page.active -ne $ExpectedActiveMapping) {
+        throw 'Require one VMware VM and the declared resident processor/mapping counts.'
     }
     $record.stop = Invoke-Command -Session $session -ArgumentList $VmxPath -ScriptBlock {
         param($VmxPath)
@@ -73,9 +75,23 @@ try {
     $record.after = Read-State
     $record.bootUnchanged = $record.before.bootUtc -eq $record.after.bootUtc
     if($record.stop.exitCode -ne 0 -or !$record.bootUnchanged -or $record.after.vmx.Count -ne 0 -or
-       $record.after.hvm.residentProcessorCount -ne 2 -or
+       $record.after.hvm.residentProcessorCount -ne $ExpectedResidentProcessors -or
        $record.after.hvm.stateNames -contains 'FAULTED' -or $record.after.hvm.stateNames -contains 'ROLLBACK_REQUIRED') {
         throw 'VMware teardown did not preserve the running Windows/KSword state.'
+    }
+    if($ExpectedActiveMapping -eq 1) {
+        if($record.after.page.active -ne 0 -or $record.after.page.ownerExited -ne 1 -or $record.after.page.retired -ne 1) {
+            throw 'Owner exit did not revoke the mapping while retaining backing for a safe drain.'
+        }
+        $record.reclamation=Invoke-Command -Session $session -ScriptBlock {
+            $raw=(& C:\ksword\hvm_ctl.exe --json nested-page-remove | Out-String);$code=$LASTEXITCODE
+            [ordered]@{exitCode=$code;remove=($raw | ConvertFrom-Json);metrics=(& C:\ksword\hvm_ctl.exe --json metrics | ConvertFrom-Json)}
+        }
+        if($record.reclamation.exitCode -ne 0 -or $record.reclamation.remove.active -ne 0 -or $record.reclamation.remove.retired -ne 0 -or
+            $record.reclamation.metrics.ruleAllocations -ne $record.reclamation.metrics.ruleFrees -or
+            $record.reclamation.metrics.replacementAllocations -ne $record.reclamation.metrics.replacementFrees) {
+            throw 'Retired mapping reclamation did not drain its complete allocation ledger.'
+        }
     }
     $record.status = 'passed'
 } catch {

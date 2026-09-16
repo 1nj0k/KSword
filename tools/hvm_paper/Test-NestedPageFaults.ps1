@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory)][string]$OutputDirectory,
     [string]$VMName='KSword-HVM-Target',
     [ValidateRange(1,100)][int]$Repetitions=5,
-    [string]$GuestPhysicalPage='7000000'
+    [string]$GuestPhysicalPage='7000000',
+    [ValidateRange(1,64)][int]$ExpectedResidentProcessors=2
 )
 $ErrorActionPreference='Stop'
 $env:COMPUTERNAME=[Environment]::MachineName
@@ -51,11 +52,12 @@ try {
             $id='page-fault-'+$fault+'-'+$iteration+'-'+[DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
             $path=Join-Path $OutputDirectory ($id+'.json')
             $r=[ordered]@{schemaVersion=1;kind='nested-page-fault';runId=$id;faultMode=$fault;iteration=$iteration;startedUtc=[DateTime]::UtcNow.ToString('o');status='started'}
+            $r.expectedResidentProcessors=$ExpectedResidentProcessors
             Save $r $path
             try {
                 $r.before=State;Save $r $path
                 $p=$r.before.page.parsed
-                if($r.before.page.exitCode -ne 0 -or $r.before.metrics.exitCode -ne 0 -or $p.active -ne 0 -or $p.retired -ne 0 -or @($p.roots).Count -ne 1 -or $p.residentProcessors -ne 2){throw 'Require a clean slot, one nested root and two resident processors.'}
+                if($r.before.page.exitCode -ne 0 -or $r.before.metrics.exitCode -ne 0 -or $p.active -ne 0 -or $p.retired -ne 0 -or @($p.roots).Count -ne 1 -or $p.residentProcessors -ne $ExpectedResidentProcessors){throw "Require a clean slot, one nested root and $ExpectedResidentProcessors resident processors."}
                 $root=[string]$p.roots[0]
                 $anchor=Control @('events','0','1')
                 $r.eventAnchor=$anchor.parsed.newestSequence
@@ -84,7 +86,7 @@ try {
                     noActiveOrRetired=($a.active -eq 0 -and $a.retired -eq 0)
                     sameWindowsBoot=($r.before.windows.bootUtc -eq $r.after.windows.bootUtc)
                     sameVmxIdentity=($idsBefore.Count -eq 1 -and ($idsBefore -join '|') -eq ($idsAfter -join '|'))
-                    residentTwo=($a.residentProcessors -eq 2)
+                    residentCountMatches=($a.residentProcessors -eq $ExpectedResidentProcessors)
                     healthy=(!@($r.after.windows.hvm.parsed.stateNames | Where-Object {$_ -in @('FAULTED','ROLLBACK_REQUIRED')}).Count)
                     balancedRuleDelta=(([decimal]$m.ruleAllocations-[decimal]$b.ruleAllocations) -eq ([decimal]$m.ruleFrees-[decimal]$b.ruleFrees))
                     balancedReplacementDelta=(([decimal]$m.replacementAllocations-[decimal]$b.replacementAllocations) -eq ([decimal]$m.replacementFrees-[decimal]$b.replacementFrees))

@@ -5,14 +5,16 @@ param(
     [string]$GuestDirectory='C:\ksword\paper',
     [int]$Repetitions=7,
     [int]$TransitionPairs=7,
-    [bool]$WithoutGapObserver=$true
+    [bool]$WithoutGapObserver=$true,
+    [ValidateRange(1,64)][int]$ExpectedResidentProcessors=2
 )
 $ErrorActionPreference='Stop'
 $env:COMPUTERNAME=[Environment]::MachineName
 $session=New-PSSession -VMName $VMName -Credential $Credential
 $sessionStarted=[DateTime]::UtcNow
 try {
-    $setup=Invoke-Command -Session $session -ScriptBlock {
+    $setup=Invoke-Command -Session $session -ArgumentList $ExpectedResidentProcessors -ScriptBlock {
+        param($expected)
         if(@(Get-Process -Name vmware-vmx -ErrorAction SilentlyContinue).Count){throw 'VMware must be absent in all matched blocks.'}
         $initial=(& C:\ksword\hvm_ctl.exe --json status | Out-String)
         $s=$initial | ConvertFrom-Json
@@ -27,20 +29,20 @@ try {
             }
         }
         $final=(& C:\ksword\hvm_ctl.exe --json status | Out-String);$s=$final | ConvertFrom-Json
-        if($s.featureNames -notcontains 'EPTP_SWITCH_ARMED' -or $s.selfTestPassedProcessorCount -ne 2){throw 'Require EPTP switch and two self-tested processors.'}
+        if($s.featureNames -notcontains 'EPTP_SWITCH_ARMED' -or $s.selfTestPassedProcessorCount -ne $expected -or $s.preparedProcessorCount -ne $expected){throw "Require EPTP switch and exactly $expected prepared/self-tested processors."}
         [ordered]@{kind='ab-setup';utc=[DateTime]::UtcNow.ToString('o');initialRaw=$initial;commands=$commands;finalRaw=$final;prepareMetricsRaw=(& C:\ksword\hvm_ctl.exe --json metrics | Out-String)}
     }
     $setup | ConvertTo-Json -Depth 18 | Set-Content -LiteralPath (Join-Path $OutputDirectory ('ab-preflight-'+$sessionStarted.ToString('yyyyMMddTHHmmssZ')+'.json')) -Encoding utf8
     $bench=Join-Path $PSScriptRoot 'Run-WindowsBenchmarks.ps1'
     $transition=Join-Path $PSScriptRoot 'Run-Transition.ps1'
-    Invoke-Command -Session $session -FilePath $bench -ArgumentList 'off-pre-no-vmware',$GuestDirectory,$Repetitions
-    Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'resident-nested-hidehv',0,$WithoutGapObserver
-    Invoke-Command -Session $session -FilePath $bench -ArgumentList 'on-no-vmware',$GuestDirectory,$Repetitions
-    Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'stop',0,$WithoutGapObserver
-    Invoke-Command -Session $session -FilePath $bench -ArgumentList 'off-post-no-vmware',$GuestDirectory,$Repetitions
+    Invoke-Command -Session $session -FilePath $bench -ArgumentList 'off-pre-no-vmware',$GuestDirectory,$Repetitions,$ExpectedResidentProcessors
+    Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'resident-nested-hidehv',0,$WithoutGapObserver,$ExpectedResidentProcessors
+    Invoke-Command -Session $session -FilePath $bench -ArgumentList 'on-no-vmware',$GuestDirectory,$Repetitions,$ExpectedResidentProcessors
+    Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'stop',0,$WithoutGapObserver,$ExpectedResidentProcessors
+    Invoke-Command -Session $session -FilePath $bench -ArgumentList 'off-post-no-vmware',$GuestDirectory,$Repetitions,$ExpectedResidentProcessors
     for($i=1;$i -le $TransitionPairs;$i++) {
-        Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'resident-nested-hidehv',$i,$WithoutGapObserver
-        Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'stop',$i,$WithoutGapObserver
+        Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'resident-nested-hidehv',$i,$WithoutGapObserver,$ExpectedResidentProcessors
+        Invoke-Command -Session $session -FilePath $transition -ArgumentList $GuestDirectory,'stop',$i,$WithoutGapObserver,$ExpectedResidentProcessors
     }
 }finally {
     $files=Invoke-Command -Session $session -ArgumentList $GuestDirectory,$sessionStarted -ScriptBlock {param($dir,$since) Get-ChildItem -LiteralPath $dir -Filter '*.json' | Where-Object {($_.Name -like 'windows1-*' -or $_.Name -like 'transition-*') -and $_.LastWriteTimeUtc -ge $since} | Select-Object -ExpandProperty FullName}

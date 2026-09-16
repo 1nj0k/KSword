@@ -580,6 +580,10 @@ typedef struct _KSW_HVM_NESTED_PAGE {
     PVOID ShadowVirtual;
     ULONGLONG Ept12Pointer, GuestPhysicalPage, ShadowPhysicalPage;
     volatile LONG64 OriginalPhysicalPage, ComposedCount;
+    /* A referenced process object binds the rule beyond numeric PID reuse. */
+    PEPROCESS OwnerProcess;
+    /* Preserve the identity checked when the mapping was admitted. */
+    ULONGLONG OwnerCreationTime;
 } KSW_HVM_NESTED_PAGE;
 
 typedef struct _KSW_HVM_RUNTIME
@@ -887,6 +891,10 @@ typedef struct _KSW_HVM_RUNTIME
     KSW_HVM_NESTED_PAGE* volatile NestedPage;
     /* Failed unpublication retains its backing until invalidation is retried. */
     KSW_HVM_NESTED_PAGE* NestedPageRetired;
+    /* Owner publication is serialized with the exit notification by the lease lock. */
+    PEPROCESS NestedPageOwner;
+    /* VMX root reads only this resident flag, never an OS process API. */
+    volatile LONG NestedPageOwnerExited;
     ULONG NestedPageGeneration;
     /* 每条 R-1 进程处置。表只在常驻停着时被改，退出路径不加锁读。 */
     KSW_HVM_PROCESS_SLOT ProcessDispositions[KSWORD_ARK_HVM_MAX_PROCESS_DISPOSITIONS];

@@ -25,7 +25,7 @@ def interval(values, mask, names, first, last, frequency):
 
 
 def decode(m):
-    if m['kind'] != 'hvm-metrics' or m['version'] != 1:
+    if m['kind'] != 'hvm-metrics' or m['version'] not in (1, 2):
         raise ValueError('unknown metrics schema')
     if not m['transitionCoherent'] or m['transitionSequence'] % 2:
         raise ValueError('incomplete transition snapshot')

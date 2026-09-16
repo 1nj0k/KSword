@@ -151,7 +151,7 @@ def cycles(root, serial):
                     raise ValueError('missing encompassing measured two-CPU load interval')
                 row['loadCpu0BusyPercent']=period['busyPercent'][0]
                 row['loadCpu1BusyPercent']=period['busyPercent'][1]
-            if any(s['status']['parsed']['residentProcessorCount'] != 2 or
+            if any(s['status']['parsed']['residentProcessorCount'] != r.get('expectedResidentProcessors', 2) or
                    {'FAULTED','ROLLBACK_REQUIRED'}.intersection(s['status']['parsed']['stateNames']) for s in (b,a)):
                 raise ValueError('unhealthy resident state')
             if a['page']['parsed']['active'] or a['page']['parsed']['retired']:

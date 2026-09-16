@@ -129,6 +129,12 @@ NTSTATUS KswordARKHvmMetricsQuery(KSWORD_ARK_HVM_METRICS_RESPONSE* Response)
     Response->replacementAllocations = (ULONGLONG)InterlockedCompareExchange64(&g_HvmReplacementAllocations, 0LL, 0LL);
     /* Export actual replacement-page reclamation. */
     Response->replacementFrees = (ULONGLONG)InterlockedCompareExchange64(&g_HvmReplacementFrees, 0LL, 0LL);
+    /* Prevent resource destruction while copying static per-CPU cache counters. */
+    KswordARKAcquirePushLockShared(&KswordARKHvmGetRuntime()->Lock);
+    /* CPU writers still run, so this does not claim a simultaneous snapshot. */
+    KswordARKHvmResidentMetrics(Response);
+    /* Release before returning to user mode. */
+    KswordARKReleasePushLockShared(&KswordARKHvmGetRuntime()->Lock);
     /* Preserve the first timestamp and close the snapshot's observation interval. */
     Response->snapshotBeginQpc = begin;
     /* Capture the final timestamp after every independently sampled value. */

@@ -10,7 +10,9 @@ import json
 import math
 from pathlib import Path
 
-ap=argparse.ArgumentParser();ap.add_argument("directory",type=Path);a=ap.parse_args()
+ap=argparse.ArgumentParser();ap.add_argument("directory",type=Path)
+ap.add_argument("--windows-only", action="store_true", help="Validate a dedicated matched Windows A/B dataset without pilot-specific guest expectations")
+a=ap.parse_args()
 root=a.directory
 read=lambda p:json.loads(p.read_text(encoding="utf-8-sig"))
 issues=[]
@@ -56,14 +58,15 @@ for r in comparisons:
     if abs(computed-r["elapsedOverheadPercent"])>1e-9:issues.append("overhead arithmetic mismatch")
     if r["offN"]!=14 or r["onN"]!=7:issues.append("wrong comparison denominator")
 transitions=summary["transitions"]["results"]
-if not any("command_timeout_state_reached" in k for k in transitions):
+if not a.windows_only and not any("command_timeout_state_reached" in k for k in transitions):
     issues.append("known timeout missing from reliability summary")
-if summary["linux"]["runResults"].get("sha256sum-unavailable:environment_error")!=7:
+if not a.windows_only and summary["linux"]["runResults"].get("sha256sum-unavailable:environment_error")!=7:
     issues.append("known unavailable-tool attempts missing")
-with (root/"derived/nested-page-runs.csv").open(encoding="utf-8-sig") as f:
-    for r in csv.DictReader(f):
-        if r["result"]=="pass" and (r["readClosure"]!="True" or r["activeAfter"]!="0" or r["retiredAfter"]!="0"):
-            issues.append("nested PASS without closure: "+r["runId"])
+if not a.windows_only:
+    with (root/"derived/nested-page-runs.csv").open(encoding="utf-8-sig") as f:
+        for r in csv.DictReader(f):
+            if r["result"]=="pass" and (r["readClosure"]!="True" or r["activeAfter"]!="0" or r["retiredAfter"]!="0"):
+                issues.append("nested PASS without closure: "+r["runId"])
 result={"schemaVersion":1,"scope":"pilot dataset integrity, not runtime correctness",
         "status":"pass" if not issues else "failed","rawFilesChecked":len(index),
         "uniqueRunIds":len(set(ids)),"matchedBootIds":sorted(boots),

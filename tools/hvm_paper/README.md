@@ -28,8 +28,9 @@ New-Item -ItemType Directory tools/hvm_paper/bin -Force | Out-Null
 
 Use the installed MinGW compiler as `$gcc`; the pilot used GCC 13.1.0. Do not replace
 binaries midway through matched blocks. Record their SHA256 and source hash.
-Linux compilation is supported with `gcc -std=c11 -O2 -Wall -Wextra -static -pthread`,
-but the pilot Linux binary was never transferred to or executed in TinyCore.
+Linux compilation uses `gcc -O2 -Wall -Wextra -Werror -static -pthread`. The old
+pilot did not run it; the 4x2 dataset delivers it through a read-only ISO and
+executes the same binary before and after the driver optimization.
 
 `microbench` exposes seven workloads: integer xorshift, CPUID, memcpy, pointer chase,
 TCP loopback bulk, TCP loopback RTT, and a new 64 MiB direct-I/O scratch file. It pins
@@ -94,8 +95,9 @@ state and remaining command processes before further mutations.
 
 Use only the diagnostic page explicitly reserved at GPA `0x07000000`, seeded with
 A5 in the guest. Query the current EPT12 root; do not reuse a root across guest boots.
-The cycle script requires exactly two resident KSword CPUs, one known nested
-root, and no active/retired mapping. The older pilot uses one guest CPU; the newer
+The cycle script requires the declared `-ExpectedResidentProcessors` count
+(default 2; use 4 for the current target), one known nested root, and no
+active/retired mapping. The older pilot uses one guest CPU; the newer
 SMP experiment pins one observer to each of two guest CPUs and checks all 4096 bytes
 with MD5 as well as a four-byte read. See `analyze_smp.py` and its per-run tables.
 
@@ -139,7 +141,53 @@ changed boot/process identity, reset counters and incomplete requested durations
 The default is a ten-minute sample; set `-Seconds 3600` for an hour. Monitoring itself
 adds work, and total Windows pool usage cannot isolate a driver memory leak.
 
-`Run-LinuxBenchmarks.sh` and `Serve-LinuxBench.ps1` are prepared transfer/collection
-helpers. The native Linux executable compiled successfully, but the attempted
-transfer was blocked by automatic approval review; it was **not executed** in
-TinyCore. This is not additional Linux performance evidence.
+## Current four-by-two workflow
+
+`Build-LinuxPayload.sh` builds the static benchmark and application-page holder,
+plus a minimal BusyBox 1.37.0 HTTP server from its official source. It retains the
+BusyBox license/config and SHA256 manifest on the delivery ISO.
+`Run-LinuxBenchmarks.sh 3 20 after` runs one warmup and three measured blocks with a 20-second process
+timeout. Stock TinyCore supplies MD5, so that identity is recorded per run; the
+host ISO manifest separately records SHA256. Every run is sent to the durable
+serial log. `analyze_nested_bench.py` checks binary identity and successful CPU
+pinning and preserves timeouts instead of inventing a latency.
+
+The original HTTP-transfer attempt was blocked by automatic approval review.
+The current run uses a read-only ISO; no transfer server or firewall rule is needed.
+
+`Run-HttpPage.sh setup` starts a real BusyBox httpd and an `mlock`/pagemap observer
+for a controlled 4-KiB JSON file. Start `observe` before the measured interval,
+then execute `Run-HttpPageCycles.ps1` inside Windows 1. The controller uses local
+serial reads and the shared HVM engine; no VNC or VMM management operation occurs
+inside its transactions. `analyze_http_page.py` requires ten HTTP responses in
+each stage, unchanged server/VMM/Windows identities, stable guest PFN, actual
+backing addresses, and a balanced page-control allocation ledger. Schema 2
+re-reads server creation time and guest boot ID on every response, requires a
+live page holder and rejects PFN samples older than five seconds. Schema 1 is
+retained separately with its startup-only identity limitation. This is a
+controlled data-fault/recovery scenario, not a general application-atomicity claim.
+
+The page ABI v2 binds each mapping to a referenced VMM process and creation time.
+After owner exit, query reports `active=0`, `retired=1`, `ownerExited=1`; backing
+stays pinned until explicit all-CPU invalidation and reclamation. This protects
+process-lifetime reuse, not guest reboots/snapshot restores inside the same process.
+For normal teardown, close VMware while KSword is resident, reclaim mappings,
+then stop residency. Stopping residency first hung vmrun in the retained 4x2 trial.
+
+`Test-VmwareTeardown.ps1 -ExpectedResidentProcessors 4 -ExpectedActiveMapping 1`
+checks revocation and reclamation with an active replacement at VMM destruction.
+Do not run it until other guest evidence is safely captured.
+
+`package_anonymous.py --output dist/<new-package-name>` creates an anonymous ZIP,
+reproduces analysis from the transformed raw files, verifies its manifest and
+checks for known identity/credential leaks. The private alias/provenance file stays
+outside the ZIP. Review its stated scope: it is an evidence package, not a full
+buildable anonymous source artifact. Functional MD5 checksums and timings remain
+real; raw 40/64-character identity digests become aliases.
+
+For a future four-CPU target soak, pass `-ExpectedResidentProcessors 4` to
+`Watch-Stability.ps1`; the analyzer still requires two independent guest CPU
+observers and preserves the historical default of two Windows CPUs.
+No new stability soak is requested. The retained ten-minute observation belongs
+to the older 2x2 build and must not be relabeled as 4x2 evidence. Win10 LTSC, further
+GUI tests, already-running-chain insertion, and overnight testing remain deferred.
