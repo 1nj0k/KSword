@@ -5,6 +5,11 @@
     "20260916-large-leaf/admission-probe.json": "dae6b87d42d494002f797c371ea539b1f1e6b578b140b3b4eae4828025d42918",
     "20260916-large-leaf/published.json": "d769e0499128d783a6072fc69634eae1b80071d9364a1f01ed2d4202232ab34a",
     "20260916-large-leaf/decoupling.json": "fe810d0deeb6f1ea9a705db3ffea4da266c95e21e912c7202071d45002d8effa",
+    "20260916-guest-workload/extent-768m-idle.json": "e558ca3a3b5280704771874339d04a71f6111075a03cdba1187e87290968656d",
+    "20260916-guest-workload/extent-768m-after-400mib-fill.json": "1b5c5dfe9a2f12feb45f459be220fe541a2be47ed62df0c1192d9df35424b38a",
+    "20260916-guest-workload/extent-4g-done-30.json": "839752768a24679cd1c4ffd0dcf9ad8b80ad5fd2702ab306a64e500bc4979e00",
+    "20260916-guest-workload/extent-4g-done-30-coarse.json": "55170692470288b43055a7f31740c48577c77722004c197bd6afb9356cfcd2e4",
+    "20260916-guest-workload/large-leaf-above-1gib.json": "71e96a7be1845ad2bd787917422e8f1ae583bcc7e22ef3b546252fa1b3653f9d",
     "20260916-followup/latency-runs.csv": "d103e8188dadc2abb4eb90796fe706edce9c1c0ebe423cc50128813f811afd73",
     "20260916-followup/lifecycle/derived/smp-summary.json": "86254878bd34a0646c7844e7c85319df0ed112b1052e55e9c4fd98235aebe0e1",
     "20260915-4x2/derived/nested-improvements.csv": "8852237127ac09ac715516a85d057ab8692ef918833a08e97310e9c186752c34",
@@ -86,6 +91,17 @@
       "idleSamplesPerRegion": 4,
       "backingChangesWhileIdle": 0,
       "regionBytes": 2097152
+    },
+    "guestWorkloadReachability": {
+      "basesProbed": 8,
+      "publishedWhileIdle": 0,
+      "publishedAfterFill": 3,
+      "fillMebibytes": 400,
+      "oneGibRequestedSourceShift": 12,
+      "oneGibLeavesRead": 0,
+      "scanBoundEntries": 512,
+      "highRegionBase": "0x60000000",
+      "highRegionLeavesRead": 512
     },
     "metadataAbstractCharacters": 1549
   },

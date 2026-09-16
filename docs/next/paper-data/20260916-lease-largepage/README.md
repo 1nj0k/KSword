@@ -37,7 +37,9 @@ detection power. It is not a hardware result:
 * Nothing here runs on hardware. A 2 MiB override has since been published and
   removed on a live descendant, and a page of it staged; those results are in
   `../20260916-large-leaf/` and are a separate measurement, not evidence about
-  these suites. A 1 GiB leaf remains unexercised on hardware.
+  these suites. A 1 GiB leaf has since been requested on hardware under both
+  rules and refused by both, for reasons measured in `../20260916-guest-workload/`;
+  no 1 GiB leaf has been published on hardware, and on that stack none can be.
 * Real source-EPT mutation by a running VMM, adversarial multicore, and actual
   hardware failures are not simulated here.
 * A mutation score is a property of this fixed set of twenty-eight defects. It

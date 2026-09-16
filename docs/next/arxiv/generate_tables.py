@@ -269,6 +269,68 @@ def main():
         "regionBytes": 2097152,
     }
 
+    # Whether a base can carry an override is a question about the intermediate
+    # VMM's table, not about the planner: it maps on demand, so an untouched
+    # base has no entries to clone. The pair below is the same descendant, the
+    # same driver and the same eight bases, differing only in whether a workload
+    # had run inside it.
+    def extent(relative):
+        data = read_json(f"20260916-guest-workload/{relative}")
+        return {p["base"]: p for p in data["probes"]}
+
+    def verdict(probe):
+        if probe["active"] == 1:
+            return "published"
+        # Distinguishing these two matters: an unmapped base says nothing about
+        # admission, while a refusal is the rule actually answering.
+        return "unmapped" if probe["lastStatus"] == "0xC0000141" else "refused"
+
+    idle_extent = extent("extent-768m-idle.json")
+    fill_extent = extent("extent-768m-after-400mib-fill.json")
+    assert idle_extent.keys() == fill_extent.keys(), "the pair must probe one base set"
+    rows = []
+    for base in idle_extent:
+        before, after = idle_extent[base], fill_extent[base]
+        rows.append([base, verdict(before), str(before["scannedLeafCount"]),
+                     verdict(after), str(after["scannedLeafCount"])])
+    workload_published = sum(1 for r in rows if r[3] == "published")
+    # Nothing is admissible before the workload and three bases are after it.
+    # Asserted rather than described, so a future evidence file cannot quietly
+    # turn the comparison into a single column.
+    assert sum(1 for r in rows if r[1] == "published") == 0
+    assert workload_published == 3, workload_published
+    table("guest-workload.tex", r"@{}lllll@{}",
+          ["Guest physical base", "Idle", "Leaves read", "After 400\\,MiB fill",
+           "Leaves read"], rows)
+
+    # The 1-GiB attempts. Both are refusals, and the count of leaves read is
+    # what separates them: zero at a base the VMM does map is the scan bound
+    # declining before it reads anything, not an absent region.
+    giant = extent("extent-4g-done-30.json")["0x40000000"]
+    giant_coarse = extent("extent-4g-done-30-coarse.json")["0x40000000"]
+    assert giant["sourceLeafShift"] == 12 and giant_coarse["sourceLeafShift"] == 12
+    assert giant["scannedLeafCount"] == 0 and giant["lastStatus"] == "0xC00000BB"
+    assert giant_coarse["lastStatus"] == "0xC00000BB"
+    # The 2-MiB leaf that the same filled descendant does admit, above 1 GiB.
+    high = read_json("20260916-guest-workload/large-leaf-above-1gib.json")
+    assert high["steps"]["publish"]["status"] == 0
+    assert high["steps"]["publish"]["scannedLeafCount"] == 512
+    assert high["steps"]["t0"]["sourceDigest"] == high["steps"]["t0"]["backingDigest"]
+    assert high["steps"]["t2"]["sourceDigest"] != high["steps"]["t2"]["backingDigest"]
+    assert high["steps"]["stageOutOfRange"]["lastStatus"] == "0xC000000D"
+    assert high["steps"]["remove"]["active"] == 0
+    workload_claims = {
+        "basesProbed": len(rows),
+        "publishedWhileIdle": 0,
+        "publishedAfterFill": workload_published,
+        "fillMebibytes": 400,
+        "oneGibRequestedSourceShift": giant["sourceLeafShift"],
+        "oneGibLeavesRead": giant["scannedLeafCount"],
+        "scanBoundEntries": 512,
+        "highRegionBase": high["base"],
+        "highRegionLeavesRead": high["steps"]["publish"]["scannedLeafCount"],
+    }
+
     lat = {r["condition"]: r for r in current["latency"]}
     latency_runs = read_csv("20260916-followup/latency-runs.csv")
     assert len(latency_runs) == 24
@@ -350,10 +412,11 @@ def main():
                 "cpuidCostBudget": budget_claims,
                 "largeLeafAdmission": large_leaf_claims,
                 "regionDecoupling": decoupling_claims,
+                "guestWorkloadReachability": workload_claims,
                 "metadataAbstractCharacters": len(abstract)},
                 "note": "Inputs are derived evidence summaries, whose raw inputs are indexed in their datasets. Cohorts are not pooled."}
     (HERE / "table-provenance.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    print(f"Generated 10 tables from {len(INPUTS)} evidence summaries; CPUID={cpuid_ratio:.4f}x, "
+    print(f"Generated 11 tables from {len(INPUTS)} evidence summaries; CPUID={cpuid_ratio:.4f}x, "
           f"RTT={rtt_overhead:.4f}%, dispatcher explains "
           f"{budget_claims["dispatcherSharePercentRange"][0]:.2f}% of the added CPUID cost")
 

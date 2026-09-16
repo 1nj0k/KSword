@@ -178,7 +178,9 @@ Large-leaf override, coarse-source rule & Publish 2 MiB on the live descendant &
 Large-leaf override, scanning rule & Same, admitting on 512 agreeing entries & Published and removed; weaker drift detection \\
 Region staging & Rewrite one page of a published region & Measured by digest; out-of-range index refused \\
 Large leaf under inner Hyper-V & Publish any region & Not reachable; admission refused before any control request \\
-Composition saving from one large leaf & Fills to cover a region & Not measured; the descendant does not touch the region \\
+1-GiB leaf request on hardware & Publish 1 GiB under either rule & Refused by both; 262,144 entries against a 512 bound \\
+Base reachability versus configured memory & Which bases carry an override & Measured; mappings follow the workload, not memsize \\
+Composition saving from one large leaf & Fills to cover a region & One composition for 512 pages; workload not aimed at the region \\
 Arbitrary page reuse / DMA / hardware faults & General lifecycle and atomicity & Outside demonstrated contract \\
 \bottomrule
 \end{tabularx}

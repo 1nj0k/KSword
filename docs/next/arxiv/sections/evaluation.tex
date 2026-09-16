@@ -242,16 +242,74 @@ a 512-page region is refused with an invalid-parameter status, leaving the stage
 count unchanged. Publication followed by removal returned the active and retired
 slots to empty each time.
 
-Two things this does not establish. There is no performance result: we publish a
-large leaf and remove it, but we do not report an exit-rate or latency change
-from doing so. The obvious measurement -- how many compositions it takes to cover
-a region with one leaf rather than 512 -- needs a descendant that touches the
-region, and the TinyCore guest is idle, producing on the order of $10^{2}$ EPT
-violations per twenty seconds across its whole address space, so the override's
-composition count stayed at zero throughout. And equality of the two digests is
-an observation at publication, not an invariant: the source is live memory that
-continues to change, as the table shows, so a later comparison is not expected to
-match and is not evidence of anything if it does.
+Equality of the two digests is an observation at publication, not an invariant:
+the source is live memory that continues to change, as the table shows, so a
+later comparison is not expected to match and is not evidence of anything if it
+does.
+
+\paragraph{Reachability follows the workload, not the configuration.}
+Every result above is about a base the intermediate VMM had already mapped, and
+which bases those are is decided by the descendant rather than by its
+configuration. VMware populates EPT12 on demand, so a descendant configured with
+4\,GiB has entries only where its guest has actually been: freshly booted and
+idle at 4096\,MiB, every base we probed from 256\,MiB to 3.75\,GiB refused with
+an address-not-associated status and zero leaves read. Raising the configured
+memory creates no mappings at all. This matters for reading the previous two
+tables, because a refusal at an unmapped base is not the admission rule
+answering; it is the question never reaching it.
+
+The lever is a workload inside the descendant, driven through its VNC
+framebuffer into the shell on its first virtual terminal. Table~\ref{tab:guest-workload}
+is one descendant, one driver and one set of eight bases, differing only in
+whether a 400\,MiB allocation had run inside it. Three bases move from having no
+entries at all to carrying a published 2\,MiB leaf over 512 uniform source
+entries. The bases that stay refused are the low ones, where kernel, DMA and
+firmware memory carry mixed attributes -- the scan stops at entry 24, 33 and 146
+-- which locates uniformity rather than merely reporting it: bulk memory the
+guest allocated in one request is what scans uniform.
+
+\begin{table}[tbp]
+\centering\small
+\caption{The same eight guest-physical bases before and after a workload ran
+inside the descendant. ``Leaves read'' is how many source entries the scanning
+rule examined before admitting or refusing; an unmapped base reads none.}
+\label{tab:guest-workload}
+\input{tables/guest-workload}
+\end{table}
+
+With 2.7\,GiB allocated inside a 4096\,MiB descendant the same procedure carries
+a 2\,MiB leaf to guest-physical \texttt{0x60000000}, above the 1\,GiB line: 512
+entries read and agreeing, backing 2\,MiB aligned, digests equal at publication
+and after an idle interval, one staged page moving the backing digest and not
+the source, page index 512 of a 512-page region refused with an
+invalid-parameter status, and removal returning the active slot to zero across
+all four processors.
+
+\paragraph{The 1\,GiB leaf, exercised and refused.}
+The same filled descendant refuses a 1\,GiB request under both rules, and the
+refusals are not interchangeable. The coarse-source rule refuses because EPT12's
+own leaf is 4\,KiB. The scanning rule refuses because a 1\,GiB region over
+4\,KiB source entries is 262,144 of them against a bound of 512 -- and that
+bound governs the drift recheck, not only the first pass, so it declines before
+reading anything. Zero leaves read at a base the VMM does map is the signature
+of the bound; an unmapped base reads zero for an unrelated reason, which is why
+the two are reported separately. Every mapped base we probed reported a 4\,KiB
+source leaf, at 768\,MiB and at 4096\,MiB, idle and filled, and with the
+descendant's memory pinned and page sharing disabled. Admitting a 1\,GiB leaf
+therefore needs an intermediate VMM whose own EPT is coarser; it is a property
+of that VMM, not of this planner, and no configuration available to us changed
+it.
+
+\paragraph{What this still does not establish.}
+There is no latency or exit-rate result for publication. The composition
+measurement is now partly available: with the 2\,MiB region published and the
+descendant reading a 2.7\,GiB file for ninety seconds, the override's
+composition count went from zero to one, so a single composition stood for all
+512 pages of the region where a 4\,KiB policy needs one per page. The
+denominator there is what the region contains, not what that workload provably
+touched -- we can start a workload in the descendant but not aim it at a chosen
+guest-physical address -- so we report the ratio as an upper bound on what one
+leaf saved here rather than as a measured speedup.
 
 \subsection{Remaining steady-state cost and attribution}
 \label{sec:performance}
