@@ -232,6 +232,43 @@ def main():
         "liveEpt12Pointer": live["ept12Pointer"],
     }
 
+    # What a published region does over time. The backing is expected to stand
+    # still unless staged; the source is not, and measuring both is the only way
+    # to tell "the override diverts" from "nothing is happening".
+    decouple = read_json("20260916-large-leaf/decoupling.json")
+    assert decouple["kind"] == "region-decoupling", decouple["kind"]
+    digest = lambda raw, name: (
+        re.search(rf'"{name}":"(0x[0-9A-F]+)"', raw).group(1)[-8:]
+        if re.search(rf'"{name}":"(0x[0-9A-F]+)"', raw) else "--")
+    rows = []
+    backing_moves = 0
+    for region in decouple["regions"]:
+        assert '"active":1' in region["map"], region["gpa"]
+        samples = region["idleSamples"]
+        first_back = digest(samples[0], "backingDigest")
+        source_moves = sum(1 for s in samples[1:]
+                           if digest(s, "sourceDigest") != digest(samples[0], "sourceDigest"))
+        moves = sum(1 for s in samples[1:] if digest(s, "backingDigest") != first_back)
+        backing_moves += moves
+        rows.append([region["gpa"],
+                     "yes" if digest(samples[0], "sourceDigest") == first_back else "no",
+                     str(moves), str(source_moves),
+                     digest(region["afterStage"], "backingDigest")
+                     if digest(region["afterStage"], "backingDigest") != first_back
+                     else "unchanged"])
+    # The whole point: staging is the only thing that moved the backing.
+    assert backing_moves == 0, backing_moves
+    table("region-decoupling.tex", r"@{}lcccl@{}",
+          ["Region base", "Cloned equal", "Backing moved", "Source moved",
+           "Backing after stage"], rows)
+
+    decoupling_claims = {
+        "regions": len(rows),
+        "idleSamplesPerRegion": len(decouple["regions"][0]["idleSamples"]),
+        "backingChangesWhileIdle": backing_moves,
+        "regionBytes": 2097152,
+    }
+
     lat = {r["condition"]: r for r in current["latency"]}
     latency_runs = read_csv("20260916-followup/latency-runs.csv")
     assert len(latency_runs) == 24
@@ -312,10 +349,11 @@ def main():
                 "pacedTcpResponses": response_count, "transitionTimesUs": transition_times,
                 "cpuidCostBudget": budget_claims,
                 "largeLeafAdmission": large_leaf_claims,
+                "regionDecoupling": decoupling_claims,
                 "metadataAbstractCharacters": len(abstract)},
                 "note": "Inputs are derived evidence summaries, whose raw inputs are indexed in their datasets. Cohorts are not pooled."}
     (HERE / "table-provenance.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    print(f"Generated 9 tables from {len(INPUTS)} evidence summaries; CPUID={cpuid_ratio:.4f}x, "
+    print(f"Generated 10 tables from {len(INPUTS)} evidence summaries; CPUID={cpuid_ratio:.4f}x, "
           f"RTT={rtt_overhead:.4f}%, dispatcher explains "
           f"{budget_claims["dispatcherSharePercentRange"][0]:.2f}% of the added CPUID cost")
 

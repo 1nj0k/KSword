@@ -33362,6 +33362,8 @@
     "覆写已发布区间里第 N 个 4 KiB 页的替换内容。索引超出区间会被拒绝而不是截断。这不是原子更新：并发读的来宾可能看到新旧混合的字节。": "Overwrite the replacement contents of the Nth 4 KiB page of the published region. An index outside the region is refused rather than truncated. This is not an atomic update: a guest reading concurrently may observe a mixture of old and new bytes.",
     "页索引（十进制，0 起）": "Page index (decimal, zero based)",
     "填充值（00–FF）": "Fill value (00-FF)",
+    "区间内容摘要": "Region content digest",
+    "读回已发布区间与它克隆自的源区间，各算一个摘要。两者相等说明克隆仍与源一致；stage 一页之后应该只有背衬摘要变。不返回字节本身。": "Read back the published region and the source region it was cloned from, and compute a digest of each. Equal digests mean the clone still matches the source; after staging one page, only the backing digest should change. The bytes themselves are not returned.",
     "扫描源表后替换区间": "Scan the source, then replace the region",
     "按大页粒度替换一整段，但允许源侧是 4 KiB 映射：先把区间内每一个源表项读一遍，权限与内存类型全部一致才放行。代价是租约变弱：后续只对首页路径做即时漂移检测，其余表项被改不会立即发现。不确定就用 nested-page-map-region。": "Replace a whole run at large-page granularity even where the source maps it 4 KiB at a time: every source entry under the region is read first, and the request proceeds only if all of them grant the same access and memory type. The cost is a weaker lease: drift is then detected immediately only on the first page's path, and a change to any other entry is not noticed straight away. If in doubt, use nested-page-map-region."
   }

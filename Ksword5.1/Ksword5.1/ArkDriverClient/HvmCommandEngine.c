@@ -5663,6 +5663,13 @@ static int DoNestedPageEx(HANDLE h, int asJson, unsigned long operation,
     unsigned long index;
     request.version = KSWORD_ARK_HVM_NESTED_PAGE_VERSION;
     request.size = sizeof(request);
+    /*
+     * A query issues only the first request, so a flag meant for it has to be
+     * set here. Only for a query, though: the other operations use this first
+     * request to read the generation, and a flag the driver accepts only on the
+     * real operation would make that read a rejected request.
+     */
+    request.flags = (operation == KSWORD_ARK_HVM_NESTED_PAGE_QUERY) ? extraFlags : 0UL;
     if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_NESTED_PAGE,
                          &request, sizeof(request), &response, sizeof(response),
                          &returned, NULL) || returned != sizeof(response)) {
@@ -5703,6 +5710,7 @@ static int DoNestedPageEx(HANDLE h, int asJson, unsigned long operation,
                "\"composedCount\":%llu,\"ownerProcessId\":%lu,\"ownerExited\":%lu,\"ownerCreationTime\":\"%llu\","
                "\"leafShift\":%lu,\"sourceLeafShift\":%lu,\"regionBytes\":%llu,\"regionPageCount\":%llu,\"stagedPageCount\":%llu,"
                "\"admittedByScan\":%lu,\"scannedLeafCount\":%llu,\"scannedSharedBits\":\"0x%016llX\","
+               "\"sourceDigest\":\"0x%016llX\",\"backingDigest\":\"0x%016llX\",\"digestBytes\":%llu,"
                "\"leaseRevocationReason\":%lu,\"sourcePhysicalPage\":\"0x%016llX\",\"sourceEntryCount\":%lu,\"sourcePath\":[",
                response.operationId, faultMode, response.status, response.lastStatus, response.generation, response.active,
                response.retired, response.residentProcessors, response.ept12Pointer,
@@ -5713,6 +5721,7 @@ static int DoNestedPageEx(HANDLE h, int asJson, unsigned long operation,
                response.regionPageCount, response.stagedPageCount,
                response.admittedByScan, response.scannedLeafCount,
                response.scannedSharedBits,
+               response.sourceDigest, response.backingDigest, response.digestBytes,
                response.leaseRevocationReason,
                response.sourcePhysicalPage, response.sourceEntryCount);
         for (index = 0; index < response.sourceEntryCount && index < 4; ++index) {
@@ -5824,6 +5833,7 @@ int KswordHvmCommandMain(int argc, char** argv)
        ignores the inline page whenever the granularity is larger than 4 KiB. */
     case HvmPageMapRegion: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], 0, 0, (unsigned long)v[3], (unsigned long)v[2], 0); break;
     case HvmPageMapRegionScan: rc = DoNestedPageEx(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], 0, 0, (unsigned long)v[3], (unsigned long)v[2], 0, KSWORD_ARK_HVM_NESTED_PAGE_SCAN_SOURCE); break;
+    case HvmPageDigest: rc = DoNestedPageEx(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_QUERY, 0, 0, 0, 0, 0, 0, 0, KSWORD_ARK_HVM_NESTED_PAGE_DIGEST); break;
     case HvmPageStage: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_STAGE, 0, 0, (unsigned char)v[1], 0, 0, 0, (unsigned long)v[0]); break;
     case HvmPageMapTest: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], (unsigned char)v[2], (unsigned long)v[3], 0, 0, 0); break;
     case HvmPageRemove: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_REMOVE, 0, 0, 0, 0, 0, 0, 0); break;

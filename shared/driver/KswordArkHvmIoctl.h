@@ -2363,6 +2363,20 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE
  * reports which rule admitted the region.
  */
 #define KSWORD_ARK_HVM_NESTED_PAGE_SCAN_SOURCE 2UL
+/*
+ * Report a digest of the published region and of the source it was cloned from.
+ *
+ * Verifying what a region actually contains needs some way to read it back, and
+ * the alternative - a general "read this physical address" request - would be a
+ * far larger surface than the question deserves, reachable by every caller that
+ * can reach this device. A digest answers the questions that matter (is the
+ * clone still identical to the source, did a staged write change exactly the
+ * page it named) without handing out the bytes.
+ *
+ * Off by default because it reads the whole region twice: 2 MiB per side is
+ * cheap once and wasteful on every status poll.
+ */
+#define KSWORD_ARK_HVM_NESTED_PAGE_DIGEST 4UL
 /* Explicit lab faults are local to this one request and never remain armed. */
 #define KSWORD_ARK_HVM_NESTED_PAGE_FAULT_SHIFT 8UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_FAULT_MASK 0x700UL
@@ -2425,4 +2439,8 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE {
     unsigned long admittedByScan;
     /* Source leaves examined by that scan, and the access bits they shared. */
     unsigned long long scannedLeafCount, scannedSharedBits;
+    /* Digests of the source region and of the replacement serving in its place,
+       zero unless the digest flag was set. Equal means the clone still matches;
+       a staged write is expected to make exactly the backing digest differ. */
+    unsigned long long sourceDigest, backingDigest, digestBytes;
 } KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE;

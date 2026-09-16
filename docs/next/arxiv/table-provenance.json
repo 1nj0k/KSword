@@ -4,6 +4,7 @@
     "20260916-followup/exit-cost-derived.json": "98fdd4f375544fbfcd45382cab108ea41a18afe60c5de721ef0862cbc58a0604",
     "20260916-large-leaf/admission-probe.json": "dae6b87d42d494002f797c371ea539b1f1e6b578b140b3b4eae4828025d42918",
     "20260916-large-leaf/published.json": "d769e0499128d783a6072fc69634eae1b80071d9364a1f01ed2d4202232ab34a",
+    "20260916-large-leaf/decoupling.json": "fe810d0deeb6f1ea9a705db3ffea4da266c95e21e912c7202071d45002d8effa",
     "20260916-followup/latency-runs.csv": "d103e8188dadc2abb4eb90796fe706edce9c1c0ebe423cc50128813f811afd73",
     "20260916-followup/lifecycle/derived/smp-summary.json": "86254878bd34a0646c7844e7c85319df0ed112b1052e55e9c4fd98235aebe0e1",
     "20260915-4x2/derived/nested-improvements.csv": "8852237127ac09ac715516a85d057ab8692ef918833a08e97310e9c186752c34",
@@ -79,6 +80,12 @@
       "scannedLeavesPerRegion": 512,
       "ept12Pointer": "0x1507C05E",
       "liveEpt12Pointer": "0x151F905E"
+    },
+    "regionDecoupling": {
+      "regions": 2,
+      "idleSamplesPerRegion": 4,
+      "backingChangesWhileIdle": 0,
+      "regionBytes": 2097152
     },
     "metadataAbstractCharacters": 1549
   },

@@ -117,17 +117,27 @@ bits inside its alignment, a non-writeback memory type, write without read, and 
 permission intersection emptied by an ancestor.
 
 Passing does not establish that a suite can detect anything, so we measure it.
-Nine defects were injected one at a time into a copy of the walker: unchecked
-reserved address bits under a large leaf, an unfolded guest offset, dirty treated
-as metadata only at the last level, a large-page bit accepted at the PTE level,
-validation that always walks four levels or that refuses short captures, an
-accepted empty permission intersection, a 4\,KiB offset mask applied to every
-leaf, and a capture that always reports four entries. The current suite kills all
-nine. Run against the suite as it stood before these cases were added, three
-survive, so the large-page cases are responsible for three of the nine and the
-remaining six were already covered. The harness is scripted and rebuilds both
-suite versions from the repository, so the count can be recomputed rather than
-taken on assertion.
+Twenty-eight defects are injected one at a time into a copy of the relevant
+header and each is required to make its suite fail: unchecked reserved address
+bits under a large leaf, an unfolded guest offset, dirty treated as metadata only
+at the last level, a large-page bit accepted at the PTE level, validation that
+always walks four levels or that refuses short captures, an accepted empty
+permission intersection, a 4\,KiB offset mask applied to every leaf, a capture
+that always reports four entries, and, for the admission rules, an ignored or
+inverted granularity test, alignment checked only to a page, a short or
+misaligned backing accepted, region ownership and staging indices off by one, and
+a scan that accepts a disagreeing entry or reports an unreadable source as
+uniform. All twenty-eight are killed. Run against the suites as committed before
+these cases existed, fourteen survive.
+
+The harness rebuilds both suite versions from the repository, so the count can be
+recomputed rather than taken on assertion, and it fails if a mutation stops
+applying -- a mutation whose expression no longer matches removes itself from the
+matrix silently, which reads as coverage. Three surviving mutations during
+development turned out to mark branches no input could reach: a region-end check
+made unreachable by the alignment test that precedes it, and two conditionals
+whose guard variable could not hold the value being tested. Each was removed
+rather than left in place looking like protection.
 
 These tests validate comparator behavior against synthetic tables. They do not
 replace hardware source-EPT mutation by a live intermediate VMM, adversarial
@@ -196,12 +206,52 @@ descendant and its VMM ran throughout.
 \input{tables/large-leaf-scan}
 \end{table}
 
-What this does not establish is a performance effect. We publish a large leaf and
-remove it; we do not report an exit-rate or latency change from doing so, and the
-page interventions measured elsewhere in this paper all target 4\,KiB pages. Nor
-does the scanning rule make the lease equivalent: its weaker drift detection is a
-property of the published region, not an implementation detail, which is why the
-response reports which rule admitted it.
+Nor does the scanning rule make the lease equivalent: its weaker drift detection
+is a property of the published region, not an implementation detail, which is why
+the response reports which rule admitted it.
+
+\paragraph{What a published region does, and what it leaves alone.}
+Checking the contents of a 2\,MiB region needs a readback, and a general
+``read this physical address'' request would be a far larger interface than the
+question deserves. The driver instead reports a digest of the region and of the
+source it was cloned from, on request, which answers whether the clone matched
+and whether a staged write landed where it was asked to, without returning bytes.
+
+Table~\ref{tab:region-decoupling} reports two regions published over the live
+descendant, each sampled four times about three seconds apart with nothing
+staged, then staged once. At publication the digests matched, so the clone was
+byte-identical over all 2\,MiB. Across every idle sample the backing digest was
+unchanged: the only thing that ever moved it was a staged write. The source
+digest moved on its own in both regions -- twice and three times respectively --
+which is what a working override looks like from here, since the descendant's
+writes are being served by the replacement and whatever still writes the original
+is no longer the descendant.
+
+\begin{table}[tbp]
+\centering\small
+\caption{A published 2\,MiB region over time. Digests are abbreviated to their
+low 32 bits. ``Changed while idle'' counts samples after the first that differ
+from it.}
+\label{tab:region-decoupling}
+\input{tables/region-decoupling}
+\end{table}
+
+Staging was exercised on the same regions: an index inside the region rewrites
+exactly one 4\,KiB page and moves only the backing digest, and an index of 512 in
+a 512-page region is refused with an invalid-parameter status, leaving the staged
+count unchanged. Publication followed by removal returned the active and retired
+slots to empty each time.
+
+Two things this does not establish. There is no performance result: we publish a
+large leaf and remove it, but we do not report an exit-rate or latency change
+from doing so. The obvious measurement -- how many compositions it takes to cover
+a region with one leaf rather than 512 -- needs a descendant that touches the
+region, and the TinyCore guest is idle, producing on the order of $10^{2}$ EPT
+violations per twenty seconds across its whole address space, so the override's
+composition count stayed at zero throughout. And equality of the two digests is
+an observation at publication, not an invariant: the source is live memory that
+continues to change, as the table shows, so a later comparison is not expected to
+match and is not evidence of anything if it does.
 
 \subsection{Remaining steady-state cost and attribution}
 \label{sec:performance}
@@ -442,6 +492,25 @@ and child uptime advances from 203.659 to 203.784 seconds. The guest has its own
 recorded boot ID and repeated normal-init heartbeats. This is positive evidence
 for the Hyper-V/TinyCore fixture and negative evidence for \ks{} admission at
 that insertion point.
+
+That refusal was re-measured with the current driver while an inner Hyper-V
+descendant was running. With \code{hypervisorlaunchtype} set to \code{Auto} and
+Windows~1 rebooted, its CPUID.1 ECX reads \code{0xFEFA3203} with the VMX bit
+clear, and the reported features reduce to Intel and hypervisor-present with no
+VMX entry at all. The driver itself loads and its service reaches the running
+state; it is admission that fails. All four of prepare, EPT-switch prepare,
+self-test and nested residency return \code{STATUS\_NOT\_SUPPORTED} at the
+capability-query stage with \code{controlSubmitted} false, so no control request
+reaches the driver's own logic. Meanwhile the Hyper-V descendant -- a two-vCPU,
+768\,MiB TinyCore guest -- starts and runs, and its worker process is present
+throughout. The configuration was returned to \code{Off} afterwards and the
+VMware stack verified working again.
+
+This is why the large-leaf mechanism has no Hyper-V measurement. Not because the
+mechanism excludes it, but because \ks{} cannot be beneath that hypervisor at
+all: Hyper-V starts from the boot loader, before any driver loads, and takes the
+virtualization extensions with it. There is no ordering in which the monitor is
+already resident when the inner hypervisor starts.
 
 Microsoft describes Hyper-V as a hypervisor below its root partition, whose
 management stack creates child partitions~\cite{hyperv-architecture}. Exposing

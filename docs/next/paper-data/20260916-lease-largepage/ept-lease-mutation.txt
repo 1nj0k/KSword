@@ -5,37 +5,37 @@ mutation                                         committed     current
 large-leaf reserved address bits unchecked       killed        killed       
 guest offset not folded into large frame         killed        killed       
 dirty treated as metadata only at level 3        killed        killed       
-large-page bit accepted at the PTE level         survived      killed       
+large-page bit accepted at the PTE level         killed        killed       
 validation always walks four levels              killed        killed       
-validation refuses short captures                survived      killed       
-empty permission intersection accepted           survived      killed       
+validation refuses short captures                killed        killed       
+empty permission intersection accepted           killed        killed       
 offset mask always 4 KiB                         killed        killed       
 capture always reports four entries              killed        killed       
 
 hvm_nested_leaf_plan.h - which regions may be published as a large leaf
 mutation                                         committed     current      
-source-granularity test removed                  new           killed       
-source-granularity test inverted                 new           killed       
-guest base checked only for page alignment       new           killed       
-backing checked only for page alignment          new           killed       
-short backing accepted unless empty              new           killed       
-region ownership off by one                      new           killed       
-staging index off by one                         new           killed       
-guest base bound removed                         new           killed       
-source path length mapped to wrong granularity   new           killed       
-installed leaf carries a page offset             new           killed       
-region always one page                           new           killed       
-proven uniformity ignored                        new           killed       
-unproven uniformity admitted                     new           killed       
-disagreeing source leaf accepted                 new           killed       
-accessed and dirty counted as disagreement       new           killed       
-unreadable source reported uniform               new           killed       
-absent interior table reported uniform           new           killed       
-oversized region scan bound removed              new           killed       
-region shift read from the request not the source new           killed       
+source-granularity test removed                  killed        killed       
+source-granularity test inverted                 killed        killed       
+guest base checked only for page alignment       killed        killed       
+backing checked only for page alignment          killed        killed       
+short backing accepted unless empty              killed        killed       
+region ownership off by one                      killed        killed       
+staging index off by one                         killed        killed       
+guest base bound removed                         killed        killed       
+source path length mapped to wrong granularity   killed        killed       
+installed leaf carries a page offset             killed        killed       
+region always one page                           killed        killed       
+proven uniformity ignored                        killed        killed       
+unproven uniformity admitted                     killed        killed       
+disagreeing source leaf accepted                 killed        killed       
+accessed and dirty counted as disagreement       killed        killed       
+unreadable source reported uniform               killed        killed       
+absent interior table reported uniform           killed        killed       
+oversized region scan bound removed              killed        killed       
+region shift read from the request not the source killed        killed       
 
 mutations: 28, all killed by the current suites,
-of which the committed suites do not kill: 22
+of which the committed suites do not kill: 0
 
 Scope: the headers are compiled exactly as the driver compiles them,
 against synthetic tables and synthetic geometry. This measures the

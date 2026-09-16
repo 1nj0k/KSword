@@ -45,10 +45,13 @@ analysis summaries, measured scripts, and validation results. Its key groups are
 \end{itemize}
 
 The large-leaf results are \path{docs/next/paper-data/20260916-large-leaf/}.
-\path{admission-probe.json} holds the coarse-source attempts and
-\path{published.json} the both-rules comparison, each with the driver and
-controller hashes, the live EPT12 pointer, the raw JSON of every attempt and its
-removal, and a status snapshot.
+\path{admission-probe.json} holds the coarse-source attempts,
+\path{published.json} the both-rules comparison,
+\path{stage-and-uniformity.json} the uniformity survey and the staging sequence,
+\path{decoupling.json} the idle digest samples, and \path{inner-hyperv.json}
+the inner Hyper-V admission attempts with the descendant's state. Each carries
+the driver and controller hashes, the live EPT12 pointer, and the raw JSON of
+every request and its removal.
 
 The portable lease-walk results are
 \path{docs/next/paper-data/20260916-lease-largepage/}:
@@ -173,6 +176,9 @@ Current 4-by-2 build & Ten-minute or overnight soak & Not newly measured \\
 2-MiB / 1-GiB source leaves & Lease capture, drift and rejection & Portable suite only; no such source leaf seen on hardware \\
 Large-leaf override, coarse-source rule & Publish 2 MiB on the live descendant & Refused 9/9; VMware backs this guest at 4 KiB \\
 Large-leaf override, scanning rule & Same, admitting on 512 agreeing entries & Published and removed; weaker drift detection \\
+Region staging & Rewrite one page of a published region & Measured by digest; out-of-range index refused \\
+Large leaf under inner Hyper-V & Publish any region & Not reachable; admission refused before any control request \\
+Composition saving from one large leaf & Fills to cover a region & Not measured; the descendant does not touch the region \\
 Arbitrary page reuse / DMA / hardware faults & General lifecycle and atomicity & Outside demonstrated contract \\
 \bottomrule
 \end{tabularx}

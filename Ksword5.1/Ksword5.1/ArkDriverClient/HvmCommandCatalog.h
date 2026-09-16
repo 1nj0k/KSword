@@ -20,7 +20,7 @@ typedef enum HVM_COMMAND_HANDLER {
     /* Region overrides: publish at a chosen leaf granularity, then edit one page
        of the published region at a time. Appended rather than inserted so every
        existing handler keeps its ordinal. */
-    HvmPageMapRegion, HvmPageMapRegionScan, HvmPageStage,
+    HvmPageMapRegion, HvmPageMapRegionScan, HvmPageStage, HvmPageDigest,
     HvmHelp, HvmCommands
 } HVM_COMMAND_HANDLER;
 

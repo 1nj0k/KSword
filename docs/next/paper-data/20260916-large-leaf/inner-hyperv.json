@@ -1,0 +1,39 @@
+﻿{
+    "schemaVersion":  1,
+    "kind":  "inner-hyperv-intermediate-vmm",
+    "utc":  "2026-09-16T21:15:35.7859955Z",
+    "driverSha256":  "9CD1AECB7C28EEF33168410C24DD777128B38DE4B62234B19CFD02B0ECD0129B",
+    "controlSha256":  "CACBB90E5B1A29D7CE98BC87398838D1F924F9A5CB1A5214B640DB129CE64E88",
+    "windowsBootUtc":  "2026-09-16T21:14:12.4523920Z",
+    "hypervisorLaunchType":  "hypervisorlaunchtype    Auto",
+    "driverServiceState":  "Running",
+    "cpuidView":  "{\"kind\":\"cpuidView\",\"hypervisorPresent\":true,\"leaf1Ecx\":\"0xFEFA3203\",\"hvLeafEax\":\"0x4000000C\",\"hvVendor\":\"Microsoft Hv\",\"hidden\":false}",
+    "status":  "{\"kind\":\"query\",\"queryStatus\":1,\"stateFlags\":1,\"stateFlagsHex\":\"0x00000001\",\"stateNames\":[\"INITIALIZED\"],\"featureNames\":[\"INTEL\",\"HYPERVISOR_PRESENT\"],\"generation\":1,\"processorCount\":0,\"preparedProcessorCount\":0,\"selfTestPassedProcessorCount\":0,\"residentProcessorCount\":0,\"residentImplementation\":\"UNSUPPORTED\",\"eptImplementation\":\"UNSUPPORTED\",\"nestedImplementation\":\"UNSUPPORTED\",\"evmcsImplementation\":\"UNSUPPORTED\",\"featureFlags\":\"0x0000000000004001\",\"vmxEptVpidCapabilities\":\"0x0000000000000000\",\"eptExecuteOnly\":false,\"eptPointer\":\"0x0000000000000000\",\"eptPageCount\":0,\"mappedRamMiB\":0,\"vmExitCount\":0,\"lastExitReason\":4294967295,\"lastExitQualification\":\"0x0000000000000000\",\"lastGuestRip\":\"0x0000000000000000\",\"lastGuestRsp\":\"0x0000000000000000\",\"lastExitInstructionLength\":0,\"lastStatus\":\"0xC00000BB\",\"vmxBasic\":\"0x0000000000000000\",\"cr0Fixed0\":\"0x0000000000000000\",\"cr0Fixed1\":\"0x0000000000000000\",\"cr4Fixed0\":\"0x0000000000000000\",\"cr4Fixed1\":\"0x0000000000000000\",\"lastVmInstructionError\":0,\"eventCount\":0,\"droppedEventCount\":0,\"overwrittenEventCount\":0,\"publishedEventCount\":0,\"nestedL2LaunchRefusedCount\":0,\"nestedVmcs12EvictionCount\":0,\"nestedFuseTripCount\":0,\"nestedLastRefusalSite\":0,\"nestedLastRefusalSiteText\":\"µ▓íµ£ëµïÆτ╗¥Φ┐ç\",\"exitReasonCount\":{},\"processors\":[]}",
+    "descendantVm":  {
+                         "name":  "KSword-TinyCore-HyperV",
+                         "state":  "Running",
+                         "uptimeSeconds":  53.521,
+                         "memoryAssigned":  805306368,
+                         "processorCount":  2,
+                         "id":  "74eb68a3-c16a-4e98-827a-05d363bdf3f6"
+                     },
+    "vmwpCount":  1,
+    "admissionAttempts":  [
+                              {
+                                  "command":  "prepare-eptpsw",
+                                  "raw":  "{\"kind\":\"control\",\"command\":\"prepare-eptpsw\",\"stage\":\"capability-query\",\"controlSubmitted\":false,\"queryStatus\":1,\"lastStatus\":\"0xC00000BB\",\"generation\":1,\"stateFlags\":1}"
+                              },
+                              {
+                                  "command":  "prepare",
+                                  "raw":  "{\"kind\":\"control\",\"command\":\"prepare\",\"stage\":\"capability-query\",\"controlSubmitted\":false,\"queryStatus\":1,\"lastStatus\":\"0xC00000BB\",\"generation\":1,\"stateFlags\":1}"
+                              },
+                              {
+                                  "command":  "self-test",
+                                  "raw":  "{\"kind\":\"control\",\"command\":\"self-test\",\"stage\":\"capability-query\",\"controlSubmitted\":false,\"queryStatus\":1,\"lastStatus\":\"0xC00000BB\",\"generation\":1,\"stateFlags\":1}"
+                              },
+                              {
+                                  "command":  "resident-nested-hidehv",
+                                  "raw":  "{\"kind\":\"control\",\"command\":\"resident-nested-hidehv\",\"stage\":\"capability-query\",\"controlSubmitted\":false,\"queryStatus\":1,\"lastStatus\":\"0xC00000BB\",\"generation\":1,\"stateFlags\":1}"
+                              }
+                          ]
+}

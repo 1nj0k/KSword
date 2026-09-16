@@ -202,6 +202,48 @@ static VOID KswordARKHvmPageTrace(const KSW_HVM_PAGE_TRACE* Trace, ULONG Stage, 
     KswordARKHvmEventPublish(&row);
 }
 
+/*
+ * FNV-1a over a region, read one page at a time.
+ *
+ * Page at a time because the source is physical memory we do not own: a single
+ * unreadable page then names itself instead of failing a 2 MiB copy with no
+ * indication of where. A page that cannot be read makes the whole digest
+ * unavailable rather than silently contributing zeroes, since a digest that
+ * quietly skips part of the region would compare equal to one that did not.
+ */
+static BOOLEAN KswordARKHvmPageDigestPhysical(ULONGLONG Base, ULONGLONG Bytes,
+    ULONGLONG* Digest)
+{
+    ULONGLONG hash = 0xCBF29CE484222325ULL;
+    ULONGLONG offset;
+    /* A page-sized staging buffer, from the pool rather than the kernel stack:
+       4 KiB is a large fraction of one, and this runs under the runtime lock
+       where an overflow would be a bugcheck rather than a failed request. */
+    UCHAR* page = (UCHAR*)KswordARKAllocateNonPagedPool(PAGE_SIZE,
+        KSW_HVM_PAGE_POOL_TAG);
+
+    *Digest = 0ULL;
+    if (page == NULL) { return FALSE; }
+    for (offset = 0ULL; offset < Bytes; offset += PAGE_SIZE) {
+        MM_COPY_ADDRESS source;
+        SIZE_T copied = 0U;
+        ULONG index;
+
+        source.PhysicalAddress.QuadPart = (LONGLONG)(Base + offset);
+        if (!NT_SUCCESS(MmCopyMemory(page, source, PAGE_SIZE,
+                MM_COPY_MEMORY_PHYSICAL, &copied)) || copied != PAGE_SIZE) {
+            ExFreePoolWithTag(page, KSW_HVM_PAGE_POOL_TAG);
+            return FALSE;
+        }
+        for (index = 0UL; index < PAGE_SIZE; ++index) {
+            hash = (hash ^ (ULONGLONG)page[index]) * 0x100000001B3ULL;
+        }
+    }
+    ExFreePoolWithTag(page, KSW_HVM_PAGE_POOL_TAG);
+    *Digest = hash;
+    return TRUE;
+}
+
 static VOID KswordARKHvmNestedPageFree(KSW_HVM_NESTED_PAGE* Page)
 {
     /* Failed allocation and empty removal both permit an empty record. */
@@ -335,6 +377,7 @@ NTSTATUS KswordARKHvmNestedPageControl(const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST*
         (Request->operation == KSWORD_ARK_HVM_NESTED_PAGE_STAGE && fault != 0UL) ||
         (Request->flags & ~(KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED |
                             KSWORD_ARK_HVM_NESTED_PAGE_SCAN_SOURCE |
+                            KSWORD_ARK_HVM_NESTED_PAGE_DIGEST |
                             KSWORD_ARK_HVM_NESTED_PAGE_FAULT_MASK)) != 0UL ||
         /* Scanning the source only means anything while creating a region. */
         ((Request->flags & KSWORD_ARK_HVM_NESTED_PAGE_SCAN_SOURCE) != 0UL &&
@@ -722,6 +765,24 @@ complete:
             (page->Plan.LeafShift > KSW_PLAN_SHIFT_4K &&
              KswordHvmLeafSourceShift(page->Translation.EntryCount) <
                  page->Plan.LeafShift) ? 1UL : 0UL;
+        /*
+         * Digests are computed only on request: each one reads the whole region.
+         * Both sides or neither, so that "equal" is never an artefact of one
+         * side having been skipped.
+         */
+        if ((Request->flags & KSWORD_ARK_HVM_NESTED_PAGE_DIGEST) != 0UL &&
+            page->Plan.Refusal == KSW_PLAN_OK && page->ShadowVirtual != NULL) {
+            ULONGLONG sourceDigest = 0ULL, backingDigest = 0ULL;
+
+            if (KswordARKHvmPageDigestPhysical(page->Translation.SourcePage,
+                    page->BackingBytes, &sourceDigest) &&
+                KswordARKHvmPageDigestPhysical(page->ShadowPhysicalPage,
+                    page->BackingBytes, &backingDigest)) {
+                Response->sourceDigest = sourceDigest;
+                Response->backingDigest = backingDigest;
+                Response->digestBytes = page->BackingBytes;
+            }
+        }
         /* Report applied staged edits; publication alone leaves this zero. */
         Response->stagedPageCount =
             (ULONGLONG)InterlockedCompareExchange64(&page->StagedPageCount, 0LL, 0LL);
