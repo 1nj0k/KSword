@@ -184,6 +184,32 @@ namespace KswordTheme
         return colorValue.name(QColor::HexRgb).toUpper();
     }
 
+    // HslLightness 作用：只取 HSL 明度分量。
+    // 中性族的层次全部由明暗表达，把明度单独取出来，色相与饱和度才能交给主题去决定。
+    inline int HslLightness(const QColor& colorValue)
+    {
+        int hue = 0;
+        int saturation = 0;
+        int lightness = 0;
+        colorValue.getHsl(&hue, &saturation, &lightness);
+        return lightness;
+    }
+
+    // ShiftLightness 作用：只移动 HSL 明度，色相与饱和度原样保留。
+    // 灰阶颜色的色相是 -1，getHsl/setHsl 之间原样往返即可，不需要额外处理。
+    inline QColor ShiftLightness(const QColor& baseColor, const int lightnessDelta)
+    {
+        int hue = 0;
+        int saturation = 0;
+        int lightness = 0;
+        int alpha = 255;
+        baseColor.getHsl(&hue, &saturation, &lightness, &alpha);
+
+        QColor shiftedColor;
+        shiftedColor.setHsl(hue, saturation, ClampChannel(lightness + lightnessDelta), alpha);
+        return shiftedColor;
+    }
+
     inline QString RgbaColorName(const QColor& colorValue, const int alphaValue)
     {
         return QStringLiteral("rgba(%1,%2,%3,%4)")
@@ -558,7 +584,98 @@ namespace KswordTheme
         return MainBackgroundColor();
     }
 
-    // RebasedNeutralRoleColor 作用：把内置中性角色相对默认窗口的 RGB 差值，
+    // NeutralRoleTone 作用：把一个内置中性角色搬到用户主背景的色调上，明度由调用方给定。
+    //
+    // 背景：内置深色中性族并不是中性灰，而是一整套深蓝灰 —— 窗口 (10,15,22)、
+    // 边框 (55,80,106)、强边框 (72,105,138)，蓝通道比红通道高 12 到 66。
+    // 原先按 RGB 通道差值整体平移到用户主背景，这个蓝调会被一并搬过去：主背景设成纯黑
+    // 之后边框照样算出 (45,65,84)，于是黑灰主题的界面上到处是蓝色的边框和分隔线。
+    //
+    // 处理：色相取用户主背景的；饱和度按「用户主背景相对内置主背景」的比例缩放角色
+    // 自身的饱和度。这里不能直接套用主背景的饱和度 —— HSL 在低明度端会把饱和度放得很大
+    // （纯黑附近的 (10,15,22) 饱和度是 96，而边框自己只有 37），边框那种高明度角色套进去
+    // 反而比内置更蓝。按比例缩放则是恒等的：用户主背景正好等于内置主背景时取值不变。
+    inline QColor NeutralRoleTone(const QColor& defaultRoleColor, const int targetLightness)
+    {
+        int roleHue = 0;
+        int roleSaturation = 0;
+        int roleLightness = 0;
+        defaultRoleColor.getHsl(&roleHue, &roleSaturation, &roleLightness);
+
+        int backgroundHue = 0;
+        int backgroundSaturation = 0;
+        int backgroundLightness = 0;
+        MainBackgroundColor().getHsl(&backgroundHue, &backgroundSaturation, &backgroundLightness);
+
+        int defaultHue = 0;
+        int defaultSaturation = 0;
+        int defaultLightness = 0;
+        DefaultMainBackgroundColor(IsDarkModeEnabled())
+            .getHsl(&defaultHue, &defaultSaturation, &defaultLightness);
+
+        const int scaledSaturation = defaultSaturation > 0
+            ? ClampChannel(roleSaturation * backgroundSaturation / defaultSaturation)
+            : 0;
+        // 灰阶颜色的 HSL 色相是 -1（未定义），Qt 用它表示消色差。饱和度被缩到 0 时
+        // 色相取什么都不影响取值，统一归到 -1，避免把一个假角度写进颜色。
+        const int tonedHue = (backgroundHue < 0 || scaledSaturation == 0) ? -1 : backgroundHue;
+
+        QColor tonedColor;
+        tonedColor.setHsl(tonedHue, scaledSaturation, ClampChannel(targetLightness), 255);
+        return tonedColor;
+    }
+
+    // RetintedNeutralColor 作用：保留角色自身明度，只把色调搬到用户主背景上。
+    // 供文字角色使用：文字的明暗是绝对的（深色主题下就该亮），不跟着主背景平移。
+    inline QColor RetintedNeutralColor(const QColor& defaultRoleColor)
+    {
+        return NeutralRoleTone(defaultRoleColor, HslLightness(defaultRoleColor));
+    }
+
+    // NeutralLayerMinimumSeparation 作用：去色之后中性族相邻层级的最小明度间距。
+    //
+    // 内置中性族的层次是「极小的明度差 + 递增的蓝调」两个维度撑起来的：深色主题下
+    // Surface→PaletteDark 的明度只差 4（亮度对比度 1.031），PaletteDark→SurfaceAlt 差 6，
+    // 人眼分辨不出 3% 的亮度差，真正在区分它们的是色差 19→22→26→30→51→66 的递增蓝调。
+    // 主背景被设成灰阶时色相维度整个消失，这几档就会糊在一起 —— 这不是错觉，是把二维
+    // 调色板投影到一维的必然结果。把相邻间距顶到这个值，最弱相邻对比度从 1.027 回到 1.067
+    //（内置带色相时是 1.051），而最亮一档的明度不变，不会更刺眼。
+    //
+    // 它还顺带拆开了一类静默故障：去色会让不同语义的角色塌到同一个灰阶值，
+    // ThemeColorRemap 按旧值查表就再也分不开它们，撞色的角色会被映射到别人的新值
+    //（实测 ControlAccentColor 撞上 ControlOutlineColor，切回默认主题后交互控件整片失去强调色）。
+    inline constexpr int NeutralLayerMinimumSeparation = 10;
+
+    // NeutralLayerRank 作用：角色在中性族明暗阶梯上的位置，从主背景往外数，最近的是 1。
+    // 不能写死序号：深浅主题的排序完全不同 —— 深色下 PaletteDark 紧贴 Surface（第 2 档），
+    // 浅色下它是离背景最远的一档。这里按当前主题的内置取值现算。
+    inline int NeutralLayerRank(const QColor& defaultRoleColor)
+    {
+        const bool darkModeEnabled = IsDarkModeEnabled();
+        const int backgroundLightness = HslLightness(DefaultMainBackgroundColor(darkModeEnabled));
+        const int roleDistance = qAbs(HslLightness(defaultRoleColor) - backgroundLightness);
+
+        const QColor familyColors[] = {
+            DefaultSurfaceColor(darkModeEnabled),
+            DefaultPaletteDarkColor(darkModeEnabled),
+            DefaultSurfaceAltColor(darkModeEnabled),
+            DefaultSurfaceMutedColor(darkModeEnabled),
+            DefaultBorderColor(darkModeEnabled),
+            DefaultBorderStrongColor(darkModeEnabled)
+        };
+
+        int rank = 1;
+        for (const QColor& familyColor : familyColors)
+        {
+            if (qAbs(HslLightness(familyColor) - backgroundLightness) < roleDistance)
+            {
+                ++rank;
+            }
+        }
+        return rank;
+    }
+
+    // RebasedNeutralRoleColor 作用：把内置中性角色相对默认窗口的明度差，
     // 平移到用户的主背景种子。未自定义时直接返回原角色，保证默认主题像素不变。
     inline QColor RebasedNeutralRoleColor(const QColor& defaultRoleColor)
     {
@@ -567,14 +684,38 @@ namespace KswordTheme
             return defaultRoleColor;
         }
 
-        const QColor defaultBackgroundColor = DefaultMainBackgroundColor(IsDarkModeEnabled());
-        return OffsetColor(
-            MainBackgroundColor(),
-            {
-                defaultRoleColor.red() - defaultBackgroundColor.red(),
-                defaultRoleColor.green() - defaultBackgroundColor.green(),
-                defaultRoleColor.blue() - defaultBackgroundColor.blue()
-            });
+        // 只搬明度差。搬 RGB 差值会把内置中性族的蓝调一起搬到用户主背景上，见 NeutralRoleTone。
+        const int lightnessDelta =
+            HslLightness(defaultRoleColor)
+            - HslLightness(DefaultMainBackgroundColor(IsDarkModeEnabled()));
+
+        // 补偿量随主背景的饱和度线性退场：主背景还带着色相时，色相仍在帮忙分辨层级，
+        // 补了反而会偏离内置调校好的明度设计；饱和度等于内置主背景时补偿量正好归零。
+        int backgroundHue = 0;
+        int backgroundSaturation = 0;
+        int backgroundLightness = 0;
+        MainBackgroundColor().getHsl(&backgroundHue, &backgroundSaturation, &backgroundLightness);
+        int defaultHue = 0;
+        int defaultSaturation = 0;
+        int defaultLightness = 0;
+        DefaultMainBackgroundColor(IsDarkModeEnabled())
+            .getHsl(&defaultHue, &defaultSaturation, &defaultLightness);
+        const int compensationPermille = defaultSaturation > 0
+            ? qBound(0, 1000 - backgroundSaturation * 1000 / defaultSaturation, 1000)
+            : 1000;
+
+        const int separation =
+            NeutralLayerRank(defaultRoleColor)
+            * NeutralLayerMinimumSeparation
+            * compensationPermille / 1000;
+        // 只放大距离，不改方向：浅色主题下 Surface 在主背景的亮侧、其余角色在暗侧，
+        // 用符号跟随原始明度差才不会把某一档推到背景的另一边去。
+        const int boostedDistance = qMax(qAbs(lightnessDelta), separation);
+        const int targetLightness = lightnessDelta >= 0
+            ? backgroundLightness + boostedDistance
+            : backgroundLightness - boostedDistance;
+
+        return NeutralRoleTone(defaultRoleColor, targetLightness);
     }
 
     inline QColor ComputeSurfaceColor()
@@ -673,7 +814,10 @@ namespace KswordTheme
         }
         QColor surfaceBuffer[4];
         const int surfaceCount = NeutralSurfaceFamily(surfaceBuffer);
-        return EnsureTextContrastForBackgrounds(defaultTextColor, surfaceBuffer, surfaceCount);
+        // 内置深色文字色是蓝白的 (237,246,255)，对比度校准只动明度、保留色相，
+        // 不先把色调搬到主背景上的话，纯黑灰主题的正文会一直泛蓝。
+        return EnsureTextContrastForBackgrounds(
+            RetintedNeutralColor(defaultTextColor), surfaceBuffer, surfaceCount);
     }
 
     inline QColor TextPrimaryColor()
@@ -692,7 +836,9 @@ namespace KswordTheme
         }
         QColor surfaceBuffer[4];
         const int surfaceCount = NeutralSurfaceFamily(surfaceBuffer);
-        return EnsureTextContrastForBackgrounds(defaultTextColor, surfaceBuffer, surfaceCount);
+        // 次级文字是全项目蓝调最重的中性角色：内置取值 (179,203,244)，蓝通道比红通道高 65。
+        return EnsureTextContrastForBackgrounds(
+            RetintedNeutralColor(defaultTextColor), surfaceBuffer, surfaceCount);
     }
 
     inline QColor TextSecondaryColor()
@@ -712,7 +858,8 @@ namespace KswordTheme
         QColor surfaceBuffer[4];
         const int surfaceCount = NeutralSurfaceFamily(surfaceBuffer);
         // 禁用文字属于非关键信息，按 WCAG 图形/大字档 3.0 判定。
-        return EnsureTextContrastForBackgrounds(defaultTextColor, surfaceBuffer, surfaceCount, 3.0);
+        return EnsureTextContrastForBackgrounds(
+            RetintedNeutralColor(defaultTextColor), surfaceBuffer, surfaceCount, 3.0);
     }
 
     inline QColor TextDisabledColor()
@@ -1353,9 +1500,32 @@ namespace KswordTheme
         return CachedThemeColor(cachedColor, cachedGeneration, &ComputeControlOutlineColor);
     }
 
+    // ControlAccentOutlineSeparation 作用：控件强调色必须比中性轮廓色亮/暗出来的明度距离。
+    // 灰阶主题色下强调色和轮廓色会被同一道 3.0 校准推到同一个取值：复选框、单选框、
+    // 滑块的选中填充色因此等于未选中的轮廓色，选中态整个看不出来。
+    // 这个距离同时也让 ThemeColorRemap 能继续分开这两个角色 —— 它是按颜色值查表的，
+    // 两个角色撞成同一个值之后，其中一个会被静默映射到另一个的新值。
+    inline constexpr int ControlAccentOutlineSeparation = 26;
+
     inline QColor ComputeControlAccentColor()
     {
-        return EnsureTextContrast(PrimaryAccentColor(), SurfaceColor(), 3.0);
+        const QColor accentColor = EnsureTextContrast(PrimaryAccentColor(), SurfaceColor(), 3.0);
+        const QColor outlineColor = ControlOutlineColor();
+
+        // 强调色要比轮廓更突出：深色主题往亮推，浅色主题往暗推。
+        const int direction = IsDarkModeEnabled() ? 1 : -1;
+        const int currentDistance = direction * (HslLightness(accentColor) - HslLightness(outlineColor));
+        if (currentDistance >= ControlAccentOutlineSeparation)
+        {
+            // 彩色主题色下两者本来就分得开，取值保持不变。
+            return accentColor;
+        }
+
+        const QColor separatedColor = ShiftLightness(
+            accentColor,
+            direction * ControlAccentOutlineSeparation - (HslLightness(accentColor) - HslLightness(outlineColor)));
+        // 推开之后仍要守住对表面的 3.0 对比度，否则浅色主题往暗推可能反而贴上表面。
+        return EnsureTextContrast(separatedColor, SurfaceColor(), 3.0);
     }
 
     inline QColor ControlAccentColor()
