@@ -2767,18 +2767,10 @@ namespace
         QObject::connect(buttonBox, &QDialogButtonBox::accepted, [&dialog, &modeComboBox, &collectSelectedHandles, &collectSelectedIds]() {
             if (modeComboBox->currentIndex() == 0 && collectSelectedHandles().empty())
             {
-                QMessageBox::information(
-                    &dialog,
-                    QStringLiteral("文件解锁器"),
-                    QStringLiteral("请至少选择一个要关闭的句柄。"));
                 return;
             }
             if (modeComboBox->currentIndex() != 0 && collectSelectedIds().empty())
             {
-                QMessageBox::information(
-                    &dialog,
-                    QStringLiteral("文件解锁器"),
-                    QStringLiteral("请至少选择一个要结束的进程。"));
                 return;
             }
             dialog.accept();
@@ -6771,33 +6763,12 @@ namespace
             UsageSelection selection;
             if (!readUsageSelection(table, selection))
             {
-                QMessageBox::information(this, QStringLiteral("关闭句柄"), QStringLiteral("请先选择一条句柄记录。"));
                 return;
             }
             if (selection.processId <= 4U ||
                 selection.processId == static_cast<std::uint32_t>(::GetCurrentProcessId()) ||
                 selection.processCreationTime == 0U || selection.handleValue == 0U ||
                 isCriticalProcessName(selection.processName))
-            {
-                QMessageBox::warning(
-                    this,
-                    QStringLiteral("关闭句柄"),
-                    QStringLiteral("当前记录没有可关闭的远程句柄，或目标进程受保护。"));
-                return;
-            }
-
-            const QString processText = selection.processName.trimmed().isEmpty()
-                ? QStringLiteral("Unknown")
-                : selection.processName;
-            if (!ks::ui::confirmDestructiveAction(
-                    this,
-                    QStringLiteral("file-detail-usage-close-handle-r3"),
-                    QStringLiteral("关闭句柄（R3）"),
-                    QStringLiteral("%1（PID %2）的句柄 %3")
-                        .arg(processText)
-                        .arg(selection.processId)
-                        .arg(formatHex64(selection.handleValue)),
-                    QStringLiteral("关闭正在使用的文件句柄可能导致目标进程读写失败或数据丢失。")))
             {
                 return;
             }
@@ -6812,10 +6783,10 @@ namespace
                 detailText);
             if (!closeOk)
             {
-                QMessageBox::warning(
-                    this,
-                    QStringLiteral("关闭句柄（R3）"),
-                    QStringLiteral("关闭句柄失败：%1").arg(QString::fromStdString(detailText)));
+                if (statusLabel != nullptr)
+                {
+                    statusLabel->setText(QString::fromStdString(detailText));
+                }
                 return;
             }
 
@@ -6832,38 +6803,12 @@ namespace
             UsageSelection selection;
             if (!readUsageSelection(table, selection))
             {
-                QMessageBox::information(this, QStringLiteral("结束进程"), QStringLiteral("请先选择一条句柄记录。"));
                 return;
             }
             if (selection.processId <= 4U ||
                 selection.processId == static_cast<std::uint32_t>(::GetCurrentProcessId()) ||
                 selection.processCreationTime == 0U ||
                 isCriticalProcessName(selection.processName))
-            {
-                QMessageBox::warning(
-                    this,
-                    QStringLiteral("结束进程"),
-                    QStringLiteral("当前记录没有可结束的进程，或目标 PID 受保护。"));
-                return;
-            }
-
-            const QString actionTitle = useKernelDriver
-                ? QStringLiteral("结束进程（R0）")
-                : QStringLiteral("结束进程（R3）");
-            const QString processText = selection.processName.trimmed().isEmpty()
-                ? QStringLiteral("Unknown")
-                : selection.processName;
-            const QString riskText = useKernelDriver
-                ? QStringLiteral("驱动级结束操作不可逆，可能造成数据丢失、系统不稳定或蓝屏。")
-                : QStringLiteral("结束进程会丢失该进程未保存的数据。");
-            if (!ks::ui::confirmDestructiveAction(
-                    this,
-                    useKernelDriver
-                        ? QStringLiteral("file-detail-usage-terminate-r0")
-                        : QStringLiteral("file-detail-usage-terminate-r3"),
-                    actionTitle,
-                    QStringLiteral("PID %1（%2）").arg(selection.processId).arg(processText),
-                    riskText))
             {
                 return;
             }
@@ -6899,7 +6844,10 @@ namespace
 
             if (!terminateOk)
             {
-                QMessageBox::warning(this, actionTitle, QString::fromStdString(detailText));
+                if (statusLabel != nullptr)
+                {
+                    statusLabel->setText(QString::fromStdString(detailText));
+                }
                 return;
             }
 
@@ -15645,14 +15593,6 @@ void FileDock::showPanelContextMenu(FilePanelWidgets& panel, const QPoint& local
     }
     if (selectedAction == unlockByDriverAction)
     {
-        if (!isSingleSelection)
-        {
-            QMessageBox::information(
-                this,
-                QStringLiteral("文件解锁器"),
-                QStringLiteral("文件解锁器暂不支持多文件批量解除占用，请只选择一个文件或目录。"));
-            return;
-        }
         unlockSelectedItemsByDriver(panel);
         return;
     }
@@ -16923,10 +16863,6 @@ void FileDock::unlockSelectedItemsByDriver(FilePanelWidgets& panel)
     {
         // 当前文件解锁器会先扫描占用来源，再让用户选择关闭句柄或结束进程。
         // 多路径下候选句柄/进程关系容易混在一起，暂不提供批量入口，避免误结束无关进程。
-        QMessageBox::information(
-            this,
-            QStringLiteral("文件解锁器"),
-            QStringLiteral("文件解锁器暂不支持多文件批量解除占用，请只选择一个文件或目录。"));
         kLogEvent event;
         info << event
             << "[FileDock] 文件解锁器取消：暂不支持多选, panel="
@@ -17675,18 +17611,6 @@ void FileDock::unlockPathsByDriver(
         (panelForRefresh == &m_rightPanel) ? RefreshTarget::Right :
         RefreshTarget::Both;
 
-    QWidget* const dialogParent = resolveVisibleDialogParent(this);
-    const QMessageBox::StandardButton scanChoice = QMessageBox::question(
-        dialogParent,
-        QStringLiteral("文件解锁器扫描确认"),
-        QStringLiteral("将扫描选中路径的占用来源。扫描完成后可选择关闭句柄，或改用 R3/R0 结束进程兜底。\n是否开始扫描？"),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-    if (scanChoice != QMessageBox::Yes)
-    {
-        return;
-    }
-
     struct UnlockJobResult
     {
         bool scanCompleted = false;
@@ -17707,7 +17631,6 @@ void FileDock::unlockPathsByDriver(
         std::lock_guard<std::mutex> lock(m_unlockerWorkerMutex);
         if (m_unlockerWorkerRunning.load())
         {
-            QMessageBox::information(dialogParent, QStringLiteral("文件解锁器"), QStringLiteral("已有解锁任务正在执行，请稍候。"));
             return;
         }
         if (m_unlockerWorkerThread.joinable())
@@ -17846,10 +17769,6 @@ void FileDock::unlockPathsByDriver(
                 }
                 else if (jobResult.processCandidateList.empty() && jobResult.handleCandidateList.empty())
                 {
-                    QMessageBox::information(
-                        unlockerDialogParent,
-                        QStringLiteral("文件解锁器"),
-                        QStringLiteral("未发现占用来源，无需解锁。"));
                     kPro.set(progressPid, "未发现占用来源", 0, 100.0f);
                 }
                 else
@@ -18082,7 +18001,6 @@ void FileDock::unlockPathsByDriver(
                     kPro.set(progressPid, "界面已关闭", 0, 100.0f);
                     return;
                 }
-                QWidget* const unlockerDialogParent = resolveVisibleDialogParent(safeThis.data());
 
                 QList<QAbstractItemView*> affectedViews;
                 if (refreshTarget == RefreshTarget::Left)
@@ -18140,38 +18058,6 @@ void FileDock::unlockPathsByDriver(
                 const std::size_t successCount = (jobResult.operationMode == UnlockOperationMode::CloseHandleR3)
                     ? jobResult.closeHandleSuccessCount
                     : jobResult.terminateSuccessCount;
-                const QString summaryText = QStringLiteral("操作方式：%1\n扫描到占用进程：%2\n扫描到句柄记录：%3\n选中目标：%4\n成功处理：%5\n失败/跳过：%6")
-                    .arg(modeText)
-                    .arg(jobResult.processCandidateList.size())
-                    .arg(jobResult.handleCandidateList.size())
-                    .arg(selectedCount)
-                    .arg(successCount)
-                    .arg(jobResult.operationFailList.size() + jobResult.skippedTargetList.size());
-                if (jobResult.operationFailList.isEmpty() && jobResult.skippedTargetList.isEmpty())
-                {
-                    QMessageBox::information(
-                        unlockerDialogParent,
-                        QStringLiteral("文件解锁器"),
-                        summaryText);
-                }
-                else
-                {
-                    const QString failurePreview = buildLogPreviewText(jobResult.operationFailList + jobResult.skippedTargetList, 8);
-                    // privilegePromptHandled：恢复提示已解释失败时不再显示汇总警告框。
-                    const bool privilegePromptHandled = ks::ui::promptForPrivilegeFailure(
-                        unlockerDialogParent,
-                        QStringLiteral("文件解锁器"),
-                        failurePreview);
-                    if (!privilegePromptHandled)
-                    {
-                        QMessageBox::warning(
-                            unlockerDialogParent,
-                            QStringLiteral("文件解锁器"),
-                            summaryText + QStringLiteral("\n\n明细（节选）：\n%1")
-                            .arg(buildLogPreviewText(jobResult.operationFailList + jobResult.skippedTargetList, 8)));
-                    }
-                }
-
                 kLogEvent event;
                 if (!jobResult.operationFailList.isEmpty() || !jobResult.skippedTargetList.isEmpty())
                 {

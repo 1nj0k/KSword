@@ -15850,12 +15850,6 @@ void ProcessDock::executeTerminateProcessTreeAction()
         warn << logEvent
             << "[ProcessDock] executeTerminateProcessTreeAction 被忽略：选中进程未包含在当前 R3 快照中。"
             << eol;
-        QMessageBox::information(
-            this,
-            processContextText("process.menu.terminate_tree", QStringLiteral("结束进程树")),
-            processContextText(
-                "process.action.terminate_tree.r3_snapshot_unavailable",
-                QStringLiteral("当前选中进程未包含在 R3 进程快照中，无法识别进程树。")));
         return;
     }
 
@@ -15869,77 +15863,10 @@ void ProcessDock::executeTerminateProcessActions(
     const std::vector<ProcessActionTarget>& actionTargets,
     const bool deleteImageAfterExit)
 {
-    QStringList targetPidList;
-    for (const ProcessActionTarget& actionTarget : actionTargets)
-    {
-        targetPidList.push_back(QString::number(actionTarget.record.pid));
-    }
-    QString targetDescription = ks::i18n::sourceText(
-        QStringLiteral("%1 个进程；PID：%2"))
-        .arg(actionTargets.size())
-        .arg(targetPidList.join(QStringLiteral(", ")));
-    QString suppressionKey = QStringLiteral("process-termination-combo");
-    QString riskDescription = ks::i18n::sourceText(QStringLiteral(
-        "R0 结束操作不可逆，可能造成数据丢失、系统不稳定或蓝屏。请确认目标无误后再继续。"));
-    if (deleteImageAfterExit)
-    {
-        if (actionTargets.size() != 1U)
-        {
-            clearContextActionBinding();
-            return;
-        }
-        const ProcessActionTarget& deleteTarget = actionTargets.front();
-        const QString imagePath = QString::fromStdString(deleteTarget.record.imagePath);
-        targetDescription = processContextText(
-            "process.action.terminate_delete_image.target",
-            QStringLiteral("PID：%1\n映像：%2"))
-            .arg(deleteTarget.record.pid)
-            .arg(imagePath);
-        riskDescription = processContextText(
-            "process.action.terminate_delete_image.risk",
-            QStringLiteral(
-                "该操作不可撤销。KSword 将先校验 PID 创建时间和文件 ID，"
-                "锁定当前映像文件对象，结束并确认原进程退出后永久删除该文件。"
-                "若目标是系统或关键进程，可能立即崩溃、丢失数据或导致系统无法启动。"
-                "KSword 只告知风险，不按进程类别限制该操作；"
-                "若身份、路径或退出状态无法确认，则不会删除。"));
-        // 永久文件删除不允许持久关闭确认提示，因此 suppressionKey 固定为空。
-        suppressionKey.clear();
-    }
-    if (!ks::ui::confirmDestructiveAction(
-            this,
-            suppressionKey,
-            actionTitle,
-            targetDescription,
-            riskDescription))
+    if (deleteImageAfterExit && actionTargets.size() != 1U)
     {
         clearContextActionBinding();
         return;
-    }
-
-    if (deleteImageAfterExit)
-    {
-        // 最终确认改为直接点击：不再要求输入确认短语，改用默认聚焦“否”的高风险提示。
-        const auto finalAnswer = QMessageBox::warning(
-            this,
-            processContextText(
-                "process.action.terminate_delete_image.type_title",
-                QStringLiteral("最终确认永久删除")),
-            processContextText(
-                "process.action.terminate_delete_image.final_prompt",
-                QStringLiteral("确认结束进程 %1 并永久删除其映像文件？此操作不可撤销。"))
-                .arg(actionTargets.front().record.pid),
-            QMessageBox::Yes | QMessageBox::No,
-            QMessageBox::No);
-        if (finalAnswer != QMessageBox::Yes)
-        {
-            kLogEvent cancellationEvent;
-            warn << cancellationEvent
-                << "[ProcessDock] 结束并删除映像动作已取消：用户在最终确认中选择了否。"
-                << eol;
-            clearContextActionBinding();
-            return;
-        }
     }
 
     dispatchProcessActionTargetsInParallel(

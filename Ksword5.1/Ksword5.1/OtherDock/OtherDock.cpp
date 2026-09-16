@@ -4506,19 +4506,7 @@ void OtherDock::showWindowContextMenu(const QPoint& localPos)
     }
     else if (selectedAction == terminateAction)
     {
-        const QString targetDescription = ks::i18n::sourceText(QStringLiteral("PID %1（%2）"))
-            .arg(windowInfo->processId)
-            .arg(windowInfo->processNameText);
-        if (!ks::ui::confirmDestructiveAction(
-                this,
-                QStringLiteral("process-termination-r3"),
-                ks::i18n::sourceText(QStringLiteral("结束进程")),
-                targetDescription))
-        {
-            return;
-        }
-
-        // 结束进程动作：确认后执行，结果继续通过统一日志记录。
+        // 结束进程动作直接执行，结果继续通过统一日志记录。
         kLogEvent actionEvent;
         warn << actionEvent
             << "[OtherDock] 执行操作：结束进程, pid="
