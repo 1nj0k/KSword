@@ -105,6 +105,23 @@ typedef struct _KSW_HVM_VMCS02_STATE
 
 EXTERN_C_START
 
+/* Read a hardware VMCS only at a boundary where its launch state is clear.
+ * The source is left inactive and the caller's current VMCS is restored.
+ * A NULL field bitmap discovers supported fields on a private test VMCS.
+ * Restore failure is fatal: returning with a foreign current VMCS is unsafe.
+ */
+NTSTATUS KswordARKHvmNestedVmcsImportCleared(
+    ULONGLONG PhysicalAddress,
+    KSW_HVM_VMCS12_STATE* Destination,
+    const ULONG* SupportedFields,
+    ULONG* DiscoveredFields,
+    ULONG* FieldCount);
+
+/* Real VMREAD/VMWRITE persistence and import test; caller owns VMX operation. */
+NTSTATUS KswordARKHvmNestedVmcsNativeSelfTest(
+    KSW_HVM_CPU_RESOURCE* Cpu,
+    KSW_HVM_VMCS12_STATE* Scratch);
+
 /* Initialize bounded vmcs12 and vmcs02 state. */
 VOID
 KswordARKHvmNestedVmcsInitialize(

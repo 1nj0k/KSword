@@ -15,9 +15,177 @@ Environment:
 --*/
 
 #include "hvm_nested_vmcs.h"
+#include "hvm_vmcs.h"
+#if defined(_M_AMD64)
+#include <intrin.h>
+#endif
 
 /* Name Intel VM-entry invalid-control-fields error seven. */
 #define KSW_HVM_VMX_ERROR_INVALID_CONTROL_FIELDS 7UL
+
+/* Native VMCS layout is implementation-specific. Never decode its page bytes. */
+NTSTATUS KswordARKHvmNestedVmcsImportCleared(
+    ULONGLONG PhysicalAddress,
+    KSW_HVM_VMCS12_STATE* Destination,
+    const ULONG* SupportedFields,
+    ULONG* DiscoveredFields,
+    ULONG* FieldCount)
+{
+#if defined(_M_AMD64)
+    unsigned __int64 original = ~0ULL;
+    unsigned __int64 source = PhysicalAddress;
+    SIZE_T value = 0;
+    SIZE_T originalError = 0;
+    ULONG slot;
+    NTSTATUS status = STATUS_HV_OPERATION_FAILED;
+    BOOLEAN loaded = FALSE;
+    UCHAR cleared;
+    UCHAR restored = 0;
+
+    if (Destination == NULL || FieldCount == NULL || PhysicalAddress == 0 ||
+        (PhysicalAddress & 0xFFFULL) != 0 ||
+        (SupportedFields == NULL && DiscoveredFields == NULL)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    *FieldCount = 0;
+    __vmx_vmptrst(&original);
+    if (original == source) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    /* The caller admits only inactive VMCSs. VMCLEAR also validates the PA. */
+    if (__vmx_vmclear(&source) != 0) {
+        return STATUS_HV_OPERATION_FAILED;
+    }
+    if (__vmx_vmptrld(&source) == 0) {
+        loaded = TRUE;
+        KswordARKHvmNestedVmcsInitialize(Destination, NULL);
+        Destination->Current = TRUE;
+        Destination->PhysicalAddress = PhysicalAddress;
+        if (DiscoveredFields != NULL) {
+            RtlZeroMemory(DiscoveredFields, 64 * sizeof(ULONG));
+        }
+        /* Unsupported-field discovery itself changes VM_INSTRUCTION_ERROR. */
+        if (KswordARKHvmVmcsFieldLoad(0x4400, &originalError) == 0) {
+            status = STATUS_SUCCESS;
+            for (slot = 0; slot < KSW_HVM_VMCS12_SLOT_COUNT; ++slot) {
+                const ULONG encoding = ((slot / 512) << 13) |
+                    (((slot % 512) / 128) << 10) | ((slot % 128) << 1);
+                if (SupportedFields != NULL &&
+                    (SupportedFields[slot / 32] & (1UL << (slot % 32))) == 0) {
+                    continue;
+                }
+                if (encoding == 0x4400) {
+                    value = originalError;
+                } else if (KswordARKHvmVmcsFieldLoad(encoding, &value) != 0) {
+                    if (SupportedFields != NULL) {
+                        status = STATUS_HV_OPERATION_FAILED;
+                        break;
+                    }
+                    continue;
+                }
+                Destination->Fields[slot] = (ULONGLONG)value;
+                if (DiscoveredFields != NULL) {
+                    DiscoveredFields[slot / 32] |= 1UL << (slot % 32);
+                }
+                ++*FieldCount;
+            }
+            Destination->InstructionError = (ULONG)originalError;
+            Destination->WriteSerial = 1;
+            /* No guessed launch state: admission requires a clear boundary. */
+            Destination->Launched = FALSE;
+        }
+    }
+    cleared = loaded ? __vmx_vmclear(&source) : 0;
+    if (original != ~0ULL) {
+        restored = __vmx_vmptrld(&original);
+    }
+    if (cleared != 0 || restored != 0) {
+        /* A foreign/current or still-active VMCS cannot escape this helper. */
+        KeBugCheckEx(0x20001, 0x4E564D43, PhysicalAddress, cleared, restored);
+    }
+    return status;
+#else
+    UNREFERENCED_PARAMETER(PhysicalAddress);
+    UNREFERENCED_PARAMETER(Destination);
+    UNREFERENCED_PARAMETER(SupportedFields);
+    UNREFERENCED_PARAMETER(DiscoveredFields);
+    UNREFERENCED_PARAMETER(FieldCount);
+    return STATUS_NOT_SUPPORTED;
+#endif
+}
+
+NTSTATUS KswordARKHvmNestedVmcsNativeSelfTest(
+    KSW_HVM_CPU_RESOURCE* Cpu,
+    KSW_HVM_VMCS12_STATE* Scratch)
+{
+#if defined(_M_AMD64)
+    static const ULONG fields[] = {0x0802, 0x4004, 0x2010, 0x681E};
+    static const ULONGLONG values[] = {
+        0x28ULL, 0xA5010080ULL, 0x1122334455667788ULL, 0xFFFF800012345678ULL};
+    unsigned __int64 source = (ULONGLONG)Cpu->Vmcs02Physical.QuadPart;
+    unsigned __int64 anchor = (ULONGLONG)Cpu->VmcsPhysical.QuadPart;
+    unsigned __int64 current = ~0ULL;
+    ULONG count = 0, index;
+    SIZE_T error = 0;
+    ULONGLONG readback = 0;
+    NTSTATUS status = STATUS_HV_OPERATION_FAILED;
+    Cpu->NativeVmcsFieldCount = 0;
+    RtlZeroMemory(Cpu->NativeVmcsFields, sizeof(Cpu->NativeVmcsFields));
+    if (__vmx_vmclear(&source) != 0 || __vmx_vmptrld(&source) != 0) {
+        goto Cleanup;
+    }
+    for (index = 0; index < RTL_NUMBER_OF(fields); ++index) {
+        if (KswordARKHvmVmcsFieldStore(fields[index], (SIZE_T)values[index]) != 0) {
+            goto Cleanup;
+        }
+    }
+    /* Seed a read-only error, then prove enumeration preserves that value. */
+    if (KswordARKHvmVmcsFieldStore(0x4402, 0) != 1 ||
+        KswordARKHvmVmcsFieldLoad(0x4400, &error) != 0 || error != 13) {
+        goto Cleanup;
+    }
+    if (__vmx_vmclear(&source) != 0 || __vmx_vmclear(&anchor) != 0 ||
+        __vmx_vmptrld(&anchor) != 0) {
+        goto Cleanup;
+    }
+    status = KswordARKHvmNestedVmcsImportCleared(
+        source, Scratch, NULL, Cpu->NativeVmcsFields, &count);
+    __vmx_vmptrst(&current);
+    if (!NT_SUCCESS(status) || current != anchor || count == 0 ||
+        Scratch->Launched || Scratch->InstructionError != error) {
+        status = STATUS_DATA_ERROR;
+        goto Cleanup;
+    }
+    for (index = 0; index < RTL_NUMBER_OF(fields); ++index) {
+        if (!NT_SUCCESS(KswordARKHvmNestedVmcs12Read(Scratch, fields[index], &readback)) ||
+            readback != values[index]) {
+            status = STATUS_DATA_ERROR;
+            goto Cleanup;
+        }
+    }
+    /* The steady-state importer reads only fields this CPU actually supports. */
+    status = KswordARKHvmNestedVmcsImportCleared(
+        source, Scratch, Cpu->NativeVmcsFields, NULL, &count);
+    __vmx_vmptrst(&current);
+    if (NT_SUCCESS(status) && current == anchor) {
+        Cpu->NativeVmcsFieldCount = count;
+    } else {
+        status = STATUS_DATA_ERROR;
+    }
+Cleanup:
+    if (__vmx_vmclear(&source) != 0 || __vmx_vmclear(&anchor) != 0) {
+        status = STATUS_HV_OPERATION_FAILED;
+    }
+    if (!NT_SUCCESS(status)) {
+        Cpu->NativeVmcsFieldCount = 0;
+    }
+    return status;
+#else
+    UNREFERENCED_PARAMETER(Cpu);
+    UNREFERENCED_PARAMETER(Scratch);
+    return STATUS_NOT_SUPPORTED;
+#endif
+}
 
 VOID
 KswordARKHvmNestedVmcsInitialize(
