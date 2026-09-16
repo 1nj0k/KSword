@@ -17,8 +17,6 @@ class KvmCommandPanel final : public QWidget
 {
 public:
     explicit KvmCommandPanel(QWidget* parent = nullptr);
-    // Exercises every real form and its validation button, without mutating the driver.
-    int runCoverageTest(const QString& reportPath, QWidget* captureHost);
     std::function<void(bool)> onBusyChanged;
 
 protected:
@@ -48,5 +46,4 @@ private:
     QPlainTextEdit* m_output = nullptr;
     QString m_lastOutput;
     bool m_validating = false;
-    std::function<void(int, bool)> m_completed;
 };

@@ -97,7 +97,6 @@ public:
         StartupProgressCallback startupProgressCallback,
         const QFont& startupSystemFont);
     ~MainWindow();
-    int runHvmCommandCoverageTest(const QString& reportPath);
 
 public slots:
     void focusKvmCommands();
