@@ -138,7 +138,7 @@ void KernelThreadAuditTab::initializeUi()
     rootLayout->setContentsMargins(6, 6, 6, 6);
     rootLayout->setSpacing(6);
 
-    // 工具栏按钮使用图标和 tooltip；A/B 按钮按列组规范紧贴放置。
+    // 工具栏按钮使用图标和 tooltip；工作队列线程页只保留 B 证据视图。
     auto* toolLayout = new QHBoxLayout();
     toolLayout->setContentsMargins(0, 0, 0, 0);
     toolLayout->setSpacing(4);
@@ -160,6 +160,7 @@ void KernelThreadAuditTab::initializeUi()
     m_evidenceButton = new QPushButton(QStringLiteral("B"), this);
     m_overviewButton->setFixedSize(28, 28);
     m_evidenceButton->setFixedSize(28, 28);
+    m_overviewButton->setVisible(m_mode != Mode::WorkQueueThreads);
 
     m_filterEdit = new QLineEdit(this);
     m_filterEdit->setClearButtonEnabled(true);
@@ -200,7 +201,7 @@ void KernelThreadAuditTab::initializeUi()
 
     ks::ui::DetailLayoutRegistry::registerHost(m_table, m_detailEditor, this);
 
-    // 连接：刷新、筛选、选择、A/B 列组、表头菜单和行操作菜单。
+    // 连接：刷新、筛选、选择、视图预设、表头菜单和行操作菜单。
     connect(m_refreshButton, &QPushButton::clicked, this, [this]() { requestRefresh(); });
     connect(m_filterEdit, &QLineEdit::textChanged, this, [this]() { rebuildTable(); });
     connect(m_table, &QTableWidget::itemSelectionChanged, this, [this]() { updateDetail(); });
@@ -224,7 +225,9 @@ void KernelThreadAuditTab::initializeUi()
         runControlAction(KSWORD_ARK_DRIVER_THREAD_ACTION_TERMINATE);
     });
 
-    applyColumnPreset(ViewPreset::Overview);
+    applyColumnPreset(m_mode == Mode::WorkQueueThreads
+        ? ViewPreset::Evidence
+        : ViewPreset::Overview);
 }
 
 void KernelThreadAuditTab::applyTranslatedText()
