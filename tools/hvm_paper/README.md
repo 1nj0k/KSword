@@ -178,6 +178,51 @@ then stop residency. Stopping residency first hung vmrun in the retained 4x2 tri
 checks revocation and reclamation with an active replacement at VMM destruction.
 Do not run it until other guest evidence is safely captured.
 
+## Pro follow-up: attribution, application disruption and source leases
+
+The current [follow-up report](../../docs/next/hvm-followup-results.md) separates
+new-binary results from earlier runs. Recompute it with:
+
+```powershell
+python tools/hvm_paper/analyze_followup.py docs/next/paper-data/20260916-followup
+python tools/hvm_paper/analyze_smp.py docs/next/paper-data/20260916-followup/lifecycle
+python tools/hvm_paper/analyze_http_page.py docs/next/paper-data/20260916-followup/application
+python tools/hvm_paper/analyze_policy_comparison.py docs/next/paper-data/20260916-followup/application
+```
+
+Build `application_latency.c` with the same Windows GCC flags above and
+`-lws2_32 -lwinmm`; build `tsc_rate.c` with those flags without these libraries.
+`Run-ExitAttribution.ps1` and `Run-ApplicationLatency.ps1` execute **inside
+Windows 1**, with all descendant VM processes stopped and the prepared four-CPU
+driver loaded. Copy each script into the target and invoke its path so its
+source hash is available. Pass a new `-OutputDirectory` for each experiment.
+They retain warmups separately; `resident-nested-fullsnapshot` is the same-binary
+reference for the sparse CPUID snapshot. No new GUI test is required to collect.
+
+The application observer records every TCP request in the Windows QPC domain.
+One-millisecond closed-loop pacing limits its load. Completion gaps include
+observation and scheduling costs; only driver metrics describe internal phases.
+
+`Run-PolicyComparison.sh observe` adds a complete-body, fixed-schema business
+oracle to HTTP readback. `inplace` is an explicitly **guest-side** comparator:
+it saves original bytes, overwrites the original file, then restores those bytes.
+The controller must save Windows/VMM identity before and after all three trials.
+Stage settling exclusions are counted in the derived report. An expired page
+holder or observer invalidates a trial; keep the raw failure and start a fresh
+window. The measured comparator uses a separate pinned file with identical
+contents and the same HTTP server, as recorded in the dataset README.
+
+`test_ept_lease.c` compiles the driver's portable EPT path walker directly.
+It tests sampled identity and A/D normalization; runtime retirement and
+allocation evidence are separate. The [lease contract](../../docs/next/ept-lease-contract.md)
+states the limitations around ABA, guest reboot and same-GPA object reuse.
+
+`Build-HyperVBaselineIso.sh` uses WSL, Python and xorriso to add a serial evidence
+overlay to the original TinyCore ISO. `Receive-HyperVSerial.ps1` reads the child's
+named serial pipe in Windows 1. The measured inner Hyper-V baseline booted, but
+KSword admission was refused. Do not bypass the capability gate or report that
+baseline as successful hot insertion.
+
 `package_anonymous.py --output dist/<new-package-name>` creates an anonymous ZIP,
 reproduces analysis from the transformed raw files, verifies its manifest and
 checks for known identity/credential leaks. The private alias/provenance file stays

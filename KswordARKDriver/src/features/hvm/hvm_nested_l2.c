@@ -434,11 +434,14 @@ KswordARKHvmNestedL2Enter(
         }
         /* Snapshot the epoch before invalidation; a later change remains pending. */
         {
+            /* Source identity is checked before permitting this CPU to run L2. */
+            const BOOLEAN leaseValid = KswordARKHvmNestedPageValidateTranslation(
+                Context->Runtime, Context->PhysWindow, value);
             /* Read the policy published by the owner-exit or control path. */
             const ULONG policyGeneration = (ULONG)ReadAcquire(
                 (volatile LONG*)&Context->Runtime->NestedPageGeneration);
             /* Do not reuse a hierarchy composed under a retired process lease. */
-            if (nested->ShadowEpt.PagePolicyGeneration != policyGeneration) {
+            if (!leaseValid || nested->ShadowEpt.PagePolicyGeneration != policyGeneration) {
                 /* Invalidate local hardware translations before recording the epoch. */
                 KswordARKHvmNestedEptInvalidate(&nested->ShadowEpt);
                 /* Store only the generation actually processed. */

@@ -17,7 +17,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 ANALYZERS = ("analyze.py", "analyze_smp.py", "transition_metrics.py", "stability_v2.py",
-             "analyze_nested_bench.py", "validate.py", "analyze_http_page.py", "analyze_lifecycle.py")
+             "analyze_nested_bench.py", "validate.py", "analyze_http_page.py", "analyze_lifecycle.py",
+             "analyze_followup.py", "analyze_policy_comparison.py")
 GUID = re.compile(r"\b[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\b")
 DIGEST = re.compile(r"(?<![0-9a-fA-F])[0-9a-fA-F]{64}(?![0-9a-fA-F])|(?<![0-9a-fA-F])[0-9a-fA-F]{40}(?![0-9a-fA-F])")
 MAC = re.compile(r"\b[0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5}\b")
@@ -37,7 +38,8 @@ class Redactor:
         self.key = key
         self.mapping = {}
         self.literals = {"KSword": "HVUnit", "Felix3322": "author000", "WangWei-CM": "author0000",
-                         "Felix": "user0", "DESKTOP-KJE7JPM": "HOST000-0000000"}
+                         "Felix": "user0", "DESKTOP-KJE7JPM": "HOST000-0000000",
+                         "DESKTOP-1CBJL0S": "HOST001-0000000"}
         assert all(len(k) == len(v) for k, v in self.literals.items())
 
     def digest(self, value):
@@ -108,7 +110,8 @@ def main():
     redactor = Redactor(secrets.token_bytes(32))
     provenance = []
     datasets = {"legacy-2x2": ROOT / "docs/next/paper-data/20260915-gap-closure",
-                "multicore-4x2": ROOT / "docs/next/paper-data/20260915-4x2"}
+                "multicore-4x2": ROOT / "docs/next/paper-data/20260915-4x2",
+                "pro-followup": ROOT / "docs/next/paper-data/20260916-followup"}
     # Discover exact machine labels from structured records before transforming
     # embedded serial/JSON strings. Keep functional process and OS names intact.
     def discover(value):
@@ -158,7 +161,7 @@ def run(script, folder):
 for folder in ('legacy-2x2', 'legacy-2x2/final-windows', 'multicore-4x2/before', 'multicore-4x2/after'):
     run('analyze.py', folder)
     run('transition_metrics.py', folder)
-for folder in ('legacy-2x2/smp', 'multicore-4x2/smp'):
+for folder in ('legacy-2x2/smp', 'multicore-4x2/smp', 'pro-followup/lifecycle'):
     run('analyze_smp.py', folder)
 sys.path.insert(0, str(root/'analysis'))
 from analyze import stability
@@ -167,6 +170,9 @@ run('analyze_nested_bench.py', 'multicore-4x2')
 run('analyze_http_page.py', 'multicore-4x2/application')
 run('analyze_http_page.py', 'multicore-4x2/application-v2')
 run('analyze_lifecycle.py', 'multicore-4x2')
+run('analyze_followup.py', 'pro-followup')
+run('analyze_http_page.py', 'pro-followup/application')
+run('analyze_policy_comparison.py', 'pro-followup/application')
 print('REPRODUCE=PASS')
 '''
     (public / "reproduce.py").write_text(reproduce)
@@ -183,7 +189,11 @@ Per-run raw records and all recorded failures are retained. Derived tables are r
   That observation does **not** establish ten-minute stability for the new 4x2 build.
 - `after-host-build-confounded`, if present: deliberately excluded from primary performance
   conclusions because a host compilation overlapped these measurements.
-- No overnight run, Windows 10 LTSC, or intermediate Hyper-V descendant result is claimed.
+- `pro-followup`: a working inner Hyper-V/TinyCore baseline and refused monitor
+  admission, same-binary exit attribution, paced TCP observations, a version 3
+  EPT lease regression and an application policy-fault comparison. The Hyper-V
+  result does not demonstrate hot insertion or descendant EPT control.
+- No overnight run or Windows 10 LTSC result is claimed.
 - Previously running full-chain insertion remains deferred.
 
 ## Redaction and integrity

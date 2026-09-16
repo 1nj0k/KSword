@@ -498,6 +498,7 @@
     <ClInclude Include="src\features\hvm\hvm_nested_bitmap.h" />
     <ClInclude Include="src\features\hvm\hvm_nested_ept.h" />
     <ClInclude Include="src\features\hvm\hvm_nested_ad_compare.h" />
+    <ClInclude Include="src\features\hvm\hvm_nested_lease_walk.h" />
     <ClInclude Include="src\features\hvm\hvm_nested.h" />
     <ClInclude Include="src\features\hvm\hvm_exit.h" />
     <ClInclude Include="src\features\hvm\hvm_exit_emulate.h" />

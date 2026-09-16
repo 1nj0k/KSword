@@ -107,9 +107,16 @@ python tools/hvm_ctl/test_command_parity.py --gui-report docs/next/logs/hvm-gui-
 
 ## 完整命令目录
 
+2026-09-16 增量：共享目录现有 60 个命令；参数回归通过 28 组有效输入、
+20 组拒绝输入。主程序、KswordCLI 和 hvm_ctl 已重建，语言包审计通过。
+新增 `resident-nested-fullsnapshot` 用于同二进制性能对照；新增页租约字段和
+能力查询拒绝 JSON 由同一执行引擎输出。遵照用户要求，本轮没有运行 GUI 测试。
+下表的早期验证数字不代表当前内嵌 GUI 的逐项实测结果。
+
 | 分类 | GUI 操作 | CLI 命令 | 参数 |
 | --- | --- | --- | --- |
 | 查询与观测 | 运行状态 | `status` | 无 |
+| 查询与观测 | 虚拟化测量 | `metrics` | 无 |
 | 查询与观测 | CPUID 可见性 | `cpuid-view` | 无 |
 | 查询与观测 | 平台探针 | `probe-platform` | 无 |
 | 查询与观测 | 使用前自检 | `selfcheck` | 无 |
@@ -123,6 +130,7 @@ python tools/hvm_ctl/test_command_parity.py --gui-report docs/next/logs/hvm-gui-
 | 生命周期 | 启动常驻 | `resident` | 无 |
 | 生命周期 | 启动嵌套常驻 | `resident-nested` | 无 |
 | 生命周期 | 启动嵌套常驻并隐藏身份 | `resident-nested-hidehv` | 无 |
+| 生命周期 | 完整退出快照对照 | `resident-nested-fullsnapshot` | 无 |
 | 生命周期 | VMREAD 开销测量 | `resident-vmreadbench` | VMREAD 次数（十进制）（十进制 32 位，默认 `512`） |
 | 生命周期 | 启动常驻并记录退出 | `resident-trace` | 无 |
 | 生命周期 | 有界常驻自检 | `soak` | 保持时长（毫秒）（十进制 32 位，默认 `1000`） |
@@ -147,8 +155,10 @@ python tools/hvm_ctl/test_command_parity.py --gui-report docs/next/logs/hvm-gui-
 | EPT 视图 | 视图效果验证 | `view-effect` | 无 |
 | EPT 视图 | 验证现有视图 | `view-verify` | 无 |
 | TinyCore 换页 | 查询嵌套页映射 | `nested-page-query` | 无 |
-| TinyCore 换页 | 替换 TinyCore 物理页 | `nested-page-map` | EPT12 指针（十六进制）（十六进制 64 位，必填）；来宾物理页（十六进制，4 KiB 对齐）（十六进制，4 KiB 对齐，必填）；影子页填充值（00–FF）（十六进制 00–FF，必填） |
+| TinyCore 换页 | 替换 TinyCore 物理页 | `nested-page-map` | EPT12 指针（十六进制 64 位，必填）；来宾物理页（十六进制，4 KiB 对齐，必填）；影子页填充值（十六进制 00–FF，必填）；VMM 进程 PID（十进制，默认 0 自动选择 VMware） |
 | TinyCore 换页 | 撤销 TinyCore 换页 | `nested-page-remove` | 无 |
+| TinyCore 换页 | 换页故障注入 | `nested-page-map-test` | EPT12 指针；来宾物理页；影子页填充值；故障阶段（十进制 1–4），均必填 |
+| TinyCore 换页 | 撤销失效故障注入 | `nested-page-remove-test` | 无 |
 | 寄存器策略 | 记录指定 MSR | `msr-log` | MSR 编号（十六进制）（十六进制 32 位，默认 `10`） |
 | 寄存器策略 | 清空 MSR 策略 | `msr-clear` | 无 |
 | 寄存器策略 | 开启 CR3 追踪 | `cr-track-cr3-on` | 无 |

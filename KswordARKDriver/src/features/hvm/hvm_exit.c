@@ -2135,8 +2135,9 @@ KswordARKHvmResidentVmExitDispatchBody(
             /* Preserve entry-failure bits as well as the basic exit reason. */
             telemetry.Reason = (ULONG)reason;
         } else {
-            /* Ordinary exits retain the complete existing public snapshot. */
-            status = KswordARKHvmReadVmExitTelemetry(&telemetry);
+            /* CPUID needs no qualification or stale VM-instruction-error diagnostic. */
+            status = KswordARKHvmReadVmExitTelemetryEx(&telemetry,
+                ReadAcquire(&Context->Runtime->FullExitSnapshot) == 0L);
         }
         Context->CostVmcsReadCycles += (__rdtsc() - readStart);
     }

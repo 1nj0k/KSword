@@ -766,6 +766,9 @@ KswordARKHvmResidentPrepareContexts(
         Runtime->ProcessorCount;
     /* Preserve the exact resident start flags. */
     g_KswordHvmResident.Flags = Flags;
+    /* Reset the reference mode at each start so experiments never inherit it. */
+    InterlockedExchange(&Runtime->FullExitSnapshot,
+        (Flags & KSWORD_ARK_HVM_CONTROL_FLAG_FULL_EXIT_SNAPSHOT) != 0UL ? 1L : 0L);
     /*
      * Publish the VMREAD measurement request where the exit path can see it.
      *

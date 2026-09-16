@@ -6013,6 +6013,8 @@
     "启动嵌套常驻": "Start nested residency",
     "启动常驻并开启嵌套 VMX 指令派发。": "Start residency with nested VMX instruction dispatch.",
     "启动嵌套常驻并隐藏身份": "Start nested residency with identity hiding",
+    "嵌套常驻完整快照对照": "Nested residency with full snapshot reference",
+    "保留 CPUID 退出的完整诊断字段读取，作为同一驱动的性能对照。": "Read all CPUID exit diagnostic fields for a performance comparison within the same driver.",
     "启动嵌套常驻，并对来宾用户态 CPUID 隐藏 Hypervisor 身份。": "Start nested residency and hide the hypervisor identity from guest user-mode CPUID.",
     "VMREAD 开销测量": "VMREAD overhead measurement",
     "每次退出额外执行指定次数的 VMREAD；仅用于测量。": "Perform extra VMREAD operations on each exit for measurement.",

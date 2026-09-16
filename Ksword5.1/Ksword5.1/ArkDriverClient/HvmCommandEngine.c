@@ -1145,7 +1145,20 @@ static int DoControl(HANDLE h, const HVM_CTL_VERB* verb,
         fprintf(stderr, "HVM state query failed before control: Win32 %lu\n", GetLastError());
         return 1;
     }
-    if (snapshot.queryStatus != 0) { return 2; }
+    if (snapshot.queryStatus != 0) {
+        /* A capability refusal must be distinguishable from an empty/crashed CLI. */
+        if (asJson) {
+            printf("{\"kind\":\"control\",\"command\":\"%s\",\"stage\":\"capability-query\","
+                   "\"controlSubmitted\":false,\"queryStatus\":%lu,\"lastStatus\":\"0x%08lX\","
+                   "\"generation\":%lu,\"stateFlags\":%lu}\n", verb->name,
+                   snapshot.queryStatus, (unsigned long)snapshot.lastStatus,
+                   snapshot.generation, snapshot.stateFlags);
+        } else {
+            fprintf(stderr, "HVM control refused before submission: queryStatus=%lu NTSTATUS=0x%08lX\n",
+                    snapshot.queryStatus, (unsigned long)snapshot.lastStatus);
+        }
+        return 2;
+    }
     memset(&rsp, 0, sizeof(rsp));
     KswordArkHvmBuildControlRequest(&req, verb->command, verb->flags,
                                    snapshot.generation, soakMs);
@@ -5681,12 +5694,19 @@ static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
                "\"generation\":%lu,\"active\":%lu,\"retired\":%lu,\"residentProcessors\":%lu,"
                "\"ept12Pointer\":\"0x%016llX\",\"guestPhysicalPage\":\"0x%016llX\","
                "\"shadowPhysicalPage\":\"0x%016llX\",\"originalPhysicalPage\":\"0x%016llX\","
-               "\"composedCount\":%llu,\"ownerProcessId\":%lu,\"ownerExited\":%lu,\"ownerCreationTime\":\"%llu\",\"roots\":[",
+               "\"composedCount\":%llu,\"ownerProcessId\":%lu,\"ownerExited\":%lu,\"ownerCreationTime\":\"%llu\","
+               "\"leaseRevocationReason\":%lu,\"sourcePhysicalPage\":\"0x%016llX\",\"sourceEntryCount\":%lu,\"sourcePath\":[",
                response.operationId, faultMode, response.status, response.lastStatus, response.generation, response.active,
                response.retired, response.residentProcessors, response.ept12Pointer,
                response.guestPhysicalPage, response.shadowPhysicalPage,
                response.originalPhysicalPage, response.composedCount, response.ownerProcessId,
-               response.ownerExited, response.ownerCreationTime);
+               response.ownerExited, response.ownerCreationTime, response.leaseRevocationReason,
+               response.sourcePhysicalPage, response.sourceEntryCount);
+        for (index = 0; index < response.sourceEntryCount && index < 4; ++index) {
+            printf("%s{\"address\":\"0x%016llX\",\"value\":\"0x%016llX\"}", index ? "," : "",
+                   response.sourceEntryAddress[index], response.sourceEntryValue[index]);
+        }
+        printf("],\"roots\":[");
     } else {
         printf("nested-page status=%lu nt=0x%08lX generation=%lu active=%lu retired=%lu cpus=%lu\n"
                "EPT12=0x%016llX GPA=0x%016llX shadow=0x%016llX original=0x%016llX composed=%llu\n",
@@ -5696,6 +5716,8 @@ static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
                response.originalPhysicalPage, response.composedCount);
         printf("ownerPid=%lu ownerCreated=%llu ownerExited=%lu\n", response.ownerProcessId,
                response.ownerCreationTime, response.ownerExited);
+        printf("leaseRevocationReason=%lu sourcePhysicalPage=0x%016llX sourceEntryCount=%lu\n",
+               response.leaseRevocationReason, response.sourcePhysicalPage, response.sourceEntryCount);
     }
     for (index = 0UL; index < response.rootCount && index < KSWORD_ARK_HVM_MAX_PROCESSORS; ++index) {
         if (asJson) { printf("%s\"0x%016llX\"", index ? "," : "", response.ept12Roots[index]); }

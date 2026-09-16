@@ -21,6 +21,11 @@ def main():
               "mapped": hashlib.md5(bytes(4096)).hexdigest(),
               "restored": hashlib.md5(original).hexdigest()}
     rows = []
+    provenance = root / "measured-policy-sources.json"
+    holder_liveness = "kill-0-per-request"
+    if provenance.exists():
+        holder_liveness = json.loads(provenance.read_text(encoding="utf-8-sig"))["holderLiveness"]
+    independent_holder_liveness = holder_liveness == "kill-0-per-request"
     for path in sorted(root.glob("http-page-*.json")):
         r = json.loads(path.read_text(encoding="utf-8-sig"))
         row = {"runId": r["runId"], "result": "incomplete", "gpa": r["gpa"]}
@@ -65,6 +70,7 @@ def main():
                     holder_ages.append(age)
                 holders = [json.loads(m) for m in re.findall(r'(?m)^\{"kind":"application-page"[^\r\n]+', tail)]
                 assert holders and all(h["samePfn"] and h["gpa"] == r["gpa"] and h["pid"] == r["holderPid"] for h in holders), "page migration or holder drift"
+                assert len({h["uptime"] for h in holders}) >= 2, "PFN observer did not advance"
                 counters[step["stage"]] = len(samples)
             assert len(identities) == 1, "HTTP server was restarted"
             for side in ("before", "mapped", "after"):
@@ -89,6 +95,8 @@ def main():
                        responses=counters, httpdIdentity=list(identities)[0], expectedMD5=hashes,
                        guestUptimeBegin=uptimes[0], guestUptimeEnd=uptimes[-1], maxPfnSampleAgeSeconds=max(holder_ages),
                        identityRereadPerRequest=live_identity,
+                       independentHolderLiveness=independent_holder_liveness and live_identity,
+                       holderLivenessEvidence=holder_liveness if live_identity else "startup-only identity",
                        originalBacking=mapped["originalPhysicalPage"], replacementBacking=mapped["shadowPhysicalPage"],
                        observedCompositions=mapped["composedCount"])
         except (AssertionError, KeyError, TypeError, ValueError, IndexError) as error:
@@ -101,6 +109,7 @@ def main():
     result = {"runs": rows, "scope": "BusyBox httpd serves a controlled resident file-cache page. "
               "Zero-filled replacement is a controlled data fault; restoration recovers its original HTTP body. "
               "Schema 1 has a server-identity startup snapshot only; schema 2 re-reads identity and boot ID per response. "
+              "The follow-up policy collector's alive field was constant one: its holder evidence is advancing, fresh PFN samples, not an independent kill-0 check. "
               "Root pagemap/mlock instrumentation selects the GPA. This is not arbitrary application atomicity, "
               "a guest-agent-free claim, or a production fault-tolerance benchmark."}
     (derived / "http-page-summary.json").write_text(json.dumps(result, indent=2) + "\n")

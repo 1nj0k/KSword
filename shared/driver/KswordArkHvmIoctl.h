@@ -477,6 +477,8 @@
  * 里做同样检查的软件都仍然会看到真相 —— 那时读数会直接告诉我们，再谈要不要放宽。
  */
 #define KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR 0x00002000UL
+/* Same-binary performance reference: retain unused CPUID diagnostic VMREADs. */
+#define KSWORD_ARK_HVM_CONTROL_FLAG_FULL_EXIT_SNAPSHOT 0x00004000UL
 
 #define KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN 0x48564D43UL
 
@@ -2315,7 +2317,12 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE
 #define KSWORD_ARK_IOCTL_FUNCTION_HVM_NESTED_PAGE 0x915UL
 #define IOCTL_KSWORD_ARK_HVM_NESTED_PAGE \
     CTL_CODE(KSWORD_ARK_IOCTL_DEVICE_TYPE, KSWORD_ARK_IOCTL_FUNCTION_HVM_NESTED_PAGE, METHOD_BUFFERED, FILE_WRITE_ACCESS)
-#define KSWORD_ARK_HVM_NESTED_PAGE_VERSION 2UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_VERSION 3UL
+/* Revocation withdraws the policy; backing still requires an acknowledged drain. */
+#define KSWORD_ARK_HVM_PAGE_LEASE_VALID 0UL
+#define KSWORD_ARK_HVM_PAGE_LEASE_OWNER_EXITED 1UL
+#define KSWORD_ARK_HVM_PAGE_LEASE_TRANSLATION_CHANGED 2UL
+#define KSWORD_ARK_HVM_PAGE_LEASE_SOURCE_UNREADABLE 3UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_QUERY 0UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_MAP 1UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_REMOVE 2UL
@@ -2359,4 +2366,9 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE {
     /* Process exit revokes the lease; explicit removal drains and frees backing. */
     unsigned long ownerProcessId, ownerExited;
     unsigned long long ownerCreationTime;
+    /* A revoked lease is retained until removal acknowledges every CPU. */
+    unsigned long leaseRevocationReason, sourceEntryCount;
+    /* Source backing and normalized path captured before publication. */
+    unsigned long long sourcePhysicalPage;
+    unsigned long long sourceEntryAddress[4], sourceEntryValue[4];
 } KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE;

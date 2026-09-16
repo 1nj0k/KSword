@@ -51,7 +51,7 @@ static ULONGLONG KswordARKHvmNestedPageLeaf(
 {
     KSW_HVM_NESTED_PAGE* page = (KSW_HVM_NESTED_PAGE*)InterlockedCompareExchangePointer(
         (PVOID volatile*)&Runtime->NestedPage, NULL, NULL);
-    if (page == NULL || ReadAcquire(&Runtime->NestedPageOwnerExited) != 0L ||
+    if (page == NULL || ReadAcquire(&Runtime->NestedPageRevocationReason) != 0L ||
         page->Ept12Pointer != Shadow->L1EptPointer ||
         page->GuestPhysicalPage != (GuestPhysical & KSW_HVM_NEPT_FRAME_MASK)) {
         return OriginalLeaf;
@@ -801,6 +801,13 @@ KswordARKHvmNestedEptFill(
         return KSW_HVM_NEPT_FILL_FAILED;
     }
 retryTranslation:
+    /* Recheck before filling as a local L2 exit need not revisit its entry builder. */
+    if (!KswordARKHvmNestedPageValidateTranslation(Runtime, Window, Shadow->L1EptPointer)) {
+        /* A revoked lease must not preserve this CPU's already composed override. */
+        KswordARKHvmNestedEptInvalidate(Shadow);
+        /* Retain backing and propagate an actual local invalidation failure. */
+        if (Shadow->Faulted) { return KSW_HVM_NEPT_FILL_FAILED; }
+    }
     /* Translate through L1's own hierarchy first. */
     if (!KswordARKHvmNestedEptWalkL1(
             Shadow,

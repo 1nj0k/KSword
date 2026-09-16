@@ -345,5 +345,8 @@ VOID KswordARKHvmNestedPageResetLocked(KSW_HVM_RUNTIME* Runtime);
 /* These callbacks only publish revocation; no allocation is freed at process exit. */
 NTSTATUS KswordARKHvmNestedPageGuardInitialize(VOID);
 VOID KswordARKHvmNestedPageGuardShutdown(VOID);
+/* Revalidate a published translation without OS memory-manager calls in VMX root. */
+BOOLEAN KswordARKHvmNestedPageValidateTranslation(KSW_HVM_RUNTIME* Runtime,
+    KSW_HVM_PHYS_WINDOW* Window, ULONGLONG EptPointer);
 
 EXTERN_C_END

@@ -243,4 +243,8 @@ KswordARKHvmReadVmExitTelemetry(
     _Out_ KSW_HVM_VMEXIT_TELEMETRY* Telemetry
     );
 
+/* Omit only fields that have no architectural meaning for a successful CPUID exit. */
+NTSTATUS KswordARKHvmReadVmExitTelemetryEx(KSW_HVM_VMEXIT_TELEMETRY* Telemetry,
+    BOOLEAN SparseCpuid);
+
 EXTERN_C_END

@@ -3043,7 +3043,9 @@ KswordARKHvmControl(
              * learns from CPUID about the hypervisor underneath; every other
              * exit keeps its exact semantics.
              */
-            KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR;
+            KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR |
+            /* Keep the full-read reference available without rebuilding a driver. */
+            KSWORD_ARK_HVM_CONTROL_FLAG_FULL_EXIT_SNAPSHOT;
         /* Stop after selecting the resident-start flag set. */
         break;
     case KSWORD_ARK_HVM_CONTROL_SOAK:

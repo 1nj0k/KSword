@@ -37,17 +37,24 @@ class HttpEvidenceTests(unittest.TestCase):
             r["steps"].append({"stage": stage, "serialOffset": start, "serialEnd": len(text)})
         return r, text
 
-    def analyze(self, record, serial):
+    def analyze(self, record, serial, provenance=None):
         with tempfile.TemporaryDirectory(prefix="http-evidence-") as directory:
             root = Path(directory)
             (root / "serial.txt").write_bytes(serial.encode())
             (root / "http-page-test.json").write_text(json.dumps(record))
+            if provenance:
+                (root / "measured-policy-sources.json").write_text(json.dumps(provenance))
             subprocess.run([sys.executable, str(Path(__file__).with_name("analyze_http_page.py")), str(root)],
                            check=True, capture_output=True)
             return json.loads((root / "derived/http-page-summary.json").read_text())["runs"][0]
 
     def test_complete_and_fresh(self):
         self.assertEqual(self.analyze(*self.fixture())["result"], "pass")
+
+    def test_constant_alive_is_not_independent_liveness(self):
+        row = self.analyze(*self.fixture(), {"holderLiveness": "constant-one; fresh PFN samples only"})
+        self.assertEqual(row["result"], "pass")
+        self.assertFalse(row["independentHolderLiveness"])
 
     def test_changed_creation_time(self):
         r, serial = self.fixture()

@@ -36,6 +36,7 @@ def main():
         (["events", "18446744073709551615"], [2**64 - 1, 64]),
         (["events", "123", "7"], [123, 7]),
         (["resident-vmreadbench"], [512]),
+        (["resident-nested-fullsnapshot"], []),
         (["soak"], [1000]),
         (["nested-page-map", "1234501e", "7000000", "d1"], [0x1234501E, 0x7000000, 0xD1, 0]),
         (["nested-page-map", "1234501e", "7000000", "d1", "1234"], [0x1234501E, 0x7000000, 0xD1, 1234]),
@@ -60,6 +61,12 @@ def main():
                 assert wire["vmreadBenchIterations"] == (expected[0] if command[0] == "resident-vmreadbench" else 0)
             parsed.append(value)
         assert parsed[0] == parsed[1], command
+
+    # The reference mode differs only in CPUID diagnostic snapshot collection.
+    fast = json.loads(invoke(args.cli, "--json", "--validate", "resident-nested-hidehv").stdout)
+    reference = json.loads(invoke(args.cli, "--json", "--validate", "resident-nested-fullsnapshot").stdout)
+    assert reference["operation"] == fast["operation"]
+    assert reference["controlRequest"]["flags"] == (fast["controlRequest"]["flags"] | 0x4000)
 
     invalid = [
         ["gdt-dump", "-1"], ["gdt-dump", "4294967295"], ["gdt-dump", "1junk"], ["status", "1"],

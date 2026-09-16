@@ -433,7 +433,8 @@ WSL silo and Linux PID/TID diagnostics.
 | 命令 | 参数与结果 |
 | --- | --- |
 | `hvm_ctl --json nested-page-map <EPT12> <GPA> <fill> [ownerPID]` | 前三项为十六进制；可选 VMM PID 是十进制，默认 `0` 自动要求恰好一个 `vmware-vmx.exe`。内核校验 PID 和创建时间，拒绝已退出或被复用的进程身份。 |
-| `hvm_ctl --json nested-page-query` | 映射 ABI v2 返回 `ownerProcessId`、`ownerCreationTime`、`ownerExited`。退出后停止新组合，但替换页保持保留，直到显式移除完成全核失效。 |
+| `hvm_ctl --json nested-page-query` | 映射 ABI v3 返回进程身份，以及 `leaseRevocationReason`、`sourcePhysicalPage` 和 `sourcePath`。进程退出或原 EPT 路径发生翻译变化后撤销规则；替换页仍保留到显式移除完成全核失效。 |
+| `hvm_ctl --json resident-nested-fullsnapshot` | 与 `resident-nested-hidehv` 相同的嵌套和身份策略，但保留 CPUID 的完整诊断 VMREAD，供同一驱动二进制内的性能对照。普通模式省略无关的 qualification 和 instruction-error 字段读取。 |
 | `hvm_ctl --json nested-page-remove` | 取消发布、全核失效、回收；失败时保留 backing，不能仅凭 `active=0` 判断已经释放。 |
 | `hvm_ctl --json metrics` | metrics ABI v2 返回逐核 `shadowEpt` 数组。计数在资源重建时清零，查询是时间区间内的观察值，不是所有 CPU 的同时快照。 |
 

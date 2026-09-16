@@ -273,6 +273,9 @@
     <ClInclude Include="src\features\hvm\hvm_nested_ept.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\features\hvm\hvm_nested_lease_walk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="src\features\hvm\hvm_nested_ad_compare.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -21,6 +21,63 @@ NTSYSAPI LONGLONG NTAPI PsGetProcessCreateTimeQuadPart(_In_ PEPROCESS Process);
 /* ntddk does not declare the documented ntifs process lookup export. */
 NTSYSAPI NTSTATUS NTAPI PsLookupProcessByProcessId(_In_ HANDLE ProcessId, _Outptr_ PEPROCESS* Process);
 
+static VOID KswordARKHvmPageRevoke(KSW_HVM_RUNTIME* Runtime, ULONG Reason)
+{
+    /* Only the first observer changes this lease's policy generation. */
+    if (InterlockedCompareExchange(&Runtime->NestedPageRevocationReason,
+            (LONG)Reason, (LONG)KSWORD_ARK_HVM_PAGE_LEASE_VALID) == 0L) {
+        /* Future entries must discard translations composed under the old policy. */
+        InterlockedIncrement((volatile LONG*)&Runtime->NestedPageGeneration);
+    }
+}
+
+static int KswordARKHvmPageReadSource(void* Context, KSW_LEASE_U64 Address,
+    KSW_LEASE_U64* Value)
+{
+    MM_COPY_ADDRESS source;
+    SIZE_T copied = 0U;
+    NTSTATUS status;
+    /* Admission runs below APC_LEVEL; no mapping-manager call occurs in VMX root. */
+    UNREFERENCED_PARAMETER(Context);
+    /* Only ordinary physical RAM is accepted by this checked kernel copy. */
+    source.PhysicalAddress.QuadPart = (LONGLONG)Address;
+    /* Reject a partial read rather than interpreting uninitialized entry bits. */
+    status = MmCopyMemory(Value, source, sizeof(*Value), MM_COPY_MEMORY_PHYSICAL, &copied);
+    /* Both status and copied length must establish a complete source word. */
+    return NT_SUCCESS(status) && copied == sizeof(*Value);
+}
+
+static int KswordARKHvmPageReadSourceRoot(void* Context, KSW_LEASE_U64 Address,
+    KSW_LEASE_U64* Value)
+{
+    /* The per-CPU window performs no allocation or operating-system memory call. */
+    return NT_SUCCESS(KswordARKHvmPhysWindowReadQword(
+        (KSW_HVM_PHYS_WINDOW*)Context, Address, Value));
+}
+
+BOOLEAN KswordARKHvmNestedPageValidateTranslation(KSW_HVM_RUNTIME* Runtime,
+    KSW_HVM_PHYS_WINDOW* Window, ULONGLONG EptPointer)
+{
+    KSW_HVM_NESTED_PAGE* page;
+    int result;
+    /* The all-CPU retirement barrier pins any pointer a root reader observes. */
+    page = (KSW_HVM_NESTED_PAGE*)ReadPointerAcquire((PVOID volatile*)&Runtime->NestedPage);
+    /* Unrelated roots need no page-policy work. */
+    if (page == NULL || page->Ept12Pointer != EptPointer) { return TRUE; }
+    /* Revocation is sticky until an explicit drain and a new map operation. */
+    if (ReadAcquire(&Runtime->NestedPageRevocationReason) != 0L) { return FALSE; }
+    /* Compare all captured path entries, never just a recycled root pointer. */
+    result = KswordHvmLeaseValidate(&page->Translation, KswordARKHvmPageReadSourceRoot, Window);
+    /* A mismatch and an inaccessible source are separately observable rejections. */
+    if (result != 1) {
+        /* Retain backing; this callback is not a global invalidation acknowledgement. */
+        KswordARKHvmPageRevoke(Runtime, result == 0 ?
+            KSWORD_ARK_HVM_PAGE_LEASE_TRANSLATION_CHANGED : KSWORD_ARK_HVM_PAGE_LEASE_SOURCE_UNREADABLE);
+    }
+    /* Re-read after validation to notice another CPU's simultaneous revocation. */
+    return ReadAcquire(&Runtime->NestedPageRevocationReason) == 0L;
+}
+
 static VOID KswordARKHvmPageOwnerNotify(PEPROCESS Process, HANDLE ProcessId,
     PPS_CREATE_NOTIFY_INFO CreateInfo)
 {
@@ -36,8 +93,8 @@ static VOID KswordARKHvmPageOwnerNotify(PEPROCESS Process, HANDLE ProcessId,
     if (runtime->NestedPageOwner == Process && runtime->NestedPageOwnerExited == 0L) {
         /* Stop new compositions from using the replacement. */
         InterlockedExchange(&runtime->NestedPageOwnerExited, 1L);
-        /* Every subsequent L2 entry must discard its cached page policy. */
-        InterlockedIncrement((volatile LONG*)&runtime->NestedPageGeneration);
+        /* Expire both process and translation policy without freeing backing. */
+        KswordARKHvmPageRevoke(runtime, KSWORD_ARK_HVM_PAGE_LEASE_OWNER_EXITED);
     }
     /* Release before returning to process teardown. */
     KeReleaseSpinLock(&g_PageOwnerLock, oldIrql);
@@ -94,6 +151,8 @@ static NTSTATUS KswordARKHvmPageBindOwner(KSW_HVM_RUNTIME* Runtime,
     KeAcquireSpinLock(&g_PageOwnerLock, &oldIrql);
     /* A previous retired rule must already have been drained before mapping again. */
     Runtime->NestedPageOwnerExited = 0L;
+    /* A prior lease must have been drained before a new owner can be published. */
+    Runtime->NestedPageRevocationReason = 0L;
     /* Publish the referenced object, not only its recyclable numeric PID. */
     Runtime->NestedPageOwner = process;
     /* Process exit after publication now marks the rule expired. */
@@ -340,6 +399,17 @@ NTSTATUS KswordARKHvmNestedPageControl(const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST*
     KswordARKHvmMetricsAllocation(FALSE, FALSE);
     /* Initialize the optional backing before any cleanup can inspect it. */
     RtlZeroMemory(page, sizeof(*page));
+    /* Capture a specific ordinary-RAM translation before allocating its replacement. */
+    if (!KswordHvmLeaseCapture(Request->ept12Pointer, Request->guestPhysicalPage,
+            KswordARKHvmPageReadSource, NULL, &page->Translation) ||
+        KswordHvmLeaseValidate(&page->Translation, KswordARKHvmPageReadSource, NULL) != 1) {
+        /* Failed or already changed captures cannot create a live mapping. */
+        KswordARKHvmNestedPageFree(page);
+        /* Preserve a precise admission failure independent of allocation injection. */
+        status = STATUS_INVALID_ADDRESS;
+        /* Return without changing the published page policy. */
+        goto complete;
+    }
     /* Allocation injection deliberately exercises cleanup of the allocated object. */
     if (fault != KSWORD_ARK_HVM_NESTED_PAGE_FAULT_ALLOCATE) {
         PHYSICAL_ADDRESS low = { 0 }, high, boundary = { 0 };
@@ -405,6 +475,8 @@ NTSTATUS KswordARKHvmNestedPageControl(const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST*
     if (NT_SUCCESS(status) && fault == KSWORD_ARK_HVM_NESTED_PAGE_FAULT_ROLLBACK) { status = STATUS_CANCELLED; }
     /* Owner exit during commit is a failed transaction, not a successful mapping. */
     if (NT_SUCCESS(status) && ReadAcquire(&runtime->NestedPageOwnerExited) != 0L) { status = STATUS_PROCESS_IS_TERMINATING; }
+    /* Source drift observed during commit is not a successful page transaction. */
+    if (NT_SUCCESS(status) && ReadAcquire(&runtime->NestedPageRevocationReason) != 0L) { status = STATUS_REVISION_MISMATCH; }
     /* A failed commit must withdraw the override instead of silently leaving it active. */
     if (!NT_SUCCESS(status)) {
         /* Keep the original error; failed rollback remains visible as retired backing. */
@@ -422,9 +494,9 @@ complete:
     /* Return the current control generation. */
     Response->generation = runtime->NestedPageGeneration;
     /* Report logical mapping occupancy. */
-    Response->active = runtime->NestedPage != NULL && ReadAcquire(&runtime->NestedPageOwnerExited) == 0L;
+    Response->active = runtime->NestedPage != NULL && ReadAcquire(&runtime->NestedPageRevocationReason) == 0L;
     /* Report potentially referenced, unreclaimed backing. */
-    Response->retired = runtime->NestedPageRetired != NULL || (runtime->NestedPage != NULL && ReadAcquire(&runtime->NestedPageOwnerExited) != 0L);
+    Response->retired = runtime->NestedPageRetired != NULL || (runtime->NestedPage != NULL && ReadAcquire(&runtime->NestedPageRevocationReason) != 0L);
     /* Preserve resident participant count for the caller's preconditions. */
     Response->residentProcessors = (ULONG)runtime->ResidentProcessorCount;
     /* Only dereference an allocation still owned by the runtime. */
@@ -435,6 +507,16 @@ complete:
         Response->ownerCreationTime = page->OwnerCreationTime;
         /* This flag does not claim that retained backing has already been freed. */
         Response->ownerExited = ReadAcquire(&runtime->NestedPageOwnerExited) != 0L;
+        /* Report the first reason this translation lease ceased to authorize remapping. */
+        Response->leaseRevocationReason = (ULONG)ReadAcquire(&runtime->NestedPageRevocationReason);
+        /* Preserve admission-time source identity after automatic revocation. */
+        Response->sourcePhysicalPage = page->Translation.SourcePage;
+        /* Expose only the bounded captured path for machine-readable evidence. */
+        Response->sourceEntryCount = page->Translation.EntryCount;
+        /* The arrays are immutable from publication until reclamation. */
+        RtlCopyMemory(Response->sourceEntryAddress, page->Translation.EntryAddress, sizeof(Response->sourceEntryAddress));
+        /* Keep normalized values alongside their exact physical entry addresses. */
+        RtlCopyMemory(Response->sourceEntryValue, page->Translation.EntryValue, sizeof(Response->sourceEntryValue));
         /* Return its exact translation identity. */
         Response->ept12Pointer = page->Ept12Pointer;
         /* Return its exact descendant page. */
