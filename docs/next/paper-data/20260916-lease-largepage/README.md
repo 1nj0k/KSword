@@ -38,11 +38,10 @@ detection power. It is not a hardware result:
   removed on a live descendant, and a page of it staged; those results are in
   `../20260916-large-leaf/` and are a separate measurement, not evidence about
   these suites. A 1 GiB leaf remains unexercised on hardware.
-* Every page intervention measured for the manuscript targets a 4 KiB page.
 * Real source-EPT mutation by a running VMM, adversarial multicore, and actual
   hardware failures are not simulated here.
-* A mutation score is a property of this fixed set of nine defects. It is not an
-  upper bound on the defects the walker could contain.
+* A mutation score is a property of this fixed set of twenty-eight defects. It
+  is not an upper bound on the defects these headers could contain.
 
 The lease contract and its ABA, guest-reboot and same-GPA-reuse limits are in
 [`docs/next/ept-lease-contract.md`](../../ept-lease-contract.md).
