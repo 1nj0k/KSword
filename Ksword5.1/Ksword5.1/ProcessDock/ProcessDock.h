@@ -833,7 +833,7 @@ private:
     // ======== 进程控制动作 ========
     // executeTerminateProcessAction 作用：
     // - 执行“结束进程组合动作”；
-    // - 固定顺序执行多种结束原理（TerminateProcess/Nt/WTS/Job/RestartManager/线程终止/调试器/Unmap 等）；
+    // - 固定顺序执行 R3 结束原理，并在 R3 全部未使目标退出时回退 KswordARK R0 结束；
     // - 使用同一个 kLogEvent 串联整次调用链日志并判定目标是否真正退出。
     void executeTerminateProcessAction();
     // executeTerminateAndDeleteImageAction 作用：
@@ -844,14 +844,6 @@ private:
     // - 仅根据当前 R3 进程快照识别选中进程及其全部后代；
     // - 每个识别出的 PID 独立复用“结束进程组合动作”。
     void executeTerminateProcessTreeAction();
-    // executeR0TerminateProcessAction 作用：
-    // - 通过 R0 驱动 IOCTL 请求内核态结束目标进程；
-    // - 成功/失败细节统一写入日志面板。
-    void executeR0TerminateProcessAction();
-    // executeR0TerminateProcessTreeAction 作用：
-    // - 仅根据当前 R3 进程快照识别选中进程树；
-    // - 对树中的每个 PID 单独提交现有结束进程 IOCTL。
-    void executeR0TerminateProcessTreeAction();
     // executeR0SuspendProcessAction 作用：
     // - 通过 R0 驱动 IOCTL 请求内核态挂起目标进程；
     // - 成功/失败细节统一写入日志面板。
@@ -999,9 +991,6 @@ private:
         const QString& actionTitle,
         const std::vector<ProcessActionTarget>& actionTargets,
         bool deleteImageAfterExit = false);
-    void executeR0TerminateProcessActions(
-        const QString& actionTitle,
-        const std::vector<ProcessActionTarget>& actionTargets);
     const ks::process::SystemThreadRecord* selectedThreadRecord() const;
     void bindContextActionToIndex(const QModelIndex& clickedIndex);
     void clearContextActionBinding();

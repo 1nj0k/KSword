@@ -3649,6 +3649,49 @@ namespace
         return processPresent;
     }
 
+    // waitForProcessExitAfterSuccessfulTerminate：
+    // - 结束 API 接受请求后，在目标进程句柄上等待固定 200ms；
+    // - 句柄已触发时才停止组合链，超时则继续下一种结束方法；
+    // - 无法打开同步句柄时保守地继续链路，避免把“无法观察”误判成已退出。
+    bool waitForProcessExitAfterSuccessfulTerminate(
+        const std::uint32_t targetPid,
+        std::string* const detailTextOut)
+    {
+        constexpr DWORD kSuccessfulTerminateWaitMilliseconds = 200U;
+        const HANDLE processHandle = ::OpenProcess(SYNCHRONIZE, FALSE, targetPid);
+        if (processHandle == nullptr)
+        {
+            if (detailTextOut != nullptr)
+            {
+                *detailTextOut = formatProcessWin32Error(
+                    "OpenProcess(SYNCHRONIZE)",
+                    ::GetLastError());
+            }
+            return false;
+        }
+
+        const DWORD waitResult = ::WaitForSingleObject(
+            processHandle,
+            kSuccessfulTerminateWaitMilliseconds);
+        const DWORD waitError = waitResult == WAIT_FAILED ? ::GetLastError() : ERROR_SUCCESS;
+        ::CloseHandle(processHandle);
+        if (waitResult == WAIT_OBJECT_0)
+        {
+            if (detailTextOut != nullptr)
+            {
+                *detailTextOut = "process handle signaled within 200ms";
+            }
+            return true;
+        }
+        if (detailTextOut != nullptr)
+        {
+            *detailTextOut = waitResult == WAIT_TIMEOUT
+                ? "process handle remained unsignaled after 200ms"
+                : formatProcessWin32Error("WaitForSingleObject", waitError);
+        }
+        return false;
+    }
+
     // usageRatioToHighlightColor 作用：
     // - 按占用比例（0~1）返回主题蓝色透明高亮；
     // - 占用越高，alpha 越大，视觉上更“深”。
@@ -10939,7 +10982,7 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
     // 结束动作区：
     // - 取消“结束进程”二级菜单，改为一级动作；
     // - 进程树目标只从当前 R3 快照的父 PID 关系推导，R0 不参与识别；
-    // - R0 进程树逐 PID 复用现有结束进程 IOCTL，不新增树专用协议。
+    // - 结束进程及进程树都复用同一条 R3→R0 组合链。
     QAction* terminateProcessAction = contextMenu.addAction(
         blueTintedIcon(":/Icon/process_terminate.svg"),
         processContextText("process.menu.terminate", QStringLiteral("结束进程")));
@@ -10964,12 +11007,6 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
     QAction* terminateProcessTreeAction = contextMenu.addAction(
         blueTintedIcon(":/Icon/process_terminate.svg"),
         processContextText("process.menu.terminate_tree", QStringLiteral("结束进程树")));
-    QAction* r0TerminateAction = contextMenu.addAction(
-        buildR0ActionIcon(":/Icon/process_terminate.svg"),
-        processContextText("process.menu.r0_terminate", QStringLiteral("R0结束进程")));
-    QAction* r0TerminateTreeAction = contextMenu.addAction(
-        buildR0ActionIcon(":/Icon/process_terminate.svg"),
-        processContextText("process.menu.r0_terminate_tree", QStringLiteral("R0结束进程树")));
     QAction* r0SuspendAction = contextMenu.addAction(
         buildR0ActionIcon(":/Icon/process_suspend.svg"),
         processContextText("process.menu.r0_suspend", QStringLiteral("R0挂起进程")));
@@ -12207,8 +12244,6 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
         else if (selectedAction == terminateProcessAction) { executeTerminateProcessAction(); }
         else if (selectedAction == terminateAndDeleteImageAction) { executeTerminateAndDeleteImageAction(); }
         else if (selectedAction == terminateProcessTreeAction) { executeTerminateProcessTreeAction(); }
-        else if (selectedAction == r0TerminateAction) { executeR0TerminateProcessAction(); }
-        else if (selectedAction == r0TerminateTreeAction) { executeR0TerminateProcessTreeAction(); }
         else if (selectedAction == r0SuspendAction) { executeR0SuspendProcessAction(); }
         else if (selectedAction == hvmFreezeAction) {
             executeHvmProcessDispositionAction(
@@ -14552,83 +14587,6 @@ bool ProcessDock::isStaticDetailIntensiveViewActive() const
         isProcessColumnVisible(TableColumn::Platform);
 }
 
-void ProcessDock::executeR0TerminateProcessAction()
-{
-    const std::vector<ProcessActionTarget> actionTargets = selectedActionTargets();
-    if (actionTargets.empty())
-    {
-        kLogEvent logEvent;
-        warn << logEvent << "[ProcessDock] executeR0TerminateProcessAction 被忽略：当前没有选中进程。" << eol;
-        return;
-    }
-
-    executeR0TerminateProcessActions(QStringLiteral("R0结束进程"), actionTargets);
-}
-
-void ProcessDock::executeR0TerminateProcessTreeAction()
-{
-    const std::vector<ProcessActionTarget> actionTargets = processTreeActionTargets();
-    if (actionTargets.empty())
-    {
-        kLogEvent logEvent;
-        warn << logEvent
-            << "[ProcessDock] executeR0TerminateProcessTreeAction 被忽略：选中进程未包含在当前 R3 快照中。"
-            << eol;
-        QMessageBox::information(
-            this,
-            processContextText("process.menu.r0_terminate_tree", QStringLiteral("R0结束进程树")),
-            processContextText(
-                "process.action.r0_terminate_tree.r3_snapshot_unavailable",
-                QStringLiteral("当前选中进程未包含在 R3 进程快照中，无法识别进程树。")));
-        return;
-    }
-
-    executeR0TerminateProcessActions(
-        processContextText("process.menu.r0_terminate_tree", QStringLiteral("R0结束进程树")),
-        actionTargets);
-}
-
-void ProcessDock::executeR0TerminateProcessActions(
-    const QString& actionTitle,
-    const std::vector<ProcessActionTarget>& actionTargets)
-{
-    QStringList targetPidList;
-    for (const ProcessActionTarget& actionTarget : actionTargets)
-    {
-        targetPidList.push_back(QString::number(actionTarget.record.pid));
-    }
-    const QString targetDescription = ks::i18n::sourceText(
-        QStringLiteral("%1 个进程；PID：%2"))
-        .arg(actionTargets.size())
-        .arg(targetPidList.join(QStringLiteral(", ")));
-    if (!ks::ui::confirmDestructiveAction(
-            this,
-            QStringLiteral("process-termination-r0"),
-            actionTitle,
-            targetDescription,
-            ks::i18n::sourceText(QStringLiteral(
-                "R0 结束操作不可逆，可能造成数据丢失、系统不稳定或蓝屏。请确认目标无误后再继续。"))))
-    {
-        clearContextActionBinding();
-        return;
-    }
-
-    dispatchProcessActionTargetsInParallel(
-        actionTitle,
-        actionTargets,
-        [](const ProcessActionTarget& actionTarget, std::string* detailTextOut)
-        {
-            // 每个动作目标都会单独调用 ArkDriverClient，形成独立的结束进程 IOCTL。
-            return terminateProcessByR0Driver(
-                actionTarget.record.pid,
-                r0ActionExpectedCreationTime(actionTarget.record),
-                detailTextOut);
-        },
-        true,
-        false,
-        true);
-}
-
 void ProcessDock::executeR0SuspendProcessAction()
 {
     const std::vector<ProcessActionTarget> actionTargets = selectedActionTargets();
@@ -15920,8 +15878,9 @@ void ProcessDock::executeTerminateProcessActions(
         QStringLiteral("%1 个进程；PID：%2"))
         .arg(actionTargets.size())
         .arg(targetPidList.join(QStringLiteral(", ")));
-    QString suppressionKey = QStringLiteral("process-termination-r3");
-    QString riskDescription;
+    QString suppressionKey = QStringLiteral("process-termination-combo");
+    QString riskDescription = ks::i18n::sourceText(QStringLiteral(
+        "R0 结束操作不可逆，可能造成数据丢失、系统不稳定或蓝屏。请确认目标无误后再继续。"));
     if (deleteImageAfterExit)
     {
         if (actionTargets.size() != 1U)
@@ -16155,18 +16114,6 @@ void ProcessDock::executeTerminateProcessActions(
                         << ", detail="
                         << normalizedMethodDetailText
                         << eol;
-                    if (!methodOk)
-                    {
-                        warn << actionEvent
-                            << "[ProcessDock] 当前方法执行失败，继续尝试下一方法, pid="
-                            << targetPid
-                            << ", round="
-                            << roundNumber
-                            << ", method="
-                            << methodEntry.methodName
-                            << eol;
-                    }
-
                     actionDetailStream
                         << " | round"
                         << roundNumber
@@ -16178,63 +16125,49 @@ void ProcessDock::executeTerminateProcessActions(
                         << normalizedMethodDetailText
                         << ")";
 
-                    bool queryProcessPresentOk = false;
-                    bool pidWasReused = false;
-                    if (deleteImageAfterExit)
-                    {
-                        std::uint64_t currentCreationTime100ns = 0U;
-                        std::string identityDetail;
-                        if (ks::process::QueryProcessCreationTimeByPid(
-                                targetPid,
-                                &currentCreationTime100ns,
-                                &identityDetail))
-                        {
-                            queryProcessPresentOk = true;
-                            processStillPresent =
-                                currentCreationTime100ns == actionTarget.record.creationTime100ns;
-                            pidWasReused = !processStillPresent;
-                        }
-                        else
-                        {
-                            // OpenProcess/GetProcessTimes 失败时退回系统快照；快照仍显示 PID
-                            // 就按原进程存活处理，不以“无法验证”作为删除许可。
-                            processStillPresent = isProcessPresentBySnapshot(
-                                targetPid,
-                                &queryProcessPresentOk);
-                        }
-                    }
-                    else
-                    {
-                        processStillPresent = isProcessPresentBySnapshot(
-                            targetPid,
-                            &queryProcessPresentOk);
-                    }
-                    if (!queryProcessPresentOk)
+                    if (!methodOk)
                     {
                         warn << actionEvent
-                            << "[ProcessDock] 方法执行后存在性检查失败，按“仍存活”继续尝试, pid="
+                            << "[ProcessDock] 当前方法执行失败，继续尝试下一方法, pid="
                             << targetPid
                             << ", round="
                             << roundNumber
                             << ", method="
                             << methodEntry.methodName
                             << eol;
+                        continue;
                     }
-                    if (!processStillPresent)
+
+                    std::string exitWaitDetail;
+                    processExited = waitForProcessExitAfterSuccessfulTerminate(
+                        targetPid,
+                        &exitWaitDetail);
+                    actionDetailStream << " | wait=" << exitWaitDetail;
+                    if (processExited)
                     {
-                        processExited = true;
                         info << actionEvent
-                            << "[ProcessDock] 目标进程已退出, pid="
+                            << "[ProcessDock] 成功方法等待目标进程退出完成, pid="
                             << targetPid
                             << ", round="
                             << roundNumber
                             << ", method="
                             << methodEntry.methodName
-                            << ", pidReused="
-                            << (pidWasReused ? "true" : "false")
+                            << ", wait="
+                            << exitWaitDetail
                             << eol;
                         break;
                     }
+
+                    warn << actionEvent
+                        << "[ProcessDock] 成功方法等待 200ms 后目标仍未退出，继续尝试下一方法, pid="
+                        << targetPid
+                        << ", round="
+                        << roundNumber
+                        << ", method="
+                        << methodEntry.methodName
+                        << ", wait="
+                        << exitWaitDetail
+                        << eol;
                 }
 
                 if (!processExited)
@@ -16244,6 +16177,99 @@ void ProcessDock::executeTerminateProcessActions(
                         << targetPid
                         << ", round="
                         << roundNumber
+                        << eol;
+                }
+            }
+
+            // 所有 R3 方法均未使目标退出时，才执行一次 R0 驱动回退；不把它放进
+            // 两轮 R3 方法表，避免对同一目标重复下发驱动结束请求。普通可见进程在
+            // 回退前再确认一次仍存在，覆盖前一成功方法的异步退出尾段。
+            if (!processExited && !actionTarget.isKernelOnly)
+            {
+                bool finalPresenceQueryOk = false;
+                const bool targetStillPresentBeforeR0 = isProcessPresentBySnapshot(
+                    targetPid,
+                    &finalPresenceQueryOk);
+                if (finalPresenceQueryOk && !targetStillPresentBeforeR0)
+                {
+                    processExited = true;
+                    actionDetailStream << " | target=exited before R0 fallback";
+                    info << actionEvent
+                        << "[ProcessDock] 目标进程已退出，跳过 R0 回退, pid="
+                        << targetPid
+                        << eol;
+                }
+            }
+            if (!processExited)
+            {
+                constexpr const char* kR0TerminateMethodName =
+                    "R0 TerminateProcess (KswordARK driver)";
+                std::string r0DetailText;
+                const bool r0Ok = terminateProcessByR0Driver(
+                    targetPid,
+                    r0ActionExpectedCreationTime(actionTarget.record),
+                    &r0DetailText);
+                const std::string normalizedR0DetailText =
+                    r0DetailText.empty() ? "无附加信息" : r0DetailText;
+                (r0Ok ? info : err) << actionEvent
+                    << "[ProcessDock] 结束进程组合动作-方法执行, pid="
+                    << targetPid
+                    << ", round=R0"
+                    << ", method="
+                    << kR0TerminateMethodName
+                    << ", ok="
+                    << (r0Ok ? "true" : "false")
+                    << ", detail="
+                    << normalizedR0DetailText
+                    << eol;
+                actionDetailStream
+                    << " | R0:"
+                    << kR0TerminateMethodName
+                    << "="
+                    << (r0Ok ? "ok" : "fail")
+                    << "("
+                    << normalizedR0DetailText
+                    << ")";
+                if (r0Ok)
+                {
+                    std::string r0ExitWaitDetail;
+                    processExited = waitForProcessExitAfterSuccessfulTerminate(
+                        targetPid,
+                        &r0ExitWaitDetail);
+                    actionDetailStream << " | wait=" << r0ExitWaitDetail;
+                    if (processExited)
+                    {
+                        info << actionEvent
+                            << "[ProcessDock] 成功方法等待目标进程退出完成, pid="
+                            << targetPid
+                            << ", round=R0"
+                            << ", method="
+                            << kR0TerminateMethodName
+                            << ", wait="
+                            << r0ExitWaitDetail
+                            << eol;
+                    }
+                    else
+                    {
+                        warn << actionEvent
+                            << "[ProcessDock] 成功方法等待 200ms 后目标仍未退出，组合链结束, pid="
+                            << targetPid
+                            << ", round=R0"
+                            << ", method="
+                            << kR0TerminateMethodName
+                            << ", wait="
+                            << r0ExitWaitDetail
+                            << eol;
+                    }
+                }
+                else
+                {
+                    warn << actionEvent
+                        << "[ProcessDock] 当前方法执行失败，组合链结束, pid="
+                        << targetPid
+                        << ", round=R0"
+                        << ", method="
+                        << kR0TerminateMethodName
                         << eol;
                 }
             }
