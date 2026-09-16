@@ -698,8 +698,9 @@ namespace
     {
         // 输入：Inline Hook UI 行与当前系统模块路径映射。
         // 处理：用 functionAddress-moduleBase 计算 RVA，从磁盘模块文件读取同 RVA 字节并与内存字节比较。
-        // 返回：包含可用性、磁盘字节、差异状态和中文诊断原因的磁盘基线结果。
+        // 返回：包含可用性、磁盘字节和简短差异状态的磁盘基线结果。
         KernelHookDiskBaselineResult baselineResult{};
+        baselineResult.statusText = kernelText("kernel.hooks.baseline.not_comparable", QStringLiteral("不可比较"));
         const std::size_t availableCurrentBytes = std::min<std::size_t>(
             row.currentBytes.size(),
             static_cast<std::size_t>(row.currentByteCount));
@@ -709,12 +710,10 @@ namespace
 
         if (baselineResult.byteCount == 0U)
         {
-            baselineResult.statusText = kernelText("kernel.hooks.baseline.memory_bytes_missing", QStringLiteral("不可用：R0 未返回内存字节。"));
             return baselineResult;
         }
         if (row.moduleBase == 0U || row.functionAddress < row.moduleBase)
         {
-            baselineResult.statusText = kernelText("kernel.hooks.baseline.address_invalid", QStringLiteral("不可用：函数地址或模块基址无效。"));
             return baselineResult;
         }
 
@@ -722,30 +721,22 @@ namespace
         baselineResult.rva = rva64;
         if (rva64 > static_cast<std::uint64_t>(std::numeric_limits<std::uint32_t>::max()))
         {
-            baselineResult.statusText = kernelText("kernel.hooks.baseline.rva_out_of_range", QStringLiteral("不可用：函数 RVA 超出 32 位 PE 范围。"));
             return baselineResult;
         }
 
         const auto moduleIterator = modulePathMap.constFind(static_cast<qulonglong>(row.moduleBase));
         if (moduleIterator == modulePathMap.constEnd())
         {
-            baselineResult.statusText = kernelText("kernel.hooks.baseline.module_path_missing", QStringLiteral("不可用：R3 未能反查模块磁盘路径。"));
             return baselineResult;
         }
 
         baselineResult.filePathText = kernelHookNormalizeKernelModulePath(moduleIterator->ntPathText);
         if (baselineResult.filePathText.isEmpty())
         {
-            baselineResult.statusText = kernelText("kernel.hooks.baseline.path_conversion_failed", QStringLiteral("不可用：模块路径无法转换为 Win32 路径（%1）。"))
-                .arg(kernelHookSafeText(
-                    moduleIterator->ntPathText,
-                    kernelText("kernel.hooks.placeholder.empty_path", QStringLiteral("<空路径>"))));
             return baselineResult;
         }
         if (!QFileInfo::exists(baselineResult.filePathText))
         {
-            baselineResult.statusText = kernelText("kernel.hooks.baseline.module_not_found", QStringLiteral("不可用：磁盘模块文件不存在（%1）。"))
-                .arg(QDir::toNativeSeparators(baselineResult.filePathText));
             return baselineResult;
         }
 
@@ -765,12 +756,10 @@ namespace
             // I-05：读不到就是缺失。这里绝不能退回"用一片 0 去比"或"当作一致"，
             // 那正是旧实现的错误 —— 它会把加载器写入的字节报成 Hook。
             baselineResult.notComparable = true;
-            baselineResult.statusText = kernelText("kernel.hooks.baseline.not_comparable", QStringLiteral("不可比较：%1")).arg(readErrorText);
             return baselineResult;
         }
         if (readOutcome != KernelHookDiskReadOutcome::Ok)
         {
-            baselineResult.statusText = kernelText("kernel.hooks.baseline.read_failed", QStringLiteral("不可用：%1")).arg(readErrorText);
             return baselineResult;
         }
 
@@ -780,8 +769,8 @@ namespace
             baselineResult.bytes.end(),
             row.currentBytes.begin());
         baselineResult.statusText = baselineResult.differsFromMemory
-            ? kernelText("kernel.hooks.baseline.different", QStringLiteral("不同：内存字节与磁盘基线不一致"))
-            : kernelText("kernel.hooks.baseline.same", QStringLiteral("一致：内存字节与磁盘基线相同"));
+            ? kernelText("kernel.hooks.baseline.different", QStringLiteral("不同"))
+            : kernelText("kernel.hooks.baseline.same", QStringLiteral("一致"));
         return baselineResult;
     }
 
@@ -1434,7 +1423,7 @@ namespace
         row->diskBaselineDiffers = baselineResult.differsFromMemory;
         row->diskBaselineRva = baselineResult.rva;
         row->diskBaselineStatusText = baselineResult.statusText.trimmed().isEmpty()
-            ? kernelText("kernel.hooks.disk_baseline.unchecked", QStringLiteral("磁盘基线：未校验"))
+            ? kernelText("kernel.hooks.baseline.not_comparable", QStringLiteral("不可比较"))
             : baselineResult.statusText;
         row->diskBaselinePathText = baselineResult.filePathText.trimmed().isEmpty()
             ? kernelText("kernel.hooks.placeholder.unavailable", QStringLiteral("<不可用>"))
@@ -1628,7 +1617,7 @@ namespace
         row.diskBaselineAvailable = false;
         row.diskBaselineDiffers = false;
         row.diskBaselineRva = 0U;
-        row.diskBaselineStatusText = kernelText("kernel.hooks.disk_baseline.unchecked", QStringLiteral("磁盘基线：未校验"));
+        row.diskBaselineStatusText = kernelText("kernel.hooks.baseline.not_comparable", QStringLiteral("不可比较"));
         row.diskBaselinePathText = kernelText("kernel.hooks.placeholder.not_resolved", QStringLiteral("<未解析>"));
         row.diskBytesText = kernelText("kernel.hooks.placeholder.not_fetched", QStringLiteral("<未获取>"));
         row.detailText = buildInlineHookDetailText(row);
