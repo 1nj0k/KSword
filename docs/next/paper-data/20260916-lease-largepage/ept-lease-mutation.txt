@@ -39,6 +39,7 @@ of which the committed suites do not kill: 0
 
 Scope: the headers are compiled exactly as the driver compiles them,
 against synthetic tables and synthetic geometry. This measures the
-suites, not the hardware: no large-page override has been published on
-a real machine, and real source-EPT mutation by a live intermediate VMM
-is not simulated here.
+suites, not the hardware. A 2-MiB override has since been published and
+removed on a live descendant, but that is a separate measurement kept
+with the paper evidence; nothing here executes on hardware, and real
+source-EPT mutation by a live intermediate VMM is not simulated.

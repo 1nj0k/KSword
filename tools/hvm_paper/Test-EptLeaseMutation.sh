@@ -154,9 +154,10 @@ mutate() {
     echo
     echo "Scope: the headers are compiled exactly as the driver compiles them,"
     echo "against synthetic tables and synthetic geometry. This measures the"
-    echo "suites, not the hardware: no large-page override has been published on"
-    echo "a real machine, and real source-EPT mutation by a live intermediate VMM"
-    echo "is not simulated here."
+    echo "suites, not the hardware. A 2-MiB override has since been published and"
+    echo "removed on a live descendant, but that is a separate measurement kept"
+    echo "with the paper evidence; nothing here executes on hardware, and real"
+    echo "source-EPT mutation by a live intermediate VMM is not simulated."
 } > "$out/ept-lease-mutation.txt"
 
 cat "$out/ept-lease-unit.txt"

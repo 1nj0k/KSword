@@ -34,11 +34,10 @@ The harness exits non-zero if any mutation survives.
 The inputs are synthetic. This measures the headers' logic and the suites'
 detection power. It is not a hardware result:
 
-* **No large-page override has ever been published on a real machine.** The
-  driver path that installs a 2 MiB or 1 GiB shadow leaf, the contiguous aligned
-  backing allocation, the copy-on-map of the original region and the per-page
-  staging write are all unexercised outside these synthetic tests. They have been
-  syntax- and type-checked with the WDK toolchain and nothing more.
+* Nothing here runs on hardware. A 2 MiB override has since been published and
+  removed on a live descendant, and a page of it staged; those results are in
+  `../20260916-large-leaf/` and are a separate measurement, not evidence about
+  these suites. A 1 GiB leaf remains unexercised on hardware.
 * Every page intervention measured for the manuscript targets a 4 KiB page.
 * Real source-EPT mutation by a running VMM, adversarial multicore, and actual
   hardware failures are not simulated here.
