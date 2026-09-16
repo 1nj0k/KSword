@@ -16,6 +16,28 @@ Environment:
 
 #pragma once
 
+/* Which step of the native VMCS self-test a processor stopped at. Published in
+   the per-processor row so that one status code does not have to stand for four
+   different failures. */
+#define KSW_HVM_NATIVE_SITE_NONE 0UL
+#define KSW_HVM_NATIVE_SITE_LOAD_SOURCE 1UL
+#define KSW_HVM_NATIVE_SITE_STORE_FIELDS 2UL
+#define KSW_HVM_NATIVE_SITE_SEED_ERROR 3UL
+#define KSW_HVM_NATIVE_SITE_SWITCH_ANCHOR 4UL
+/* Reading the VM-instruction error the import has to reproduce. */
+#define KSW_HVM_NATIVE_SITE_SEED_READ 31UL
+#define KSW_HVM_NATIVE_SITE_IMPORT 5UL
+/* Conditions the import has to satisfy, separated because they fail for
+   unrelated reasons and one code cannot say which one did. */
+#define KSW_HVM_NATIVE_SITE_IMPORT_ANCHOR 51UL
+#define KSW_HVM_NATIVE_SITE_IMPORT_EMPTY 52UL
+#define KSW_HVM_NATIVE_SITE_IMPORT_LAUNCHED 53UL
+#define KSW_HVM_NATIVE_SITE_IMPORT_ERRORFIELD 54UL
+#define KSW_HVM_NATIVE_SITE_IMPORT_FIELDS 55UL
+#define KSW_HVM_NATIVE_SITE_IMPORT_STEADY 56UL
+#define KSW_HVM_NATIVE_SITE_CLEANUP 6UL
+
+
 #include "hvm_internal.h"
 
 /*
