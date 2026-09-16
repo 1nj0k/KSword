@@ -1,0 +1,24 @@
+{
+  "utc": "2026-09-15T22:28:27.3366912Z",
+  "kind": "fixture-teardown-failure",
+  "result": "vmrun_hung_after_resident_stop",
+  "bootUtc": "2026-09-15T22:03:31.9904000Z",
+  "hvmRaw": "{\"kind\":\"query\",\"queryStatus\":0,\"stateFlags\":9044255,\"stateFlagsHex\":\"0x008A011F\",\"stateNames\":[\"INITIALIZED\",\"RESOURCES_READY\",\"EPT_READY\",\"SELF_TESTED\",\"SELF_TEST_PASSED\",\"GUEST_READY\",\"EVENTS_AVAILABLE\",\"EVMCS_PARTIAL\",\"RESIDENT_NESTED\"],\"featureNames\":[\"INTEL\",\"VMX\",\"FEATURE_CONTROL_LOCKED\",\"VMX_OUTSIDE_SMX\",\"TRUE_CONTROLS\",\"EPT\",\"EPT_WB\",\"EPT_4_LEVEL\",\"EPT_2MB\",\"EPT_AD\",\"INVEPT\",\"INVEPT_SINGLE\",\"INVEPT_ALL\",\"VPID\",\"HYPERVISOR_PRESENT\",\"NESTED_VMX_EXPOSED\",\"ONE_SHOT_GUEST\",\"VMEXIT_TELEMETRY\",\"RESIDENT_VMM\",\"MULTICORE_RENDEZVOUS\",\"EPT_4KB_SPLIT\",\"EPT_RULES\",\"EPT_EVENT_RING\",\"MTRR_AWARE_EPT\",\"HYPERV_EVMCS_CAPABLE\",\"HYPERV_EVMCS_V1\",\"POWER_STATE_GUARD\",\"PROCESSOR_TOPOLOGY_GUARD\",\"DRIVER_UNLOAD_GUARD\",\"RESIDENT_LIFECYCLE_GUARDED\",\"MSR_BITMAP\",\"EXIT_EMULATION\",\"VE_INFO_READY\",\"VE_SUPPRESSED_BY_DEFAULT\",\"EPTP_LIST_READY\",\"EPTP_SWITCH_ARMED\"],\"generation\":26,\"processorCount\":4,\"preparedProcessorCount\":4,\"selfTestPassedProcessorCount\":4,\"residentProcessorCount\":0,\"residentImplementation\":\"CAPABILITY_ONLY\",\"eptImplementation\":\"ACTIVE\",\"nestedImplementation\":\"CAPABILITY_ONLY\",\"evmcsImplementation\":\"PARTIAL\",\"featureFlags\":\"0x0029803F30FFFFFF\",\"vmxEptVpidCapabilities\":\"0x00000F0106F34041\",\"eptExecuteOnly\":true,\"eptPointer\":\"0x0000000207FD905E\",\"eptPageCount\":515,\"mappedRamMiB\":8190,\"vmExitCount\":71285893,\"lastExitReason\":18,\"lastExitQualification\":\"0x0000000000000000\",\"lastGuestRip\":\"0xFFFFF80555B01300\",\"lastGuestRsp\":\"0xFFFFF30AA886EF08\",\"lastExitInstructionLength\":3,\"lastStatus\":\"0x00000000\",\"vmxBasic\":\"0x01D8100000000001\",\"cr0Fixed0\":\"0x0000000080000021\",\"cr0Fixed1\":\"0x00000000FFFFFFFF\",\"cr4Fixed0\":\"0x0000000000002000\",\"cr4Fixed1\":\"0x0000000000B72FFF\",\"lastVmInstructionError\":12,\"eventCount\":8192,\"droppedEventCount\":0,\"overwrittenEventCount\":111806,\"publishedEventCount\":119998,\"nestedL2LaunchRefusedCount\":0,\"nestedVmcs12EvictionCount\":0,\"nestedFuseTripCount\":0,\"nestedLastRefusalSite\":0,\"nestedLastRefusalSiteText\":\"µ▓íµ£ëµïÆτ╗¥Φ┐ç\",\"exitReasonCount\":{\"0\":84251,\"1\":134191,\"7\":12609,\"10\":908171,\"12\":20434523,\"16\":481,\"18\":122831,\"19\":653846,\"20\":556619,\"21\":653850,\"23\":13633769,\"24\":467683,\"25\":5592632,\"26\":654295,\"27\":654295,\"28\":57841,\"29\":44,\"30\":363587,\"31\":839765,\"32\":988542,\"48\":22814865,\"50\":659690,\"53\":713424,\"55\":284089},\"processors\":[{\"index\":0,\"group\":0,\"number\":0,\"vmxInstructionResult\":0,\"stateFlags\":1127,\"stateHex\":\"0x00000467\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":18,\"vmExitCount\":21657581,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"DEVIRTUALIZED\"]},{\"index\":1,\"group\":0,\"number\":1,\"vmxInstructionResult\":0,\"stateFlags\":1127,\"stateHex\":\"0x00000467\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":18,\"vmExitCount\":14202759,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"DEVIRTUALIZED\"]},{\"index\":2,\"group\":0,\"number\":2,\"vmxInstructionResult\":0,\"stateFlags\":1127,\"stateHex\":\"0x00000467\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":18,\"vmExitCount\":18203734,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"DEVIRTUALIZED\"]},{\"index\":3,\"group\":0,\"number\":3,\"vmxInstructionResult\":0,\"stateFlags\":1127,\"stateHex\":\"0x00000467\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":18,\"vmExitCount\":17221819,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"DEVIRTUALIZED\"]}]}\r\n",
+  "processes": [
+    {
+      "Name": "vmrun",
+      "Id": 5204,
+      "CPU": 0.1875,
+      "StartTime": "2026-09-15T18:25:32.5444729-04:00"
+    },
+    {
+      "Name": "vmware-vmx",
+      "Id": 3976,
+      "CPU": 264.796875,
+      "StartTime": "2026-09-15T18:13:32.5413002-04:00"
+    }
+  ],
+  "PSComputerName": "KSword-HVM-Target",
+  "RunspaceId": "9b0be38d-3646-43f5-b651-dc50e8f550c6",
+  "PSShowComputerName": true
+}

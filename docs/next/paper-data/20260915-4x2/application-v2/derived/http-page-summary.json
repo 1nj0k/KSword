@@ -1,0 +1,83 @@
+{
+  "runs": [
+    {
+      "runId": "http-page-20260916T000025618Z",
+      "result": "pass",
+      "gpa": "0x2ed5f000",
+      "responses": {
+        "before": 10,
+        "mapped": 10,
+        "restored": 10
+      },
+      "httpdIdentity": [
+        "1246",
+        "17122"
+      ],
+      "expectedMD5": {
+        "before": "53398dd1f3a4c282ace3b660acd92ff7",
+        "mapped": "620f0b67a91f7f74151bc5be745b7110",
+        "restored": "53398dd1f3a4c282ace3b660acd92ff7"
+      },
+      "guestUptimeBegin": 212.54,
+      "guestUptimeEnd": 248.08,
+      "maxPfnSampleAgeSeconds": 1.795722703999985,
+      "identityRereadPerRequest": true,
+      "originalBacking": "0x0000000038027000",
+      "replacementBacking": "0x0000000204FD4000",
+      "observedCompositions": 9
+    },
+    {
+      "runId": "http-page-20260916T000101627Z",
+      "result": "pass",
+      "gpa": "0x2ed5f000",
+      "responses": {
+        "before": 10,
+        "mapped": 10,
+        "restored": 10
+      },
+      "httpdIdentity": [
+        "1246",
+        "17122"
+      ],
+      "expectedMD5": {
+        "before": "53398dd1f3a4c282ace3b660acd92ff7",
+        "mapped": "620f0b67a91f7f74151bc5be745b7110",
+        "restored": "53398dd1f3a4c282ace3b660acd92ff7"
+      },
+      "guestUptimeBegin": 249.33,
+      "guestUptimeEnd": 285.01,
+      "maxPfnSampleAgeSeconds": 1.8210158950000164,
+      "identityRereadPerRequest": true,
+      "originalBacking": "0x0000000038027000",
+      "replacementBacking": "0x0000000204FD4000",
+      "observedCompositions": 9
+    },
+    {
+      "runId": "http-page-20260916T000138787Z",
+      "result": "pass",
+      "gpa": "0x2ed5f000",
+      "responses": {
+        "before": 10,
+        "mapped": 10,
+        "restored": 10
+      },
+      "httpdIdentity": [
+        "1246",
+        "17122"
+      ],
+      "expectedMD5": {
+        "before": "53398dd1f3a4c282ace3b660acd92ff7",
+        "mapped": "620f0b67a91f7f74151bc5be745b7110",
+        "restored": "53398dd1f3a4c282ace3b660acd92ff7"
+      },
+      "guestUptimeBegin": 286.24,
+      "guestUptimeEnd": 321.68,
+      "maxPfnSampleAgeSeconds": 1.8819964299999583,
+      "identityRereadPerRequest": true,
+      "originalBacking": "0x0000000038027000",
+      "replacementBacking": "0x0000000204FD4000",
+      "observedCompositions": 10
+    }
+  ],
+  "scope": "BusyBox httpd serves a controlled resident file-cache page. Zero-filled replacement is a controlled data fault; restoration recovers its original HTTP body. Schema 1 has a server-identity startup snapshot only; schema 2 re-reads identity and boot ID per response. Root pagemap/mlock instrumentation selects the GPA. This is not arbitrary application atomicity, a guest-agent-free claim, or a production fault-tolerance benchmark."
+}

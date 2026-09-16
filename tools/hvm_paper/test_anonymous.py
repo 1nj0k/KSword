@@ -1,3 +1,4 @@
+import json
 import unittest
 from package_anonymous import Redactor
 
@@ -27,10 +28,15 @@ class RedactionTests(unittest.TestCase):
         identifier = '56 4d 95 04 0e 7d 2a 11-98 b0 12 21 43 65 87 a9'
         for key in ('uuid.bios', 'uuid.location'):
             text = key + ' = "' + identifier + '"\r\n'
-            changed = r.text(text)
-            self.assertEqual(len(text), len(changed))
-            self.assertNotIn(identifier, changed)
-            self.assertEqual(changed, r.text(text))
+            for _ in range(3):
+                changed = r.text(text)
+                self.assertEqual(len(text), len(changed))
+                self.assertNotIn(identifier, changed)
+                self.assertEqual(changed, r.text(text))
+                text = json.dumps(text)
+        line = 'vcpu-0 BIOS-UUID is ' + identifier + '\r\n'
+        self.assertNotIn(identifier, r.text(line))
+        self.assertEqual(len(line), len(r.text(line)))
         self.assertEqual(identifier, r.text(identifier))
 
 

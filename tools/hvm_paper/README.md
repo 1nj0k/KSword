@@ -184,6 +184,9 @@ checks for known identity/credential leaks. The private alias/provenance file st
 outside the ZIP. Review its stated scope: it is an evidence package, not a full
 buildable anonymous source artifact. Functional MD5 checksums and timings remain
 real; raw 40/64-character identity digests become aliases.
+Before committing a new collection directory, disable Git text normalization for
+that directory, as `.gitattributes` does for `20260915-4x2`. Serial offsets and raw
+SHA256 manifests require exact captured CRLF bytes on every checkout platform.
 
 For a future four-CPU target soak, pass `-ExpectedResidentProcessors 4` to
 `Watch-Stability.ps1`; the analyzer still requires two independent guest CPU

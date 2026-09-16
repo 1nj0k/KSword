@@ -1,0 +1,77 @@
+{
+    "schemaVersion":  1,
+    "runId":  "windows1-off-post-no-vmware-net-00-20260915T230706869Z",
+    "role":  "windows1",
+    "configuration":  "off-post-no-vmware",
+    "workload":  "net",
+    "iteration":  0,
+    "warmup":  true,
+    "status":  "ok",
+    "startedUtc":  "2026-09-15T23:07:06.8699592Z",
+    "binarySha256":  "A37D9D1B3FC22D5539C51C3DC364B7C1BAA0061913B72EFEF8183E020D464E0D",
+    "before":  {
+                   "utc":  "2026-09-15T23:07:06.8855807Z",
+                   "bootUtc":  "2026-09-15T23:02:45.9386870Z",
+                   "hvmRaw":  "{\"kind\":\"query\",\"queryStatus\":0,\"stateFlags\":9044255,\"stateFlagsHex\":\"0x008A011F\",\"stateNames\":[\"INITIALIZED\",\"RESOURCES_READY\",\"EPT_READY\",\"SELF_TESTED\",\"SELF_TEST_PASSED\",\"GUEST_READY\",\"EVENTS_AVAILABLE\",\"EVMCS_PARTIAL\",\"RESIDENT_NESTED\"],\"featureNames\":[\"INTEL\",\"VMX\",\"FEATURE_CONTROL_LOCKED\",\"VMX_OUTSIDE_SMX\",\"TRUE_CONTROLS\",\"EPT\",\"EPT_WB\",\"EPT_4_LEVEL\",\"EPT_2MB\",\"EPT_AD\",\"INVEPT\",\"INVEPT_SINGLE\",\"INVEPT_ALL\",\"VPID\",\"HYPERVISOR_PRESENT\",\"NESTED_VMX_EXPOSED\",\"ONE_SHOT_GUEST\",\"VMEXIT_TELEMETRY\",\"RESIDENT_VMM\",\"MULTICORE_RENDEZVOUS\",\"EPT_4KB_SPLIT\",\"EPT_RULES\",\"EPT_EVENT_RING\",\"MTRR_AWARE_EPT\",\"HYPERV_EVMCS_CAPABLE\",\"HYPERV_EVMCS_V1\",\"POWER_STATE_GUARD\",\"PROCESSOR_TOPOLOGY_GUARD\",\"DRIVER_UNLOAD_GUARD\",\"RESIDENT_LIFECYCLE_GUARDED\",\"MSR_BITMAP\",\"EXIT_EMULATION\",\"VE_INFO_READY\",\"VE_SUPPRESSED_BY_DEFAULT\",\"EPTP_LIST_READY\",\"EPTP_SWITCH_ARMED\"],\"generation\":5,\"processorCount\":4,\"preparedProcessorCount\":4,\"selfTestPassedProcessorCount\":4,\"residentProcessorCount\":0,\"residentImplementation\":\"CAPABILITY_ONLY\",\"eptImplementation\":\"ACTIVE\",\"nestedImplementation\":\"CAPABILITY_ONLY\",\"evmcsImplementation\":\"PARTIAL\",\"featureFlags\":\"0x0029803F30FFFFFF\",\"vmxEptVpidCapabilities\":\"0x00000F0106F34041\",\"eptExecuteOnly\":true,\"eptPointer\":\"0x0000000207FD905E\",\"eptPageCount\":515,\"mappedRamMiB\":8190,\"vmExitCount\":1429798,\"lastExitReason\":18,\"lastExitQualification\":\"0x0000000000000000\",\"lastGuestRip\":\"0xFFFFF80057B31300\",\"lastGuestRsp\":\"0xFFFFA481D87E8E68\",\"lastExitInstructionLength\":3,\"lastStatus\":\"0x00000000\",\"vmxBasic\":\"0x01D8100000000001\",\"cr0Fixed0\":\"0x0000000080000021\",\"cr0Fixed1\":\"0x00000000FFFFFFFF\",\"cr4Fixed0\":\"0x0000000000002000\",\"cr4Fixed1\":\"0x0000000000B72FFF\",\"lastVmInstructionError\":12,\"eventCount\":44,\"droppedEventCount\":0,\"overwrittenEventCount\":0,\"publishedEventCount\":44,\"nestedL2LaunchRefusedCount\":0,\"nestedVmcs12EvictionCount\":0,\"nestedFuseTripCount\":0,\"nestedLastRefusalSite\":0,\"nestedLastRefusalSiteText\":\"µ▓íµ£ëµïÆτ╗¥Φ┐ç\",\"exitReasonCount\":{\"0\":10881,\"10\":803269,\"12\":503456,\"18\":10836,\"31\":39967,\"32\":61389},\"processors\":[{\"index\":0,\"group\":0,\"number\":0,\"vmxInstructionResult\":0,\"stateFlags\":1127,\"stateHex\":\"0x00000467\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":18,\"vmExitCount\":1302970,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"DEVIRTUALIZED\"]},{\"index\":1,\"group\":0,\"number\":1,\"vmxInstructionResult\":0,\"stateFlags\":1127,\"stateHex\":\"0x00000467\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":18,\"vmExitCount\":57847,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"DEVIRTUALIZED\"]},{\"index\":2,\"group\":0,\"number\":2,\"vmxInstructionResult\":0,\"stateFlags\":1127,\"stateHex\":\"0x00000467\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":18,\"vmExitCount\":37122,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"DEVIRTUALIZED\"]},{\"index\":3,\"group\":0,\"number\":3,\"vmxInstructionResult\":0,\"stateFlags\":1127,\"stateHex\":\"0x00000467\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":18,\"vmExitCount\":31859,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"DEVIRTUALIZED\"]}]}\r\n",
+                   "processes":  [
+                                     {
+                                         "name":  "lsass",
+                                         "pid":  932,
+                                         "createdUtc":  "2026-09-15T23:02:47.8120252Z",
+                                         "cpuSeconds":  0.640625,
+                                         "privateBytes":  7311360
+                                     },
+                                     {
+                                         "name":  "services",
+                                         "pid":  904,
+                                         "createdUtc":  "2026-09-15T23:02:47.7870199Z",
+                                         "cpuSeconds":  0.484375,
+                                         "privateBytes":  5001216
+                                     },
+                                     {
+                                         "name":  "wininit",
+                                         "pid":  760,
+                                         "createdUtc":  "2026-09-15T23:02:47.7482189Z",
+                                         "cpuSeconds":  0.015625,
+                                         "privateBytes":  1499136
+                                     }
+                                 ]
+               },
+    "expectedResidentProcessors":  4,
+    "benchmarkPid":  5116,
+    "benchmarkCreatedUtc":  "2026-09-15T23:07:06.9148137Z",
+    "exitCode":  0,
+    "stdout":  "{\"schemaVersion\":1,\"kind\":\"metadata\",\"pointerBytes\":8,\"pinCpu\":0,\"affinityResult\":0,\"cpuid1Eax\":\"0x000B0671\",\"cpuid1Ecx\":\"0xFFFA3223\",\"timer\":\"QueryPerformanceCounter\"}\r\n{\"schemaVersion\":1,\"workload\":\"tcp-loopback-64MiB\",\"status\":\"ok\",\"seconds\":0.031598800,\"operations\":0,\"bytes\":67108864,\"nsPerOperation\":0.0000,\"MiBPerSecond\":2025.3934,\"sink\":\"0\"}\r\n",
+    "stderr":  "",
+    "commandElapsedMs":  47.511300000000006,
+    "endedUtc":  "2026-09-15T23:07:06.9481140Z",
+    "after":  {
+                  "utc":  "2026-09-15T23:07:06.9637296Z",
+                  "bootUtc":  "2026-09-15T23:02:45.9386870Z",
+                  "hvmRaw":  "{\"kind\":\"query\",\"queryStatus\":0,\"stateFlags\":9044255,\"stateFlagsHex\":\"0x008A011F\",\"stateNames\":[\"INITIALIZED\",\"RESOURCES_READY\",\"EPT_READY\",\"SELF_TESTED\",\"SELF_TEST_PASSED\",\"GUEST_READY\",\"EVENTS_AVAILABLE\",\"EVMCS_PARTIAL\",\"RESIDENT_NESTED\"],\"featureNames\":[\"INTEL\",\"VMX\",\"FEATURE_CONTROL_LOCKED\",\"VMX_OUTSIDE_SMX\",\"TRUE_CONTROLS\",\"EPT\",\"EPT_WB\",\"EPT_4_LEVEL\",\"EPT_2MB\",\"EPT_AD\",\"INVEPT\",\"INVEPT_SINGLE\",\"INVEPT_ALL\",\"VPID\",\"HYPERVISOR_PRESENT\",\"NESTED_VMX_EXPOSED\",\"ONE_SHOT_GUEST\",\"VMEXIT_TELEMETRY\",\"RESIDENT_VMM\",\"MULTICORE_RENDEZVOUS\",\"EPT_4KB_SPLIT\",\"EPT_RULES\",\"EPT_EVENT_RING\",\"MTRR_AWARE_EPT\",\"HYPERV_EVMCS_CAPABLE\",\"HYPERV_EVMCS_V1\",\"POWER_STATE_GUARD\",\"PROCESSOR_TOPOLOGY_GUARD\",\"DRIVER_UNLOAD_GUARD\",\"RESIDENT_LIFECYCLE_GUARDED\",\"MSR_BITMAP\",\"EXIT_EMULATION\",\"VE_INFO_READY\",\"VE_SUPPRESSED_BY_DEFAULT\",\"EPTP_LIST_READY\",\"EPTP_SWITCH_ARMED\"],\"generation\":5,\"processorCount\":4,\"preparedProcessorCount\":4,\"selfTestPassedProcessorCount\":4,\"residentProcessorCount\":0,\"residentImplementation\":\"CAPABILITY_ONLY\",\"eptImplementation\":\"ACTIVE\",\"nestedImplementation\":\"CAPABILITY_ONLY\",\"evmcsImplementation\":\"PARTIAL\",\"featureFlags\":\"0x0029803F30FFFFFF\",\"vmxEptVpidCapabilities\":\"0x00000F0106F34041\",\"eptExecuteOnly\":true,\"eptPointer\":\"0x0000000207FD905E\",\"eptPageCount\":515,\"mappedRamMiB\":8190,\"vmExitCount\":1429798,\"lastExitReason\":18,\"lastExitQualification\":\"0x0000000000000000\",\"lastGuestRip\":\"0xFFFFF80057B31300\",\"lastGuestRsp\":\"0xFFFFA481D87E8E68\",\"lastExitInstructionLength\":3,\"lastStatus\":\"0x00000000\",\"vmxBasic\":\"0x01D8100000000001\",\"cr0Fixed0\":\"0x0000000080000021\",\"cr0Fixed1\":\"0x00000000FFFFFFFF\",\"cr4Fixed0\":\"0x0000000000002000\",\"cr4Fixed1\":\"0x0000000000B72FFF\",\"lastVmInstructionError\":12,\"eventCount\":44,\"droppedEventCount\":0,\"overwrittenEventCount\":0,\"publishedEventCount\":44,\"nestedL2LaunchRefusedCount\":0,\"nestedVmcs12EvictionCount\":0,\"nestedFuseTripCount\":0,\"nestedLastRefusalSite\":0,\"nestedLastRefusalSiteText\":\"µ▓íµ£ëµïÆτ╗¥Φ┐ç\",\"exitReasonCount\":{\"0\":10881,\"10\":803269,\"12\":503456,\"18\":10836,\"31\":39967,\"32\":61389},\"processors\":[{\"index\":0,\"group\":0,\"number\":0,\"vmxInstructionResult\":0,\"stateFlags\":1127,\"stateHex\":\"0x00000467\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":18,\"vmExitCount\":1302970,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"DEVIRTUALIZED\"]},{\"index\":1,\"group\":0,\"number\":1,\"vmxInstructionResult\":0,\"stateFlags\":1127,\"stateHex\":\"0x00000467\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":18,\"vmExitCount\":57847,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"DEVIRTUALIZED\"]},{\"index\":2,\"group\":0,\"number\":2,\"vmxInstructionResult\":0,\"stateFlags\":1127,\"stateHex\":\"0x00000467\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":18,\"vmExitCount\":37122,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"DEVIRTUALIZED\"]},{\"index\":3,\"group\":0,\"number\":3,\"vmxInstructionResult\":0,\"stateFlags\":1127,\"stateHex\":\"0x00000467\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":18,\"vmExitCount\":31859,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"DEVIRTUALIZED\"]}]}\r\n",
+                  "processes":  [
+                                    {
+                                        "name":  "lsass",
+                                        "pid":  932,
+                                        "createdUtc":  "2026-09-15T23:02:47.8120252Z",
+                                        "cpuSeconds":  0.65625,
+                                        "privateBytes":  7311360
+                                    },
+                                    {
+                                        "name":  "services",
+                                        "pid":  904,
+                                        "createdUtc":  "2026-09-15T23:02:47.7870199Z",
+                                        "cpuSeconds":  0.484375,
+                                        "privateBytes":  5001216
+                                    },
+                                    {
+                                        "name":  "wininit",
+                                        "pid":  760,
+                                        "createdUtc":  "2026-09-15T23:02:47.7482189Z",
+                                        "cpuSeconds":  0.015625,
+                                        "privateBytes":  1499136
+                                    }
+                                ]
+              },
+    "scratchRemains":  false
+}

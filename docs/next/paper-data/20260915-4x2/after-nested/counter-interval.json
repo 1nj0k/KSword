@@ -1,0 +1,99 @@
+{
+  "kind": "nested-benchmark-counter-interval",
+  "secondsBetweenSnapshots": 115.7719872,
+  "deltas": {
+    "inveptAttempts": 101233,
+    "inveptSucceeded": 101233,
+    "inveptFailed": 0,
+    "ruleAllocations": 0,
+    "ruleFrees": 0,
+    "replacementAllocations": 0,
+    "replacementFrees": 0
+  },
+  "inveptAttemptsPerSecond": 874.4170541455472,
+  "shadowDeltas": [
+    {
+      "index": 0,
+      "fills": 563763,
+      "denied": 4047,
+      "exhausted": 0,
+      "kept": 28405,
+      "dropped": 1840,
+      "adPropagated": 0,
+      "adOverflow": 0,
+      "verifyMismatch": 0
+    },
+    {
+      "index": 1,
+      "fills": 384111,
+      "denied": 3458,
+      "exhausted": 0,
+      "kept": 14082,
+      "dropped": 1552,
+      "adPropagated": 0,
+      "adOverflow": 0,
+      "verifyMismatch": 0
+    },
+    {
+      "index": 2,
+      "fills": 965588,
+      "denied": 7391,
+      "exhausted": 0,
+      "kept": 26975,
+      "dropped": 3374,
+      "adPropagated": 0,
+      "adOverflow": 0,
+      "verifyMismatch": 0
+    },
+    {
+      "index": 3,
+      "fills": 616073,
+      "denied": 3447,
+      "exhausted": 0,
+      "kept": 22722,
+      "dropped": 2283,
+      "adPropagated": 0,
+      "adOverflow": 0,
+      "verifyMismatch": 0
+    }
+  ],
+  "scope": "Observational interval includes benchmark launch and collection, not pure workload time. Cumulative counters compared only across the same resident resource lifetime. Exit classes include L1 and L2, not disjoint guest workloads. Classes 50/53 count intercepted nested instructions; hardware INVVPID count is unavailable.",
+  "statusObservationSecondsUtc": 116.192412,
+  "vmExitDelta": 19489348,
+  "vmExitsPerSecondUtc": 167733.39725489132,
+  "statusContinuity": {
+    "bootUnchanged": true,
+    "residentProcessorsBefore": 4,
+    "residentProcessorsAfter": 4
+  },
+  "exitReasonDeltas": {
+    "0": 10746,
+    "1": 32685,
+    "7": 1391,
+    "10": 820863,
+    "12": 5638101,
+    "16": 0,
+    "18": 11350,
+    "19": 100261,
+    "20": 89618,
+    "21": 100261,
+    "23": 6363958,
+    "24": 437938,
+    "25": 2646391,
+    "26": 100261,
+    "27": 100261,
+    "28": 0,
+    "29": 0,
+    "30": 21015,
+    "31": 146308,
+    "32": 117894,
+    "48": 2548387,
+    "50": 101397,
+    "53": 100262,
+    "55": 0
+  },
+  "eptViolationDelta": 2548387,
+  "nestedInveptInstructionExitDelta": 101397,
+  "nestedInvvpidInstructionExitDelta": 100262,
+  "hardwareInvvpidCount": null
+}

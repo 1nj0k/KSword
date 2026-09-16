@@ -50,6 +50,10 @@ CMakeLists.txt text eol=lf
 .gitattributes text eol=lf
 .editorconfig text eol=lf
 
+# Preserve captured CRLF and terminal whitespace for serial offsets and SHA256 manifests.
+# These raw captures are not source code; keep source whitespace checks elsewhere.
+docs/next/paper-data/20260915-4x2/** -text -whitespace
+
 # Large icon collections and vendored sources retain their upstream bytes.
 *.svg -text
 third_party/** -text

@@ -1,0 +1,49 @@
+{
+  "kind": "validation-summary",
+  "utc": "2026-09-16T00:14:54.9068846Z",
+  "powerShellParsers": [
+    {
+      "file": "Run-HttpPageCycles.ps1",
+      "syntax": "passed"
+    },
+    {
+      "file": "Run-NestedPageCycles.ps1",
+      "syntax": "passed"
+    },
+    {
+      "file": "Run-Transition.ps1",
+      "syntax": "passed"
+    },
+    {
+      "file": "Run-WindowsAB.ps1",
+      "syntax": "passed"
+    },
+    {
+      "file": "Run-WindowsBenchmarks.ps1",
+      "syntax": "passed"
+    },
+    {
+      "file": "Test-NestedPageFaults.ps1",
+      "syntax": "passed"
+    },
+    {
+      "file": "Test-VmwareTeardown.ps1",
+      "syntax": "passed"
+    },
+    {
+      "file": "Watch-Stability.ps1",
+      "syntax": "passed"
+    }
+  ],
+  "pythonEvidenceUnitTests": 24,
+  "pythonEvidenceUnitResult": "passed",
+  "hvmCatalogCommands": 59,
+  "catalogTranslationStrings": 143,
+  "validParserCases": 26,
+  "refusedParserCases": 20,
+  "guiExecuted": false,
+  "driverRuntimeSha256": "8850E28F7F43CF12F95116C862E0AA9FB4B609D60446EE1D46DDC1B900AB7A04",
+  "ordinaryTestSigning": true,
+  "variantSigning": false,
+  "scope": "Summary of completed checks. Raw runtime records are stored separately; these counts are not runtime trial denominators."
+}

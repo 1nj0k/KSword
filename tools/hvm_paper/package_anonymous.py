@@ -21,8 +21,10 @@ ANALYZERS = ("analyze.py", "analyze_smp.py", "transition_metrics.py", "stability
 GUID = re.compile(r"\b[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\b")
 DIGEST = re.compile(r"(?<![0-9a-fA-F])[0-9a-fA-F]{64}(?![0-9a-fA-F])|(?<![0-9a-fA-F])[0-9a-fA-F]{40}(?![0-9a-fA-F])")
 MAC = re.compile(r"\b[0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5}\b")
-VMX_UUID = re.compile(r'(\buuid\.(?:bios|location)(?:\\?")?\s*[=:]\s*\\?")'
-                      r'([0-9a-fA-F]{2}(?:[ -][0-9a-fA-F]{2}){15})(\\?")', re.I)
+VMX_UUID = re.compile(r'(\buuid\.(?:bios|location)(?:\\*")?\s*[=:]\s*\\*")'
+                      r'([0-9a-fA-F]{2}(?:[ -][0-9a-fA-F]{2}){15})(\\*")', re.I)
+BIOS_UUID = re.compile(r'(\bBIOS-UUID\s+(?:is\s+|[=:]\s*))'
+                       r'([0-9a-fA-F]{2}(?:[ -][0-9a-fA-F]{2}){15})', re.I)
 IP = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
 
 
@@ -70,6 +72,7 @@ class Redactor:
         text = DIGEST.sub(lambda m: self.alias(m[0], "digest"), text)
         text = MAC.sub(lambda m: self.alias(m[0], "mac"), text)
         text = VMX_UUID.sub(lambda m: m[1] + self.alias(m[2], "vmx-uuid") + m[3], text)
+        text = BIOS_UUID.sub(lambda m: m[1] + self.alias(m[2], "vmx-uuid"), text)
         def ip(match):
             value = match[0]
             octets = value.split(".")
@@ -133,7 +136,7 @@ def main():
             transformed = redactor.text(text).encode("utf-8")
             if raw.startswith(b"\xef\xbb\xbf"):
                 transformed = b"\xef\xbb\xbf" + transformed
-            relative = Path(label) / path.relative_to(source)
+            relative = Path(redactor.text((Path(label) / path.relative_to(source)).as_posix()))
             target = public / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(transformed)
@@ -206,7 +209,7 @@ No archive or paper was uploaded by this workflow.
         if path.is_file():
             text = path.read_text(encoding="utf-8-sig")
             for token in redactor.literals:
-                if re.search(re.escape(token), text, re.I):
+                if re.search(re.escape(token), text + "\n" + path.relative_to(public).as_posix(), re.I):
                     leaks.append({"file": path.relative_to(public).as_posix(), "token": token})
             if re.search(r"ConvertTo-SecureString|BEGIN (?:RSA |OPENSSH )?PRIVATE KEY|github\.com/(?:Felix|KSword)", text, re.I):
                 leaks.append({"file": path.relative_to(public).as_posix(), "token": "credential-or-identity-pattern"})

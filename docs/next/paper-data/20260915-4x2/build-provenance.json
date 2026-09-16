@@ -1,0 +1,514 @@
+{
+  "kind": "build-provenance",
+  "sourceBase": "4ad95ee7d9862f062bb0172a88f09de95a33546c",
+  "workingTreeChanges": true,
+  "driverBuild": "docs/next/logs/hvm-4x2-ad-build.txt",
+  "driverBuildStatus": "success_zero_warnings_universal_inf2cat",
+  "driverSigning": "Existing ordinary lab test certificate; signtool sign /fd SHA256. Auto variant and auto test signing both disabled during builds. No variant signer invoked.",
+  "mainBuild": "docs/next/logs/hvm-4x2-main-build.txt",
+  "guiTested": false,
+  "artifacts": [
+    {
+      "path": "Ksword5.1/x64/Release/KswordARK.sys",
+      "bytes": 2743192,
+      "sha256": "8850e28f7f43cf12f95116c862e0aa9fb4b609d60446ee1d46ddc1b900ab7a04"
+    },
+    {
+      "path": "tools/hvm_ctl/hvm_ctl.exe",
+      "bytes": 267264,
+      "sha256": "9dfc873dd44d4f2d340de85da4c0b97ac803667bf2599fdbb2f08d6a7bb61f0d"
+    },
+    {
+      "path": "Ksword5.1/x64/Release/Ksword5.1.exe",
+      "bytes": 19130368,
+      "sha256": "116bcd4131b6de3da2e5c591ef552d22568211117197a1709adb76d8c95fb891"
+    },
+    {
+      "path": "Ksword5.1/x64/Release/KswordCLI.exe",
+      "bytes": 668160,
+      "sha256": "4704f07c92761484f6b79687215beae9875143932a3e813a9417ab31e6764312"
+    },
+    {
+      "path": ".deps/hvm-paper/payload.iso",
+      "bytes": 3467264,
+      "sha256": "7cfc60401274f71107b7505404b3139d6332f56890bcf469d1cf37cf2715d647"
+    },
+    {
+      "path": ".deps/hvm-paper/payload/microbench-linux",
+      "bytes": 928048,
+      "sha256": "07e184bd00e263790004e1df170c902a9e91a77a2a0fa657e90504630a80bbce"
+    },
+    {
+      "path": ".deps/hvm-paper/payload/page-holder",
+      "bytes": 825320,
+      "sha256": "5be975845fc99211b7ef65685d978ba28fd2d4c705280e059753667758da7226"
+    },
+    {
+      "path": ".deps/hvm-paper/payload/busybox",
+      "bytes": 1272264,
+      "sha256": "a6a742be64bf0e32c14905cacf1bbf7159d078c69456e0c450a0a4518df16160"
+    }
+  ],
+  "hvmSourceFiles": [
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/HvmCommandCatalog.c",
+      "sha256": "f82b2e894afab4b2f604eb590ca0ba2899270110a86735807c25676da8dc6a8e",
+      "gitBlobSha1": "cf1d4633f74993d3c13796f9364e82aaa86ba1fc",
+      "normalizedLfSha256": "84fa939b8d18db635c79e10d477b5cf63390e7ed0633e5fe5068b532d1869298"
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/HvmCommandEngine.c",
+      "sha256": "93633898dfd7963dedbd8f403e1c4ea62466a95bea9991529c870486ae0891e3",
+      "gitBlobSha1": "45fb2f93cc2744c76083b4257de45aba42f3ff8b",
+      "normalizedLfSha256": "4be9cd4b209d5407ccb0509fad4aef9da3ac14c13de4455fe348b689d5f41d7a"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_cr_policy.c",
+      "sha256": "af388094bf3f804333328df48bb32f89c28bf68f8b8b0e741cf5d5dab8d73a0e",
+      "gitBlobSha1": "af65e5b17747dcf82f9728f80e6dd31f022f57d2",
+      "normalizedLfSha256": "af388094bf3f804333328df48bb32f89c28bf68f8b8b0e741cf5d5dab8d73a0e"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_cr_policy.h",
+      "sha256": "75035a9654ffd4381a79941bccd32e8172730da181df0a8c4ad12244a5440665",
+      "gitBlobSha1": "271ce3c03b04926910a5081f2a3a9c0b669b57ea",
+      "normalizedLfSha256": "e5f8ed53c8e02e8a3725111e66e78276af02d350b888281f8f811ec2b6a25c70"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_descriptor.c",
+      "sha256": "79ed62f7e3e64fb336085d3f07f5589a29204b26eb888256261990ea0166891d",
+      "gitBlobSha1": "3fdaaa6baff7356ac060ddfbf12d3fcdb18c11a1",
+      "normalizedLfSha256": "79ed62f7e3e64fb336085d3f07f5589a29204b26eb888256261990ea0166891d"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_descriptor.h",
+      "sha256": "01f532d6b4ad10b8d6f8fe02a69299900c3389db419bbc564ce755f04f34d41d",
+      "gitBlobSha1": "3eaead38f04838b4895d8dcd4ab5dffc7ab378ae",
+      "normalizedLfSha256": "01f532d6b4ad10b8d6f8fe02a69299900c3389db419bbc564ce755f04f34d41d"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_entry.asm",
+      "sha256": "c2c6ff329d2985037614db3c5844d313442535e0345260acceb11e1fcb855ff8",
+      "gitBlobSha1": "7d5e5438618604193c31626168a5c9390d1b4c28",
+      "normalizedLfSha256": "4d6c6b6e45daa9b29510ed9716159b53860acda447983d9ad8a5140aa8c27e25"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept.c",
+      "sha256": "4b17e0eacb540be7af65ac45aadde223ac31caf0802f006e8e7067b5f05c58b2",
+      "gitBlobSha1": "6629808a5276ada6d002e2490e237fbe99ae2c3a",
+      "normalizedLfSha256": "ac603fca94f297f42a4bd351a1de53de39b24731ee94033dacf9f9a53374e581"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept.h",
+      "sha256": "34d99115ae60a1f53f0283ffb8d4eddfa71e78df3649fc507d3cdb5ac0689bf5",
+      "gitBlobSha1": "7ac9798e273d206bb2ee0466d6cc5e2e759fada5",
+      "normalizedLfSha256": "448193f2c83de6c83c1297a0b9b791396123e48cdd046ac4d54cfa297ad79be9"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_builder.c",
+      "sha256": "b6191116d19b5ea74f40d24d05a4b18de9838371c028e4c039b7086e078b683a",
+      "gitBlobSha1": "19e6708fe29c16330d49a0863c6c2365db860465",
+      "normalizedLfSha256": "828b9feb7fd33dfe2f9fe7f5adcabe9a9996f2861ab82437a24cf8a42baa6c16"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_domain.c",
+      "sha256": "1dd0fa739c57c4603d009375d7d137d8913482450c5a01d2410c64699c65ac0b",
+      "gitBlobSha1": "61632f964622aadad3f11784deb4ddce68ffc1a5",
+      "normalizedLfSha256": "ed9eae8a5a4aa0e4400118874a70164fd838a63cf1862648779311af20fee074"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_domain.h",
+      "sha256": "e5c4f31daebd896313b45976ec447f8192eb17c6d9ad62ac0e5125c6d1150a6f",
+      "gitBlobSha1": "d7775dc9a27bf61ac528df57fadc0dc9a95da98e",
+      "normalizedLfSha256": "686b47d784a3f97e495f1a560774ef5d810f23853c61bdef63e0a259908e89ab"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_local.c",
+      "sha256": "9aa9b4a6ac2d6f6c5a5caf1ddba4e4a97b48fe0f3c37d7b73c14dee1ed46350f",
+      "gitBlobSha1": "a6abb679554e7408614be35c248de8d9fd12d7fb",
+      "normalizedLfSha256": "d116221f6aab8fdfffea8d69714807d04e9d41fc3181ac0468ab1cc8a01ff934"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_local.h",
+      "sha256": "2cb5d75527ff06dfaf75aa20c40b5be86972148e4d4a4ec1ec86645d9998c6d2",
+      "gitBlobSha1": "17897bccb788367fed46ae426cf71845a2340437",
+      "normalizedLfSha256": "b0874cd89196deaa79921eb48b77a6cd00c99a8451c0ef55d995c0dff77c7880"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_switch.c",
+      "sha256": "b574c154f0346f836aa09ae245f34d26392df37b6c48c3259251591b421b8f9e",
+      "gitBlobSha1": "80ec5dcee39709b307443394e9a322a439a6b93d",
+      "normalizedLfSha256": "a666112fbaf8ed31f30dbc15355392ac7fe321b93a34113de3555e43dfcf03d0"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_switch.h",
+      "sha256": "f9a92016cc0f515739d81b51e33c0061dd1ce0b33d0b6b4969ada17746592735",
+      "gitBlobSha1": "0790120fc7fd30979ce9f18158cbbdedd6531004",
+      "normalizedLfSha256": "321ae12532efdda87bfca6b8a9a0889e35a23b59e1e20b943793fb7805d2d1be"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_view.c",
+      "sha256": "be4325fd826081a3bfab2a4c0e0b07f3cc5d531d3457f0c05a512235a33af67c",
+      "gitBlobSha1": "a15719cfba4765111b205c6fad4d48c70c8c06a7",
+      "normalizedLfSha256": "21e5fc2f48b2e274b7d0cd212bd2c90cef3db48d00456ce5053dafb50d71d277"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ept_view.h",
+      "sha256": "73764898c4917a4bcfa482155ef3b541dca008570028caafefd86646e3d07835",
+      "gitBlobSha1": "447b1b14b536948fb3e24b41e3006d3140ced069",
+      "normalizedLfSha256": "bb9430c1e9f3c9ea304b37952ee085389fcae28198695b29ff1c51e1f6046396"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_event.c",
+      "sha256": "f97891815596108c9c329f1dfa5500cdc09f6e8e12356d6fd267686642baf153",
+      "gitBlobSha1": "870f11e963e80d3768995052b89760ba50b16827",
+      "normalizedLfSha256": "fb6e20f5f81413db39920bc04e86ca40db74812f15530236624f7414184faf8b"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_event.h",
+      "sha256": "2818270e111b380099d0a7c1a111cf5cf8da8f089abaad34c9b522fd63e7a1e7",
+      "gitBlobSha1": "28d3cc53983723178e960b661073272d108eb2d9",
+      "normalizedLfSha256": "e8f21c54bd33e098682915122f0a449ca9becd9bbd112ee3ff65fd9563dda4a4"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_evmcs.c",
+      "sha256": "d3b39344daee3c122ed6eada7d3a8cc86c162631dd9471bba4ed2d41b9ec8c87",
+      "gitBlobSha1": "b3eeb0075bd32d145ce4534bcced9f49ad473306",
+      "normalizedLfSha256": "87e6b9215dd96fe724fa38201d48aa0ab26f2f2fe8fae066a47294d422f81d4b"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_evmcs.h",
+      "sha256": "9adbe71c7cc5d032f1171ceb894a750e40dd28e28568cb18e3b797ffeb258b94",
+      "gitBlobSha1": "b8ae080f8b54e0f9578a247f3bd782759170f9f4",
+      "normalizedLfSha256": "58f541a0310d7a5e7ace6213960063edc8aa72c0f31b42601f57144f7ec62e41"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_exit.c",
+      "sha256": "d7dc1d420fd04eca7d9ff4c9c92400e2e87ed645c918db2d23e1178dc11bcd69",
+      "gitBlobSha1": "2caf0a1d5a394a52502f60a491667914c30b7f0b",
+      "normalizedLfSha256": "d7dc1d420fd04eca7d9ff4c9c92400e2e87ed645c918db2d23e1178dc11bcd69"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_exit.h",
+      "sha256": "e48b6575a892f47e7bbb8239ae8c4e147c986d914c2b808868b9d121e282a2af",
+      "gitBlobSha1": "f89f34465c9d5ab39de4d8f97096fa36dc4cd7d1",
+      "normalizedLfSha256": "22f455d037ca0668273533eff261db55706f3b4f09f78085b48a055e9bbe6c3d"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_exit_emulate.c",
+      "sha256": "553719a655f87ee3a701fb6bc82b522a75665f69c3e85b338b7c09a6185367fb",
+      "gitBlobSha1": "df2c7601690ae2ce43f5665f038bebbfa94efff5",
+      "normalizedLfSha256": "553719a655f87ee3a701fb6bc82b522a75665f69c3e85b338b7c09a6185367fb"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_exit_emulate.h",
+      "sha256": "0b7ddd3c823cb2c33a3c51c1072023a191f754da1fbaf69116c97eecbeb55bf4",
+      "gitBlobSha1": "5389b53bad212d7b157fb3bda4641dab680d43c7",
+      "normalizedLfSha256": "c95079f01bda6687b34fa5eb2a5bfb518dbc18cb33c6f0ae241a8c51bee6cd93"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_guest.c",
+      "sha256": "28cf0e163e7caa81137aa1aab77672f378d47c571ef183c24c5996b316c701b7",
+      "gitBlobSha1": "d85e47ee1d2911e804e200c4b951cc8ac5ec7eb6",
+      "normalizedLfSha256": "28cf0e163e7caa81137aa1aab77672f378d47c571ef183c24c5996b316c701b7"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_guest.h",
+      "sha256": "7d6c256aff6bde1047b4b0a745319a27eb95f67663b4172bd41aa82fe8da999a",
+      "gitBlobSha1": "2da75a9cc6c04f1d6ca8796bff1912298e56e515",
+      "normalizedLfSha256": "c3e71561ebf01a6f39d11c9e507020e415c04d1b7de50bd3e5f1873b17d3f875"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_inject.c",
+      "sha256": "8d1f6161e2772325f21c7e5b33f9efdcd432f0812a8829a83537ffa3af50df33",
+      "gitBlobSha1": "971f8a0397c67c1a4b663bac144d33f829f1eb29",
+      "normalizedLfSha256": "8d1f6161e2772325f21c7e5b33f9efdcd432f0812a8829a83537ffa3af50df33"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_inject.h",
+      "sha256": "2a4b83f3b781f0ad5f3b594bcf987e3d7f62c7ebbfcda418ad0a8be37f2f94c4",
+      "gitBlobSha1": "6c5772f9555cee6eeeb85d15e20148eaa6f072b7",
+      "normalizedLfSha256": "2a4b83f3b781f0ad5f3b594bcf987e3d7f62c7ebbfcda418ad0a8be37f2f94c4"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_internal.h",
+      "sha256": "7e661f6f2b3e6c1706a34e6040dde395517cf1a4884167c64ef1bc8a60421d80",
+      "gitBlobSha1": "8bd925ec33e8b8be7d1f23517db361062dc9e357",
+      "normalizedLfSha256": "09c35975b38f29b908629179722626a539d1fa6995696e86634c012893915edd"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_ioctl.c",
+      "sha256": "a1036d29edaae5b0419002b5dc1519914f3532a3d3fe0084055adf68e1ad93b0",
+      "gitBlobSha1": "75c1667ef0db554a459f7d220df38475daba8423",
+      "normalizedLfSha256": "915a08ba308695c03d8524b06479b9485412fb693990678dc3b5296598379a48"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_memory.c",
+      "sha256": "f752ca6db9b4dd3a428b896725d92ceabdab67bf9c8854d10ff22b68f1e19804",
+      "gitBlobSha1": "36f88acbf9cf05462592c85664175b92f233f1e4",
+      "normalizedLfSha256": "ccd1719a2ee959fcc65b13a93fc5266bac1ac2923b6c74e7f1720f4ee526abc6"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_memory.h",
+      "sha256": "99c4977ac21b404909295803228087d215a9f53ba7699afd44e6df059fee07e4",
+      "gitBlobSha1": "a452e75a82b56e6fe3fa8ddfa4d828054b5aedae",
+      "normalizedLfSha256": "f81d5145c80aa41807193e98193d71344cc7dec919800fe2502dc0546f877319"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_metrics.c",
+      "sha256": "ca62468592e6bedbaeeb0d0a2a1019d71f02f9fa89b3092dc69f070c6ea7a526",
+      "gitBlobSha1": "c03ad59a343e869c6659f907ba327da18bf41607",
+      "normalizedLfSha256": "44f0245526837ec2cd94226ea2df85149d9196eea022658a7466770c7da8375d"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_metrics.h",
+      "sha256": "b5b42be684702f24ca75272ce720005e4eefc6a0073122579555237a1c2a5d0e",
+      "gitBlobSha1": "41a94b6471f8ce548f6b842a5dae2b946c17f3a5",
+      "normalizedLfSha256": "09052809d0054e93b1f4c0773e1b77abf57bff0f9cf3495f29b704a9c514ebd7"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_msr_policy.c",
+      "sha256": "c00dae198b431797f78badd9976c293e365f9897ea24d72739d8ee4d832292fd",
+      "gitBlobSha1": "4fa4a7493c407e052d3035892270cc3f10359e6b",
+      "normalizedLfSha256": "77038df9d95ef1b6189c6be5700fed632f4908b69f8790a4963c95ee4fc3f46b"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_msr_policy.h",
+      "sha256": "47d2cefedf73905249ba280d1e17e1d061bf0f41b69e26b4ba3f47a28a08153a",
+      "gitBlobSha1": "45e03cd83f783e584a31c258b4438908ac79a771",
+      "normalizedLfSha256": "f30c007aa683563a110b5b9a1adf171b45dbda293ccb594d8b581aa7ca587f1b"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_mtrr.c",
+      "sha256": "46f10841b477a5c10f148c722486240d316eb077cc5ca7a7c477239f04aeb5e8",
+      "gitBlobSha1": "432e96ee1de9682af0e99bf05b3e0a59938e08d9",
+      "normalizedLfSha256": "9cae7eb79e469301063822db6d8d9bffc8c8d7c31d41dadb0790ee52452fe60c"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_mtrr.h",
+      "sha256": "b32867d71aae2e8b21f4f919a62645e82ebc4962a0140eed53a7ea9d22cb5d44",
+      "gitBlobSha1": "f7bf84e694c71b851d226a5493391febefd2ea3e",
+      "normalizedLfSha256": "d761f73bd2c23d4804c678a2e0f7e5cce7426c34ab7e36e0b5bd009910374f14"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested.c",
+      "sha256": "fa14708b0b223fff46cc19176e7cd3a1fc74f5283896aacfb36f300ec7cb11a5",
+      "gitBlobSha1": "2ea62c8ef5dfbef8eed32d3c5a8ff187085c2dac",
+      "normalizedLfSha256": "fa14708b0b223fff46cc19176e7cd3a1fc74f5283896aacfb36f300ec7cb11a5"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested.h",
+      "sha256": "3c8d7f9d9456b9eaca1bc13fc4f1acd3d70ea423afa245bd4e0cb0a078a50dbf",
+      "gitBlobSha1": "6cbbef73860ac4732c49950d95fd6bec4742b2f8",
+      "normalizedLfSha256": "c7f19383130424f3d138f2d6773c70fccc3170ec3a90982796f1cfd0edfdd455"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_ad.c",
+      "sha256": "564340469455e1b3e2325c2448e32eaf57711f3b7c9b225c616d2f2edde0ea5d",
+      "gitBlobSha1": "c74fb02b4e5cf5a28d7e1c121870db163921da33",
+      "normalizedLfSha256": "564340469455e1b3e2325c2448e32eaf57711f3b7c9b225c616d2f2edde0ea5d"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_ad_compare.h",
+      "sha256": "d76359f1366ab9c2b574759fcbe06221ccfe7f412a4585455af9479d9e7217b1",
+      "gitBlobSha1": "76b382817bba52f60a295e59d96c5b4e3d8844b3",
+      "normalizedLfSha256": "d76359f1366ab9c2b574759fcbe06221ccfe7f412a4585455af9479d9e7217b1"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_bitmap.c",
+      "sha256": "bba57eba00eb013888a2833ca205eea16cb4ac3c9c973ed8c7da820ebaa5b81d",
+      "gitBlobSha1": "5bf7f854626a6c52fba64f131d7a09078e4e86da",
+      "normalizedLfSha256": "bba57eba00eb013888a2833ca205eea16cb4ac3c9c973ed8c7da820ebaa5b81d"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_bitmap.h",
+      "sha256": "8562a9543947c601fcba4f48cbbff31007d555125364c97b8664b85cfb23927d",
+      "gitBlobSha1": "24a59966162434ec52987e1dd0f9bfbe51de4e63",
+      "normalizedLfSha256": "8562a9543947c601fcba4f48cbbff31007d555125364c97b8664b85cfb23927d"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_decode.c",
+      "sha256": "712c77c41e1b3a40a696fa4ec8c4ae6cb787d5b43c17ad790cd6898af83ded82",
+      "gitBlobSha1": "dd1948f6e48ac1d7e5282db387edd573dd60aa93",
+      "normalizedLfSha256": "712c77c41e1b3a40a696fa4ec8c4ae6cb787d5b43c17ad790cd6898af83ded82"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_decode.h",
+      "sha256": "0818b98586f7fa0914571d527d0960ceafb1e904ab43e3288e9ea015e64a4073",
+      "gitBlobSha1": "69fade0b1c722b621eaf0532d8d421bdcd4e361b",
+      "normalizedLfSha256": "0818b98586f7fa0914571d527d0960ceafb1e904ab43e3288e9ea015e64a4073"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_ept.c",
+      "sha256": "e3ede18b20f31f99214268bffa44a787e1ba2bc067769966338aeda4060b52a2",
+      "gitBlobSha1": "fa8a401e37d3e34f3e8d51ceb65d8438d118ab74",
+      "normalizedLfSha256": "1a3417d4c03559d3ccd43d8f26fcc53663f0ee77c0f3233dddf528d0b91d8a04"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_ept.h",
+      "sha256": "e567563dca71ccc4f751a4d6ddf41578caa176fa8658899c432bfe1cdc473135",
+      "gitBlobSha1": "63241237c8e486689511096bc1053eaf740bf170",
+      "normalizedLfSha256": "4d3bb40df4ab99a46775a2c670b4345d90cd84e10d17935211891174ff96b3bd"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_l2.c",
+      "sha256": "e0e256876d397ae6223e0455427c64a14a1fd262f71efc1c187020ff5428a209",
+      "gitBlobSha1": "e6aaa125a39b521224a1649c0bbf9d669b8d46f0",
+      "normalizedLfSha256": "98481d099c4c89d35238bc4eb5ec7bd061f95be03fbc2948c293292b78c66643"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_l2.h",
+      "sha256": "cb6d40a0ae9a0aea8529a371df781fc491ea8b717ca4ec83c731e69dad5702db",
+      "gitBlobSha1": "dca8f5813448ee3cc677f1851b5c46e4acd77fc8",
+      "normalizedLfSha256": "cb6d40a0ae9a0aea8529a371df781fc491ea8b717ca4ec83c731e69dad5702db"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_page.c",
+      "sha256": "68a17c10f2e1ed9b61dc9aa2037965d580465cd2835814b29fe2f87c2657d582",
+      "gitBlobSha1": "4fe774c4b6476a4898700eafcfee5c930ba4cf0b",
+      "normalizedLfSha256": "68a17c10f2e1ed9b61dc9aa2037965d580465cd2835814b29fe2f87c2657d582"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_probe.c",
+      "sha256": "41efca7190fdc9d16bc8f0879204411a5d243d8fb4b5a5f911c447e1f4fd8348",
+      "gitBlobSha1": "eef19d3891651dbc9763448a4be770928c550943",
+      "normalizedLfSha256": "41efca7190fdc9d16bc8f0879204411a5d243d8fb4b5a5f911c447e1f4fd8348"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_probe.h",
+      "sha256": "5a8778975cb570b7c81b0dcb3abc99862d9d2bdab2cc17727f81dd487b85d672",
+      "gitBlobSha1": "b38f1c49904bd2e44f87c96477aac88bc5a18a63",
+      "normalizedLfSha256": "5a8778975cb570b7c81b0dcb3abc99862d9d2bdab2cc17727f81dd487b85d672"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_vmcs.c",
+      "sha256": "76fc64672cc872fa7e41d9070735f6ec7f1da181b004f2b9dea6aff109223a2c",
+      "gitBlobSha1": "345fc762a79ea73d8f2ec4d091ddc67ccd3a2cf7",
+      "normalizedLfSha256": "679f323185e72020ad25fcec5d74a23c811ce4d441515f161011ff683a01fcb7"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_vmcs.h",
+      "sha256": "5273ed200249b7b20dd724b4354867c8f06cff90b6da21744233bfe30554b114",
+      "gitBlobSha1": "87e23337886e97fa0a8cb90f80d7939114ba0ea1",
+      "normalizedLfSha256": "293d65a96f8cd15b2b7a90e622f71edda84824593e7e3e16888c1b0c9da81308"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_phys_window.c",
+      "sha256": "2a90ea26bf6828a5a90a029de525fea69cbe3edb48b0e05b44072ab26d09cb9c",
+      "gitBlobSha1": "bd455885748cef8a6065f7badf4ad948120f7ab3",
+      "normalizedLfSha256": "2a90ea26bf6828a5a90a029de525fea69cbe3edb48b0e05b44072ab26d09cb9c"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_phys_window.h",
+      "sha256": "a4156dd8a794a42ef2a2fa5cd655651c381d6946ee07e24a226daf391ab53b2a",
+      "gitBlobSha1": "9b60af592cf8cc5e44a0264bf9a52a4ad122a2fa",
+      "normalizedLfSha256": "a4156dd8a794a42ef2a2fa5cd655651c381d6946ee07e24a226daf391ab53b2a"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_process.c",
+      "sha256": "2e91e21053af77e327f9acfd3da4b64668bb238eabc29092d04cf7d7df124fd8",
+      "gitBlobSha1": "30f83ad616e635e2db23075a9e06784f9943ab79",
+      "normalizedLfSha256": "2e91e21053af77e327f9acfd3da4b64668bb238eabc29092d04cf7d7df124fd8"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_process.h",
+      "sha256": "f35b6b3eac1c999f2c6394adc53365a08e02041a66aa76a19863871208d395d8",
+      "gitBlobSha1": "6e43c5e6c997b72cc5852aeedbcd5bac3e12fa65",
+      "normalizedLfSha256": "f35b6b3eac1c999f2c6394adc53365a08e02041a66aa76a19863871208d395d8"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_resident.c",
+      "sha256": "eb0e7372105fbd88b28607fa29ac01622aa2f06ad6539dcf54ff0b0f04c2f5c6",
+      "gitBlobSha1": "60dd444adf4a894c13954a63b636e50bf5d9fe44",
+      "normalizedLfSha256": "0fd3ab9a70e3a25b7d4c7033404b91b61777f084f373561500aacefd9a4212b1"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_resident.h",
+      "sha256": "6e40797b7c7266a289e1d318a00850ce8fa1ba53f668291b39bb57faa90af1f1",
+      "gitBlobSha1": "a05f1549343df28d78d9674a95afa938a61a4d1b",
+      "normalizedLfSha256": "9800e829bba8aa779e31d6ce3c9865afd7525ebafa8f77afdb25b55ead82d264"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_runtime.c",
+      "sha256": "601e1efd57017862f2293d067a761075895ad7bcb29c7b7970459728b9f8ea92",
+      "gitBlobSha1": "1bc72db4d54a8cf397ec7fd77a93b68f10c7e377",
+      "normalizedLfSha256": "601e1efd57017862f2293d067a761075895ad7bcb29c7b7970459728b9f8ea92"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_runtime.h",
+      "sha256": "694e3677196c9597c3f8797b46127158c4e6f97262ccc2ebdc41a143ac31b0d8",
+      "gitBlobSha1": "53ca19730775483daecfb329d9205fae64391f77",
+      "normalizedLfSha256": "5d1427d195262eddb5427dd244e825f69bd7bf1beccf4f8e0ac4dd93c510134c"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_vmcs.c",
+      "sha256": "907838b4275d14bac225786f84f2bf1b4a3ed547893aa2745e26354f4694b5e3",
+      "gitBlobSha1": "53e804fba5414915ff75fe749c7ec0bed1acd567",
+      "normalizedLfSha256": "907838b4275d14bac225786f84f2bf1b4a3ed547893aa2745e26354f4694b5e3"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_vmcs.h",
+      "sha256": "d915b5dc1300250fc55e6bfcee60b68a6dbce747afb1ef17fa8b065fb39774e6",
+      "gitBlobSha1": "4db07660c690edf5a73cec827928f67430153a7a",
+      "normalizedLfSha256": "d915b5dc1300250fc55e6bfcee60b68a6dbce747afb1ef17fa8b065fb39774e6"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/slat_iommu_audit.c",
+      "sha256": "08b50982171830b4050d05d2310990c205a81aec3e0062b565367b7b63e895a3",
+      "gitBlobSha1": "94309fc0f2ef8383395a163bcddc1d16f57515bf",
+      "normalizedLfSha256": "682a82a08434c26178db657be9b5101e5f6347be800140243ca394a786a54072"
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/slat_iommu_audit_ioctl.c",
+      "sha256": "f9ea7e1be172ce715eccfc971a47da82c7e1a9cfe69facc85a300b22f277b547",
+      "gitBlobSha1": "5f5abefa5797250d610bce9550f37d2ff1cdc600",
+      "normalizedLfSha256": "afba7466c57258e5e047fdcd2af0a5ff6551a92a64d22a1d406e9f1c48f49bbe"
+    },
+    {
+      "path": "shared/driver/KswordArkHvmControls.h",
+      "sha256": "6e9eaf13d266e80dedd84dde7dbc4848b9c5e4571776b776423c28f3c7123085",
+      "gitBlobSha1": "065998629de298acda18c6fba58c7577a66487ec",
+      "normalizedLfSha256": "7204854460dee64d6af693d523178f2f297437eeb01a4eb6e45bc440b9372bc8"
+    },
+    {
+      "path": "shared/driver/KswordArkHvmEptSwitch.h",
+      "sha256": "02e451a923c15bb351542acf4df63b4215c2d40a6f5ee99c56895d8b9db95207",
+      "gitBlobSha1": "cc993465d389555b7975a5038611da9186276575",
+      "normalizedLfSha256": "f6f631da2f02e195b939121debbaa5535fbdb1134a977ccb17a2bfcd8cbf1c55"
+    },
+    {
+      "path": "shared/driver/KswordArkHvmIoctl.h",
+      "sha256": "1580b217b2ab193cd1d47e479d2745bc048d553782cc5afed7262e78390e2439",
+      "gitBlobSha1": "f1257305833ce8136ee869949e289c50222d813d",
+      "normalizedLfSha256": "4bca5f965f02b5b15817a54b602f4a1aa904774c6d89d79c4a3bae7447809176"
+    },
+    {
+      "path": "shared/driver/KswordArkHvmMetricsIoctl.h",
+      "sha256": "63f42a3ed705dbd6c66fbfbfc16a6f7e22071369873b3be2431b9856d5f3b523",
+      "gitBlobSha1": "c239dff501099e9cb638392e69b4a5794687965d",
+      "normalizedLfSha256": "a8ee7b70d20a93179c6ba2da54606820de513bd4da235fd5653765519c4015a4"
+    },
+    {
+      "path": "shared/driver/KswordArkHvmRequest.h",
+      "sha256": "798c98fcd77b2b2645ffbd9c6f180b81cd083dd14e1cad92ed5a33a657a762dd",
+      "gitBlobSha1": "7ae74a6289cc7bf5856f5297867e9d6ca20cd2dd",
+      "normalizedLfSha256": "798c98fcd77b2b2645ffbd9c6f180b81cd083dd14e1cad92ed5a33a657a762dd"
+    }
+  ],
+  "busyboxSource": {
+    "url": "https://busybox.net/downloads/busybox-1.37.0.tar.bz2",
+    "license": "GPL-2.0; LICENSE and build configuration retained in delivery ISO"
+  },
+  "benchmarkCompiler": "Ubuntu WSL GCC 13.3, static -O2 -pthread, same MD5 fe11c500cef37d45948d4acf5797f75e in both guest datasets",
+  "preservedUncommittedMainInput": {
+    "path": "Ksword5.1/Ksword5.1/theme.h",
+    "sha256": "504ecddf06671b1946b57497039abd3c2621974c01661227c09cd07d0e295426",
+    "scope": "Pre-existing user edit, included in local main EXE build, excluded from implementation commit. Driver/HVM source provenance is unaffected."
+  },
+  "applicationV2Payload": {
+    "sha256": "6e053de9669478ae4070728c24eb0f62060febb8ff20b8c8c054e449dd15ee98",
+    "scope": "Only Run-HttpPage.sh observer changed after the performance and first application collection; C binaries unchanged."
+  },
+  "implementationCommit": "b9bdda8358fc7278e79053f2cc4dbf2056a900b9",
+  "packagedBuildRecords": "build-records/"
+}

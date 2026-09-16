@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "kind": "fixture-topology-change",
+  "before": {
+    "Count": 2,
+    "ExposeVirtualizationExtensions": true
+  },
+  "preflight": {
+    "utc": "2026-09-15T22:03:20.2341681Z",
+    "bootUtc": "2026-09-15T21:22:40.0366070Z",
+    "driverService": "Absent",
+    "tinycoreProcessorSetting": "numvcpus = \"2\"",
+    "vmxSha256": "E6480F997A2CA0F8595A57C11A5AA80D7CD799EA9B36F48C150A45540784B5F5",
+    "PSComputerName": "KSword-HVM-Target",
+    "RunspaceId": "69f0e028-89b7-4f60-b223-1c7f4b0e39ff",
+    "PSShowComputerName": true
+  },
+  "status": "configured_rebooted",
+  "after": {
+    "Count": 4,
+    "ExposeVirtualizationExtensions": true
+  },
+  "endedUtc": "2026-09-15T22:03:31.0755009Z"
+}

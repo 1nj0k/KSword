@@ -1,0 +1,27 @@
+{
+  "kind": "run-start",
+  "runId": "after-cpuid-2",
+  "workload": "cpuid",
+  "iteration": 2,
+  "bootId": "64995441-1414-4560-9278-450fbfc72baf",
+  "guestUptime": 283.09,
+  "binaryMD5": "fe11c500cef37d45948d4acf5797f75e",
+  "exitCode": 0,
+  "endGuestUptime": 292.04,
+  "eligible": true,
+  "metrics": [
+    {
+      "schemaVersion": 1,
+      "workload": "cpuid-leaf0",
+      "status": "ok",
+      "seconds": 8.908369194,
+      "operations": 100000,
+      "bytes": 0,
+      "nsPerOperation": 89083.6919,
+      "MiBPerSecond": 0.0,
+      "sink": "2800000"
+    }
+  ],
+  "raw": "{\"kind\":\"run-start\",\"runId\":\"after-cpuid-2\",\"workload\":\"cpuid\",\"iteration\":2,\"bootId\":\"64995441-1414-4560-9278-450fbfc72baf\",\"guestUptime\":283.09,\"binaryMD5\":\"fe11c500cef37d45948d4acf5797f75e\"}\n{\"schemaVersion\":1,\"kind\":\"metadata\",\"pointerBytes\":8,\"pinCpu\":0,\"affinityResult\":0,\"cpuid1Eax\":\"0x000B0671\",\"cpuid1Ecx\":\"0xFFFA3203\",\"timer\":\"CLOCK_MONOTONIC_RAW\"}\n{\"schemaVersion\":1,\"workload\":\"cpuid-leaf0\",\"status\":\"ok\",\"seconds\":8.908369194,\"operations\":100000,\"bytes\":0,\"nsPerOperation\":89083.6919,\"MiBPerSecond\":0.0000,\"sink\":\"2800000\"}\n{\"kind\":\"run-end\",\"runId\":\"after-cpuid-2\",\"exitCode\":0,\"guestUptime\":292.04}\n",
+  "serialSha256": "d854ccba53be8e75838ce591e9e01ecb4c13122ed9962604e3ca636e8553c5f3"
+}

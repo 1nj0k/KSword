@@ -1,0 +1,47 @@
+{
+  "kind": "platform-details",
+  "utc": "2026-09-15T23:29:56.1345862Z",
+  "hypervBinaries": [
+    {
+      "name": "vmms.exe",
+      "fileVersion": "10.0.26100.8875 (WinBuild.160101.0800)",
+      "sha256": "F8D39F97D48D376E190FAA80A306CE85FF7233F955BC3970B25497D540059606"
+    },
+    {
+      "name": "vmwp.exe",
+      "fileVersion": "10.0.26100.8875 (WinBuild.160101.0800)",
+      "sha256": "A57B19D1C9A8CE98C609B0109DFB442E212EF4E0C96CF1F54476912F96F067A4"
+    },
+    {
+      "name": "hvix64.exe",
+      "fileVersion": "10.0.26100.9022 (WinBuild.160101.0800)",
+      "sha256": "9140DDF9D4C1DB25F665DC73591B75A5D73A82894B1083901383DB1F143A9584"
+    }
+  ],
+  "vm": {
+    "Name": "KSword-HVM-Target",
+    "VMId": "01f7b608-bf8f-462d-983b-f6bda6b5d178",
+    "Generation": 2,
+    "ProcessorCount": 4,
+    "MemoryAssigned": 8589934592,
+    "DynamicMemoryEnabled": false,
+    "State": 2
+  },
+  "cpu": {
+    "Count": 4,
+    "ExposeVirtualizationExtensions": true,
+    "CompatibilityForMigrationEnabled": false,
+    "HwThreadCountPerCore": 0
+  },
+  "memory": {
+    "DynamicMemoryEnabled": false,
+    "Startup": 8589934592,
+    "Minimum": 536870912,
+    "Maximum": 1099511627776
+  },
+  "firmware": {
+    "SecureBoot": 1,
+    "SecureBootTemplate": "MicrosoftWindows"
+  },
+  "scope": "Read-only platform configuration. Firmware setup switches not independently observed; WMI VMX flags under active Hyper-V are not treated as BIOS-switch proof."
+}

@@ -1,0 +1,29 @@
+{
+  "utc": "2026-09-15T23:55:40.9371606Z",
+  "payloadSha256": "6E053DE9669478AE4070728C24EB0F62060FEBB8FF20B8C8C054E449DD15EE98",
+  "page": {
+    "kind": "nested-page",
+    "operationId": 77,
+    "faultMode": 0,
+    "status": 0,
+    "lastStatus": "0x00000000",
+    "generation": 74,
+    "active": 0,
+    "retired": 0,
+    "residentProcessors": 4,
+    "ept12Pointer": "0x0000000000000000",
+    "guestPhysicalPage": "0x0000000000000000",
+    "shadowPhysicalPage": "0x0000000000000000",
+    "originalPhysicalPage": "0x0000000000000000",
+    "composedCount": 0,
+    "ownerProcessId": 0,
+    "ownerExited": 0,
+    "ownerCreationTime": "0",
+    "roots": [
+      "0x000000000AF0C05E"
+    ]
+  },
+  "PSComputerName": "KSword-HVM-Target",
+  "RunspaceId": "fb3ead73-e959-47b3-8188-ce623ab7848d",
+  "PSShowComputerName": true
+}
