@@ -1,0 +1,120 @@
+{
+  "faults": {
+    "1:pass": 3,
+    "2:pass": 3,
+    "3:pass": 3,
+    "4:pass": 3,
+    "5:pass": 3
+  },
+  "loadPeriods": [
+    {
+      "startOffset": 157262,
+      "endOffset": 176333,
+      "busyPercent": {
+        "0": 99.95938261575954,
+        "1": 98.771345272803
+      }
+    }
+  ],
+  "cycles": {
+    "guest-cpu-load:remap-restore:pass": 10,
+    "idle:gpa-above-52-bits:clean_reject": 1,
+    "idle:remap-restore:pass": 10,
+    "idle:unaligned-gpa:clean_reject": 1,
+    "idle:unknown-ept-root:clean_reject": 1
+  },
+  "effectResults": {
+    "guest-cpu-load:True": 10,
+    "idle:True": 10
+  },
+  "latencyUs": {
+    "guest-cpu-load": {
+      "mapBodyUs": {
+        "n": 10,
+        "median": 146.8,
+        "mean": 169.62,
+        "min": 103.5,
+        "max": 341.6,
+        "sampleSd": 72.14443537484756
+      },
+      "restoreBodyUs": {
+        "n": 10,
+        "median": 167.0,
+        "mean": 200.69,
+        "min": 113.6,
+        "max": 501.7,
+        "sampleSd": 121.2889886913803
+      },
+      "commitDrainUs": {
+        "n": 10,
+        "median": 116.10000000000001,
+        "mean": 130.39,
+        "min": 79.0,
+        "max": 226.6,
+        "sampleSd": 49.50320865021445
+      },
+      "retireDrainUs": {
+        "n": 10,
+        "median": 136.95,
+        "mean": 150.56,
+        "min": 90.6,
+        "max": 333.4,
+        "sampleSd": 73.16269844971852
+      }
+    },
+    "idle": {
+      "mapBodyUs": {
+        "n": 10,
+        "median": 108.35,
+        "mean": 116.37,
+        "min": 83.3,
+        "max": 163.2,
+        "sampleSd": 30.68561190163523
+      },
+      "restoreBodyUs": {
+        "n": 10,
+        "median": 96.65,
+        "mean": 110.71,
+        "min": 83.1,
+        "max": 152.9,
+        "sampleSd": 26.457196038549174
+      },
+      "commitDrainUs": {
+        "n": 10,
+        "median": 77.3,
+        "mean": 86.27,
+        "min": 53.7,
+        "max": 134.5,
+        "sampleSd": 29.012910919106343
+      },
+      "retireDrainUs": {
+        "n": 10,
+        "median": 73.44999999999999,
+        "mean": 87.65,
+        "min": 61.4,
+        "max": 130.0,
+        "sampleSd": 26.6486293164291
+      }
+    }
+  },
+  "writeIsolation": [
+    {
+      "source": "write-isolation-20260915T233507Z.json",
+      "result": "pass",
+      "guestBootIds": [
+        "64995441-1414-4560-9278-450fbfc72baf"
+      ],
+      "cpuCount": 2,
+      "writtenBytes": 4,
+      "readbackHashBytes": 4096,
+      "patterns": [
+        "a5a5a5a5",
+        "d1d1d1d1",
+        "b2b2b2b2",
+        "a5a5a5a5"
+      ]
+    }
+  ],
+  "scope": "Two guest CPU-pinned observers; one reserved 4 KiB page and one boot. Sampled full-page MD5/readback, not arbitrary application atomicity or universal stale-translation freedom. Actual INVEPT deltas include background work. Fault modes 4/5 omit one drain call; not injected hardware INVEPT faults. Allocation ledger covers only page-control objects/backing.",
+  "incomplete": []
+}

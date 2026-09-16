@@ -1,0 +1,60 @@
+{
+    "utc":  "2026-09-16T00:54:28.8421336Z",
+    "bootUtc":  "2026-09-16T00:53:15.1584830Z",
+    "edition":  "Professional",
+    "features":  [
+                     {
+                         "FeatureName":  "Microsoft-Hyper-V-All",
+                         "state":  "Enabled"
+                     },
+                     {
+                         "FeatureName":  "Microsoft-Hyper-V",
+                         "state":  "Enabled"
+                     },
+                     {
+                         "FeatureName":  "Microsoft-Hyper-V-Tools-All",
+                         "state":  "Enabled"
+                     },
+                     {
+                         "FeatureName":  "Microsoft-Hyper-V-Management-PowerShell",
+                         "state":  "Enabled"
+                     },
+                     {
+                         "FeatureName":  "Microsoft-Hyper-V-Hypervisor",
+                         "state":  "Enabled"
+                     },
+                     {
+                         "FeatureName":  "Microsoft-Hyper-V-Services",
+                         "state":  "Enabled"
+                     },
+                     {
+                         "FeatureName":  "Microsoft-Hyper-V-Management-Clients",
+                         "state":  "Enabled"
+                     }
+                 ],
+    "services":  "[SC] EnumQueryServicesStatus:OpenService FAILED 1060:\r\n\r\nThe specified service does not exist as an installed service.\r\n\r\n",
+    "vmms":  "\r\nSERVICE_NAME: vmms \r\n        TYPE               : 10  WIN32_OWN_PROCESS  \r\n        STATE              : 4  RUNNING \r\n                                (STOPPABLE, NOT_PAUSABLE, ACCEPTS_PRESHUTDOWN)\r\n        WIN32_EXIT_CODE    : 0  (0x0)\r\n        SERVICE_EXIT_CODE  : 0  (0x0)\r\n        CHECKPOINT         : 0x0\r\n        WAIT_HINT          : 0x0\r\n",
+    "driverImage":  {
+
+                    },
+    "hvmRaw":  "hvm_ctl.exe : µëôΣ╕ìσ╝Ç \\\\.\\KswordARKLog∩╝Üwin32=2\r\nAt line:1 char:668\r\n+ ...  ImagePath;hvmRaw=(\u0026 C:\\ksword\\hvm_ctl.exe --json status 2\u003e\u00261 | Out-S ...\r\n+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : NotSpecified: (µëôΣ╕ìσ╝Ç \\\\.\\KswordARKLog∩╝Üwin32=2:String) [], RemoteException\r\n    + FullyQualifiedErrorId : NativeCommandError\r\n \r\n  2 = Φ«╛σñçΣ╕ìσ¡ÿσ£¿∩╝êΘ⌐▒σè¿µ▓íσèáΦ╜╜∩╝ë∩╝¢5 = µïÆτ╗¥Φ«┐Θù«∩╝êΘ£ÇΦªüτ«íτÉåσæÿ∩╝ë\r\n{\"kind\":\"error\",\"reason\":\"device-open-failed\"}\r\n",
+    "files":  [
+                  {
+                      "Name":  "paper-payload.iso",
+                      "Length":  3467264
+                  },
+                  {
+                      "Name":  "TinyCorePure64-17.1.iso",
+                      "Length":  44040192
+                  }
+              ],
+    "innerVMs":  [
+
+                 ],
+    "deviceGuard":  {
+                        "VirtualizationBasedSecurityStatus":  2,
+                        "SecurityServicesRunning":  [
+                                                        0
+                                                    ]
+                    }
+}

@@ -1,4 +1,5 @@
 #include "KernelHvmTab.h"
+#include "../MainWindow.h"
 
 #include "KernelDock.h"
 #include "../ArkDriverClient/ArkDriverClient.h"
@@ -309,6 +310,18 @@ void KernelHvmTab::initializeUi()
     toolbar->addWidget(m_stopResidentButton);
     toolbar->addWidget(m_teardownButton);
     toolbar->addWidget(m_featureActionButton);
+    auto* commandsButton = new QPushButton(ks::i18n::sourceText(QStringLiteral("KVM 完整命令面板")), this);
+    toolbar->addWidget(commandsButton);
+    connect(commandsButton, &QPushButton::clicked, this, [this]() {
+        for (auto* widget : QApplication::topLevelWidgets())
+        {
+            if (auto* mainWindow = qobject_cast<MainWindow*>(widget))
+            {
+                mainWindow->focusKvmCommands();
+                return;
+            }
+        }
+    });
     rootLayout->addLayout(toolbar);
     // 状态标签移出按钮行：换行布局没有 stretch，跟在最后一个按钮后面会被
     // 当成第九个"按钮"参与折行，位置随窗口宽度乱跳。自己占一行反而稳定。
@@ -719,6 +732,9 @@ void KernelHvmTab::runControlAsync(
         ksword::kvm::isLocalEptEnabled();
     const bool enableEptpSwitch =
         prepareBackendFlags && ksword::kvm::isEptpSwitchEnabled();
+    const bool enableVe = residentFeatureFlags && ksword::kvm::isVeEnabled();
+    const bool enableVmFunc = residentFeatureFlags && ksword::kvm::isVmFuncEnabled();
+    const bool hideHypervisor = residentFeatureFlags && ksword::kvm::isHypervisorHidden();
     QPointer<KernelHvmTab> safeThis(this);
     std::thread([
         safeThis,
@@ -730,7 +746,7 @@ void KernelHvmTab::runControlAsync(
         enableNestedVmx,
         enableEvmcs,
         enableLocalEpt,
-        enableEptpSwitch]() {
+        enableEptpSwitch, enableVe, enableVmFunc, hideHypervisor]() {
         ksword::ark::DriverClient client;
         auto control = client.controlHvm(
             command,
@@ -741,10 +757,10 @@ void KernelHvmTab::runControlAsync(
             enableEptEvents,
             enableNestedVmx,
             enableEvmcs,
-            false,
-            false,
+            enableVe,
+            enableVmFunc,
             enableLocalEpt,
-            enableEptpSwitch);
+            enableEptpSwitch, 0UL, hideHypervisor);
         auto status = client.queryHvmStatus();
         if (safeThis == nullptr)
         {

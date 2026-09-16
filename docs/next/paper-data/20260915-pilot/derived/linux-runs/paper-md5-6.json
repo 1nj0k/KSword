@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "runId": "paper-md5-6",
+  "workload": "md5-64MiB-ramfile",
+  "iteration": 6,
+  "warmup": false,
+  "source": "tinycore-serial.txt",
+  "raw": "paper-md5-6\n7268.82 7155.18\n7f614da9329cd3aebf59b91aadc30bf0  /tmp/ksword-paper.dat\nrc=0\n7269.63 7155.18\n",
+  "guestUptimeSamples": [
+    7268.82,
+    7269.63
+  ],
+  "status": "ok",
+  "hostTimestamp": null,
+  "timestampNote": "Raw serial has guest uptime only; no synchronized host timestamp per command.",
+  "uptimeBracketSeconds": 0.8100000000004002,
+  "digest": "7f614da9329cd3aebf59b91aadc30bf0"
+}

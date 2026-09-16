@@ -1,0 +1,192 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.015 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.6584 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Felix\CLionProjects\KSword\docs\next\logs\hvm-latest-full-20260915.dmp]
+Kernel Bitmap Dump File: Kernel address space is available, User address space may not be available.
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release
+Deferred                                       srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release;srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 22621 MP (2 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS Personal
+Edition build lab: 22621.2506.amd64fre.ni_release_svc_prod3.231018-1809
+Kernel base = 0xfffff806`50800000 PsLoadedModuleList = 0xfffff806`514134b0
+Debug session time: Tue Sep 15 13:39:08.282 2026 (UTC - 4:00)
+System Uptime: 0 days 1:06:00.014
+Loading Kernel Symbols
+...............................................................
+................................................................
+.................................................
+Loading User Symbols
+
+Loading unloaded module list
+........
+For analysis of this file, run !analyze -v
+0: kd> cdb: Reading initial command '.trap ffff928a06466c60; dt nt!_KEXCEPTION_FRAME ffff928a06466a80; dt nt!_KCONTEXT fffff8064e5371c0; dps ffffa98be08029c6 L14; u ffffa98be0817a70 L40; q'
+NOTE: The trap frame does not contain all registers.
+Some register values may be zeroed or incorrect.
+rax=0000000080040033 rbx=0000000000000000 rcx=fffff8064d495180
+rdx=fffff8064d495180 rsi=0000000000000000 rdi=0000000000000000
+rip=ffffa98be0817b9d rsp=ffff928a06466df0 rbp=ffff928a06466ef0
+ r8=0000000020201c84  r9=0000000000000002 r10=0000000000000000
+r11=ffffa98be0802486 r12=0000000000000000 r13=0000000000000000
+r14=0000000000000000 r15=0000000000000000
+iopl=0         nv up ei pl zr na po cy
+ffffa98b`e0817b9d 0f22c0          mov     cr0,rax
+   +0x000 P1Home           : 0
+   +0x008 P2Home           : 0
+   +0x010 P3Home           : 0
+   +0x018 P4Home           : 0
+   +0x020 P5               : 1
+   +0x028 Spare1           : 0
+   +0x030 Xmm6             : _M128A
+   +0x040 Xmm7             : _M128A
+   +0x050 Xmm8             : _M128A
+   +0x060 Xmm9             : _M128A
+   +0x070 Xmm10            : _M128A
+   +0x080 Xmm11            : _M128A
+   +0x090 Xmm12            : _M128A
+   +0x0a0 Xmm13            : _M128A
+   +0x0b0 Xmm14            : _M128A
+   +0x0c0 Xmm15            : _M128A
+   +0x0d0 TrapFrame        : 0
+   +0x0d8 OutputBuffer     : 0xfffff806`50ab6125
+   +0x0e0 OutputLength     : 0
+   +0x0e8 Spare2           : 0xfffff806`50ab6125
+   +0x0f0 MxCsr            : 0xffffa98b`de0a3040
+   +0x0f8 Rbp              : 0
+   +0x100 Rbx              : 0xb3b6f56a`c4cb7cb7
+   +0x108 Rdi              : 0xa39fe8e4`7248d96e
+   +0x110 Rsi              : 0xffff928a`06467c30
+   +0x118 R12              : 3
+   +0x120 R13              : 0xfffff806`4e516fb0
+   +0x128 R14              : 0xffffa98b`de0a3040
+   +0x130 R15              : 0x80050033
+   +0x138 Return           : 0xc0000096
+Symbol nt!_KCONTEXT not found.
+ffffa98b`e08029c6  fffff806`51554ad0 nt!PspActiveProcessLock
+ffffa98b`e08029ce  fffff806`5151ec30 nt!PspCidTable
+ffffa98b`e08029d6  fffff806`5150c8e8 nt!ExpUuidLock
+ffffa98b`e08029de  fffff806`51440248 nt!AlpcpPortListLock
+ffffa98b`e08029e6  fffff806`516018c0 nt!KeServiceDescriptorTable
+ffffa98b`e08029ee  fffff806`5151f140 nt!KeServiceDescriptorTableShadow
+ffffa98b`e08029f6  fffff806`5151f2c0 nt!KeServiceDescriptorTableFilter
+ffffa98b`e08029fe  fffff806`51436bf0 nt!VfThunksExtended
+ffffa98b`e0802a06  fffff806`51437c78 nt!PsWin32CallBack
+ffffa98b`e0802a0e  fffff806`5140dec8 nt!TriageImagePageSize+0x4c
+ffffa98b`e0802a16  fffff806`5140ed38 nt!KiTableInformation
+ffffa98b`e0802a1e  fffff806`51554ec0 nt!HandleTableListHead
+ffffa98b`e0802a26  fffff806`51554b18 nt!HandleTableListLock
+ffffa98b`e0802a2e  ffff820e`da84be80
+ffffa98b`e0802a36  fffff780`00000000
+ffffa98b`e0802a3e  04cba156`0005c174
+ffffa98b`e0802a46  fffff806`51273d68 nt!SeProtectedMapping
+ffffa98b`e0802a4e  fffff806`50c21d70 nt!$$0
+ffffa98b`e0802a56  fffff806`51442200 nt!KiStackProtectNotifyEvent
+ffffa98b`e0802a5e  fffffe00`00000000
+ffffa98b`e0817a70 8995c8060000    mov     dword ptr [rbp+6C8h],edx
+ffffa98b`e0817a76 4c33c0          xor     r8,rax
+ffffa98b`e0817a79 48b84b598638d6c56d34 mov rax,346DC5D63886594Bh
+ffffa98b`e0817a83 49f7e0          mul     rax,r8
+ffffa98b`e0817a86 48c1ea0b        shr     rdx,0Bh
+ffffa98b`e0817a8a 4869c210270000  imul    rax,rdx,2710h
+ffffa98b`e0817a91 488bd7          mov     rdx,rdi
+ffffa98b`e0817a94 4c2bc0          sub     r8,rax
+ffffa98b`e0817a97 498b83d8010000  mov     rax,qword ptr [r11+1D8h]
+ffffa98b`e0817a9e 458bc8          mov     r9d,r8d
+ffffa98b`e0817aa1 4533c0          xor     r8d,r8d
+ffffa98b`e0817aa4 e82b690000      call    ffffa98b`e081e3d4
+ffffa98b`e0817aa9 4c8b9d800a0000  mov     r11,qword ptr [rbp+0A80h]
+ffffa98b`e0817ab0 b900800000      mov     ecx,8000h
+ffffa98b`e0817ab5 4439ad80030000  cmp     dword ptr [rbp+380h],r13d
+ffffa98b`e0817abc 0f84ba010000    je      ffffa98b`e0817c7c
+ffffa98b`e0817ac2 458b8390090000  mov     r8d,dword ptr [r11+990h]
+ffffa98b`e0817ac9 4485c1          test    ecx,r8d
+ffffa98b`e0817acc 0f85aa010000    jne     ffffa98b`e0817c7c
+ffffa98b`e0817ad2 4c8ba598030000  mov     r12,qword ptr [rbp+398h]
+ffffa98b`e0817ad9 4c8bada0030000  mov     r13,qword ptr [rbp+3A0h]
+ffffa98b`e0817ae0 488b9d90030000  mov     rbx,qword ptr [rbp+390h]
+ffffa98b`e0817ae7 488bbd88030000  mov     rdi,qword ptr [rbp+388h]
+ffffa98b`e0817aee 4c89a5880a0000  mov     qword ptr [rbp+0A88h],r12
+ffffa98b`e0817af5 4c896d48        mov     qword ptr [rbp+48h],r13
+ffffa98b`e0817af9 48895df8        mov     qword ptr [rbp-8],rbx
+ffffa98b`e0817afd 48897db0        mov     qword ptr [rbp-50h],rdi
+ffffa98b`e0817b01 440f20c0        mov     rax,cr8
+ffffa98b`e0817b05 41b902000000    mov     r9d,2
+ffffa98b`e0817b0b 413ac1          cmp     al,r9b
+ffffa98b`e0817b0e 730f            jae     ffffa98b`e0817b1f
+ffffa98b`e0817b10 440f20c0        mov     rax,cr8
+ffffa98b`e0817b14 450f22c1        mov     cr8,r9
+ffffa98b`e0817b18 458b8390090000  mov     r8d,dword ptr [r11+990h]
+ffffa98b`e0817b1f 65488b142520000000 mov   rdx,qword ptr gs:[20h]
+ffffa98b`e0817b28 4533d2          xor     r10d,r10d
+ffffa98b`e0817b2b 65488b0c2520000000 mov   rcx,qword ptr gs:[20h]
+ffffa98b`e0817b34 498b8340060000  mov     rax,qword ptr [r11+640h]
+ffffa98b`e0817b3b 488b3402        mov     rsi,qword ptr [rdx+rax]
+ffffa98b`e0817b3f 498b8350060000  mov     rax,qword ptr [r11+650h]
+ffffa98b`e0817b46 4c8b3401        mov     r14,qword ptr [rcx+rax]
+ffffa98b`e0817b4a 498b8348060000  mov     rax,qword ptr [r11+648h]
+ffffa98b`e0817b51 4c89742478      mov     qword ptr [rsp+78h],r14
+ffffa98b`e0817b56 44381402        cmp     byte ptr [rdx+rax],r10b
+ffffa98b`e0817b5a 741f            je      ffffa98b`e0817b7b
+ffffa98b`e0817b5c 488d85a8010000  lea     rax,[rbp+1A8h]
+ffffa98b`e0817b63 483bc6          cmp     rax,rsi
+ffffa98b`e0817b66 7713            ja      ffffa98b`e0817b7b
+ffffa98b`e0817b68 488d8600a0ffff  lea     rax,[rsi-6000h]
+ffffa98b`e0817b6f 488d8da8010000  lea     rcx,[rbp+1A8h]
+ffffa98b`e0817b76 483bc8          cmp     rcx,rax
+ffffa98b`e0817b79 730b            jae     ffffa98b`e0817b86
+ffffa98b`e0817b7b 498b8380060000  mov     rax,qword ptr [r11+680h]
+ffffa98b`e0817b82 498b3406        mov     rsi,qword ptr [r14+rax]
+ffffa98b`e0817b86 410fbae01b      bt      r8d,1Bh
+ffffa98b`e0817b8b 0f82a5040000    jb      ffffa98b`e0818036
+ffffa98b`e0817b91 410f20c7        mov     r15,cr0
+ffffa98b`e0817b95 498bc7          mov     rax,r15
+ffffa98b`e0817b98 480fbaf010      btr     rax,10h
+ffffa98b`e0817b9d 0f22c0          mov     cr0,rax
+ffffa98b`e0817ba0 458b8ba00a0000  mov     r9d,dword ptr [r11+0AA0h]
+ffffa98b`e0817ba7 498d93a80a0000  lea     rdx,[r11+0AA8h]
+ffffa98b`e0817bae 49c1e104        shl     r9,4
+ffffa98b`e0817bb2 33c0            xor     eax,eax
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'

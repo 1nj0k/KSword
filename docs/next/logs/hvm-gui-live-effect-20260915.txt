@@ -1,0 +1,40 @@
+BEFORE={"Boot":"2026-09-15T10:18:32.0326920-04:00","VmwarePid":10492,"GuiHash":"8B5C130226CBAB631D345298F1557960E71C0710BB38AF35BF5069FFD5BECC58","DriverHash":"3E131F93D8C3C09BAA34B486AC19BB5BC53DA85180A220642C6E872A9D20F1AC"}
+GUI_COMMAND=nested-page-query EXIT=0
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":3,"active":0,"retired":0,"residentProcessors":2,"ept12Pointer":"0x0000000000000000","guestPhysicalPage":"0x0000000000000000","shadowPhysicalPage":"0x0000000000000000","originalPhysicalPage":"0x0000000000000000","composedCount":0,"roots":["0x000000001CAC605E"]}
+GUI_COMMAND=nested-page-map 0x000000001CAC605E 7000000 d1 EXIT=0
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":4,"active":1,"retired":0,"residentProcessors":2,"ept12Pointer":"0x000000001CAC605E","guestPhysicalPage":"0x0000000007000000","shadowPhysicalPage":"0x0000000204FE5000","originalPhysicalPage":"0x0000000000000000","composedCount":0,"roots":["0x000000001CAC605E"]}
+GUI_COMMAND=nested-page-query EXIT=0
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":4,"active":1,"retired":0,"residentProcessors":2,"ept12Pointer":"0x000000001CAC605E","guestPhysicalPage":"0x0000000007000000","shadowPhysicalPage":"0x0000000204FE5000","originalPhysicalPage":"0x00000001043D3000","composedCount":3,"roots":["0x000000001CAC605E"]}
+GUI_COMMAND=nested-page-remove EXIT=0
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":5,"active":0,"retired":0,"residentProcessors":2,"ept12Pointer":"0x0000000000000000","guestPhysicalPage":"0x0000000000000000","shadowPhysicalPage":"0x0000000000000000","originalPhysicalPage":"0x0000000000000000","composedCount":0,"roots":["0x000000001CAC605E"]}
+AFTER={"Boot":"2026-09-15T10:18:32.0326920-04:00","VmwarePid":10492}
+gui-before
+1+0 records in
+1+0 records out
+4 bytes (4B) copied, 0.000962 seconds, 4.1KB/s
+ a5a5a5a5
+1+0 records in
+1+0 records out
+4 bytes (4B) copied, 0.009873 seconds, 405B/s
+gui-shadow
+1+0 records in
+1+0 records out
+4 bytes (4B) copied,  d1d1d1d1
+0.000335 seconds, 11.7KB/s
+gui-shadow-write
+1+0 records in
+1+0 records out
+4 bytes (4B) copied, 0.000637 seconds, 6.1KB/s
+1+0 records in
+1+0 records out
+4 bytes (4B) copied,  b2b2b2b2
+0.024707 seconds, 161B/s
+gui-restored
+ a5a5a5a5
+1+0 records in
+1+0 records out
+4 bytes (4B) copied, 0.005752 seconds, 695B/s
+
+GUI_COMMAND=nested-page-query EXIT=0
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":5,"active":0,"retired":0,"residentProcessors":2,"ept12Pointer":"0x0000000000000000","guestPhysicalPage":"0x0000000000000000","shadowPhysicalPage":"0x0000000000000000","originalPhysicalPage":"0x0000000000000000","composedCount":0,"roots":["0x000000001CAC605E"]}
+GUI_TINYCORE_EPT_EFFECT=PASS A5 -> D1 -> B2 -> A5; Windows and VMware stayed running

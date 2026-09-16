@@ -1,0 +1,9 @@
+{
+  "runId": "stability-20260915T210242Z",
+  "endedUtc": "2026-09-15T21:12:42.8262242Z",
+  "durationSeconds": 600.6126751,
+  "samples": 21,
+  "observerFailures": 0,
+  "result": "requires-analysis",
+  "logFile": "stability-20260915T210242Z.jsonl"
+}

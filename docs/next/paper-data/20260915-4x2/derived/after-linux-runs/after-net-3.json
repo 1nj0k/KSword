@@ -1,0 +1,27 @@
+{
+  "kind": "run-start",
+  "runId": "after-net-3",
+  "workload": "net",
+  "iteration": 3,
+  "bootId": "64995441-1414-4560-9278-450fbfc72baf",
+  "guestUptime": 318.54,
+  "binaryMD5": "fe11c500cef37d45948d4acf5797f75e",
+  "exitCode": 0,
+  "endGuestUptime": 318.66,
+  "eligible": true,
+  "metrics": [
+    {
+      "schemaVersion": 1,
+      "workload": "tcp-loopback-64MiB",
+      "status": "ok",
+      "seconds": 0.065857222,
+      "operations": 0,
+      "bytes": 67108864,
+      "nsPerOperation": 0.0,
+      "MiBPerSecond": 971.7993,
+      "sink": "0"
+    }
+  ],
+  "raw": "{\"kind\":\"run-start\",\"runId\":\"after-net-3\",\"workload\":\"net\",\"iteration\":3,\"bootId\":\"64995441-1414-4560-9278-450fbfc72baf\",\"guestUptime\":318.54,\"binaryMD5\":\"fe11c500cef37d45948d4acf5797f75e\"}\n{\"schemaVersion\":1,\"kind\":\"metadata\",\"pointerBytes\":8,\"pinCpu\":0,\"affinityResult\":0,\"cpuid1Eax\":\"0x000B0671\",\"cpuid1Ecx\":\"0xFFFA3203\",\"timer\":\"CLOCK_MONOTONIC_RAW\"}\n{\"schemaVersion\":1,\"workload\":\"tcp-loopback-64MiB\",\"status\":\"ok\",\"seconds\":0.065857222,\"operations\":0,\"bytes\":67108864,\"nsPerOperation\":0.0000,\"MiBPerSecond\":971.7993,\"sink\":\"0\"}\n{\"kind\":\"run-end\",\"runId\":\"after-net-3\",\"exitCode\":0,\"guestUptime\":318.66}\n",
+  "serialSha256": "d854ccba53be8e75838ce591e9e01ecb4c13122ed9962604e3ca636e8553c5f3"
+}

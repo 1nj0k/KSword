@@ -4,6 +4,7 @@
 #include "../KernelDock/KernelHvmTab.h"
 #include "../UI/FlowLayout.h"
 #include "../UI/KvmControl.h"
+#include "../UI/KvmCommandPanel.h"
 #include "../theme.h"
 
 #include <QGroupBox>
@@ -113,6 +114,23 @@ void KvmDock::setActionHandler(ActionHandler handler)
     m_actionHandler = std::move(handler);
 }
 
+void KvmDock::setCommandOperationHandler(std::function<void(bool)> handler)
+{
+    m_commandOperationHandler = std::move(handler);
+}
+
+void KvmDock::showCommandPanel()
+{
+    m_tabs->setCurrentWidget(m_commandPanel);
+    m_commandPanel->setFocus();
+}
+
+int KvmDock::runCommandCoverageTest(const QString& reportPath)
+{
+    showCommandPanel();
+    return m_commandPanel->runCoverageTest(reportPath, window());
+}
+
 void KvmDock::setOperationRunning(const bool running)
 {
     if (m_operationRunning == running)
@@ -120,6 +138,8 @@ void KvmDock::setOperationRunning(const bool running)
         return;
     }
     m_operationRunning = running;
+    m_commandPanel->setEnabled(!running);
+    m_hvmTab->setEnabled(!running);
     updateLifecycleView();
     if (!running)
     {
@@ -197,6 +217,7 @@ void KvmDock::initializeUi()
     // 高度，剩给逐 CPU 表的只有两三行；而每个分组内部的按钮又在横向被裁。
     // 拆成子页之后每一页只剩一件事，两个方向的挤压同时消失。
     auto* const tabs = new QTabWidget(this);
+    m_tabs = tabs;
     tabs->setDocumentMode(true);
 
     auto* const controlPanel = new QWidget(tabs);
@@ -257,6 +278,11 @@ void KvmDock::initializeUi()
         installRow->addWidget(button);
     }
     controlLayout->addWidget(installGroup);
+    auto* commandsButton = new QPushButton(ks::i18n::sourceText(QStringLiteral("KVM 完整命令面板")), controlPanel);
+    controlLayout->addWidget(commandsButton);
+    connect(commandsButton, &QPushButton::clicked, this, [this]() {
+        showCommandPanel();
+    });
 
     // 第 3 步：进出常驻，以及唯一一个"卡住时先做这个"的出口。
     auto* const residentGroup = new QGroupBox(
@@ -372,6 +398,12 @@ void KvmDock::initializeUi()
     m_hvmTab = new KernelHvmTab(tabs);
 
     tabs->addTab(controlPanel, ks::i18n::sourceText(QStringLiteral("控制")));
+    m_commandPanel = new KvmCommandPanel(tabs);
+    m_commandPanel->onBusyChanged = [this](bool running) {
+        setOperationRunning(running);
+        if (m_commandOperationHandler) { m_commandOperationHandler(running); }
+    };
+    tabs->addTab(m_commandPanel, ks::i18n::sourceText(QStringLiteral("完整操作")));
     tabs->addTab(detailPage, ks::i18n::sourceText(QStringLiteral("状态详情")));
     tabs->addTab(m_hvmTab, ks::i18n::sourceText(QStringLiteral("VT-x/EPT 证据")));
     rootLayout->addWidget(tabs, 1);

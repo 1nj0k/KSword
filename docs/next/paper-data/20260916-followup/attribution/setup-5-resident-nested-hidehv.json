@@ -1,0 +1,7 @@
+{
+    "kind":  "mode-setup",
+    "round":  5,
+    "condition":  "resident-nested-hidehv",
+    "status":  "ready",
+    "utc":  "2026-09-16T01:32:14.3888574Z"
+}

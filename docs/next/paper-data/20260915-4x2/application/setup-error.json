@@ -1,0 +1,7 @@
+{
+  "kind": "application-collector-preflight-error",
+  "status": "error_before_transaction",
+  "utc": "2026-09-15T23:41:58.5594360Z",
+  "reason": "Windows PowerShell 5.1 MatchCollection negative index returned null. Corrected to Count-1 before any EPT operation.",
+  "mappingAttempted": false
+}

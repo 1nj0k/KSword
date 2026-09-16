@@ -234,6 +234,108 @@ KswordARKHvmNestedL2ClampControl(
     return (Requested | allowedZero) & allowedOne;
 }
 
+/* VMX host fields become guest fields when the emulated VM exit enters L1. */
+static VOID
+KswordARKHvmNestedL2LoadHostState(
+    _Inout_ KSW_HVM_VMCS12_STATE* Vmcs12,
+    _In_ ULONGLONG L2Cr0,
+    _In_ ULONGLONG L2Efer,
+    _In_ ULONGLONG L2Pat
+    )
+{
+    static const ULONG hostToGuest[][2] = {
+        { 0x6C02UL, KSW_L2_GUEST_CR3 },
+        { 0x6C14UL, KSW_L2_GUEST_RSP },
+        { 0x6C16UL, KSW_L2_GUEST_RIP },
+        { 0x6C06UL, 0x680EUL }, /* FS base */
+        { 0x6C08UL, 0x6810UL }, /* GS base */
+        { 0x6C0AUL, 0x6814UL }, /* TR base */
+        { 0x6C0CUL, 0x6816UL }, /* GDTR base */
+        { 0x6C0EUL, 0x6818UL }, /* IDTR base */
+        { 0x4C00UL, 0x482AUL }, /* SYSENTER CS */
+        { 0x6C10UL, 0x6824UL }, /* SYSENTER ESP */
+        { 0x6C12UL, 0x6826UL }  /* SYSENTER EIP */
+    };
+    ULONGLONG exitControls = 0ULL;
+    ULONGLONG cr0 = 0ULL;
+    ULONGLONG cr4 = 0ULL;
+    ULONGLONG efer = L2Efer;
+    ULONGLONG pat = L2Pat;
+    ULONG index = 0UL;
+    BOOLEAN longMode = FALSE;
+
+    (void)KswordARKHvmNestedVmcs12Read(Vmcs12, KSW_L2_EXIT_CONTROLS, &exitControls);
+    longMode = (exitControls & (1ULL << 9)) != 0ULL;
+    (void)KswordARKHvmNestedVmcs12Read(Vmcs12, 0x6C00UL, &cr0);
+    (void)KswordARKHvmNestedVmcs12Read(Vmcs12, 0x6C04UL, &cr4);
+    /* Intel SDM 28.5.1: cache-disable bits survive; PAE/PCIDE follow host mode. */
+    cr0 = (cr0 & ~0x60000000ULL) | (L2Cr0 & 0x60000000ULL);
+    if (longMode) { cr4 |= (1ULL << 5); }
+    else { cr4 &= ~(1ULL << 17); }
+    {
+        const ULONGLONG cr0Mask = KswordARKHvmNestedL2Read(0x6000UL);
+        const ULONGLONG cr4Mask = KswordARKHvmNestedL2Read(0x6002UL);
+        const ULONGLONG cr0Pinned = KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR0);
+        const ULONGLONG cr4Pinned = KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR4);
+        KswordARKHvmNestedL2Write(KSW_L2_GUEST_CR0,
+            (cr0 & ~cr0Mask) | (cr0Pinned & cr0Mask));
+        KswordARKHvmNestedL2Write(KSW_L2_GUEST_CR4,
+            (cr4 & ~cr4Mask) | (cr4Pinned & cr4Mask));
+    }
+    KswordARKHvmNestedL2Write(0x6004UL, cr0);
+    KswordARKHvmNestedL2Write(0x6006UL, cr4);
+    for (index = 0UL; index < RTL_NUMBER_OF(hostToGuest); ++index) {
+        ULONGLONG value = 0ULL;
+        (void)KswordARKHvmNestedVmcs12Read(Vmcs12, hostToGuest[index][0], &value);
+        KswordARKHvmNestedL2Write(hostToGuest[index][1], value);
+    }
+    /* ES, CS, SS, DS, FS and GS have architecturally specified VM-exit caches. */
+    for (index = 0UL; index < 6UL; ++index) {
+        ULONGLONG selector = 0ULL;
+        ULONGLONG ar = 0xC093ULL;
+        (void)KswordARKHvmNestedVmcs12Read(Vmcs12, 0x0C00UL + index * 2UL, &selector);
+        if (index == 1UL) { ar = longMode ? 0xA09BULL : 0xC09BULL; }
+        else if (selector == 0ULL) { ar = 0x10000ULL; }
+        KswordARKHvmNestedL2Write(0x0800UL + index * 2UL, selector);
+        KswordARKHvmNestedL2Write(0x4800UL + index * 2UL, 0xFFFFFFFFULL);
+        KswordARKHvmNestedL2Write(0x4814UL + index * 2UL, ar);
+        if (index < 4UL) { KswordARKHvmNestedL2Write(0x6806UL + index * 2UL, 0ULL); }
+    }
+    {
+        ULONGLONG selector = 0ULL;
+        (void)KswordARKHvmNestedVmcs12Read(Vmcs12, 0x0C0CUL, &selector);
+        KswordARKHvmNestedL2Write(0x080EUL, selector);
+    }
+    KswordARKHvmNestedL2Write(0x480EUL, 0x67ULL);
+    KswordARKHvmNestedL2Write(0x4822UL, 0x8BULL);
+    KswordARKHvmNestedL2Write(0x080CUL, 0ULL);
+    KswordARKHvmNestedL2Write(0x4820UL, 0x10000ULL);
+    KswordARKHvmNestedL2Write(0x4810UL, 0xFFFFULL);
+    KswordARKHvmNestedL2Write(0x4812UL, 0xFFFFULL);
+    KswordARKHvmNestedL2Write(0x681AUL, 0x400ULL);
+    KswordARKHvmNestedL2Write(0x2802UL, 0ULL);
+    KswordARKHvmNestedL2Write(0x6822UL, 0ULL);
+    if ((exitControls & (1ULL << 21)) != 0ULL) {
+        (void)KswordARKHvmNestedVmcs12Read(Vmcs12, 0x2C02UL, &efer);
+    } else {
+        efer &= ~((1ULL << 8) | (1ULL << 10));
+        if (longMode) { efer |= (1ULL << 8) | (1ULL << 10); }
+    }
+    if ((exitControls & (1ULL << 19)) != 0ULL) {
+        (void)KswordARKHvmNestedVmcs12Read(Vmcs12, 0x2C00UL, &pat);
+    }
+    KswordARKHvmNestedL2Write(0x2806UL, efer);
+    KswordARKHvmNestedL2Write(0x2804UL, pat);
+    {
+        ULONGLONG entry = KswordARKHvmNestedL2Read(KSW_L2_ENTRY_CONTROLS);
+        entry = (entry & ~(1ULL << 9)) | (longMode ? (1ULL << 9) : 0ULL);
+        KswordARKHvmNestedL2Write(KSW_L2_ENTRY_CONTROLS, entry);
+    }
+    KswordARKHvmNestedL2Write(KSW_L2_GUEST_RFLAGS, 0x2ULL);
+    KswordARKHvmNestedL2Write(KSW_L2_GUEST_INTERRUPTIBILITY, 0ULL);
+    KswordARKHvmNestedL2Write(KSW_L2_GUEST_ACTIVITY_STATE, 0ULL);
+}
+
 ULONG
 KswordARKHvmNestedL2Enter(
     _Inout_ struct _KSW_HVM_RESIDENT_VCPU* Context,
@@ -290,7 +392,7 @@ KswordARKHvmNestedL2Enter(
         return KSW_L2_ERROR_VMLAUNCH_NONCLEAR_VMCS;
     }
     /* Refuse without the resources L2 execution needs. */
-    if (Context->Resource == NULL ||
+    if (Frame == NULL || Context->Resource == NULL ||
         Context->Resource->Vmcs02Virtual == NULL ||
         Context->PhysWindow == NULL) {
         /* Return the exact unavailable-resource error. */
@@ -329,6 +431,24 @@ KswordARKHvmNestedL2Enter(
             /* Return the exact unusable-EPT-pointer error. */
             nested->L2LastRefusalSite = 3UL;
             return KSW_L2_ERROR_INVALID_CONTROL_FIELDS;
+        }
+        /* Snapshot the epoch before invalidation; a later change remains pending. */
+        {
+            /* Source identity is checked before permitting this CPU to run L2. */
+            const BOOLEAN leaseValid = KswordARKHvmNestedPageValidateTranslation(
+                Context->Runtime, Context->PhysWindow, value);
+            /* Read the policy published by the owner-exit or control path. */
+            const ULONG policyGeneration = (ULONG)ReadAcquire(
+                (volatile LONG*)&Context->Runtime->NestedPageGeneration);
+            /* Do not reuse a hierarchy composed under a retired process lease. */
+            if (!leaseValid || nested->ShadowEpt.PagePolicyGeneration != policyGeneration) {
+                /* Invalidate local hardware translations before recording the epoch. */
+                KswordARKHvmNestedEptInvalidate(&nested->ShadowEpt);
+                /* Store only the generation actually processed. */
+                nested->ShadowEpt.PagePolicyGeneration = policyGeneration;
+                /* Failed invalidation must never permit stale execution. */
+                if (nested->ShadowEpt.Faulted) { return KSW_L2_ERROR_INVALID_CONTROL_FIELDS; }
+            }
         }
         eptPointer = nested->ShadowEpt.ComposedEptPointer;
     } else {
@@ -1053,16 +1173,11 @@ KswordARKHvmNestedL2Enter(
      * Frame holds exactly what L1 had when it executed its VMLAUNCH, which is
      * what the architecture says its guest inherits.
      *
-     * A missing Frame keeps the old behaviour rather than refusing: the entry
-     * is still architecturally valid, just with registers nobody promised.
+     * The assembly restores the saved x87/SSE state too; C has used those
+     * registers since the exit stub captured them. A missing frame is refused
+     * before touching vmcs02.
      */
-    if (Frame != NULL) {
-        (void)KswordARKHvmAsmNestedL2Enter(Frame, IsResume ? 1UL : 0UL);
-    } else if (IsResume) {
-        (void)__vmx_vmresume();
-    } else {
-        (void)__vmx_vmlaunch();
-    }
+    (void)KswordARKHvmAsmNestedL2Enter(Frame, IsResume ? 1UL : 0UL, Context->FxState);
     /* Entry failed, so nothing is running L2 and the claim must be undone. */
     nested->InL2 = FALSE;
     nested->State = KSWORD_ARK_HVM_NESTED_STATE_VMCS12_CURRENT;
@@ -1078,6 +1193,7 @@ KswordARKHvmNestedL2Enter(
 #define KSW_L2_OWNER_L1 0UL
 #define KSW_L2_OWNER_US_RESOLVED 1UL
 #define KSW_L2_OWNER_US_NEEDS_SERVICE 2UL
+#define KSW_L2_OWNER_US_ABORT 3UL
 
 /*
  * Deliver again the event whose delivery this exit interrupted.
@@ -1337,24 +1453,35 @@ KswordARKHvmNestedL2ExitOwner(
             if (isDeviceSpace) { nested->L2LastMmioDisposition = 3UL; }
             return KSW_L2_OWNER_US_NEEDS_SERVICE;
         }
-        if (KswordARKHvmNestedEptFill(
-                Context->Runtime,
-                &nested->ShadowEpt,
-                Context->PhysWindow,
-                guestPhysical,
-                access)) {
-            /* Report the satisfied violation as needing nothing further. */
-            nested->L2LastEptDisposition = 1UL;
-            if (isDeviceSpace) {
-                nested->L2LastMmioDisposition = 1UL;
-                nested->L2MmioComposedCount += 1ULL;
+        {
+            const ULONG fill = KswordARKHvmNestedEptFill(
+                Context->Runtime, &nested->ShadowEpt, Context->PhysWindow,
+                guestPhysical, access, KswordARKHvmNestedL2Read(KSW_L2_GUEST_RIP));
+            if (fill == KSW_HVM_NEPT_FILL_RESOLVED) {
+                /* Report the satisfied violation as needing nothing further. */
+                nested->L2LastEptDisposition = 1UL;
+                if (isDeviceSpace) {
+                    nested->L2LastMmioDisposition = 1UL;
+                    nested->L2MmioComposedCount += 1ULL;
+                }
+                if (apicPage != 0UL) {
+                    nested->L2ApicMmio[apicPage - 1UL][1] += 1UL;
+                }
+                return KSW_L2_OWNER_US_RESOLVED;
             }
-            if (apicPage != 0UL) {
-                nested->L2ApicMmio[apicPage - 1UL][1] += 1UL;
+            if (fill != KSW_HVM_NEPT_FILL_L1_DENIED) {
+                /* No Windows rollback and no EPT01 lookup with an L2 address.
+                 * Stop this virtual CPU through L1's guest-shutdown path. */
+                nested->ShadowEpt.Faulted = TRUE;
+                if (NT_SUCCESS(nested->ShadowEpt.LastStatus)) {
+                    nested->ShadowEpt.LastStatus = STATUS_NOT_SUPPORTED;
+                }
+                nested->L2LastEptDisposition = 4UL;
+                if (isDeviceSpace) { nested->L2LastMmioDisposition = 4UL; }
+                return KSW_L2_OWNER_US_ABORT;
             }
-            return KSW_L2_OWNER_US_RESOLVED;
         }
-        /* Report the refused violation as L1's. */
+        /* Only an EPT12 denial is reflected as an EPT violation. */
         nested->L2LastEptDisposition = 2UL;
         if (isDeviceSpace) {
             nested->L2LastMmioDisposition = 2UL;
@@ -1839,6 +1966,10 @@ KswordARKHvmNestedL2Reflect(
     KSW_HVM_VMCS12_STATE* vmcs12 = &nested->Vmcs12;
     ULONGLONG vmcs01Physical = nested->Vmcs01Physical;
     ULONG index = 0UL;
+    BOOLEAN abortL2 = FALSE;
+    ULONGLONG l2Cr0 = 0ULL;
+    ULONGLONG l2Efer = 0ULL;
+    ULONGLONG l2Pat = 0ULL;
 
     /* Not an L2 exit at all, so there is nothing to route. */
     if (!nested->InL2) {
@@ -2177,6 +2308,9 @@ KswordARKHvmNestedL2Reflect(
             /* Report that the ordinary handling must run on vmcs02. */
             return KSW_HVM_L2_ROUTE_SERVICE_LOCALLY;
         }
+        abortL2 = (owner == KSW_L2_OWNER_US_ABORT) ? TRUE : FALSE;
+        /* A return to L1 ends the run covered by the no-progress ledger. */
+        KswordArkHvmEptSwProgressReset(&nested->ShadowEpt.OuterViewProgress);
         /*
          * Reflected: L1 re-delivers, because the field reaches it in vmcs12
          * below.  Counted anyway so the pair says whether an interrupted
@@ -2347,6 +2481,23 @@ KswordARKHvmNestedL2Reflect(
         vmcs12,
         KSW_L2_GUEST_PHYSICAL_ADDRESS,
         KswordARKHvmNestedL2Read(KSW_L2_GUEST_PHYSICAL_ADDRESS));
+    if (abortL2) {
+        /*
+         * A synthetic shutdown (exit 2) tells L1 this virtual CPU cannot
+         * continue. The real EPT failure stays in LastStatus/disposition 4.
+         * Never disguise our denial as EPT12 denying a page, which would
+         * make VMware repeatedly "fix" a mapping it already permits.
+         */
+        (void)KswordARKHvmNestedVmcs12Write(vmcs12, KSW_L2_EXIT_REASON, 2ULL);
+        (void)KswordARKHvmNestedVmcs12Write(vmcs12, KSW_L2_EXIT_QUALIFICATION, 0ULL);
+        (void)KswordARKHvmNestedVmcs12Write(vmcs12, KSW_L2_EXIT_INTR_INFO, 0ULL);
+        (void)KswordARKHvmNestedVmcs12Write(vmcs12, KSW_L2_IDT_VECTORING_INFO, 0ULL);
+        (void)KswordARKHvmNestedVmcs12Write(vmcs12, KSW_L2_EXIT_INSTRUCTION_LENGTH, 0ULL);
+    }
+    /* Capture retained guest state before changing the current VMCS. */
+    l2Cr0 = KswordARKHvmNestedL2Read(KSW_L2_GUEST_CR0);
+    l2Efer = KswordARKHvmNestedL2Read(0x2806UL);
+    l2Pat = KswordARKHvmNestedL2Read(0x2804UL);
     /* Go back to the VMCS that runs L1. */
     if (__vmx_vmptrld(&vmcs01Physical) != 0) {
         /*
@@ -2368,28 +2519,7 @@ KswordARKHvmNestedL2Reflect(
      * instruction after VMLAUNCH instead would be resuming it as though the
      * entry had failed, which is a different architectural event entirely.
      */
-    {
-        ULONGLONG hostRip = 0ULL;
-        ULONGLONG hostRsp = 0ULL;
-        ULONGLONG hostCr0 = 0ULL;
-        ULONGLONG hostCr3 = 0ULL;
-        ULONGLONG hostCr4 = 0ULL;
-
-        (void)KswordARKHvmNestedVmcs12Read(vmcs12, 0x6C16UL, &hostRip);
-        (void)KswordARKHvmNestedVmcs12Read(vmcs12, 0x6C14UL, &hostRsp);
-        (void)KswordARKHvmNestedVmcs12Read(vmcs12, 0x6C00UL, &hostCr0);
-        (void)KswordARKHvmNestedVmcs12Read(vmcs12, 0x6C02UL, &hostCr3);
-        (void)KswordARKHvmNestedVmcs12Read(vmcs12, 0x6C04UL, &hostCr4);
-        KswordARKHvmNestedL2Write(KSW_L2_GUEST_RIP, hostRip);
-        KswordARKHvmNestedL2Write(KSW_L2_GUEST_RSP, hostRsp);
-        KswordARKHvmNestedL2Write(KSW_L2_GUEST_CR0, hostCr0);
-        KswordARKHvmNestedL2Write(KSW_L2_GUEST_CR3, hostCr3);
-        KswordARKHvmNestedL2Write(KSW_L2_GUEST_CR4, hostCr4);
-        /* A VM exit always lands with interrupts masked and no shadow. */
-        KswordARKHvmNestedL2Write(KSW_L2_GUEST_RFLAGS, 0x2ULL);
-        KswordARKHvmNestedL2Write(KSW_L2_GUEST_INTERRUPTIBILITY, 0ULL);
-        KswordARKHvmNestedL2Write(KSW_L2_GUEST_ACTIVITY_STATE, 0ULL);
-    }
+    KswordARKHvmNestedL2LoadHostState(vmcs12, l2Cr0, l2Efer, l2Pat);
     vmcs12->Launched = TRUE;
     nested->InL2 = FALSE;
     nested->State = KSWORD_ARK_HVM_NESTED_STATE_VMCS12_CURRENT;

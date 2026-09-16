@@ -1,0 +1,20 @@
+{
+  "kind": "measured-script-provenance",
+  "files": [
+    {
+      "path": "measured-policy-script.txt",
+      "bytes": 1560,
+      "md5": "3bec4c62f74914a1414b32c76db36c0c",
+      "sha256": "1a2b40622fe266872d7cab32d36c1e33ab5e98b998983c61a94b837bc6644717"
+    },
+    {
+      "path": "measured-inplace-script.txt",
+      "bytes": 1616,
+      "md5": "15c5b0b96444c4ee74354631226a50a5",
+      "sha256": "d9dfeda139455cec1bb064d1aa7361b5b6f5cdf549c38cd2b2bacc830d815923"
+    }
+  ],
+  "note": "Actual guest copies captured through serial after all interventions, with terminal CRLF normalized to original LF and original MD5 verified. Tracked wrapper later adds POLICY_FILE/POLICY_PFN_LOG; these measured copies retain literal paths.",
+  "holderLiveness": "constant-one; advancing fresh PFN observations only",
+  "collectorFixRuntimeTested": false
+}

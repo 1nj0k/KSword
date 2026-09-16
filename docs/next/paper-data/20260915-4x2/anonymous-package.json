@@ -1,0 +1,16 @@
+{
+  "archive": "dist/hvm-anonymous-20260915-4x2-r2/anonymous-evidence.zip",
+  "sha256": "05c01664512348ce731424ab6b808edaa66a343911f00ce17034697155fe5eea",
+  "bytes": 8017092,
+  "files": 1281,
+  "reproduction": "passed",
+  "identityScan": "passed",
+  "zipIntegrity": "passed",
+  "kind": "anonymous-evidence-package",
+  "scope": "Local evidence and analysis archive; not uploaded as a submission. Private provenance remains outside ZIP.",
+  "privateProvenanceIncluded": false,
+  "retainedOldStabilityCpus": 2,
+  "currentHttpCompleteRuns": 3,
+  "currentSmpCompleteRuns": 20,
+  "extendedIdentityScan": "passed"
+}

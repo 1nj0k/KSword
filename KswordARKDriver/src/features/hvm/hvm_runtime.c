@@ -18,6 +18,8 @@ Environment:
 --*/
 
 #include "hvm_internal.h"
+#include "hvm_metrics.h"
+#include "hvm_nested_ept.h"
 // KswordARKAllocateNonPagedPool：L1 位图副本不进硬件，用普通池即可。
 #include "../../platform/pool_compat.h"
 
@@ -1145,6 +1147,7 @@ KswordARKHvmFreeResourcesLocked(
      * 就指向一张不存在的视图，摘不掉也报不出来，影子页跟着泄露。
      */
     KswordARKHvmInjectResetLocked(Runtime);
+    KswordARKHvmNestedPageResetLocked(Runtime);
     /* Restore view leaves and free shadows before rules touch the same pages. */
     KswordARKHvmEptViewResetLocked(Runtime);
     /* Restore baseline EPT leaves before releasing split table pages. */
@@ -1698,7 +1701,11 @@ KswordARKHvmPrepareLocked(
         KswordARKHvmFreeResourcesLocked(Runtime);
         return status;
     }
+    /* Base EPT construction belongs to prepare, before resident insertion. */
+    KswordARKHvmMetricsStamp(KSW_HVM_TIME_EPT_BEGIN);
     status = KswordARKHvmBuildEptLocked(Runtime);
+    /* Record failures as well as successful hierarchy construction. */
+    KswordARKHvmMetricsStamp(KSW_HVM_TIME_EPT_END);
     if (!NT_SUCCESS(status)) {
         KswordARKHvmFreeResourcesLocked(Runtime);
         return status;
@@ -2456,6 +2463,10 @@ KswordARKHvmEnableResidentLifecycle(
         goto Failure;
     }
 
+    /* Page overrides also require an exact VMM-process lifetime guard. */
+    status = KswordARKHvmNestedPageGuardInitialize();
+    /* Roll back the earlier callback registrations if this guard is unavailable. */
+    if (!NT_SUCCESS(status)) { goto Failure; }
     /* Publish resident/EPT controls only after every fail-closed guard exists. */
     g_KswordHvm.FeatureFlags |=
         KSWORD_ARK_HVM_FEATURE_RESIDENT_VMM |
@@ -2472,6 +2483,8 @@ KswordARKHvmEnableResidentLifecycle(
     return STATUS_SUCCESS;
 
 Failure:
+    /* No callback may retain a pointer into an unavailable HVM runtime. */
+    KswordARKHvmNestedPageGuardShutdown();
     /* Roll back partial callback ownership before leaving resident disabled. */
     if (g_KswordHvm.PowerStateCallbackRegistration != NULL) {
         ExUnregisterCallback(
@@ -2520,6 +2533,8 @@ KswordARKHvmUninitialize(
     KswordARKHvmPhysWindowShutdownAll();
     /* Close the ring -1 window before any other teardown can use it. */
     KswordARKHvmMemoryShutdown();
+    /* Drain process notifications before releasing any referenced page owners. */
+    KswordARKHvmNestedPageGuardShutdown();
     /* Block new residency before draining either lifecycle callback. */
     g_KswordHvm.ResidentStartAllowed = FALSE;
     InterlockedExchange(
@@ -2586,6 +2601,21 @@ KswordARKHvmUninitialize(
     }
     g_KswordHvm.DriverObject = NULL;
     g_KswordHvm.OriginalDriverUnload = NULL;
+}
+
+/* The caller holds the resource lock; CPU writers never contend on a global sum. */
+static ULONGLONG KswordARKHvmTotalVmExitCountLocked(VOID)
+{
+    ULONG index;
+    /* One-shot exits are counted separately from the resident per-CPU rows. */
+    ULONGLONG count = (ULONGLONG)g_KswordHvm.VmExitCount;
+    /* The sum is observational, as were the separately queried reason histograms. */
+    for (index = 0UL; index < g_KswordHvm.ProcessorCount; ++index) {
+        /* Aligned x64 reads cannot tear; each resident row has a single writer. */
+        count += *(volatile ULONGLONG*)&g_KswordHvm.Processors[index].Row.vmExitCount;
+    }
+    /* Include every resident dispatch, including early reflected L2 exits. */
+    return count;
 }
 
 NTSTATUS
@@ -2725,7 +2755,7 @@ KswordARKHvmQuery(
     Response->mappedRamBytes = g_KswordHvm.MappedRamBytes;
     Response->highestMappedPhysicalAddress =
         g_KswordHvm.HighestMappedPhysicalAddress;
-    Response->vmExitCount = g_KswordHvm.VmExitCount;
+    Response->vmExitCount = KswordARKHvmTotalVmExitCountLocked();
     Response->lastExitQualification =
         g_KswordHvm.LastExitQualification;
     Response->lastGuestRip = g_KswordHvm.LastGuestRip;
@@ -3013,7 +3043,9 @@ KswordARKHvmControl(
              * learns from CPUID about the hypervisor underneath; every other
              * exit keeps its exact semantics.
              */
-            KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR;
+            KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR |
+            /* Keep the full-read reference available without rebuilding a driver. */
+            KSWORD_ARK_HVM_CONTROL_FLAG_FULL_EXIT_SNAPSHOT;
         /* Stop after selecting the resident-start flag set. */
         break;
     case KSWORD_ARK_HVM_CONTROL_SOAK:
@@ -3204,9 +3236,13 @@ KswordARKHvmControl(
     g_KswordHvm.Busy = TRUE;
     KswordARKHvmStateSet(&g_KswordHvm, KSWORD_ARK_HVM_STATE_BUSY);
     if (Request->command == KSWORD_ARK_HVM_CONTROL_PREPARE) {
+        /* Measure preparation separately from resident insertion. */
+        KswordARKHvmMetricsBegin(Request->command);
         status = KswordARKHvmPrepareLocked(
             &g_KswordHvm,
             Request);
+        /* Preserve both successful and failed preparation intervals. */
+        KswordARKHvmMetricsEnd(status);
     } else if (Request->command ==
         KSWORD_ARK_HVM_CONTROL_SELF_TEST) {
         status = KswordARKHvmSelfTestLocked(
@@ -3224,14 +3260,20 @@ KswordARKHvmControl(
             &g_KswordHvm,
             Request->vmreadBenchIterations);
         /* Enter resident VMX only through the all-processor rendezvous. */
+        KswordARKHvmMetricsBegin(Request->command);
         status = KswordARKHvmResidentStart(
             &g_KswordHvm,
             Request->flags);
+        /* Finalize after complete startup or its rollback. */
+        KswordARKHvmMetricsEnd(status);
     } else if (Request->command ==
         KSWORD_ARK_HVM_CONTROL_STOP_RESIDENT) {
         /* Leave resident VMX through the all-processor rollback path. */
+        KswordARKHvmMetricsBegin(Request->command);
         status = KswordARKHvmResidentStop(
             &g_KswordHvm);
+        /* Preserve timing after the per-CPU contexts have been released. */
+        KswordARKHvmMetricsEnd(status);
     } else if (Request->command ==
         KSWORD_ARK_HVM_CONTROL_SOAK) {
         /* Hold residency for a bounded window and report whether it held. */
@@ -3376,7 +3418,7 @@ Complete:
     Response->eptPageCount = g_KswordHvm.EptPageCount;
     Response->eptPointer = g_KswordHvm.EptPointer;
     Response->mappedRamBytes = g_KswordHvm.MappedRamBytes;
-    Response->vmExitCount = g_KswordHvm.VmExitCount;
+    Response->vmExitCount = KswordARKHvmTotalVmExitCountLocked();
     Response->lastExitQualification =
         g_KswordHvm.LastExitQualification;
     Response->lastGuestRip = g_KswordHvm.LastGuestRip;

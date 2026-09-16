@@ -1,0 +1,10 @@
+{
+  "utc": "2026-09-15T22:11:04.6558465Z",
+  "action": "create-demand-kernel-service",
+  "raw": "[SC] CreateService SUCCESS\r\n",
+  "exitCode": 0,
+  "imagePath": "\\??\\C:\\ksword\\gui\\KswordARK.sys",
+  "PSComputerName": "KSword-HVM-Target",
+  "RunspaceId": "295fe5d6-e6e7-4427-979e-c8e298181489",
+  "PSShowComputerName": true
+}

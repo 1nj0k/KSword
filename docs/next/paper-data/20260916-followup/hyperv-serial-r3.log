@@ -1,0 +1,579 @@
+Linux version 6.18.35-tinycore64 (tc@NUC12-Devel) (gcc (GCC) 15.2.0, GNU ld (GNU Binutils) 2.45.1) #1 SMP Wed Jun 17 00:02:49 UTC 2026
+Command line: console=ttyS0,115200n8 ignore_loglevel loglevel=7 initrd=/boot/corepure64.gz,/boot/hyperv-overlay.gz BOOT_IMAGE=/boot/vmlinuz64 
+BIOS-provided physical RAM map:
+BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+BIOS-e820: [mem 0x000000000009fc00-0x000000000009ffff] reserved
+BIOS-e820: [mem 0x00000000000e0000-0x00000000000fffff] reserved
+BIOS-e820: [mem 0x0000000000100000-0x000000002ffeffff] usable
+BIOS-e820: [mem 0x000000002fff0000-0x000000002fffefff] ACPI data
+BIOS-e820: [mem 0x000000002ffff000-0x000000002fffffff] ACPI NVS
+printk: debug: ignoring loglevel setting.
+NX (Execute Disable) protection: active
+APIC: Static calls initialized
+[Firmware Bug]: Corrupted DMI table, offset 478 (only 5 entries processed)
+SMBIOS 2.3 present.
+DMI: Microsoft Corporation Virtual Machine/Virtual Machine, BIOS 090008  12/07/2018
+DMI: Memory slots populated: 0/0
+Hypervisor detected: Microsoft Hyper-V
+Hyper-V: privilege flags low 0x2e7f, high 0x388030, ext 0x22, hints 0x20c2c, misc 0xe0bed7b2
+Hyper-V: Nested features: 0x0
+Hyper-V: LAPIC Timer Frequency: 0xa2c2a
+Hyper-V: Using hypercall for remote TLB flush
+clocksource: hyperv_clocksource_tsc_page: mask: 0xffffffffffffffff max_cycles: 0x24e6a1710, max_idle_ns: 440795202120 ns
+clocksource: hyperv_clocksource_msr: mask: 0xffffffffffffffff max_cycles: 0x24e6a1710, max_idle_ns: 440795202120 ns
+tsc: Marking TSC unstable due to running on Hyper-V
+tsc: Detected 2112.010 MHz processor
+e820: update [mem 0x00000000-0x00000fff] usable ==> reserved
+e820: remove [mem 0x000a0000-0x000fffff] usable
+last_pfn = 0x2ffff max_arch_pfn = 0x400000000
+MTRR map: 4 entries (3 fixed + 1 variable; max 19), built from 8 variable MTRRs
+x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT  
+found SMP MP-table at [mem 0x000ff780-0x000ff78f]
+Using GB pages for direct mapping
+RAMDISK: [mem 0x2ee47000-0x2ffcefff]
+ACPI: Early table checksum verification disabled
+ACPI: RSDP 0x00000000000F5C00 000014 (v00 ACPIAM)
+ACPI: RSDT 0x000000002FFF0000 000040 (v01 VRTUAL MICROSFT 12001807 MSFT 00000097)
+ACPI: FACP 0x000000002FFF0200 000081 (v02 VRTUAL MICROSFT 12001807 MSFT 00000097)
+ACPI: DSDT 0x000000002FFF1D24 003CD5 (v01 MSFTVM MSFTVM02 00000002 INTL 02002026)
+ACPI: FACS 0x000000002FFFF000 000040
+ACPI: WAET 0x000000002FFF1A80 000028 (v01 VRTUAL MICROSFT 12001807 MSFT 00000097)
+ACPI: SLIC 0x000000002FFF1AC0 000176 (v01 VRTUAL MICROSFT 12001807 MSFT 00000097)
+ACPI: OEM0 0x000000002FFF1CC0 000064 (v01 VRTUAL MICROSFT 12001807 MSFT 00000097)
+ACPI: SRAT 0x000000002FFF0800 0000F0 (v02 VRTUAL MICROSFT 00000001 MSFT 00000001)
+ACPI: APIC 0x000000002FFF0300 000062 (v01 VRTUAL MICROSFT 12001807 MSFT 00000097)
+ACPI: OEMB 0x000000002FFFF040 000064 (v01 VRTUAL MICROSFT 12001807 MSFT 00000097)
+ACPI: Reserving FACP table memory at [mem 0x2fff0200-0x2fff0280]
+ACPI: Reserving DSDT table memory at [mem 0x2fff1d24-0x2fff59f8]
+ACPI: Reserving FACS table memory at [mem 0x2ffff000-0x2ffff03f]
+ACPI: Reserving WAET table memory at [mem 0x2fff1a80-0x2fff1aa7]
+ACPI: Reserving SLIC table memory at [mem 0x2fff1ac0-0x2fff1c35]
+ACPI: Reserving OEM0 table memory at [mem 0x2fff1cc0-0x2fff1d23]
+ACPI: Reserving SRAT table memory at [mem 0x2fff0800-0x2fff08ef]
+ACPI: Reserving APIC table memory at [mem 0x2fff0300-0x2fff0361]
+ACPI: Reserving OEMB table memory at [mem 0x2ffff040-0x2ffff0a3]
+Zone ranges:
+  DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+  DMA32    [mem 0x0000000001000000-0x000000002fffefff]
+  Normal   empty
+Movable zone start for each node
+Early memory node ranges
+  node   0: [mem 0x0000000000001000-0x000000000009efff]
+  node   0: [mem 0x0000000000100000-0x000000002ffeffff]
+Initmem setup node 0 [mem 0x0000000000001000-0x000000002ffeffff]
+On node 0, zone DMA: 1 pages in unavailable ranges
+On node 0, zone DMA: 97 pages in unavailable ranges
+On node 0, zone DMA32: 16 pages in unavailable ranges
+ACPI: PM-Timer IO Port: 0x408
+ACPI: LAPIC_NMI (acpi_id[0xff] dfl dfl lint[0x1])
+IOAPIC[0]: apic_id 0, version 17, address 0xfec00000, GSI 0-23
+ACPI: INT_SRC_OVR (bus 0 bus_irq 0 global_irq 2 dfl dfl)
+ACPI: INT_SRC_OVR (bus 0 bus_irq 9 global_irq 9 high level)
+ACPI: Using ACPI (MADT) for SMP configuration information
+CPU topo: Max. logical packages:   1
+CPU topo: Max. logical dies:       1
+CPU topo: Max. dies per package:   1
+CPU topo: Max. threads per core:   2
+CPU topo: Num. cores per package:     1
+CPU topo: Num. threads per package:   2
+CPU topo: Allowing 2 present CPUs plus 0 hotplug CPUs
+random: crng init done
+PM: hibernation: Registered nosave memory: [mem 0x00000000-0x00000fff]
+PM: hibernation: Registered nosave memory: [mem 0x0009f000-0x000fffff]
+PM: hibernation: Registered nosave memory: [mem 0x2fff0000-0x2fffefff]
+[mem 0x30000000-0xffffffff] available for PCI devices
+Booting paravirtualized kernel on Hyper-V
+clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 6370452778343963 ns
+setup_percpu: NR_CPUS:64 nr_cpumask_bits:2 nr_cpu_ids:2 nr_node_ids:1
+percpu: Embedded 51 pages/cpu s172032 r8192 d28672 u1048576
+pcpu-alloc: s172032 r8192 d28672 u1048576 alloc=1*2097152
+pcpu-alloc: [0] 0 1 
+Kernel command line: console=ttyS0,115200n8 ignore_loglevel loglevel=7 initrd=/boot/corepure64.gz,/boot/hyperv-overlay.gz BOOT_IMAGE=/boot/vmlinuz64 
+printk: log buffer data + meta data: 131072 + 458752 = 589824 bytes
+Dentry cache hash table entries: 131072 (order: 8, 1048576 bytes, linear)
+Inode-cache hash table entries: 65536 (order: 7, 524288 bytes, linear)
+Built 1 zonelists, mobility grouping on.  Total pages: 196494
+mem auto-init: stack:off, heap alloc:off, heap free:off
+SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=2, Nodes=1
+rcu: Hierarchical RCU implementation.
+rcu: 	RCU restricting CPUs from NR_CPUS=64 to nr_cpu_ids=2.
+	Tracing variant of Tasks RCU enabled.
+rcu: RCU calculated value of scheduler-enlistment delay is 30 jiffies.
+rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=2
+RCU Tasks Trace: Setting shift to 1 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=2.
+NR_IRQS: 4352, nr_irqs: 440, preallocated irqs: 16
+rcu: srcu_init: Setting srcu_struct sizes based on contention.
+Console: colour VGA+ 80x25
+printk: legacy console [ttyS0] enabled
+ACPI: Core revision 20250807
+APIC: Switch to symmetric I/O mode setup
+Hyper-V: Host Build 10.0.22621.4317-4-0
+Hyper-V: enabling crash_kexec_post_notifiers
+Hyper-V: Using IPI hypercalls
+APIC: send_IPI() replaced with 0xffffffff8124e510()
+APIC: send_IPI_mask() replaced with 0xffffffff8124e3d0()
+APIC: send_IPI_mask_allbutself() replaced with 0xffffffff8124e350()
+APIC: send_IPI_allbutself() replaced with 0xffffffff8124e3a0()
+APIC: send_IPI_all() replaced with 0xffffffff8124e310()
+APIC: send_IPI_self() replaced with 0xffffffff8124e4d0()
+Hyper-V: Using enlightened APIC (xapic mode)
+APIC: eoi() replaced with 0xffffffff8124dee0()
+APIC: read() replaced with 0xffffffff8124dfa0()
+APIC: write() replaced with 0xffffffff8124df50()
+APIC: icr_write() replaced with 0xffffffff8124dea0()
+APIC: icr_read() replaced with 0xffffffff8124de70()
+..TIMER: vector=0x30 apic1=0 pin1=2 apic2=-1 pin2=-1
+Calibrating delay loop (skipped), value calculated using timer frequency.. 4225.02 BogoMIPS (lpj=7040033)
+x86/cpu: User Mode Instruction Prevention (UMIP) activated
+Last level iTLB entries: 4KB 0, 2MB 0, 4MB 0
+Last level dTLB entries: 4KB 0, 2MB 0, 4MB 0, 1GB 0
+mitigations: Enabled attack vectors: user_kernel, user_user, guest_host, guest_guest, SMT mitigations: auto
+Speculative Store Bypass: Mitigation: Speculative Store Bypass disabled via prctl
+Spectre V2 : Mitigation: Enhanced / Automatic IBRS
+RETBleed: Mitigation: Enhanced IBRS
+Register File Data Sampling: Mitigation: Clear Register File
+Spectre V1 : Mitigation: usercopy/swapgs barriers and __user pointer sanitization
+Spectre V2 : Spectre v2 / PBRSB-eIBRS: Retire a single CALL on VMEXIT
+Spectre V2 : mitigation: Enabling conditional Indirect Branch Prediction Barrier
+x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'
+x86/fpu: Supporting XSAVE feature 0x002: 'SSE registers'
+x86/fpu: Supporting XSAVE feature 0x004: 'AVX registers'
+x86/fpu: Supporting XSAVE feature 0x800: 'Control-flow User registers'
+x86/fpu: Supporting XSAVE feature 0x1000: 'Control-flow Kernel registers (KVM only)'
+x86/fpu: xstate_offset[2]:  576, xstate_sizes[2]:  256
+x86/fpu: xstate_offset[11]:  832, xstate_sizes[11]:   16
+x86/fpu: xstate_offset[12]:  848, xstate_sizes[12]:   24
+x86/fpu: Enabled xstate features 0x1807, context size is 872 bytes, using 'compacted' format.
+Freeing SMP alternatives memory: 32K
+pid_max: default: 32768 minimum: 301
+Mount-cache hash table entries: 2048 (order: 2, 16384 bytes, linear)
+Mountpoint-cache hash table entries: 2048 (order: 2, 16384 bytes, linear)
+smpboot: CPU0: 13th Gen Intel(R) Core(TM) i7-13700F (family: 0x6, model: 0xb7, stepping: 0x1)
+Performance Events: unsupported CPU family 6 model 183 no PMU driver, software events only.
+signal: max sigframe size: 1776
+rcu: Hierarchical SRCU implementation.
+rcu: 	Max phase no-delay instances is 1000.
+Timer migration: 1 hierarchy levels; 8 children per group; 1 crossnode level
+smp: Bringing up secondary CPUs ...
+smpboot: x86: Booting SMP configuration:
+.... node  #0, CPUs:      #1
+smp: Brought up 1 node, 2 CPUs
+smpboot: Total of 2 processors activated (8616.18 BogoMIPS)
+Memory: 723044K/785976K available (12785K kernel code, 1259K rwdata, 2736K rodata, 2656K init, 4176K bss, 59492K reserved, 0K cma-reserved)
+ACPI: PM: Registering ACPI NVS region [mem 0x2ffff000-0x2fffffff] (4096 bytes)
+clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 6370867519511994 ns
+posixtimers hash table entries: 1024 (order: 2, 16384 bytes, linear)
+futex hash table entries: 512 (32768 bytes on 1 NUMA nodes, total 32 KiB, linear).
+pinctrl core: initialized pinctrl subsystem
+NET: Registered PF_NETLINK/PF_ROUTE protocol family
+DMA: preallocated 128 KiB GFP_KERNEL pool for atomic allocations
+DMA: preallocated 128 KiB GFP_KERNEL|GFP_DMA pool for atomic allocations
+DMA: preallocated 128 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations
+thermal_sys: Registered thermal governor 'bang_bang'
+thermal_sys: Registered thermal governor 'step_wise'
+thermal_sys: Registered thermal governor 'user_space'
+cpuidle: using governor ladder
+cpuidle: using governor menu
+acpiphp: ACPI Hot Plug PCI Controller Driver version: 0.5
+PCI: Using configuration type 1 for base access
+HugeTLB: registered 2.00 MiB page size, pre-allocated 0 pages
+HugeTLB: 28 KiB vmemmap can be freed for a 2.00 MiB page
+ACPI: Added _OSI(Module Device)
+ACPI: Added _OSI(Processor Device)
+ACPI: Added _OSI(Processor Aggregator Device)
+ACPI: 1 ACPI AML tables successfully acquired and loaded
+ACPI: Interpreter enabled
+ACPI: PM: (supports S0 S5)
+ACPI: Using IOAPIC for interrupt routing
+PCI: Using host bridge windows from ACPI; if necessary, use "pci=nocrs" and report a bug
+PCI: Using E820 reservations for host bridge windows
+ACPI: Enabled 1 GPEs in block 00 to 0F
+ACPI: PCI Root Bridge [PCI0] (domain 0000 [bus 00-ff])
+acpi PNP0A03:00: _OSC: OS supports [ASPM ClockPM Segments MSI HPX-Type3]
+acpi PNP0A03:00: _OSC: not requesting OS control; OS requires [ExtendedConfig ASPM ClockPM MSI]
+acpi PNP0A03:00: fail to add MMCONFIG information, can't access extended configuration space under this bridge
+PCI host bridge to bus 0000:00
+pci_bus 0000:00: root bus resource [mem 0xfe0000000-0xfffffffff window]
+pci_bus 0000:00: root bus resource [io  0x0000-0x0cf7 window]
+pci_bus 0000:00: root bus resource [io  0x0d00-0xffff window]
+pci_bus 0000:00: root bus resource [mem 0x000a0000-0x000bffff window]
+pci_bus 0000:00: root bus resource [mem 0xf8000000-0xfffbffff window]
+pci_bus 0000:00: root bus resource [bus 00-ff]
+pci 0000:00:00.0: [8086:7192] type 00 class 0x060000 conventional PCI endpoint
+pci 0000:00:07.0: [8086:7110] type 00 class 0x060100 conventional PCI endpoint
+pci 0000:00:07.1: [8086:7111] type 00 class 0x010180 conventional PCI endpoint
+pci 0000:00:07.1: BAR 4 [io  0xffa0-0xffaf]
+pci 0000:00:07.1: BAR 0 [io  0x01f0-0x01f7]: legacy IDE quirk
+pci 0000:00:07.1: BAR 1 [io  0x03f6]: legacy IDE quirk
+pci 0000:00:07.1: BAR 2 [io  0x0170-0x0177]: legacy IDE quirk
+pci 0000:00:07.1: BAR 3 [io  0x0376]: legacy IDE quirk
+* Found PM-Timer Bug on the chipset. Due to workarounds for a bug,
+* this clock source is slow. Consider trying other clock sources
+pci 0000:00:07.3: [8086:7113] type 00 class 0x068000 conventional PCI endpoint
+pci 0000:00:07.3: quirk: [io  0x0400-0x043f] claimed by PIIX4 ACPI
+pci 0000:00:08.0: [1414:5353] type 00 class 0x030000 conventional PCI endpoint
+pci 0000:00:08.0: BAR 0 [mem 0xf8000000-0xfbffffff]
+pci 0000:00:08.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
+pci_bus 0000:00: on NUMA node 0
+ACPI: PCI: Interrupt link LNKA configured for IRQ 11
+ACPI: PCI: Interrupt link LNKB configured for IRQ 0
+ACPI: PCI: Interrupt link LNKB disabled
+ACPI: PCI: Interrupt link LNKC configured for IRQ 0
+ACPI: PCI: Interrupt link LNKC disabled
+ACPI: PCI: Interrupt link LNKD configured for IRQ 0
+ACPI: PCI: Interrupt link LNKD disabled
+iommu: Default domain type: Translated
+iommu: DMA domain TLB invalidation policy: lazy mode
+SCSI subsystem initialized
+libata version 3.00 loaded.
+ACPI: bus type USB registered
+usbcore: registered new interface driver usbfs
+usbcore: registered new interface driver hub
+usbcore: registered new device driver usb
+mc: Linux media interface: v0.10
+videodev: Linux video capture interface: v2.00
+pps_core: LinuxPPS API ver. 1 registered
+pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+PTP clock support registered
+PCI: Using ACPI for IRQ routing
+PCI: pci_cache_line_size set to 64 bytes
+e820: reserve RAM buffer [mem 0x0009fc00-0x0009ffff]
+e820: reserve RAM buffer [mem 0x2fff0000-0x2fffffff]
+pci 0000:00:08.0: vgaarb: setting as boot VGA device
+pci 0000:00:08.0: vgaarb: bridge control possible
+pci 0000:00:08.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+vgaarb: loaded
+clocksource: Switched to clocksource hyperv_clocksource_tsc_page
+pnp: PnP ACPI init
+pnp 00:03: [dma 0 disabled]
+pnp 00:04: [dma 0 disabled]
+pnp 00:05: [dma 2]
+system 00:06: [io  0x01e0-0x01ef] has been reserved
+system 00:06: [io  0x0160-0x016f] has been reserved
+system 00:06: [io  0x0278-0x027f] has been reserved
+system 00:06: [io  0x0378-0x037f] has been reserved
+system 00:06: [io  0x0678-0x067f] has been reserved
+system 00:06: [io  0x0778-0x077f] has been reserved
+system 00:06: [io  0x04d0-0x04d1] has been reserved
+system 00:07: [io  0x0400-0x043f] has been reserved
+system 00:07: [io  0x0370-0x0371] has been reserved
+system 00:07: [io  0x0440-0x044f] has been reserved
+system 00:07: [mem 0xfec00000-0xfec00fff] could not be reserved
+system 00:07: [mem 0xfee00000-0xfee00fff] has been reserved
+system 00:08: [mem 0x00000000-0x0009ffff] could not be reserved
+system 00:08: [mem 0x000c0000-0x000dffff] could not be reserved
+system 00:08: [mem 0x000e0000-0x000fffff] could not be reserved
+system 00:08: [mem 0x00100000-0xf7ffffff] could not be reserved
+system 00:08: [mem 0xfffc0000-0xffffffff] has been reserved
+pnp: PnP ACPI: found 9 devices
+clocksource: acpi_pm: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 2085701024 ns
+NET: Registered PF_INET protocol family
+IP idents hash table entries: 16384 (order: 5, 131072 bytes, linear)
+tcp_listen_portaddr_hash hash table entries: 512 (order: 1, 8192 bytes, linear)
+Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+TCP established hash table entries: 8192 (order: 4, 65536 bytes, linear)
+TCP bind hash table entries: 8192 (order: 6, 262144 bytes, linear)
+TCP: Hash tables configured (established 8192 bind 8192)
+MPTCP token hash table entries: 1024 (order: 3, 24576 bytes, linear)
+UDP hash table entries: 512 (order: 3, 32768 bytes, linear)
+UDP-Lite hash table entries: 512 (order: 3, 32768 bytes, linear)
+NET: Registered PF_UNIX/PF_LOCAL protocol family
+RPC: Registered named UNIX socket transport module.
+RPC: Registered udp transport module.
+RPC: Registered tcp transport module.
+RPC: Registered tcp-with-tls transport module.
+RPC: Registered tcp NFSv4.1 backchannel transport module.
+pci_bus 0000:00: resource 4 [mem 0xfe0000000-0xfffffffff window]
+pci_bus 0000:00: resource 5 [io  0x0000-0x0cf7 window]
+pci_bus 0000:00: resource 6 [io  0x0d00-0xffff window]
+pci_bus 0000:00: resource 7 [mem 0x000a0000-0x000bffff window]
+pci_bus 0000:00: resource 8 [mem 0xf8000000-0xfffbffff window]
+pci 0000:00:00.0: Limiting direct PCI/PCI transfers
+pci 0000:00:00.0: 0xffffffff817566b0 took 15950 usecs
+PCI: CLS 0 bytes, default 64
+RAPL PMU: API unit is 2^-32 Joules, 0 fixed counters, 10737418240 ms ovfl timer
+Trying to unpack rootfs image as initramfs...
+workingset: timestamp_bits=62 max_order=18 bucket_order=0
+NFS: Registering the id_resolver key type
+Key type id_resolver registered
+Key type id_legacy registered
+nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+nfs4flexfilelayout_init: NFSv4 Flexfile Layout Driver Registering...
+Freeing initrd memory: 17952K
+fuse: init (API version 7.45)
+cryptd: max_cpu_qlen set to 1000
+NET: Registered PF_ALG protocol family
+Key type asymmetric registered
+Asymmetric key parser 'x509' registered
+Block layer SCSI generic (bsg) driver version 0.4 loaded (major 246)
+io scheduler mq-deadline registered
+io scheduler kyber registered
+ledtrig-cpu: registered to indicate activity on CPUs
+input: Power Button as /devices/LNXSYSTM:00/LNXPWRBN:00/input/input0
+ACPI: button: Power Button [PWRF]
+Serial: 8250/16550 driver, 4 ports, IRQ sharing disabled
+00:03: ttyS0 at I/O 0x3f8 (irq = 4, base_baud = 115200) is a 16550A
+00:04: ttyS1 at I/O 0x2f8 (irq = 3, base_baud = 115200) is a 16550A
+Non-volatile memory driver v1.3
+Hangcheck: starting hangcheck timer 0.9.1 (tick is 180 seconds, margin is 60 seconds).
+brd: module loaded
+mtip32xx Version 1.3.1
+zram: Added device: zram0
+VMware PVSCSI driver - version 1.0.7.0-k
+ata_piix 0000:00:07.1: Hyper-V Virtual Machine detected, ATA device ignore set
+scsi host0: ata_piix
+scsi host1: ata_piix
+ata1: PATA max UDMA/33 cmd 0x1f0 ctl 0x3f6 bmdma 0xffa0 irq 14 lpm-pol 0
+ata2: PATA max UDMA/33 cmd 0x170 ctl 0x376 bmdma 0xffa8 irq 15 lpm-pol 0
+MACsec IEEE 802.1AE
+tun: Universal TUN/TAP device driver, 1.6
+PPP generic driver version 2.4.2
+PPP Deflate Compression module registered
+NET: Registered PF_PPPOX protocol family
+VFIO - User Level meta-driver version: 0.3
+usbcore: registered new interface driver uas
+usbcore: registered new interface driver usb-storage
+usbcore: registered new interface driver ums-alauda
+usbcore: registered new interface driver ums-cypress
+usbcore: registered new interface driver ums-datafab
+usbcore: registered new interface driver ums_eneub6250
+usbcore: registered new interface driver ums-freecom
+usbcore: registered new interface driver ums-isd200
+usbcore: registered new interface driver ums-jumpshot
+usbcore: registered new interface driver ums-karma
+usbcore: registered new interface driver ums-onetouch
+usbcore: registered new interface driver ums-sddr09
+usbcore: registered new interface driver ums-sddr55
+usbcore: registered new interface driver ums-usbat
+i8042: PNP: PS/2 Controller [PNP0303:PS2K,PNP0f03:PS2M] at 0x60,0x64 irq 1,12
+ata2.00: ATAPI: Virtual CD, , max MWDMA2
+serio: i8042 KBD port at 0x60,0x64 irq 1
+serio: i8042 AUX port at 0x60,0x64 irq 12
+mousedev: PS/2 mouse device common for all mice
+usbcore: registered new interface driver appletouch
+usbcore: registered new interface driver bcm5974
+scsi 1:0:0:0: CD-ROM            Msft     Virtual CD/ROM   1.0  PQ: 0 ANSI: 5
+input: AT Translated Set 2 keyboard as /devices/platform/i8042/serio0/input/input1
+usbcore: registered new interface driver synaptics_usb
+rtc_cmos 00:00: RTC can wake from S4
+rtc_cmos 00:00: registered as rtc0
+rtc_cmos 00:00: setting system clock to 2026-09-15T21:18:00 UTC (1789507080)
+sr 1:0:0:0: [sr0] scsi3-mmc drive: 0x/0x tray
+rtc_cmos 00:00: alarms up to one month, 114 bytes nvram
+cdrom: Uniform CD-ROM driver Revision: 3.20
+intel_powerclamp: CPU does not support MWAIT
+softdog: initialized. soft_noboot=0 soft_margin=60 sec soft_panic=0 (nowayout=0)
+softdog:              soft_reboot_cmd=<not set> soft_active_on_boot=0
+intel_pstate: CPU model not supported
+ccp_crypto: Cannot load: there are no available CCPs
+hid: raw HID events driver (C) Jiri Kosina
+usbcore: registered new interface driver usbhid
+usbhid: USB HID core driver
+ipip: IPv4 and MPLS over IPv4 tunneling driver
+Initializing XFRM netlink socket
+NET: Registered PF_PACKET protocol family
+sr 1:0:0:0: Attached scsi CD-ROM sr0
+NET: Registered PF_KEY protocol family
+sr 1:0:0:0: Attached scsi generic sg0 type 5
+Key type dns_resolver registered
+NET: Registered PF_VSOCK protocol family
+IPI shorthand broadcast: enabled
+sched_clock: Marking stable (3053374522, 2038400272)->(6734376600, -1642601806)
+registered taskstats version 1
+Key type .fscrypt registered
+Key type fscrypt-provisioning registered
+Key type encrypted registered
+clk: Disabling unused clocks
+PM: genpd: Disabling unused power domains
+Freeing unused decrypted memory: 2028K
+Freeing unused kernel image (initmem) memory: 2656K
+Write protecting the kernel read-only data: 18432k
+Freeing unused kernel image (text/rodata gap) memory: 1548K
+Freeing unused kernel image (rodata/data gap) memory: 1360K
+x86/mm: Checked W+X mappings: passed, no W+X pages found.
+Run /init as init process
+  with arguments:
+    /init
+  with environment:
+    HOME=/
+    TERM=linux
+init started: BusyBox v1.36.1 (2024-01-28 10:23:59 UTC)
+[H[J[1;32mBooting [1;33mCore 17.1 [0;39m
+[1;32mRunning Linux Kernel [1;33m6.18.35-tinycore64[1;32m.[0;39m
+[1;34mChecking boot options...[0;39m[1;32m Done.[0;39m
+[1;34mStarting udev daemon for hotplug support...[0;39mpsmouse serio1: trackpoint: failed to get extended button data, assuming 3 buttons
+/input: PC Speaker as /devices/platform/pcspkr/input/input4
+Floppy drive(s): fd0 is 1.44M
+hv_vmbus: Vmbus version:5.3
+[1;32m Done.[0;39m
+loop: module loaded
+hv_vmbus: registering driver hv_balloon
+zram0: detected capacity change from 0 to 282840
+hv_balloon: Using Dynamic Memory protocol version 2.0
+hv_utils: Registering HyperV Utility Driver
+FDC 0 is an 82078.
+hv_vmbus: registering driver hv_utils
+Adding 141416k swap on /dev/zram0.  Priority:-2 extents:1 across:141416k SS
+hv_vmbus: registering driver hv_netvsc
+[1;34mScanning hv_utils: TimeSync IC version 4.0
+hard disk partithv_utils: Heartbeat IC version 3.0
+ions to create hv_utils: Shutdown IC version 3.2
+[1;33m/etc/fstabhv_utils: VSS IC version 5.0
+ [0;39mhv_vmbus: registering driver hid_hyperv
+hv_vmbus: registering driver hyperv_keyboard
+
+input: Microsoft Vmbus HID-compliant Mouse as /devices/0006:045E:0621.0001/input/input5
+[1;32mSetting Language to [1;35mChid-hyperv 0006:045E:0621.0001: input: VIRTUAL HID v0.01 Mouse [Microsoft Vmbus HID-compliant Mouse] on 
+[1;32m Done.[0;39m
+squashfs: version 4.0 (2009/01/31) Phillip Lougher
+process '/sbin/ldconfig' started with executable stack
+[1;32mPossible swap partition(s) enabled.[0;39m
+[1;34mLoading extensions...[0;39m/[1;32m Done.[0;39m
+[1;32mSetting keymap to [1;35mus[1;32m Done.[0;39m
+[1;32mSetting hostname to [1;35mbox[0;39m [1;32mDone.[0;39m
+HYPERV_NORMAL_INIT_READY
+login[497]: root login on 'tty1'
+Linux box 6.18.35-tinycore64 #1 SMP Wed Jun 17 00:02:49 UTC 2026 x86_64 GNU/Linux
+VERSION=NAME=TinyCore
+VERSION="17.1"
+ID=tinycore
+VERSION_ID=17.1
+PRETTY_NAME="TinyCoreLinux 17.1"
+ANSI_COLOR="0;34"
+CPE_NAME="cpe:/o:tinycore:tinycore_linux:17.1"
+HOME_URL="http://tinycorelinux.net/"
+SUPPORT_URL="http://forum.tinycorelinux.net/"
+BUG_REPORT_URL="http://forum.tinycorelinux.net/"
+BOOT_ID=c6c03f47-16bc-4d0f-9dae-14194fa93ea9
+CPU_ONLINE=0-1
+INIT=init
+CMDLINE=console=ttyS0,115200n8 ignore_loglevel loglevel=7 initrd=/boot/corepure64.gz,/boot/hyperv-overlay.gz BOOT_IMAGE=/boot/vmlinuz64 
+MEMINFO=MemTotal:         752028 kB
+MemFree:          599124 kB
+MemAvailable:     543860 kB
+Buffers:               4 kB
+Cached:            27004 kB
+HV_HEARTBEAT seq=0 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=4.52 2.65
+HV_HEARTBEAT seq=1 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=6.55 6.66
+psmouse serio1: trackpoint: IBM TrackPoint firmware: 0x01, buttons: 3/3
+input: TPPS/2 IBM TrackPoint as /devices/platform/i8042/serio1/input/input3
+input: AT Translated Set 2 keyboard as /devices/LNXSYSTM:00/LNXSYBUS:00/PNP0A03:00/device:07/VMBUS:01/d34b2567-b9b6-42b9-8778-0a4ec0b955bf/serio2/input/input6
+HV_HEARTBEAT seq=2 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=8.59 10.58
+HV_HEARTBEAT seq=3 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=10.62 14.59
+HV_HEARTBEAT seq=4 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=12.65 18.61
+HV_HEARTBEAT seq=5 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=14.68 22.62
+HV_HEARTBEAT seq=6 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=16.71 26.63
+HV_HEARTBEAT seq=7 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=18.74 30.65
+HV_HEARTBEAT seq=8 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=20.77 34.66
+HV_HEARTBEAT seq=9 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=22.80 38.69
+HV_HEARTBEAT seq=10 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=24.83 42.70
+HV_HEARTBEAT seq=11 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=26.86 46.71
+HV_HEARTBEAT seq=12 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=28.89 50.73
+HV_HEARTBEAT seq=13 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=30.92 54.74
+HV_HEARTBEAT seq=14 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=32.95 58.76
+HV_HEARTBEAT seq=15 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=34.98 62.78
+HV_HEARTBEAT seq=16 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=37.01 66.79
+HV_HEARTBEAT seq=17 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=39.04 70.80
+HV_HEARTBEAT seq=18 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=41.07 74.82
+HV_HEARTBEAT seq=19 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=43.10 78.83
+HV_HEARTBEAT seq=20 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=45.13 82.84
+HV_HEARTBEAT seq=21 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=47.16 86.86
+HV_HEARTBEAT seq=22 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=49.19 90.87
+HV_HEARTBEAT seq=23 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=51.22 94.88
+hv_balloon: Max. dynamic memory size: 768 MB
+HV_HEARTBEAT seq=24 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=53.25 98.89
+HV_HEARTBEAT seq=25 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=55.28 102.90
+HV_HEARTBEAT seq=26 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=57.30 106.92
+HV_HEARTBEAT seq=27 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=59.33 110.93
+HV_HEARTBEAT seq=28 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=61.36 114.95
+HV_HEARTBEAT seq=29 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=63.40 118.97
+HV_HEARTBEAT seq=30 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=65.43 122.98
+HV_HEARTBEAT seq=31 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=67.46 127.00
+HV_HEARTBEAT seq=32 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=69.49 131.02
+HV_HEARTBEAT seq=33 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=71.52 135.04
+HV_HEARTBEAT seq=34 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=73.55 139.05
+HV_HEARTBEAT seq=35 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=75.58 143.06
+HV_HEARTBEAT seq=36 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=77.61 147.08
+HV_HEARTBEAT seq=37 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=79.64 151.10
+HV_HEARTBEAT seq=38 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=81.67 155.11
+HV_HEARTBEAT seq=39 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=83.70 159.13
+HV_HEARTBEAT seq=40 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=85.72 163.13
+HV_HEARTBEAT seq=41 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=87.75 167.14
+HV_HEARTBEAT seq=42 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=89.78 171.16
+HV_HEARTBEAT seq=43 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=91.81 175.17
+HV_HEARTBEAT seq=44 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=93.85 179.19
+HV_HEARTBEAT seq=45 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=95.88 183.21
+HV_HEARTBEAT seq=46 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=97.91 187.22
+HV_HEARTBEAT seq=47 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=99.94 191.24
+HV_HEARTBEAT seq=48 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=101.97 195.26
+HV_HEARTBEAT seq=49 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=104.00 199.27
+HV_HEARTBEAT seq=50 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=106.03 203.28
+HV_HEARTBEAT seq=51 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=108.06 207.31
+HV_HEARTBEAT seq=52 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=110.09 211.32
+HV_HEARTBEAT seq=53 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=112.12 215.34
+HV_HEARTBEAT seq=54 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=114.15 219.36
+HV_HEARTBEAT seq=55 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=116.18 223.38
+HV_HEARTBEAT seq=56 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=118.21 227.39
+HV_HEARTBEAT seq=57 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=120.24 231.41
+HV_HEARTBEAT seq=58 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=122.27 235.42
+HV_HEARTBEAT seq=59 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=124.30 239.43
+HV_HEARTBEAT seq=60 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=126.32 243.45
+HV_HEARTBEAT seq=61 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=128.35 247.47
+HV_HEARTBEAT seq=62 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=130.38 251.48
+HV_HEARTBEAT seq=63 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=132.41 255.49
+HV_HEARTBEAT seq=64 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=134.44 259.51
+HV_HEARTBEAT seq=65 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=136.47 263.53
+HV_HEARTBEAT seq=66 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=138.51 267.55
+HV_HEARTBEAT seq=67 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=140.54 271.56
+HV_HEARTBEAT seq=68 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=142.57 275.58
+HV_HEARTBEAT seq=69 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=144.60 279.59
+HV_HEARTBEAT seq=70 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=146.64 283.61
+HV_HEARTBEAT seq=71 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=148.67 287.62
+HV_HEARTBEAT seq=72 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=150.70 291.64
+HV_HEARTBEAT seq=73 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=152.73 295.65
+HV_HEARTBEAT seq=74 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=154.75 299.66
+HV_HEARTBEAT seq=75 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=156.78 303.68
+HV_HEARTBEAT seq=76 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=158.81 307.69
+HV_HEARTBEAT seq=77 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=160.84 311.71
+HV_HEARTBEAT seq=78 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=162.87 315.72
+HV_HEARTBEAT seq=79 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=164.90 319.74
+HV_HEARTBEAT seq=80 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=166.93 323.75
+HV_HEARTBEAT seq=81 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=168.96 327.77
+HV_HEARTBEAT seq=82 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=170.99 331.78
+HV_HEARTBEAT seq=83 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=173.02 335.80
+HV_HEARTBEAT seq=84 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=175.05 339.81
+HV_HEARTBEAT seq=85 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=177.08 343.82
+HV_HEARTBEAT seq=86 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=179.11 347.84
+HV_HEARTBEAT seq=87 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=181.14 351.85
+HV_HEARTBEAT seq=88 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=183.17 355.87
+HV_HEARTBEAT seq=89 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=185.20 359.88
+HV_HEARTBEAT seq=90 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=187.23 363.90
+HV_HEARTBEAT seq=91 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=189.26 367.91
+HV_HEARTBEAT seq=92 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=191.29 371.92
+HV_HEARTBEAT seq=93 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=193.32 375.94
+HV_HEARTBEAT seq=94 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=195.35 379.96
+HV_HEARTBEAT seq=95 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=197.38 383.98
+HV_HEARTBEAT seq=96 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=199.41 387.99
+HV_HEARTBEAT seq=97 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=201.45 392.02
+HV_HEARTBEAT seq=98 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=203.47 396.03
+HV_HEARTBEAT seq=99 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=205.50 400.05
+HV_HEARTBEAT seq=100 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=207.53 404.06
+HV_HEARTBEAT seq=101 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=209.56 408.08
+HV_HEARTBEAT seq=102 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=211.59 412.09
+HV_HEARTBEAT seq=103 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=213.63 416.11
+HV_HEARTBEAT seq=104 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=215.66 420.13
+HV_HEARTBEAT seq=105 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=217.69 424.15
+HV_HEARTBEAT seq=106 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=219.73 428.17
+HV_HEARTBEAT seq=107 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=221.77 432.19
+HV_HEARTBEAT seq=108 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=223.81 436.21
+HV_HEARTBEAT seq=109 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=225.84 440.23
+HV_HEARTBEAT seq=110 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=227.87 444.24
+HV_HEARTBEAT seq=111 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=229.90 448.25
+HV_HEARTBEAT seq=112 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=231.93 452.27
+HV_HEARTBEAT seq=113 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=233.96 456.29
+HV_HEARTBEAT seq=114 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=235.99 460.30
+HV_HEARTBEAT seq=115 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=238.02 464.32
+HV_HEARTBEAT seq=116 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=240.05 468.34
+HV_HEARTBEAT seq=117 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=242.08 472.35
+HV_HEARTBEAT seq=118 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=244.11 476.37
+HV_HEARTBEAT seq=119 boot=c6c03f47-16bc-4d0f-9dae-14194fa93ea9 uptime=246.15 480.38

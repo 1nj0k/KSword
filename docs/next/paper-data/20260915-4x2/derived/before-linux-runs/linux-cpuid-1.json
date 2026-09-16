@@ -1,0 +1,27 @@
+{
+  "kind": "run-start",
+  "runId": "linux-cpuid-1",
+  "workload": "cpuid",
+  "iteration": 1,
+  "bootId": "a6ec69a5-cc4b-474d-8a55-4876d48574a0",
+  "guestUptime": 704.87,
+  "binarySha256": "",
+  "exitCode": 0,
+  "endGuestUptime": 716.36,
+  "eligible": false,
+  "metrics": [
+    {
+      "schemaVersion": 1,
+      "workload": "cpuid-leaf0",
+      "status": "ok",
+      "seconds": 11.391927241,
+      "operations": 100000,
+      "bytes": 0,
+      "nsPerOperation": 113919.2724,
+      "MiBPerSecond": 0.0,
+      "sink": "2800000"
+    }
+  ],
+  "raw": "{\"kind\":\"run-start\",\"runId\":\"linux-cpuid-1\",\"workload\":\"cpuid\",\"iteration\":1,\"bootId\":\"a6ec69a5-cc4b-474d-8a55-4876d48574a0\",\"guestUptime\":704.87,\"binarySha256\":\"\"}\n{\"schemaVersion\":1,\"kind\":\"metadata\",\"pointerBytes\":8,\"pinCpu\":0,\"affinityResult\":0,\"cpuid1Eax\":\"0x000B0671\",\"cpuid1Ecx\":\"0xFFFA3203\",\"timer\":\"CLOCK_MONOTONIC_RAW\"}\n{\"schemaVersion\":1,\"workload\":\"cpuid-leaf0\",\"status\":\"ok\",\"seconds\":11.391927241,\"operations\":100000,\"bytes\":0,\"nsPerOperation\":113919.2724,\"MiBPerSecond\":0.0000,\"sink\":\"2800000\"}\n{\"kind\":\"run-end\",\"runId\":\"linux-cpuid-1\",\"exitCode\":0,\"guestUptime\":716.36}\n",
+  "serialSha256": "61385cb13c4af0d23e25f1344ea0b2245d9534d9c6e781107809c10ced54f590"
+}

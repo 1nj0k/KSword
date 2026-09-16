@@ -1,3 +1,4 @@
+#include "ArkDriverClient/HvmCommandProcess.h"
 #include "MainWindow.h"
 
 #include <QtCore/QByteArray>
@@ -1303,6 +1304,15 @@ namespace
 
 int main(int argc, char* argv[])
 {
+    int hvmExitCode = 0;
+    if (ksword::ark::tryRunHvmCommandLine(&hvmExitCode)) { return hvmExitCode; }
+    if (argc > 1 && strcmp(argv[1], "--ksword-hvm-gui-test") == 0)
+    {
+        QApplication app(argc, argv);
+        MainWindow window(nullptr, {}, app.font());
+        window.show();
+        return window.runHvmCommandCoverageTest(QCoreApplication::arguments().value(2));
+    }
     // 启动流程：
     // 1) 初始化 DPI 感知；
     // 2) 读取配置并处理推荐缩放；

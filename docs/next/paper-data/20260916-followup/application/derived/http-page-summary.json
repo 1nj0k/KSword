@@ -1,0 +1,95 @@
+{
+  "runs": [
+    {
+      "runId": "http-page-20260916T014941505Z",
+      "result": "pass",
+      "gpa": "0x2479000",
+      "responses": {
+        "before": 10,
+        "mapped": 10,
+        "restored": 10
+      },
+      "httpdIdentity": [
+        "4578",
+        "52514"
+      ],
+      "expectedMD5": {
+        "before": "53398dd1f3a4c282ace3b660acd92ff7",
+        "mapped": "620f0b67a91f7f74151bc5be745b7110",
+        "restored": "53398dd1f3a4c282ace3b660acd92ff7"
+      },
+      "guestUptimeBegin": 635.72,
+      "guestUptimeEnd": 670.69,
+      "maxPfnSampleAgeSeconds": 1.7625109719999728,
+      "identityRereadPerRequest": true,
+      "independentHolderLiveness": false,
+      "holderLivenessEvidence": "constant-one; advancing fresh PFN observations only",
+      "originalBacking": "0x00000000CCF89000",
+      "replacementBacking": "0x0000000204FD4000",
+      "observedCompositions": 10
+    },
+    {
+      "runId": "http-page-20260916T015017821Z",
+      "result": "pass",
+      "gpa": "0x2479000",
+      "responses": {
+        "before": 10,
+        "mapped": 10,
+        "restored": 10
+      },
+      "httpdIdentity": [
+        "4578",
+        "52514"
+      ],
+      "expectedMD5": {
+        "before": "53398dd1f3a4c282ace3b660acd92ff7",
+        "mapped": "620f0b67a91f7f74151bc5be745b7110",
+        "restored": "53398dd1f3a4c282ace3b660acd92ff7"
+      },
+      "guestUptimeBegin": 671.87,
+      "guestUptimeEnd": 708.31,
+      "maxPfnSampleAgeSeconds": 1.8669681869999977,
+      "identityRereadPerRequest": true,
+      "independentHolderLiveness": false,
+      "holderLivenessEvidence": "constant-one; advancing fresh PFN observations only",
+      "originalBacking": "0x00000000CCF89000",
+      "replacementBacking": "0x0000000204FD4000",
+      "observedCompositions": 10
+    },
+    {
+      "runId": "http-page-20260916T015055471Z",
+      "result": "incomplete",
+      "gpa": "0x2479000",
+      "error": "HTTP observer timed out while mapped; cleanup required."
+    },
+    {
+      "runId": "http-page-20260916T015548267Z",
+      "result": "pass",
+      "gpa": "0x2479000",
+      "responses": {
+        "before": 10,
+        "mapped": 10,
+        "restored": 10
+      },
+      "httpdIdentity": [
+        "4578",
+        "52514"
+      ],
+      "expectedMD5": {
+        "before": "53398dd1f3a4c282ace3b660acd92ff7",
+        "mapped": "620f0b67a91f7f74151bc5be745b7110",
+        "restored": "53398dd1f3a4c282ace3b660acd92ff7"
+      },
+      "guestUptimeBegin": 1002.03,
+      "guestUptimeEnd": 1039.07,
+      "maxPfnSampleAgeSeconds": 1.8576251260000163,
+      "identityRereadPerRequest": true,
+      "independentHolderLiveness": false,
+      "holderLivenessEvidence": "constant-one; advancing fresh PFN observations only",
+      "originalBacking": "0x00000000CCF89000",
+      "replacementBacking": "0x0000000204FD4000",
+      "observedCompositions": 10
+    }
+  ],
+  "scope": "BusyBox httpd serves a controlled resident file-cache page. Zero-filled replacement is a controlled data fault; restoration recovers its original HTTP body. Schema 1 has a server-identity startup snapshot only; schema 2 re-reads identity and boot ID per response. The follow-up policy collector's alive field was constant one: its holder evidence is advancing, fresh PFN samples, not an independent kill-0 check. Root pagemap/mlock instrumentation selects the GPA. This is not arbitrary application atomicity, a guest-agent-free claim, or a production fault-tolerance benchmark."
+}

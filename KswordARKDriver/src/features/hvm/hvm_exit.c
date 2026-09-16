@@ -96,6 +96,8 @@ Environment:
 
 /* VM-exit interruption information; describes what caused an exception/NMI exit. */
 #define KSW_VMCS_EXIT_INTERRUPTION_INFO 0x4404UL
+/* Route reflected exits without redundantly capturing five unused fields. */
+#define KSW_VMCS_EXIT_REASON 0x4402UL
 /* VM-entry interruption information; writing it delivers an event on entry. */
 #define KSW_VMCS_ENTRY_INTERRUPTION_INFO 0x4016UL
 /* Name the guest RFLAGS field, read on the halt path to see whether IF is set. */
@@ -416,37 +418,18 @@ KswordARKHvmExitPublishTelemetry(
     basicReason =
         Telemetry->Reason &
         KSW_HVM_VMEXIT_REASON_BASIC_MASK;
-    /* Increment the process-wide VM-exit count atomically. */
-    InterlockedIncrement64(
-        &Context->Runtime->VmExitCount);
     /* Publish the last exit qualification atomically. */
-    InterlockedExchange64(
-        &Context->Runtime->LastExitQualification,
-        (LONG64)Telemetry->Qualification);
+    Context->Runtime->LastExitQualification = (LONG64)Telemetry->Qualification;
     /* Publish the last guest instruction pointer atomically. */
-    InterlockedExchange64(
-        &Context->Runtime->LastGuestRip,
-        (LONG64)Telemetry->GuestRip);
+    Context->Runtime->LastGuestRip = (LONG64)Telemetry->GuestRip;
     /* Publish the last guest stack pointer atomically. */
-    InterlockedExchange64(
-        &Context->Runtime->LastGuestRsp,
-        (LONG64)Telemetry->GuestRsp);
+    Context->Runtime->LastGuestRsp = (LONG64)Telemetry->GuestRsp;
     /* Publish the last basic exit reason atomically. */
-    InterlockedExchange(
-        &Context->Runtime->LastExitReason,
-        (LONG)basicReason);
+    Context->Runtime->LastExitReason = (LONG)basicReason;
     /* Publish the last exit instruction length atomically. */
-    InterlockedExchange(
-        &Context->Runtime->LastExitInstructionLength,
-        (LONG)Telemetry->InstructionLength);
+    Context->Runtime->LastExitInstructionLength = (LONG)Telemetry->InstructionLength;
     /* Publish the last VM-instruction error atomically. */
-    InterlockedExchange(
-        &Context->Runtime->LastVmInstructionError,
-        (LONG)Telemetry->VmInstructionError);
-    /* Increment the processor-local VM-exit count atomically. */
-    InterlockedIncrement64(
-        (volatile LONG64*)&Context->Resource->
-            Row.vmExitCount);
+    Context->Runtime->LastVmInstructionError = (LONG)Telemetry->VmInstructionError;
     /* Publish the processor-local last exit reason. */
     Context->Resource->Row.lastExitReason =
         basicReason;
@@ -515,17 +498,17 @@ KswordARKHvmExitPublishTelemetry(
      */
     if ((eventRow.type != KSWORD_ARK_HVM_EVENT_TYPE_VMEXIT &&
          eventRow.type != KSWORD_ARK_HVM_EVENT_TYPE_NESTED_VMX) ||
-        InterlockedCompareExchange(
-            &Context->Runtime->TraceRoutineExits,
-            0L,
-            0L) != 0L) {
+        ReadAcquire(&Context->Runtime->TraceRoutineExits) != 0L) {
         /* Publish the complete nonblocking event row. */
         KswordARKHvmEventPublish(&eventRow);
     }
     /* Publish protocol-visible event availability. */
-    InterlockedOr(
-        (volatile LONG*)&Context->Runtime->StateFlags,
-        (LONG)KSWORD_ARK_HVM_STATE_EVENTS_AVAILABLE);
+    if ((ReadAcquire((volatile LONG*)&Context->Runtime->StateFlags) &
+        KSWORD_ARK_HVM_STATE_EVENTS_AVAILABLE) == 0UL) {
+        /* Lifecycle clears this flag only after exits have stopped. */
+        InterlockedOr((volatile LONG*)&Context->Runtime->StateFlags,
+            (LONG)KSWORD_ARK_HVM_STATE_EVENTS_AVAILABLE);
+    }
     /* Charge this exit's telemetry to this processor's own account. */
     Context->CostTelemetryCycles += (__rdtsc() - costStart);
 }
@@ -771,18 +754,22 @@ static BOOLEAN
 KswordARKHvmExitHandleCpuid(
     _Inout_ KSW_HVM_RESIDENT_VCPU* Context,
     _Inout_ KSW_HVM_GPR_FRAME* Frame,
-    _In_ ULONG InstructionLength
+    _In_ ULONG InstructionLength,
+    _In_ ULONGLONG GuestRip
     )
 {
     int registers[4] = { 0 };
     ULONG leaf = (ULONG)Frame->Rax;
     ULONG subleaf = (ULONG)Frame->Rcx;
 
-    /* Execute the exact host CPUID leaf and subleaf. */
-    __cpuidex(
-        registers,
-        (int)leaf,
-        (int)subleaf);
+    /* Leaf zero ignores ECX and is invariant during frozen CPU topology. */
+    if (leaf == 0UL) {
+        /* Avoid another outer-hypervisor exit for the captured vendor leaf. */
+        RtlCopyMemory(registers, Context->CpuidVendorLeaf, sizeof(registers));
+    } else {
+        /* Forward dynamic leaves, including CR4-sensitive OSXSAVE, unchanged. */
+        __cpuidex(registers, (int)leaf, (int)subleaf);
+    }
     /* Hide guest VMX exposure unless nested dispatch was explicitly enabled. */
     if (leaf == 1UL &&
         !Context->Nested.Enabled) {
@@ -806,9 +793,9 @@ KswordARKHvmExitHandleCpuid(
      * that cannot be read means this exit path is already broken, and the
      * outcome here is a narrower CPUID answer rather than a wider one.
      */
-    if (Context->Runtime != NULL &&
-        InterlockedCompareExchange(
-            &Context->Runtime->HideHypervisorCpuid, 0L, 0L) != 0L &&
+    if ((leaf == 1UL || (leaf >= 0x40000000UL && leaf <= 0x400000FFUL)) &&
+        Context->Runtime != NULL &&
+        ReadAcquire(&Context->Runtime->HideHypervisorCpuid) != 0L &&
         KswordARKHvmExitGuestCpl() == KSW_HVM_USER_CPL) {
         /* Clear the hypervisor-present bit in CPUID.1:ECX. */
         if (leaf == 1UL) {
@@ -840,9 +827,15 @@ KswordARKHvmExitHandleCpuid(
     Frame->Rcx = (ULONG)registers[2];
     /* Publish zero-extended guest RDX. */
     Frame->Rdx = (ULONG)registers[3];
-    /* Advance past the fully decoded CPUID instruction. */
-    return KswordARKHvmExitAdvanceRip(
-        InstructionLength);
+    /* Reuse the already captured RIP, retaining the common continuation checks. */
+    if (InstructionLength == 0UL || InstructionLength > 15UL ||
+        GuestRip > MAXULONG_PTR - InstructionLength) {
+        /* Never commit an invalid continuation. */
+        return FALSE;
+    }
+    /* CPUID did not modify the VMCS RIP; no second VMREAD is necessary. */
+    return KswordARKHvmVmcsFieldStore(KSW_VMCS_GUEST_RIP,
+        (SIZE_T)(GuestRip + InstructionLength)) == 0U;
 }
 
 /* Return whether one exit reason belongs to nested VMX instruction dispatch. */
@@ -2124,19 +2117,28 @@ KswordARKHvmResidentVmExitDispatchBody(
         Context == NULL ||
         Context->Runtime == NULL ||
         Context->Resource == NULL ||
-        InterlockedCompareExchange(
-            &Context->Active,
-            0L,
-            0L) == 0L) {
+        ReadAcquire(&Context->Active) == 0L) {
         /* Request a bounded fatal trap with no unsafe continuation. */
         return KSW_HVM_EXIT_ACTION_FATAL;
     }
+    /* One writer per CPU; queries sum these aligned counters under the resource lock. */
+    (*(volatile ULONGLONG*)&Context->Resource->Row.vmExitCount) += 1ULL;
     {
         const ULONGLONG readStart = __rdtsc();
 
-        /* Capture protocol-visible VMCS exit telemetry. */
-        status = KswordARKHvmReadVmExitTelemetry(
-            &telemetry);
+        /* Reflection reads its own VMCS fields and never published this snapshot. */
+        if (Context->Nested.InL2) {
+            SIZE_T reason = 0U;
+            /* Only the reason is needed for routing and the complete histogram. */
+            status = KswordARKHvmVmcsFieldLoad(KSW_VMCS_EXIT_REASON, &reason) == 0U
+                ? STATUS_SUCCESS : STATUS_HV_OPERATION_FAILED;
+            /* Preserve entry-failure bits as well as the basic exit reason. */
+            telemetry.Reason = (ULONG)reason;
+        } else {
+            /* CPUID needs no qualification or stale VM-instruction-error diagnostic. */
+            status = KswordARKHvmReadVmExitTelemetryEx(&telemetry,
+                ReadAcquire(&Context->Runtime->FullExitSnapshot) == 0L);
+        }
         Context->CostVmcsReadCycles += (__rdtsc() - readStart);
     }
     /* Name the bucket this exit belongs to, for the wrapper to charge. */
@@ -2179,8 +2181,15 @@ KswordARKHvmResidentVmExitDispatchBody(
             ? KSW_HVM_EXIT_ACTION_DEVIRTUALIZE
             : KSW_HVM_EXIT_ACTION_FATAL;
     }
+    /* Classify the original exit before nested reflection changes the VMCS. */
+    basicReason = telemetry.Reason & KSW_HVM_VMEXIT_REASON_BASIC_MASK;
+    /* Per-CPU histograms have one writer; concurrent queries are observational. */
+    if (basicReason < KSWORD_ARK_HVM_EXIT_REASON_SLOTS) {
+        /* Unreadable reasons remain in the total count without inventing a class. */
+        Context->Resource->ExitReasonCount[basicReason] += 1UL;
+    }
     /*
-     * Route an L2 exit before anything else looks at it.
+     * Route an L2 exit before anything else services it.
      *
      * While L2 runs, every field this handler reads describes L2, not the
      * guest we host directly - so the ordinary handling below would act on the
@@ -2220,28 +2229,13 @@ KswordARKHvmResidentVmExitDispatchBody(
             /* Resume whichever guest routing left loaded. */
             return KSW_HVM_EXIT_ACTION_RESUME;
         }
-    }
-    /* Decode the Intel basic VM-exit reason. */
-    basicReason =
-        telemetry.Reason &
-        KSW_HVM_VMEXIT_REASON_BASIC_MASK;
-    /*
-     * Count the exit here, before anything can decide to leave.
-     *
-     * Placed immediately after the reason is decoded so the histogram counts
-     * exits by what they *were*, independent of how they were later serviced -
-     * including the ones that devirtualize a few lines below and never reach
-     * the servicing switch at all.  An exit the driver refused to handle is
-     * exactly the kind worth having a count of.
-     *
-     * Plain increment, no interlocked: this array belongs to the processor
-     * executing this handler and no other writer exists.  Nothing reads it
-     * concurrently either - the protocol path sums the columns while reporting,
-     * where a torn count would cost a slightly stale diagnostic number and
-     * nothing else.
-     */
-    if (basicReason < KSWORD_ARK_HVM_EXIT_REASON_SLOTS) {
-        Context->Resource->ExitReasonCount[basicReason] += 1UL;
+        /* Local service needs the full L2 snapshot that reflection did not consume. */
+        if (!NT_SUCCESS(KswordARKHvmReadVmExitTelemetry(&telemetry))) {
+            /* Retain the existing fail-closed continuation for an unreadable VMCS. */
+            handled = KswordARKHvmResidentDeactivateCurrent(Context, 0UL, TRUE);
+            /* Never emulate an instruction using absent state. */
+            return handled ? KSW_HVM_EXIT_ACTION_DEVIRTUALIZE : KSW_HVM_EXIT_ACTION_FATAL;
+        }
     }
     /*
      * Optional VMREAD load, for measuring what a VMCS field access costs here.
@@ -2258,10 +2252,7 @@ KswordARKHvmResidentVmExitDispatchBody(
      * discarded and no VMCS state is touched, so an armed run differs from an
      * unarmed one only in speed - which is the measurement.
      */
-    if (InterlockedCompareExchange(
-            &Context->Runtime->VmreadBenchArmed,
-            0L,
-            0L) != 0L) {
+    if (ReadAcquire(&Context->Runtime->VmreadBenchArmed) != 0L) {
         LONG depth = InterlockedCompareExchange(
             &Context->Runtime->VmreadBenchIterations,
             0L,
@@ -2335,10 +2326,7 @@ KswordARKHvmResidentVmExitDispatchBody(
      * rather than falling through.
      */
     if (basicReason != KSW_VMX_EXIT_VMCALL &&
-        InterlockedCompareExchange(
-            &Context->Runtime->ResidentFaultStopRequested,
-            0L,
-            0L) != 0L) {
+        ReadAcquire(&Context->Runtime->ResidentFaultStopRequested) != 0L) {
         /* Leave VMX without advancing an unserviced instruction. */
         handled = KswordARKHvmResidentDeactivateCurrent(
             Context,
@@ -2376,7 +2364,8 @@ KswordARKHvmResidentVmExitDispatchBody(
         handled = KswordARKHvmExitHandleCpuid(
             Context,
             Frame,
-            telemetry.InstructionLength);
+            telemetry.InstructionLength,
+            telemetry.GuestRip);
     /*
      * Dispatch KSword-private lifecycle VMCALLs.
      *
@@ -2448,6 +2437,12 @@ KswordARKHvmResidentVmExitDispatchBody(
                 Frame->Rax =
                     KswordARKHvmAsmInveptSingle(
                         Frame->Rdx);
+                if (Frame->Rax == 0ULL && Context->Nested.ShadowEpt.RootVirtual != NULL) {
+                    (void)KswordARKHvmNestedEptPropagateAccessedDirty(
+                        &Context->Nested.ShadowEpt, Context->PhysWindow);
+                    KswordARKHvmNestedEptInvalidate(&Context->Nested.ShadowEpt);
+                    if (Context->Nested.ShadowEpt.Faulted) { Frame->Rax = 1ULL; }
+                }
             }
             /* Advance past the fully decoded private VMCALL. */
             handled = KswordARKHvmExitAdvanceRip(

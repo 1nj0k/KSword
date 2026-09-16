@@ -16,6 +16,7 @@ Environment:
 --*/
 
 #include "hvm_vmcs.h"
+#include "hvm_metrics.h"
 
 #include "driver/KswordArkHvmControls.h"
 /* KSWORD_ARK_HVM_VMCS_DIAG_*：配置失败判别码的编码，与用户态工具共用同一份定义。 */
@@ -1295,6 +1296,11 @@ KswordARKHvmConfigureVmcs(
             { KSW_VMCS_HOST_EFER, (SIZE_T)efer }
         };
 
+        /* The ledger now contains all captured state and selected controls. */
+        if (Input->ResidentMode != 0U) {
+            /* This boundary precedes the first write from the fixed ledger. */
+            KswordARKHvmMetricsCpuStamp(Input->MetricsCpuIndex, KSW_HVM_TIME_STATE_CAPTURED);
+        }
         /* 先写入所有处理器都实现的基础字段。 */
         status = KswordARKHvmWriteVmcs(
             writes,
@@ -1495,11 +1501,13 @@ KswordARKHvmConfigureVmcs(
 }
 
 NTSTATUS
-KswordARKHvmReadVmExitTelemetry(
-    _Out_ KSW_HVM_VMEXIT_TELEMETRY* Telemetry
+KswordARKHvmReadVmExitTelemetryEx(
+    _Out_ KSW_HVM_VMEXIT_TELEMETRY* Telemetry,
+    _In_ BOOLEAN SparseCpuid
     )
 {
     SIZE_T value = 0U;
+    BOOLEAN sparse = FALSE;
 
     /* Reject a missing telemetry destination before VMREAD. */
     if (Telemetry == NULL) {
@@ -1513,12 +1521,14 @@ KswordARKHvmReadVmExitTelemetry(
     }
     /* Preserve only the protocol-visible 32-bit exit reason. */
     Telemetry->Reason = (ULONG)value;
+    /* Exact reason matching excludes VM-entry failures and preserves their diagnostics. */
+    sparse = SparseCpuid && Telemetry->Reason == 10UL;
     /* Read the exit qualification associated with the basic reason. */
-    if (KswordARKHvmVmcsFieldLoad(KSW_VMCS_EXIT_QUALIFICATION, &value) != 0U) {
+    if (!sparse && KswordARKHvmVmcsFieldLoad(KSW_VMCS_EXIT_QUALIFICATION, &value) != 0U) {
         return STATUS_HV_OPERATION_FAILED;
     }
-    /* Publish the complete natural-width qualification. */
-    Telemetry->Qualification = (ULONGLONG)value;
+    /* CPUID supplies no exit qualification; zero does not masquerade as a read value. */
+    Telemetry->Qualification = sparse ? 0ULL : (ULONGLONG)value;
     /* Read the guest instruction pointer at the point of exit. */
     if (KswordARKHvmVmcsFieldLoad(KSW_VMCS_GUEST_RIP, &value) != 0U) {
         return STATUS_HV_OPERATION_FAILED;
@@ -1538,13 +1548,30 @@ KswordARKHvmReadVmExitTelemetry(
     /* Publish the bounded instruction length. */
     Telemetry->InstructionLength = (ULONG)value;
     /* Read the VM-instruction error field as additional diagnostic evidence. */
-    if (KswordARKHvmVmcsFieldLoad(KSW_VMCS_INSTRUCTION_ERROR, &value) == 0U) {
+    if (!sparse && KswordARKHvmVmcsFieldLoad(KSW_VMCS_INSTRUCTION_ERROR, &value) == 0U) {
         Telemetry->VmInstructionError = (ULONG)value;
     }
     return STATUS_SUCCESS;
 }
 
+NTSTATUS KswordARKHvmReadVmExitTelemetry(KSW_HVM_VMEXIT_TELEMETRY* Telemetry)
+{
+    /* One-shot and failure diagnostics retain the complete existing snapshot. */
+    return KswordARKHvmReadVmExitTelemetryEx(Telemetry, FALSE);
+}
+
 #else
+
+NTSTATUS KswordARKHvmReadVmExitTelemetryEx(KSW_HVM_VMEXIT_TELEMETRY* Telemetry,
+    BOOLEAN SparseCpuid)
+{
+    /* Non-x64 builds have no VMCS telemetry implementation. */
+    UNREFERENCED_PARAMETER(Telemetry);
+    /* Preserve the same unsupported contract for either snapshot policy. */
+    UNREFERENCED_PARAMETER(SparseCpuid);
+    /* Do not report a fabricated snapshot as success. */
+    return STATUS_NOT_SUPPORTED;
+}
 
 NTSTATUS
 KswordARKHvmConfigureVmcs(

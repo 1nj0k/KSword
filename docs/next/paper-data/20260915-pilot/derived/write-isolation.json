@@ -1,0 +1,24 @@
+[
+  {
+    "source": "write-isolation-20260915T162828Z.json",
+    "values": [
+      "a5a5a5a5",
+      "d1d1d1d1",
+      "b2b2b2b2",
+      "a5a5a5a5"
+    ],
+    "guestBootIds": [
+      "7230583c-637f-4c98-ac86-6d79c1bce8a8",
+      "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+    ],
+    "windowsAndProcessContinuity": true,
+    "vmwareDiskHashesUnchanged": true,
+    "guestUptimeSamples": [
+      7702.01,
+      7731.83,
+      7732.08,
+      7750.28
+    ],
+    "result": "pass"
+  }
+]

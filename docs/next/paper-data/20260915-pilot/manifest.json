@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "experiment": "20260915-pilot",
+  "createdUtc": "2026-09-15T15:55:33.4151207Z",
+  "sourceCommit": "7af2fa6bafca3d54a9ef90d69ff416e1d68ac4c3",
+  "driverSourceCommit": "7360d502",
+  "limitations": [
+    "Single physical CPU model",
+    "TinyCore diagnostic boot with one vCPU",
+    "No GUI tests requested",
+    "No matched TinyCore baseline",
+    "Internal VMX phases and exact transition pause not instrumented",
+    "One busy-observer stop command exceeded the 30 second wait; stopped state later observed",
+    "EPT12 accessed/dirty writeback modifies VMM-managed metadata; no blanket VMM-memory-integrity claim"
+  ],
+  "windows10Ltsc": {
+    "status": "skipped_by_user",
+    "reason": "User requested temporarily skipping Windows 10 LTSC."
+  },
+  "blockedActions": [
+    {
+      "action": "Start temporary HTTP server on Windows 1 and transfer Linux benchmark to TinyCore",
+      "status": "automatic_approval_rejected",
+      "reason": "blocked by policy; no further reason supplied",
+      "executed": false
+    }
+  ],
+  "completedCollectionUtc": "2026-09-15T17:00:04.4024259Z",
+  "status": "collected_with_explicit_gaps",
+  "runIndex": "raw-index.json",
+  "derivedSummary": "derived/summary.json",
+  "coverage": "coverage.json"
+}

@@ -1,0 +1,8 @@
+{
+  "originalsChanged": false,
+  "kind": "anonymous-packaging-audit",
+  "reproduction": "passed",
+  "extendedIdentityScan": "failed",
+  "reason": "VMware BIOS-UUID log variant and project text in one archive filename were missed. Archive marked rejected; corrected package must pass extended checks.",
+  "attempt": "initial"
+}

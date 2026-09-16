@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "runId": "paper-linux-cpu-4",
+  "workload": "sha256sum-unavailable",
+  "iteration": 4,
+  "warmup": false,
+  "source": "tinycore-serial.txt",
+  "raw": "paper-linux-cpu-4\n6755.95 6652.99\n/bin/sh: sha256sum: not found\n6756.03 6652.99\n",
+  "guestUptimeSamples": [
+    6755.95,
+    6756.03
+  ],
+  "status": "environment_error",
+  "hostTimestamp": null,
+  "timestampNote": "Raw serial has guest uptime only; no synchronized host timestamp per command.",
+  "uptimeBracketSeconds": 0.07999999999992724
+}

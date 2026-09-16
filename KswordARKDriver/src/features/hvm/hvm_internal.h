@@ -20,6 +20,8 @@ Environment:
 #include "hvm_runtime.h"
 /* KSW_HVM_ACTIVE_CONTROLS is embedded in the runtime below. */
 #include "hvm_vmcs.h"
+/* Immutable translation identity shared by page admission and root readers. */
+#include "hvm_nested_lease_walk.h"
 
 /* Define the architectural page size used by VMX and EPT structures. */
 #define KSW_HVM_PAGE_BYTES 0x1000ULL
@@ -262,7 +264,8 @@ typedef struct _KSW_HVM_CPU_RESOURCE
      * exits a second wraps after about five days - acceptable for a diagnostic
      * counter, and the protocol widens to 64 bits before summing.
      */
-    ULONG ExitReasonCount[KSWORD_ARK_HVM_EXIT_REASON_SLOTS];
+    /* Long nested runs can exceed 32-bit counts; match the protocol width. */
+    ULONGLONG ExitReasonCount[KSWORD_ARK_HVM_EXIT_REASON_SLOTS];
 } KSW_HVM_CPU_RESOURCE;
 
 /* Track one contiguous page allocated for an EPT hierarchy. */
@@ -574,6 +577,19 @@ typedef struct _KSW_HVM_MSR_POLICY_SLOT
 } KSW_HVM_MSR_POLICY_SLOT;
 
 /* Own the serialized HVM capability, lifecycle, EPT, and telemetry state. */
+/* Immutable while published; counters are written atomically from VMX root. */
+typedef struct _KSW_HVM_NESTED_PAGE {
+    PVOID ShadowVirtual;
+    ULONGLONG Ept12Pointer, GuestPhysicalPage, ShadowPhysicalPage;
+    volatile LONG64 OriginalPhysicalPage, ComposedCount;
+    /* A referenced process object binds the rule beyond numeric PID reuse. */
+    PEPROCESS OwnerProcess;
+    /* Preserve the identity checked when the mapping was admitted. */
+    ULONGLONG OwnerCreationTime;
+    /* Publication never automatically rebinds this path to a recycled GPA. */
+    KSW_HVM_PAGE_TRANSLATION Translation;
+} KSW_HVM_NESTED_PAGE;
+
 typedef struct _KSW_HVM_RUNTIME
 {
     /* Serialize PASSIVE_LEVEL lifecycle and protocol operations. */
@@ -784,6 +800,8 @@ typedef struct _KSW_HVM_RUNTIME
      * 的那一轮绝不能继承上一轮的隐藏，否则"没开时行为不变"这句话就不成立了。
      */
     volatile LONG HideHypervisorCpuid;
+    /* Diagnostic reference mode changes field-read cost, not emulated CPU state. */
+    volatile LONG FullExitSnapshot;
     /* Preserve IA32_VMX_VMFUNC evidence; bit 0 is EPTP switching. */
     ULONGLONG VmFunctionCapabilities;
     /* Retain the 512-entry EPTP list published to VMFUNC. */
@@ -876,6 +894,16 @@ typedef struct _KSW_HVM_RUNTIME
      * otherwise, so an unarmed runtime carries the storage but never a page.
      */
     KSW_HVM_EPTSW EptSwitch;
+    KSW_HVM_NESTED_PAGE* volatile NestedPage;
+    /* Failed unpublication retains its backing until invalidation is retried. */
+    KSW_HVM_NESTED_PAGE* NestedPageRetired;
+    /* Owner publication is serialized with the exit notification by the lease lock. */
+    PEPROCESS NestedPageOwner;
+    /* VMX root reads only this resident flag, never an OS process API. */
+    volatile LONG NestedPageOwnerExited;
+    /* First revocation reason wins and cannot be cleared while backing is live. */
+    volatile LONG NestedPageRevocationReason;
+    ULONG NestedPageGeneration;
     /* 每条 R-1 进程处置。表只在常驻停着时被改，退出路径不加锁读。 */
     KSW_HVM_PROCESS_SLOT ProcessDispositions[KSWORD_ARK_HVM_MAX_PROCESS_DISPOSITIONS];
     /* 表里当前有多少条。 */

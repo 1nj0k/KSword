@@ -1,0 +1,37 @@
+适用于 .NET Framework MSBuild 版本 17.14.51+25f168cee
+
+  Building 'KswordARKDriver' with toolset 'WindowsKernelModeDriver10.0' and the 'Universal' target platform.
+  Stamping x64\Release\KswordARKDriver.inf
+  Stamping [Version] section with DriverVer=04/24/2026,18.59.39.498
+  Assembling src\features\hvm\hvm_entry.asm...
+  Assembling src\features\rxpf\page_fault_stub.asm...
+  ioctl_registry.c
+  hvm_runtime.c
+  hvm_ept.c
+  hvm_nested_probe.c
+  hvm_nested_l2.c
+  hvm_nested_bitmap.c
+  hvm_nested_ept.c
+  hvm_nested_ad.c
+  hvm_nested.c
+  hvm_exit.c
+  hvm_ept_view.c
+  hvm_resident.c
+  hvm_vmcs.c
+  hvm_metrics.c
+  hvm_nested_page.c
+  hvm_ioctl.c
+    正在创建库 C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release\KswordARK.lib 和对象 C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release\KswordARK.exp
+  KswordARKDriver.vcxproj -> C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release\KswordARK.sys
+  Driver is 'Universal'.
+  ..........................
+  Signability test complete.
+  
+  Errors:
+  None
+  
+  Warnings:
+  None
+  
+  Catalog generation complete.
+  C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release\KswordARKDriver\kswordarkdriver.cat

@@ -1,0 +1,17 @@
+{
+  "kind": "derived-exit-cost",
+  "source": "exit-cost-million.json",
+  "tscCalibration": "tsc-calibration.jsonl",
+  "tscHzMedian": 2111992559.874,
+  "samples": [
+    {
+      "processor": 0,
+      "cDispatchCycles": 382,
+      "cDispatchNs": 180.87184929419914,
+      "telemetryCycles": 19,
+      "vmcsReadCycles": 97,
+      "emptyTimingCycles": 25
+    }
+  ],
+  "scope": "TSC snapshots average all exits on the reported vCPU; C dispatcher excludes entry/exit assembly and outer hypervisor time. Profile is instrumentation, not isolated CPUID handler timing."
+}

@@ -1,0 +1,6 @@
+{"kind":"tsc-calibration-header","invariantTsc":true,"qpcFrequency":10000000}
+{"kind":"tsc-calibration","qpcBegin":9207286078,"qpcEnd":9208317781,"tscBegin":1946214589306,"tscEnd":1946432484212,"tscHz":2111992559.874}
+{"kind":"tsc-calibration","qpcBegin":9208318065,"qpcEnd":9209393919,"tscBegin":1946432545916,"tscEnd":1946659764374,"tscHz":2111982276.406}
+{"kind":"tsc-calibration","qpcBegin":9209394038,"qpcEnd":9210478099,"tscBegin":1946659792606,"tscEnd":1946888744781,"tscHz":2111986087.499}
+{"kind":"tsc-calibration","qpcBegin":9210478209,"qpcEnd":9211565765,"tscBegin":1946888770472,"tscEnd":1947118461575,"tscHz":2111993341.033}
+{"kind":"tsc-calibration","qpcBegin":9211566636,"qpcEnd":9212653090,"tscBegin":1947118647444,"tscEnd":1947348105967,"tscHz":2111994829.049}

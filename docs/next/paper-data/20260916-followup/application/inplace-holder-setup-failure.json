@@ -1,0 +1,6 @@
+{
+  "kind": "fixture-setup-failure",
+  "result": "clean-reject",
+  "source": "serial.txt",
+  "reason": "page-holder uses O_EXCL and refused existing policy.json. No comparator trial ran in this failed setup. A fresh named file was then pinned for the direct-write comparison."
+}

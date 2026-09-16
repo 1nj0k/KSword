@@ -1,0 +1,271 @@
+{
+  "method": "Same static binary, 4 Windows vCPUs / 2 TinyCore vCPUs, pinned CPU 0. One warmup and three measured iterations. A 20-second timeout is a censored failure, never zero latency. Before/after are different driver builds and guest boots; this is an implementation comparison, not overhead relative to an absent hypervisor.",
+  "summaries": {
+    "before": {
+      "latency": {
+        "runs": 3,
+        "successes": 0,
+        "failures": 3,
+        "medianSeconds": null,
+        "seconds": [],
+        "binaryMD5": [
+          "fe11c500cef37d45948d4acf5797f75e"
+        ],
+        "bootIds": [
+          "a6ec69a5-cc4b-474d-8a55-4876d48574a0"
+        ]
+      },
+      "net": {
+        "runs": 3,
+        "successes": 3,
+        "failures": 0,
+        "medianSeconds": 0.02639159,
+        "seconds": [
+          0.034225072,
+          0.02639159,
+          0.02360463
+        ],
+        "binaryMD5": [
+          "fe11c500cef37d45948d4acf5797f75e"
+        ],
+        "bootIds": [
+          "a6ec69a5-cc4b-474d-8a55-4876d48574a0"
+        ]
+      },
+      "ping": {
+        "runs": 3,
+        "successes": 3,
+        "failures": 0,
+        "medianSeconds": 0.00870219,
+        "seconds": [
+          0.018846116,
+          0.008608938,
+          0.00870219
+        ],
+        "binaryMD5": [
+          "fe11c500cef37d45948d4acf5797f75e"
+        ],
+        "bootIds": [
+          "a6ec69a5-cc4b-474d-8a55-4876d48574a0"
+        ]
+      },
+      "cpu": {
+        "runs": 3,
+        "successes": 3,
+        "failures": 0,
+        "medianSeconds": 0.143797002,
+        "seconds": [
+          0.143797002,
+          0.166878755,
+          0.135675983
+        ],
+        "binaryMD5": [
+          "fe11c500cef37d45948d4acf5797f75e"
+        ],
+        "bootIds": [
+          "a6ec69a5-cc4b-474d-8a55-4876d48574a0"
+        ]
+      },
+      "cpuid": {
+        "runs": 3,
+        "successes": 3,
+        "failures": 0,
+        "medianSeconds": 12.564454199,
+        "seconds": [
+          12.888379266,
+          12.564454199,
+          12.487020438
+        ],
+        "binaryMD5": [
+          "fe11c500cef37d45948d4acf5797f75e"
+        ],
+        "bootIds": [
+          "a6ec69a5-cc4b-474d-8a55-4876d48574a0"
+        ]
+      },
+      "memory": {
+        "runs": 3,
+        "successes": 3,
+        "failures": 0,
+        "medianSeconds": 6.342333979,
+        "seconds": [
+          6.342333979,
+          6.938475457,
+          6.293146268
+        ],
+        "binaryMD5": [
+          "fe11c500cef37d45948d4acf5797f75e"
+        ],
+        "bootIds": [
+          "a6ec69a5-cc4b-474d-8a55-4876d48574a0"
+        ]
+      }
+    },
+    "after": {
+      "latency": {
+        "runs": 3,
+        "successes": 3,
+        "failures": 0,
+        "medianSeconds": 1.611810033,
+        "seconds": [
+          1.611810033,
+          1.47934581,
+          3.55868137
+        ],
+        "binaryMD5": [
+          "fe11c500cef37d45948d4acf5797f75e"
+        ],
+        "bootIds": [
+          "64995441-1414-4560-9278-450fbfc72baf"
+        ]
+      },
+      "net": {
+        "runs": 3,
+        "successes": 3,
+        "failures": 0,
+        "medianSeconds": 0.021537739,
+        "seconds": [
+          0.021537739,
+          0.015248868,
+          0.065857222
+        ],
+        "binaryMD5": [
+          "fe11c500cef37d45948d4acf5797f75e"
+        ],
+        "bootIds": [
+          "64995441-1414-4560-9278-450fbfc72baf"
+        ]
+      },
+      "ping": {
+        "runs": 3,
+        "successes": 3,
+        "failures": 0,
+        "medianSeconds": 0.010263365,
+        "seconds": [
+          0.010263365,
+          0.009675709,
+          0.010396903
+        ],
+        "binaryMD5": [
+          "fe11c500cef37d45948d4acf5797f75e"
+        ],
+        "bootIds": [
+          "64995441-1414-4560-9278-450fbfc72baf"
+        ]
+      },
+      "cpu": {
+        "runs": 3,
+        "successes": 3,
+        "failures": 0,
+        "medianSeconds": 0.139019472,
+        "seconds": [
+          0.138523847,
+          0.139019472,
+          0.176926894
+        ],
+        "binaryMD5": [
+          "fe11c500cef37d45948d4acf5797f75e"
+        ],
+        "bootIds": [
+          "64995441-1414-4560-9278-450fbfc72baf"
+        ]
+      },
+      "cpuid": {
+        "runs": 3,
+        "successes": 3,
+        "failures": 0,
+        "medianSeconds": 8.914615513,
+        "seconds": [
+          8.914615513,
+          8.908369194,
+          9.744802648
+        ],
+        "binaryMD5": [
+          "fe11c500cef37d45948d4acf5797f75e"
+        ],
+        "bootIds": [
+          "64995441-1414-4560-9278-450fbfc72baf"
+        ]
+      },
+      "memory": {
+        "runs": 3,
+        "successes": 3,
+        "failures": 0,
+        "medianSeconds": 0.346955268,
+        "seconds": [
+          0.269279389,
+          0.958103573,
+          0.346955268
+        ],
+        "binaryMD5": [
+          "fe11c500cef37d45948d4acf5797f75e"
+        ],
+        "bootIds": [
+          "64995441-1414-4560-9278-450fbfc72baf"
+        ]
+      }
+    }
+  },
+  "comparison": [
+    {
+      "workload": "cpu",
+      "beforeSeconds": 0.143797002,
+      "afterSeconds": 0.139019472,
+      "elapsedReductionPercent": 3.3224127996771435,
+      "beforeSuccesses": 3,
+      "beforeFailures": 0,
+      "afterSuccesses": 3,
+      "afterFailures": 0
+    },
+    {
+      "workload": "cpuid",
+      "beforeSeconds": 12.564454199,
+      "afterSeconds": 8.914615513,
+      "elapsedReductionPercent": 29.048923480420584,
+      "beforeSuccesses": 3,
+      "beforeFailures": 0,
+      "afterSuccesses": 3,
+      "afterFailures": 0
+    },
+    {
+      "workload": "latency",
+      "beforeSeconds": null,
+      "afterSeconds": 1.611810033,
+      "elapsedReductionPercent": null,
+      "beforeSuccesses": 0,
+      "beforeFailures": 3,
+      "afterSuccesses": 3,
+      "afterFailures": 0
+    },
+    {
+      "workload": "memory",
+      "beforeSeconds": 6.342333979,
+      "afterSeconds": 0.346955268,
+      "elapsedReductionPercent": 94.52953330510822,
+      "beforeSuccesses": 3,
+      "beforeFailures": 0,
+      "afterSuccesses": 3,
+      "afterFailures": 0
+    },
+    {
+      "workload": "net",
+      "beforeSeconds": 0.02639159,
+      "afterSeconds": 0.021537739,
+      "elapsedReductionPercent": 18.39165810017509,
+      "beforeSuccesses": 3,
+      "beforeFailures": 0,
+      "afterSuccesses": 3,
+      "afterFailures": 0
+    },
+    {
+      "workload": "ping",
+      "beforeSeconds": 0.00870219,
+      "afterSeconds": 0.010263365,
+      "elapsedReductionPercent": -17.94002429273551,
+      "beforeSuccesses": 3,
+      "beforeFailures": 0,
+      "afterSuccesses": 3,
+      "afterFailures": 0
+    }
+  ]
+}

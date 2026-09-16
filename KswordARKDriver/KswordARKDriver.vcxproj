@@ -98,6 +98,9 @@
     <ClCompile Include="src\features\hvm\hvm_nested_ept.c">
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
+    <ClCompile Include="src\features\hvm\hvm_nested_ad.c">
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
     <ClCompile Include="src\features\hvm\hvm_nested.c">
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
@@ -138,6 +141,15 @@
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
     <ClCompile Include="src\features\hvm\hvm_vmcs.c">
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
+    <ClCompile Include="src\features\hvm\hvm_descriptor.c">
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
+    <ClCompile Include="src\features\hvm\hvm_metrics.c">
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
+    <ClCompile Include="src\features\hvm\hvm_nested_page.c">
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
     <ClCompile Include="src\features\hvm\hvm_guest.c">
@@ -485,6 +497,8 @@
     <ClInclude Include="src\features\hvm\hvm_nested_vmcs.h" />
     <ClInclude Include="src\features\hvm\hvm_nested_bitmap.h" />
     <ClInclude Include="src\features\hvm\hvm_nested_ept.h" />
+    <ClInclude Include="src\features\hvm\hvm_nested_ad_compare.h" />
+    <ClInclude Include="src\features\hvm\hvm_nested_lease_walk.h" />
     <ClInclude Include="src\features\hvm\hvm_nested.h" />
     <ClInclude Include="src\features\hvm\hvm_exit.h" />
     <ClInclude Include="src\features\hvm\hvm_exit_emulate.h" />
@@ -499,6 +513,9 @@
     <ClInclude Include="src\features\hvm\hvm_cr_policy.h" />
     <ClInclude Include="src\features\hvm\hvm_resident.h" />
     <ClInclude Include="src\features\hvm\hvm_vmcs.h" />
+    <ClInclude Include="src\features\hvm\hvm_descriptor.h" />
+    <ClInclude Include="src\features\hvm\hvm_metrics.h" />
+    <ClInclude Include="..\shared\driver\KswordArkHvmMetricsIoctl.h" />
     <ClInclude Include="src\features\hvm\hvm_guest.h" />
     <ClInclude Include="..\shared\driver\KswordArkHvmIoctl.h" />
     <ClInclude Include="..\shared\driver\KswordArkSlatIommuAuditIoctl.h" />

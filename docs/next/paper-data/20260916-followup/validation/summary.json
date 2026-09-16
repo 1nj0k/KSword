@@ -1,0 +1,18 @@
+{
+  "kind": "followup-validation-summary",
+  "implementationCommit": "bd703d84a0f45f7567c8d05113578ae9e4adf1bd",
+  "driverBuild": "complete, exit 0, Universal validator",
+  "ordinaryTestSigned": true,
+  "variantSigning": false,
+  "mainAndClisBuild": "success",
+  "guiRuntimeTested": false,
+  "analysisUnitTests": 29,
+  "commandCatalogCount": 60,
+  "validArgumentCases": 28,
+  "refusedArgumentCases": 20,
+  "endRuleOutstanding": 0,
+  "endReplacementOutstanding": 0,
+  "remainingVmwareProcesses": 0,
+  "measuredPolicyObserverIndependentHolderLiveness": false,
+  "fixedPolicyObserverRuntimeTested": false
+}

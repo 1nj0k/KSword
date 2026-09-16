@@ -1,0 +1,29 @@
+{
+  "runs": [
+    {
+      "source": "application/vmware-teardown-20260915T235335174Z.json",
+      "result": "pass",
+      "residentCpus": 4,
+      "activeMappingAtExit": 1,
+      "driverSha256": "8850E28F7F43CF12F95116C862E0AA9FB4B609D60446EE1D46DDC1B900AB7A04",
+      "bootUtc": "2026-09-15T23:02:45.9386870Z"
+    },
+    {
+      "source": "application-v2/vmware-teardown-20260916T000311189Z.json",
+      "result": "pass",
+      "residentCpus": 4,
+      "activeMappingAtExit": 0,
+      "driverSha256": "8850E28F7F43CF12F95116C862E0AA9FB4B609D60446EE1D46DDC1B900AB7A04",
+      "bootUtc": "2026-09-15T23:02:45.9386870Z"
+    },
+    {
+      "source": "before-nested/vmware-teardown-20260915T230159142Z.json",
+      "result": "pass",
+      "residentCpus": 4,
+      "activeMappingAtExit": 0,
+      "driverSha256": "667D21B398B7C6A6FA9D00BAC203576C05E32B6F33F0536573C99011D3EFC407",
+      "bootUtc": "2026-09-15T22:28:28.7775770Z"
+    }
+  ],
+  "scope": "VMM process exit and explicit all-CPU reclamation. Does not test guest reboot/snapshot reuse within a surviving VMM process or stopping residency with a live VMM."
+}

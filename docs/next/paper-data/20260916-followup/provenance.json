@@ -1,0 +1,297 @@
+{
+  "kind": "source-binary-provenance",
+  "sourceParentCommit": "60e1b5efe44a39fb526e91b87bcd223d63b585f4",
+  "builtFromUncommittedChanges": true,
+  "driverBuild": {
+    "toolchain": "MSVC/WDK Release x64",
+    "variantSigning": false,
+    "automaticTestSigning": false,
+    "separateOrdinaryTestSigning": true,
+    "completeBuildExitCode": 0,
+    "apiValidator": "Universal",
+    "targetLoad": "success",
+    "hostAuthenticodeTrust": "untrusted root"
+  },
+  "sourceFiles": [
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/HvmCommandCatalog.c",
+      "sha256": "06fac4045da872de5b1343623889f70450d36515b68d0dc3c0a39974bcdb0d06",
+      "normalizedLfSha256": "6d4005c020ca3e936f20e2c51df9827c17c6ab24088527bd4620aeaa1bc41fe2",
+      "bytes": 22334
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/ArkDriverClient/HvmCommandEngine.c",
+      "sha256": "b0526cdda9457f4e9c7934784e56320868414ac67dc8724d6ada0fdd42857027",
+      "normalizedLfSha256": "8dd573f8e15cbc117a2634aca74327f3ec6f71ee367665fe23e6115662e279ae",
+      "bytes": 288828
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/languages/en-US.json",
+      "sha256": "ae596686d8d8e6dda2f1a9ea3e5ff7cda574d600b31aa709b23909851bce663f",
+      "normalizedLfSha256": "ae596686d8d8e6dda2f1a9ea3e5ff7cda574d600b31aa709b23909851bce663f",
+      "bytes": 3339227
+    },
+    {
+      "path": "Ksword5.1/Ksword5.1/languages/zh-CN.json",
+      "sha256": "c9404a54bcccd45f838fe32b8199518146aa844c8312d77e1019c0f3f5e80d61",
+      "normalizedLfSha256": "c9404a54bcccd45f838fe32b8199518146aa844c8312d77e1019c0f3f5e80d61",
+      "bytes": 3160084
+    },
+    {
+      "path": "KswordARKDriver/KswordARKDriver.vcxproj",
+      "sha256": "27aa4f4d86982528327515984b17dda7b481cb45adf067f40c1ac687d7569a0c",
+      "normalizedLfSha256": "c1bbe5a408db58418ca4ea79b13d9fb57dfd8e76c24f0a3552adaafb6d13e4f5",
+      "bytes": 50050
+    },
+    {
+      "path": "KswordARKDriver/KswordARKDriver.vcxproj.filters",
+      "sha256": "301ae1adc23134a4be9c1b8381e3f3c86d6355de0eda2d1b826e5535d93a655d",
+      "normalizedLfSha256": "f596203a7968169bedb5ce3d7f0bbd28f628c9c792cdce089600dfeb53ab5981",
+      "bytes": 63177
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_exit.c",
+      "sha256": "84bcf699008454a974bde88feada6844645bcc00e7b233c079bc8d7f15054b97",
+      "normalizedLfSha256": "84bcf699008454a974bde88feada6844645bcc00e7b233c079bc8d7f15054b97",
+      "bytes": 153447
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_internal.h",
+      "sha256": "a1f52eb5cb2b957c4a5ef05249292799de909c1d5acc9f715a262d5f311eecf8",
+      "normalizedLfSha256": "bc909dcd97ad7d9ba0754b939bb221a80190955218aa1d253482220d9c9ec4d9",
+      "bytes": 51626
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_ept.c",
+      "sha256": "b161dfd62889c73607e322f9a12239f3215b87f5d0ff75d28dac24925440ae40",
+      "normalizedLfSha256": "129ac372d1a5988677173dc6e9ee44ba05ae0111cd6b42b32dacb7be8eeef6f5",
+      "bytes": 45549
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_ept.h",
+      "sha256": "bf5e12487ecf2627bfc55230a721e3957ff0a226863603eaeab57cce73bf94ea",
+      "normalizedLfSha256": "4b03f8c49dac26f81eaf8c4c6b4785fdea54cff1a0b75c39f3b423a51bda2927",
+      "bytes": 15198
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_l2.c",
+      "sha256": "5b3f2bf1fb758c3974c2b044ce02ae9ff121ed93f1e951fee8ae876d4b17d3a8",
+      "normalizedLfSha256": "1cb86e625366f08d1db088c635d622414fec69d37683defa28d190518fc2e7ab",
+      "bytes": 117824
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_lease_walk.h",
+      "sha256": "39c955097632bf832d7e62948d47238420b97e46e415e52003c14089e7f0469d",
+      "normalizedLfSha256": "39c955097632bf832d7e62948d47238420b97e46e415e52003c14089e7f0469d",
+      "bytes": 7239
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_nested_page.c",
+      "sha256": "8afb24962f9c3012373cfd2bae956da7f399a282e2d03bcce19d960844305dbe",
+      "normalizedLfSha256": "8afb24962f9c3012373cfd2bae956da7f399a282e2d03bcce19d960844305dbe",
+      "bytes": 31396
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_resident.c",
+      "sha256": "e26bae5e663cc28f52d7a4e533003944943611ff26fd8e7ba7b958a3120b3757",
+      "normalizedLfSha256": "374d61271faab1bb689456c3adfbc48fd1c3a9ef4af2225c17dac618a79c1c89",
+      "bytes": 123065
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_runtime.c",
+      "sha256": "b06c087741b545d8bf3a016ae3641a03f7954e944a5d384d912783bcd5f3e8bb",
+      "normalizedLfSha256": "b06c087741b545d8bf3a016ae3641a03f7954e944a5d384d912783bcd5f3e8bb",
+      "bytes": 151771
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_vmcs.c",
+      "sha256": "9e0e8753d75b5a0fe86c130ef3c0b9e91da31cad4d2afac51b9f4740dad2b25f",
+      "normalizedLfSha256": "9e0e8753d75b5a0fe86c130ef3c0b9e91da31cad4d2afac51b9f4740dad2b25f",
+      "bytes": 68212
+    },
+    {
+      "path": "KswordARKDriver/src/features/hvm/hvm_vmcs.h",
+      "sha256": "321dba7b3b0b658b68fb8b6049234774e30b68eb7043a96bd4674814d9fc035e",
+      "normalizedLfSha256": "321dba7b3b0b658b68fb8b6049234774e30b68eb7043a96bd4674814d9fc035e",
+      "bytes": 8348
+    },
+    {
+      "path": "shared/driver/KswordArkHvmIoctl.h",
+      "sha256": "42b4a1e75b53b58bbcfd124907c20624fca17f5f8f70cfa63fdfe6deca2e5eb3",
+      "normalizedLfSha256": "e0b1ebc7651dc117245c0a8c186b4945cdee884095fd8370a57d683f7656a1c8",
+      "bytes": 120173
+    },
+    {
+      "path": "tools/hvm_ctl/build.cmd",
+      "sha256": "db3e5d45963bf243830ab1a7daa5c223e3640badf4d2dd3046152438df527042",
+      "normalizedLfSha256": "db3e5d45963bf243830ab1a7daa5c223e3640badf4d2dd3046152438df527042",
+      "bytes": 338
+    },
+    {
+      "path": "tools/hvm_ctl/test_command_parity.py",
+      "sha256": "88bc045cef3d4bd5e908759dabc3b774860129e2131548ce7d99b4206883389d",
+      "normalizedLfSha256": "f7c14394598d0aee370e476c87ca11d62655b9cb08f5e24b72f5418a245b6f93",
+      "bytes": 5839
+    },
+    {
+      "path": "tools/hvm_paper/Build-HyperVBaselineIso.sh",
+      "sha256": "43752a77e62fc819f74e8f235097044ac3ff52e5d6b7b898f1f7a3dc0d24008c",
+      "normalizedLfSha256": "43752a77e62fc819f74e8f235097044ac3ff52e5d6b7b898f1f7a3dc0d24008c",
+      "bytes": 2468
+    },
+    {
+      "path": "tools/hvm_paper/Build-LinuxPayload.sh",
+      "sha256": "0d091611be128537d2f5bf593a39231f20c9740e9b4da0765ecdf3bb69312d0f",
+      "normalizedLfSha256": "0d091611be128537d2f5bf593a39231f20c9740e9b4da0765ecdf3bb69312d0f",
+      "bytes": 1475
+    },
+    {
+      "path": "tools/hvm_paper/README.md",
+      "sha256": "1a1b4647f84d508ada059cc1f69bfb20643f322930f6fd66e734cf37c9fadaab",
+      "normalizedLfSha256": "bc4e8d824e3ea2995fa2ebbc6d2d893caacb2fcfab7c91eb6d4fc3e948b3f691",
+      "bytes": 15193
+    },
+    {
+      "path": "tools/hvm_paper/Receive-HyperVSerial.ps1",
+      "sha256": "5b9690319eea92fa26dd03db09de9fbdf48c4dc6365dd05648f8739853c6a0e7",
+      "normalizedLfSha256": "5b9690319eea92fa26dd03db09de9fbdf48c4dc6365dd05648f8739853c6a0e7",
+      "bytes": 1272
+    },
+    {
+      "path": "tools/hvm_paper/Run-ApplicationLatency.ps1",
+      "sha256": "38e3bdd0b017f0c0c061c6f6776779e3d7f90b1643603918e2ec392ea268f5a8",
+      "normalizedLfSha256": "38e3bdd0b017f0c0c061c6f6776779e3d7f90b1643603918e2ec392ea268f5a8",
+      "bytes": 3678
+    },
+    {
+      "path": "tools/hvm_paper/Run-ExitAttribution.ps1",
+      "sha256": "7efb02f817679e388b84251f8f3c88388d9c6d0945b06744a064b039eb252b78",
+      "normalizedLfSha256": "7efb02f817679e388b84251f8f3c88388d9c6d0945b06744a064b039eb252b78",
+      "bytes": 5947
+    },
+    {
+      "path": "tools/hvm_paper/Run-HttpPageCycles.ps1",
+      "sha256": "739e53de9a90fdca0fe02ad2b94f43ad050b43ee5beacbcd071938d0ccc20986",
+      "normalizedLfSha256": "739e53de9a90fdca0fe02ad2b94f43ad050b43ee5beacbcd071938d0ccc20986",
+      "bytes": 5548
+    },
+    {
+      "path": "tools/hvm_paper/Run-PolicyComparison.sh",
+      "sha256": "4cb400302959bc2fc9a4368aede8789e1d9da10f2f50b484c3bc12e7ede33de9",
+      "normalizedLfSha256": "4cb400302959bc2fc9a4368aede8789e1d9da10f2f50b484c3bc12e7ede33de9",
+      "bytes": 1924
+    },
+    {
+      "path": "tools/hvm_paper/analyze_followup.py",
+      "sha256": "78256ce364381c489bb953bd6f608b2f81010400b0f30f2338087f9e16eb936d",
+      "normalizedLfSha256": "78256ce364381c489bb953bd6f608b2f81010400b0f30f2338087f9e16eb936d",
+      "bytes": 7073
+    },
+    {
+      "path": "tools/hvm_paper/analyze_http_page.py",
+      "sha256": "cf5834e54ecce035976663978895c04d078e26597b0147af951d0d5406c6db78",
+      "normalizedLfSha256": "cf5834e54ecce035976663978895c04d078e26597b0147af951d0d5406c6db78",
+      "bytes": 8253
+    },
+    {
+      "path": "tools/hvm_paper/analyze_policy_comparison.py",
+      "sha256": "d7827ba473fe5ea93972565b1d7f395b35fc92480e19552f6ebd09ca06b184a2",
+      "normalizedLfSha256": "d7827ba473fe5ea93972565b1d7f395b35fc92480e19552f6ebd09ca06b184a2",
+      "bytes": 7486
+    },
+    {
+      "path": "tools/hvm_paper/application_latency.c",
+      "sha256": "83ec17e09074e40c309aee5827e9ef419e4a81790f744f26554cdbeebb9eba05",
+      "normalizedLfSha256": "83ec17e09074e40c309aee5827e9ef419e4a81790f744f26554cdbeebb9eba05",
+      "bytes": 6158
+    },
+    {
+      "path": "tools/hvm_paper/http_policy_oracle.c",
+      "sha256": "85789f50e244c060deefe70ced8a97a85fa6e1011d0bf6a7689bc59c2f2ca671",
+      "normalizedLfSha256": "85789f50e244c060deefe70ced8a97a85fa6e1011d0bf6a7689bc59c2f2ca671",
+      "bytes": 1132
+    },
+    {
+      "path": "tools/hvm_paper/microbench.c",
+      "sha256": "cba53fc3ee16c6067afe8360843d2adcb34eea6623ce2ac1dda8ce4e3665a157",
+      "normalizedLfSha256": "cba53fc3ee16c6067afe8360843d2adcb34eea6623ce2ac1dda8ce4e3665a157",
+      "bytes": 10345
+    },
+    {
+      "path": "tools/hvm_paper/package_anonymous.py",
+      "sha256": "7cd5c234d12cc8f1d33291244f57d65b2a7d4aa53f4d95881689e3c38ae10f41",
+      "normalizedLfSha256": "33145b9aa0bbe84c5581918d85aba00fecc6ffac65043631c2bd2cc7a5db7c32",
+      "bytes": 13731
+    },
+    {
+      "path": "tools/hvm_paper/page_holder.c",
+      "sha256": "a2df170460be7b5bb8ae1b0de1e779eb6a88e6a91d4ffc55781b044830a96134",
+      "normalizedLfSha256": "a2df170460be7b5bb8ae1b0de1e779eb6a88e6a91d4ffc55781b044830a96134",
+      "bytes": 2229
+    },
+    {
+      "path": "tools/hvm_paper/test_ept_lease.c",
+      "sha256": "0add34a658945e081d9b8178edb8962b87d47a17e3440e88404702c3b420e054",
+      "normalizedLfSha256": "0add34a658945e081d9b8178edb8962b87d47a17e3440e88404702c3b420e054",
+      "bytes": 3555
+    },
+    {
+      "path": "tools/hvm_paper/test_http_evidence.py",
+      "sha256": "eb579fc2ee64d0085a0be5feb11400608c0e0f0ed0da2ea3ba50dd1d0a5235f2",
+      "normalizedLfSha256": "eb579fc2ee64d0085a0be5feb11400608c0e0f0ed0da2ea3ba50dd1d0a5235f2",
+      "bytes": 4400
+    },
+    {
+      "path": "tools/hvm_paper/test_policy_comparison.py",
+      "sha256": "f45c1a3abc738f4ee0e3acfad62285bb91956f9ada49b0cbd58b31097656cb7c",
+      "normalizedLfSha256": "f45c1a3abc738f4ee0e3acfad62285bb91956f9ada49b0cbd58b31097656cb7c",
+      "bytes": 2308
+    },
+    {
+      "path": "tools/hvm_paper/tsc_rate.c",
+      "sha256": "b5731eafcf84482816225368eb6adecd6be223d2d5fec351ff0ff680ced1d2c8",
+      "normalizedLfSha256": "b5731eafcf84482816225368eb6adecd6be223d2d5fec351ff0ff680ced1d2c8",
+      "bytes": 967
+    }
+  ],
+  "localBinaries": [
+    {
+      "path": "Ksword5.1/x64/Release/KswordARK.sys",
+      "sha256": "3b44132f82febce3fcdf059b697d938479b9f791a628c00b55bc2cf397d5d500",
+      "bytes": 2745240
+    },
+    {
+      "path": "Ksword5.1/x64/Release/Ksword5.1.exe",
+      "sha256": "989d6a5d319e0a965f6622599b5d4dd4298b7033047104abda542e8f7c2aa5aa",
+      "bytes": 19132824
+    },
+    {
+      "path": "tools/hvm_ctl/hvm_ctl.exe",
+      "sha256": "4dd0d8dabb3019503e15d70692759ff0502cac46635d53f266a577caad5972ae",
+      "bytes": 267776
+    },
+    {
+      "path": "tools/hvm_paper/bin/application_latency.exe",
+      "sha256": "1ae25ca955dd01ea44ab3c45e22f6fc1175c0b407cc80a796ff79f073570e4f9",
+      "bytes": 92857
+    },
+    {
+      "path": "tools/hvm_paper/bin/microbench.exe",
+      "sha256": "a37d9d1b3fc22d5539c51c3dc364b7c1baa0061913b72efef8183e020d464e0d",
+      "bytes": 92657
+    },
+    {
+      "path": "tools/hvm_paper/bin/tsc_rate.exe",
+      "sha256": "f1a8c9ecd125d2ab31328e724bb0530fd610e9389707572fca5915c26850ad9e",
+      "bytes": 81424
+    }
+  ],
+  "notes": [
+    "Measured script versions are separately archived under application/measured-*.txt.",
+    "Unrelated theme.h is excluded from implementation changes; the main-program binary was built from the existing shared checkout.",
+    "No GUI runtime test. The Hyper-V admission baseline names a prior driver; all performance and lease regressions identify the new deployed binary.",
+    "Source byte hashes identify the local build inputs; normalizedLfSha256 permits comparison after Git line-ending conversion.",
+    "The implementation commit records the driver changes and later analysis/collector corrections. The corrected holder-liveness probe was not rerun; measured collector scripts remain separately archived."
+  ],
+  "implementationCommit": "bd703d84a0f45f7567c8d05113578ae9e4adf1bd"
+}

@@ -604,6 +604,71 @@ TestLocalEptArithmetic(void)
 
 /* ------------------------------------------------------------------ */
 
+
+static void
+TestNestedEptComposition(void)
+{
+    unsigned long long leaf = 0ULL;
+    unsigned long p;
+    unsigned long q;
+    unsigned long a;
+    int all = 1;
+
+    Group("Nested EPT composition");
+    Check(KswordArkHvmNestedEptComposeLeaf(0x2468ABCULL, 0x37ULL,
+          0x80000000ABCD5037ULL, 12UL, 1UL, &leaf) == 0UL,
+          "nonidentity outer mapping resolves");
+    CheckEqU64(leaf, 0x80000000ABCD5037ULL,
+               "L2 maps the replacement frame, not the L1 frame");
+    Check(KswordArkHvmNestedEptComposeLeaf(0x12345ABCULL, 0x35ULL,
+          0x80000000400000B7ULL, 21UL, 4UL, &leaf) == 0UL,
+          "large outer mapping resolves");
+    CheckEqU64(leaf, 0x8000000040145035ULL,
+               "2 MiB mapping retains the page offset and intersects permissions");
+    Check(KswordArkHvmNestedEptComposeLeaf(0x52345ABCULL, 0x37ULL,
+          0x80000000800000B7ULL, 30UL, 2UL, &leaf) == 0UL,
+          "1 GiB mapping resolves");
+    CheckEqU64(leaf, 0x8000000092345037ULL, "1 GiB offset is preserved");
+    Check(KswordArkHvmNestedEptComposeLeaf(0x1000ULL, 0x37ULL,
+          0xFED00007ULL, 12UL, 2UL, &leaf) == 0UL &&
+          (leaf & 0x38ULL) == 0ULL, "outer MMIO UC is never converted to WB");
+    Check(KswordArkHvmNestedEptComposeLeaf(0x1000ULL, 0x07ULL,
+          0x12345037ULL, 12UL, 1UL, &leaf) == 0UL &&
+          (leaf & 0x38ULL) == 0ULL, "inner MMIO UC is retained");
+    Check(KswordArkHvmNestedEptComposeLeaf(0x1000ULL, 0x77ULL,
+          0x12345337ULL, 12UL, 1UL, &leaf) == 0UL &&
+          (leaf & 0x340ULL) == 0x40ULL, "ignore PAT retained; A/D not preclaimed");
+
+    for (p = 0UL; p < 8UL; ++p) {
+        for (q = 0UL; q < 8UL; ++q) {
+            for (a = 1UL; a < 8UL; ++a) {
+                unsigned long result = KswordArkHvmNestedEptComposeLeaf(
+                    0x888000ULL, 0x30ULL | p, 0x999030ULL | q, 12UL, a, &leaf);
+                unsigned long expected =
+                    (p & a) != a ? 1UL :
+                    ((p & 3UL) == 2UL || (q & 3UL) == 2UL) ? 3UL :
+                    ((p & q & a) != a) ? 2UL : 0UL;
+                if (result != expected ||
+                    (result == 0UL && (leaf & 7ULL) != (p & q)) ||
+                    (result != 0UL && leaf != 0ULL)) { all = 0; }
+            }
+        }
+    }
+    Check(all, "448 permission combinations preserve ownership and never widen access");
+    Check(KswordArkHvmNestedEptComposeLeaf(0x1000ULL, 0x37ULL,
+          0x400010B7ULL, 21UL, 1UL, &leaf) == 3UL,
+          "misaligned large frame refused");
+    Check(KswordArkHvmNestedEptComposeLeaf(0x1000ULL, 0x37ULL,
+          0x123450B7ULL, 12UL, 1UL, &leaf) == 3UL,
+          "large bit in 4 KiB leaf refused");
+    Check(KswordArkHvmNestedEptComposeLeaf(0x1000ULL, 0x37ULL,
+          0x12345037ULL, 12UL, 0UL, &leaf) == 3UL, "zero access refused");
+    Check(KswordArkHvmNestedEptComposeLeaf(0x1000ULL, 0x37ULL,
+          0x12345037ULL, 12UL, 8UL, &leaf) == 3UL, "unknown access refused");
+    Check(KswordArkHvmNestedEptComposeLeaf(0x1000ULL, 0x37ULL,
+          0x12345017ULL, 12UL, 1UL, &leaf) == 3UL, "reserved memory type refused");
+}
+
 int
 main(void)
 {
@@ -617,6 +682,7 @@ main(void)
     TestEptIndices();
     TestDomainRestriction();
     TestLocalEptArithmetic();
+    TestNestedEptComposition();
 
     printf("\n================================================\n");
     printf("%d 项检查，%d 项失败\n", g_checks, g_failures);

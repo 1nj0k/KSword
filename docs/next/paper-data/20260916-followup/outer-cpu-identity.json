@@ -1,0 +1,14 @@
+{
+  "utc": "2026-09-16T02:17:25.1130597Z",
+  "cpuRegistry": {
+    "Identifier": "Intel64 Family 6 Model 183 Stepping 1",
+    "ProcessorNameString": "13th Gen Intel(R) Core(TM) i7-13700F",
+    "VendorIdentifier": "GenuineIntel",
+    "~MHz": 2112
+  },
+  "version": {
+    "CurrentBuild": "26300",
+    "UBR": 9022,
+    "EditionID": "ProfessionalWorkstation"
+  }
+}

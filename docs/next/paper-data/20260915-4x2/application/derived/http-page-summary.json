@@ -1,0 +1,69 @@
+{
+  "runs": [
+    {
+      "runId": "http-page-20260915T234222794Z",
+      "result": "incomplete",
+      "gpa": "0x171a5000",
+      "error": "HTTP observer timed out."
+    },
+    {
+      "runId": "http-page-20260915T235041253Z",
+      "result": "incomplete",
+      "gpa": "0x171a5000",
+      "error": "missing HTTP responses"
+    },
+    {
+      "runId": "http-page-20260915T235117585Z",
+      "result": "effect_only_identity_snapshot",
+      "gpa": "0x171a5000",
+      "responses": {
+        "before": 10,
+        "mapped": 10,
+        "restored": 10
+      },
+      "httpdIdentity": [
+        "11974",
+        "126892"
+      ],
+      "expectedMD5": {
+        "before": "53398dd1f3a4c282ace3b660acd92ff7",
+        "mapped": "620f0b67a91f7f74151bc5be745b7110",
+        "restored": "53398dd1f3a4c282ace3b660acd92ff7"
+      },
+      "guestUptimeBegin": 2029.46,
+      "guestUptimeEnd": 2064.13,
+      "maxPfnSampleAgeSeconds": 1.9237148299998807,
+      "identityRereadPerRequest": false,
+      "originalBacking": "0x0000000037EEC000",
+      "replacementBacking": "0x0000000204FD4000",
+      "observedCompositions": 9
+    },
+    {
+      "runId": "http-page-20260915T235153607Z",
+      "result": "effect_only_identity_snapshot",
+      "gpa": "0x171a5000",
+      "responses": {
+        "before": 10,
+        "mapped": 10,
+        "restored": 10
+      },
+      "httpdIdentity": [
+        "11974",
+        "126892"
+      ],
+      "expectedMD5": {
+        "before": "53398dd1f3a4c282ace3b660acd92ff7",
+        "mapped": "620f0b67a91f7f74151bc5be745b7110",
+        "restored": "53398dd1f3a4c282ace3b660acd92ff7"
+      },
+      "guestUptimeBegin": 2065.3,
+      "guestUptimeEnd": 2099.81,
+      "maxPfnSampleAgeSeconds": 1.8370818930002315,
+      "identityRereadPerRequest": false,
+      "originalBacking": "0x0000000037EEC000",
+      "replacementBacking": "0x0000000204FD4000",
+      "observedCompositions": 10
+    }
+  ],
+  "scope": "BusyBox httpd serves a controlled resident file-cache page. Zero-filled replacement is a controlled data fault; restoration recovers its original HTTP body. Schema 1 has a server-identity startup snapshot only; schema 2 re-reads identity and boot ID per response. Root pagemap/mlock instrumentation selects the GPA. This is not arbitrary application atomicity, a guest-agent-free claim, or a production fault-tolerance benchmark."
+}

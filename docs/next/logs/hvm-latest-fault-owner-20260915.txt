@@ -1,0 +1,343 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.000 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.6584 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Felix\CLionProjects\KSword\docs\next\logs\hvm-latest-full-20260915.dmp]
+Kernel Bitmap Dump File: Kernel address space is available, User address space may not be available.
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                               16            C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release
+Deferred                                       srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release;srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 22621 MP (2 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS Personal
+Edition build lab: 22621.2506.amd64fre.ni_release_svc_prod3.231018-1809
+Kernel base = 0xfffff806`50800000 PsLoadedModuleList = 0xfffff806`514134b0
+Debug session time: Tue Sep 15 13:39:08.282 2026 (UTC - 4:00)
+System Uptime: 0 days 1:06:00.014
+Loading Kernel Symbols
+...............................................................
+................................................................
+.................................................
+Loading User Symbols
+
+Loading unloaded module list
+........
+For analysis of this file, run !analyze -v
+0: kd> cdb: Reading initial command '.reload /f KswordARK.sys; !pool ffffa98be0802486; !address ffffa98be0802486; dps ffff928a06467500 Lc0; u ffffa98be081e124 L20; u ffffa98be081e3e4 L15; q'
+unable to get nt!PspSessionIdBitmap
+Pool page ffffa98be0802486 region is Nonpaged pool
+*ffffa98be0802000 : large page allocation, tag is NtFW, size is 0x68000 bytes
+		Pooltag NtFW : Write.c, Binary : ntfs.sys
+Mapping user range ...
+Mapping system range ...
+Mapping non addressable range ...
+Mapping page tables...
+Mapping hyperspace...
+Mapping HAL reserved range...
+Mapping User Probe Area...
+Mapping system shared page...
+Mapping system cache working set...
+Mapping loader mappings...
+Mapping system PTEs...
+Mapping system paged pool...
+Mapping session space...
+Mapping dynamic system space...
+Mapping PFN database...
+Mapping non paged pool...
+Mapping VAD regions...
+Mapping module regions...
+Mapping process, thread, and stack regions...
+Mapping system cache regions...
+
+
+Usage:                  
+Base Address:           ffff951f`86a2c000
+End Address:            ffffc98b`5f600000
+Region Size:            0000346b`d8bd4000
+VA Type:                SystemRange
+ffff928a`06467500  ffffa98b`de0a3040
+ffff928a`06467508  fffff806`50b1e3ea nt!KiUpdateSpeculationControl+0xfa
+ffff928a`06467510  fffff806`4d495180
+ffff928a`06467518  00000000`00000000
+ffff928a`06467520  00000000`00000001
+ffff928a`06467528  00000400`00000000
+ffff928a`06467530  00000000`00000000
+ffff928a`06467538  00000000`00000000
+ffff928a`06467540  00180410`018302ff
+ffff928a`06467548  00000002`00000048
+ffff928a`06467550  0652f593`d4976bc6
+ffff928a`06467558  fffff806`5154c040 nt!KiInitialSharedReadyQueue
+ffff928a`06467560  00000000`00000000
+ffff928a`06467568  00000000`00000000
+ffff928a`06467570  ffffffff`ffffffff
+ffff928a`06467578  0652f593`d4976bc6
+ffff928a`06467580  00000000`00000000
+ffff928a`06467588  ffffa98b`debd1080
+ffff928a`06467590  fffff806`4d495180
+ffff928a`06467598  fffff806`50c1e927 nt!SwapContext+0x1c7
+ffff928a`064675a0  fffff806`4d495180
+ffff928a`064675a8  00000000`00000000
+ffff928a`064675b0  00000000`00400000
+ffff928a`064675b8  00000000`00000000
+ffff928a`064675c0  00000000`00000000
+ffff928a`064675c8  00000000`00000000
+ffff928a`064675d0  ffff928a`06467820
+ffff928a`064675d8  fffff806`50c1e6f6 nt!KiSwapContext+0x76
+ffff928a`064675e0  0652f58e`6aaed0a3
+ffff928a`064675e8  00000000`00000000
+ffff928a`064675f0  00000000`00000000
+ffff928a`064675f8  00000000`00000000
+ffff928a`06467600  00000000`00000000
+ffff928a`06467608  00000000`00000000
+ffff928a`06467610  00000000`00000000
+ffff928a`06467618  00000000`00000000
+ffff928a`06467620  00000000`00000000
+ffff928a`06467628  00000000`00000000
+ffff928a`06467630  0652f58e`6fef950a
+ffff928a`06467638  00000000`00000000
+ffff928a`06467640  00000000`00000000
+ffff928a`06467648  00000000`00000000
+ffff928a`06467650  00000000`00000000
+ffff928a`06467658  00000000`00000000
+ffff928a`06467660  00000000`00000000
+ffff928a`06467668  00000000`00000000
+ffff928a`06467670  00000000`00000000
+ffff928a`06467678  00000000`00000000
+ffff928a`06467680  00000000`00000000
+ffff928a`06467688  00000000`00000000
+ffff928a`06467690  00000000`00000000
+ffff928a`06467698  00000000`00000000
+ffff928a`064676a0  00000000`00000000
+ffff928a`064676a8  00000000`00000000
+ffff928a`064676b0  00000000`00000000
+ffff928a`064676b8  00000000`00000000
+ffff928a`064676c0  00000000`00000000
+ffff928a`064676c8  00000000`00000000
+ffff928a`064676d0  ffff6e76`9fc78fec
+ffff928a`064676d8  00000000`00000001
+ffff928a`064676e0  00000000`00000000
+ffff928a`064676e8  00000000`00000000
+ffff928a`064676f0  00000000`00000000
+ffff928a`064676f8  00000000`00000000
+ffff928a`06467700  ffffa98b`de0a3040
+ffff928a`06467708  00000000`00000001
+ffff928a`06467710  00000000`00000000
+ffff928a`06467718  fffff806`50a20644 nt!KiSwapThread+0xf44
+ffff928a`06467720  00000000`00000002
+ffff928a`06467728  00000000`00000000
+ffff928a`06467730  0e02034e`583ab481
+ffff928a`06467738  ffffa98b`d95dd800
+ffff928a`06467740  00000000`00000000
+ffff928a`06467748  ffffa98b`d9c4b050
+ffff928a`06467750  ffffa98b`e0b570c0
+ffff928a`06467758  fffff806`50a35be3 nt!KiUpdateProcessConcurrencyCount+0x143
+ffff928a`06467760  ffffa98b`e0b50000
+ffff928a`06467768  fffff806`50ab3b0f nt!CcLazyWriteScanVolume+0x5bf
+ffff928a`06467770  00000000`00000004
+ffff928a`06467778  ffffa98b`d95dd8e0
+ffff928a`06467780  ffffa98b`00000004
+ffff928a`06467788  fffff806`50b3606d nt!MiClearStackOwners+0xdd
+ffff928a`06467790  0001e79d`de620000
+ffff928a`06467798  0000033e`57bab089
+ffff928a`064677a0  0000033e`57baae9a
+ffff928a`064677a8  0000033e`57baae48
+ffff928a`064677b0  460a038e`5a3abc43
+ffff928a`064677b8  00000000`45011eb8
+ffff928a`064677c0  ffffa98b`dceae000
+ffff928a`064677c8  fffff806`512aaa84 nt!ExFreePoolWithTag+0x224
+ffff928a`064677d0  a98bdeb4`5000ffff
+ffff928a`064677d8  fffff806`4d49ffff
+ffff928a`064677e0  8a000001`2a588963
+ffff928a`064677e8  00000000`00000000
+ffff928a`064677f0  00000000`00000000
+ffff928a`064677f8  fffff806`515493c0 nt!KiProcessListLock
+ffff928a`06467800  00000000`00000001
+ffff928a`06467808  fffff806`50ee5547 nt!ExpFreeHandleTableEntry+0x7f
+ffff928a`06467810  00000000`00000000
+ffff928a`06467818  ffff820e`e4ffd510
+ffff928a`06467820  00000000`00000000
+ffff928a`06467828  ffff6e76`9fc78bfc
+ffff928a`06467830  ffffa98b`de0a3140
+ffff928a`06467838  ffffa98b`de0a3180
+ffff928a`06467840  00000000`00000000
+ffff928a`06467848  00000000`00000000
+ffff928a`06467850  00000000`00000000
+ffff928a`06467858  00000000`00000000
+ffff928a`06467860  ffffa98b`e081e174
+ffff928a`06467868  ffffa98b`e0802486
+ffff928a`06467870  ffffa98b`00000002
+ffff928a`06467878  00000000`00000b00
+ffff928a`06467880  00000000`000000e0
+ffff928a`06467888  00000000`00000000
+ffff928a`06467890  ffffa98b`dceae000
+ffff928a`06467898  00000000`00000000
+ffff928a`064678a0  00000002`00000000
+ffff928a`064678a8  00000000`00000000
+ffff928a`064678b0  00000000`00000000
+ffff928a`064678b8  00000000`00000000
+ffff928a`064678c0  ffffa98b`e081e174
+ffff928a`064678c8  ffffa98b`e0802486
+ffff928a`064678d0  ffffa98b`dceae050
+ffff928a`064678d8  00000000`00000000
+ffff928a`064678e0  ffffa98b`de0a3180
+ffff928a`064678e8  ffffa98b`de0a31c6
+ffff928a`064678f0  00000000`00000000
+ffff928a`064678f8  00000000`00000000
+ffff928a`06467900  00000000`00000000
+ffff928a`06467908  ffffa98b`d94aec50
+ffff928a`06467910  ffffa98b`de0a3040
+ffff928a`06467918  fffff806`50ab81bf nt!KeRemovePriQueue+0x1ff
+ffff928a`06467920  00000000`00000000
+ffff928a`06467928  ffffa98b`e081e174
+ffff928a`06467930  ffffa98b`e0802c1e
+ffff928a`06467938  00000002`1cd9cc00
+ffff928a`06467940  ffffa98b`e0802486
+ffff928a`06467948  fffff806`5154aac0 nt!ExNode0
+ffff928a`06467950  ffffa98b`d94aec50
+ffff928a`06467958  ffffa98b`de0a3040
+ffff928a`06467960  ffff928a`06467ac0
+ffff928a`06467968  ffffa98b`e081e17d
+ffff928a`06467970  ffffa98b`e0802486
+ffff928a`06467978  00000000`00000003
+ffff928a`06467980  00000000`00000000
+ffff928a`06467988  fffff806`51437e60 nt!PsReaperWorkItem
+ffff928a`06467990  00000002`1cd9cc00
+ffff928a`06467998  fffff806`5154aac0 nt!ExNode0
+ffff928a`064679a0  ffffa98b`d94aec50
+ffff928a`064679a8  ffff928a`06467ac0
+ffff928a`064679b0  ffffa98b`de0a3040
+ffff928a`064679b8  fffff806`50ab7bf5 nt!ExpWorkerThread+0x155
+ffff928a`064679c0  ffffa98b`d94aec50
+ffff928a`064679c8  ffff928a`06467a00
+ffff928a`064679d0  ffffa98b`00000000
+ffff928a`064679d8  ffffa98b`00000000
+ffff928a`064679e0  00000000`00000000
+ffff928a`064679e8  00000000`00000000
+ffff928a`064679f0  00000000`00000000
+ffff928a`064679f8  00000000`00000000
+ffff928a`06467a00  00000000`00000000
+ffff928a`06467a08  fffff806`5154aac0 nt!ExNode0
+ffff928a`06467a10  fffff806`5154aac0 nt!ExNode0
+ffff928a`06467a18  00000000`00000000
+ffff928a`06467a20  ffffa98b`d94690c0
+ffff928a`06467a28  ffffa98b`de0a3040
+ffff928a`06467a30  ffffa98b`d94aec50
+ffff928a`06467a38  00000000`00000003
+ffff928a`06467a40  00000000`00000000
+ffff928a`06467a48  00000000`00000000
+ffff928a`06467a50  00000000`00000000
+ffff928a`06467a58  00000000`00000000
+ffff928a`06467a60  00000000`00200001
+ffff928a`06467a68  00000000`00000003
+ffff928a`06467a70  00000000`00000000
+ffff928a`06467a78  00000000`00000000
+ffff928a`06467a80  00000000`00000000
+ffff928a`06467a88  00000000`00000000
+ffff928a`06467a90  00000000`00000000
+ffff928a`06467a98  00000000`00000000
+ffff928a`06467aa0  00000000`00000000
+ffff928a`06467aa8  00000000`00000000
+ffff928a`06467ab0  00000000`00000000
+ffff928a`06467ab8  00000000`00000000
+ffff928a`06467ac0  00000000`00000000
+ffff928a`06467ac8  00000000`00000000
+ffff928a`06467ad0  00000000`00000000
+ffff928a`06467ad8  00000000`00000000
+ffff928a`06467ae0  00000000`00000000
+ffff928a`06467ae8  00000000`00000000
+ffff928a`06467af0  00000000`00000000
+ffff928a`06467af8  00000000`00000000
+ffffa98b`e081e124 488b742430      mov     rsi,qword ptr [rsp+30h]
+ffffa98b`e081e129 488b7c2428      mov     rdi,qword ptr [rsp+28h]
+ffffa98b`e081e12e 4c8b542438      mov     r10,qword ptr [rsp+38h]
+ffffa98b`e081e133 33c0            xor     eax,eax
+ffffa98b`e081e135 498902          mov     qword ptr [r10],rax
+ffffa98b`e081e138 4983ea08        sub     r10,8
+ffffa98b`e081e13c 4c3bd4          cmp     r10,rsp
+ffffa98b`e081e13f 73f4            jae     ffffa98b`e081e135
+ffffa98b`e081e141 48897c2428      mov     qword ptr [rsp+28h],rdi
+ffffa98b`e081e146 8bd8            mov     ebx,eax
+ffffa98b`e081e148 8bf8            mov     edi,eax
+ffffa98b`e081e14a 8be8            mov     ebp,eax
+ffffa98b`e081e14c 4c8bd0          mov     r10,rax
+ffffa98b`e081e14f 4c8bd8          mov     r11,rax
+ffffa98b`e081e152 4c8be0          mov     r12,rax
+ffffa98b`e081e155 4c8be8          mov     r13,rax
+ffffa98b`e081e158 4c8bf0          mov     r14,rax
+ffffa98b`e081e15b 4c8bf8          mov     r15,rax
+ffffa98b`e081e15e ffe6            jmp     rsi
+ffffa98b`e081e160 cc              int     3
+ffffa98b`e081e161 cc              int     3
+ffffa98b`e081e162 cc              int     3
+ffffa98b`e081e163 cc              int     3
+ffffa98b`e081e164 cc              int     3
+ffffa98b`e081e165 cc              int     3
+ffffa98b`e081e166 6666666666660f1f840000000000 nop word ptr [rax+rax]
+ffffa98b`e081e174 4883ec48        sub     rsp,48h
+ffffa98b`e081e178 e8c76afeff      call    ffffa98b`e0804c44
+ffffa98b`e081e17d 488d8800080000  lea     rcx,[rax+800h]
+ffffa98b`e081e184 488b11          mov     rdx,qword ptr [rcx]
+ffffa98b`e081e187 480bd2          or      rdx,rdx
+ffffa98b`e081e18a 756e            jne     ffffa98b`e081e1fa
+ffffa98b`e081e3e4 c3              ret
+ffffa98b`e081e3e5 bb0791ffcc      mov     ebx,0CCFF9107h
+ffffa98b`e081e3ea cc              int     3
+ffffa98b`e081e3eb cc              int     3
+ffffa98b`e081e3ec cc              int     3
+ffffa98b`e081e3ed cc              int     3
+ffffa98b`e081e3ee cc              int     3
+ffffa98b`e081e3ef cc              int     3
+ffffa98b`e081e3f0 cc              int     3
+ffffa98b`e081e3f1 cc              int     3
+ffffa98b`e081e3f2 cc              int     3
+ffffa98b`e081e3f3 cc              int     3
+ffffa98b`e081e3f4 48895c2418      mov     qword ptr [rsp+18h],rbx
+ffffa98b`e081e3f9 489c            pushfq
+ffffa98b`e081e3fb 56              push    rsi
+ffffa98b`e081e3fc 57              push    rdi
+ffffa98b`e081e3fd 4883ec20        sub     rsp,20h
+ffffa98b`e081e401 4c8bd2          mov     r10,rdx
+ffffa98b`e081e404 0faee8          lfence
+ffffa98b`e081e407 4c335140        xor     r10,qword ptr [rcx+40h]
+ffffa98b`e081e40b bf19000000      mov     edi,19h
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'

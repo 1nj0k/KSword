@@ -1,0 +1,23 @@
+[
+  {
+    "Path": "C:\\vmware\\paper-payload.iso",
+    "Hash": "7CFC60401274F71107B7505404B3139D6332F56890BCF469D1CF37CF2715D647",
+    "PSComputerName": "KSword-HVM-Target",
+    "RunspaceId": "2cc8ce43-75e2-481b-bf2c-1b9ade52432a",
+    "PSShowComputerName": true
+  },
+  {
+    "Path": "C:\\ksword\\gui\\Ksword5.1.exe",
+    "Hash": "116BCD4131B6DE3DA2E5C591EF552D22568211117197A1709ADB76D8C95FB891",
+    "PSComputerName": "KSword-HVM-Target",
+    "RunspaceId": "2cc8ce43-75e2-481b-bf2c-1b9ade52432a",
+    "PSShowComputerName": true
+  },
+  {
+    "Path": "C:\\ksword\\gui\\KswordARK.sys",
+    "Hash": "8850E28F7F43CF12F95116C862E0AA9FB4B609D60446EE1D46DDC1B900AB7A04",
+    "PSComputerName": "KSword-HVM-Target",
+    "RunspaceId": "2cc8ce43-75e2-481b-bf2c-1b9ade52432a",
+    "PSShowComputerName": true
+  }
+]

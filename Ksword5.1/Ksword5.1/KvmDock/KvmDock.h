@@ -31,6 +31,8 @@ class QLabel;
 class QPushButton;
 class QShowEvent;
 class QTimer;
+class QTabWidget;
+class KvmCommandPanel;
 
 class KernelHvmTab;
 
@@ -51,6 +53,7 @@ public:
         ReleaseResources,
         ResetFault,
         OpenHookWizard,
+        OpenCommandPanel,
         OpenViewDialog,
         OpenDomainDialog,
         OpenMsrPolicyDialog,
@@ -71,6 +74,9 @@ public:
     ~KvmDock() override = default;
 
     void setActionHandler(ActionHandler handler);
+    void setCommandOperationHandler(std::function<void(bool)> handler);
+    void showCommandPanel();
+    int runCommandCoverageTest(const QString& reportPath);
 
     // setOperationRunning：控制命令执行期间禁用本页全部入口。
     //
@@ -93,6 +99,9 @@ private:
     void requestAction(Action action);
 
     ActionHandler m_actionHandler;
+    std::function<void(bool)> m_commandOperationHandler;
+    QTabWidget* m_tabs = nullptr;
+    KvmCommandPanel* m_commandPanel = nullptr;
     QTimer* m_pollTimer = nullptr;
 
     // 只留派生位而不是整个 KvmState：把 KvmControl.h 拖进本头文件，

@@ -1,0 +1,13 @@
+{
+    "schemaVersion":  1,
+    "beginUtc":  "2026-09-16T01:07:40.6609728Z",
+    "endUtc":  "2026-09-16T01:07:40.9145652Z",
+    "vmId":  "74eb68a3-c16a-4e98-827a-05d363bdf3f6",
+    "vmName":  "KSword-TinyCore-HyperV",
+    "serialReaderPid":  3400,
+    "serialReaderCreationUtc":  "2026-09-16T01:07:40.6653252Z",
+    "processorCount":  2,
+    "memoryBytes":  805306368,
+    "isoSha256":  "5C7E0AD3D33E80642A9CCDD407AA40F7D19C72B178C3D226CFA65E64C645E265",
+    "windowsBootUtc":  "2026-09-16T00:53:15.1584830Z"
+}

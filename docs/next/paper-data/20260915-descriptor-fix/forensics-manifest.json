@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "storage": "Local workspace only; dump binaries are not committed to Git",
+  "files": [
+    {
+      "path": "docs/next/logs/hvm-latest-full-20260915.dmp",
+      "bytes": 518933653,
+      "sha256": "BF526537720C6E37C0A0584D514E3AA7524F22E8767FB4665198D51642FFF29A"
+    },
+    {
+      "path": "docs/next/logs/hvm-latest-091526-3640-01.dmp",
+      "bytes": 885884,
+      "sha256": "DC8D05DCD57D1696885C4458B008B7DFC5CE51C6D4831A23E3068D6339756D3E"
+    }
+  ]
+}

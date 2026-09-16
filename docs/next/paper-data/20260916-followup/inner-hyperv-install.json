@@ -1,0 +1,14 @@
+{
+    "schemaVersion":  1,
+    "kind":  "inner-hyperv-install",
+    "startedUtc":  "2026-09-16T00:51:28.2365262Z",
+    "bootUtc":  "2026-09-16T00:49:40.2792730Z",
+    "edition":  "Professional",
+    "status":  "installed_reboot_required",
+    "result":  {
+                   "Online":  true,
+                   "RestartNeeded":  true
+               },
+    "bcd":  "The operation completed successfully.\r\n",
+    "endedUtc":  "2026-09-16T00:51:33.0492529Z"
+}

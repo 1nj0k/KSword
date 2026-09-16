@@ -1,0 +1,6 @@
+{
+  "kind": "cleanup-reboot-request",
+  "utc": "2026-09-16T02:19:58.1951701Z",
+  "reason": "Restore previously enabled inner Hyper-V startup after all VMX experiment intervals ended",
+  "target": "KSword-HVM-Target"
+}

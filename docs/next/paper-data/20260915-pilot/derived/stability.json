@@ -1,0 +1,170 @@
+[
+  {
+    "source": "stability-20260915T155904Z.jsonl",
+    "sampleCount": 21,
+    "observerFailures": 0,
+    "firstUtc": "2026-09-15T15:59:12.3070883Z",
+    "lastUtc": "2026-09-15T16:09:06.5164250Z",
+    "sampleSpanSeconds": 594.2093369960785,
+    "windowsProcessIdentityStable": true,
+    "cpuIdentityStable": true,
+    "cpuIdentity": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        1
+      ]
+    ],
+    "allResidentTwo": true,
+    "faultedSamples": 0,
+    "reportedVmExitDelta": 3975041,
+    "reportedVmExitsPerSecond": 6689.630661300486,
+    "exitReasonDelta": {
+      "0": 10353,
+      "10": 809918,
+      "12": 1789615,
+      "18": 31953,
+      "19": 33679,
+      "20": 19481,
+      "21": 33679,
+      "23": 464675,
+      "24": 18032,
+      "25": 201301,
+      "26": 33679,
+      "27": 33679,
+      "31": 243407,
+      "32": 221716,
+      "50": 33689,
+      "53": 33699,
+      "55": 0
+    },
+    "counterScope": "Existing ordinary-exit telemetry; reflected/handled L2 exits return before this counter. This is not all hardware exits across layers. Reasons 50/53 are nested INVEPT/INVVPID instruction exits, not total invalidations executed.",
+    "nonpagedPoolGrowthBytes": 2633728,
+    "vmwarePrivateGrowthBytes": 0,
+    "guestHeartbeats": [
+      [
+        5907.89,
+        5825.21,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        5938.0,
+        5855.15,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        5968.11,
+        5885.1,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        5998.31,
+        5915.04,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6028.41,
+        5944.99,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6058.6,
+        5974.93,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6088.76,
+        6004.87,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6118.86,
+        6034.81,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6148.98,
+        6064.75,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6179.19,
+        6094.69,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6209.43,
+        6124.64,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6239.67,
+        6154.59,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6269.88,
+        6184.54,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6300.13,
+        6213.19,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6330.5,
+        6242.65,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6360.7,
+        6272.44,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6390.93,
+        6302.23,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6421.07,
+        6332.01,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6451.29,
+        6361.75,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6481.47,
+        6391.53,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ],
+      [
+        6511.58,
+        6421.33,
+        "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+      ]
+    ],
+    "guestBootIds": [
+      "7230583c-637f-4c98-ac86-6d79c1bce8a8"
+    ],
+    "observerDurationMs": {
+      "n": 21,
+      "median": 350.0252,
+      "mean": 586.7207857142857,
+      "min": 319.9354,
+      "max": 5332.479,
+      "sampleSd": 1087.5089285931042
+    },
+    "droppedEventsDelta": 0,
+    "overwrittenEventsDelta": 6965
+  }
+]

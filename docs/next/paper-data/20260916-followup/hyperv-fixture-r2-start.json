@@ -1,0 +1,10 @@
+{
+    "schemaVersion":  1,
+    "beginUtc":  "2026-09-16T01:11:54.3267491Z",
+    "isoSha256":  "A244A135A285A0F555E2B6C530BA2144606A349B0D7C46E48402CCBF91285301",
+    "serialReaderPid":  10908,
+    "vmId":  "74eb68a3-c16a-4e98-827a-05d363bdf3f6",
+    "previousAttempt":  "kernel_not_found_at_isolinux",
+    "change":  "ISO9660 level 3 retains vmlinuz64 name",
+    "fixtureRetryNote":  "An intervening DVD reattach command failed before boot; retried with explicit localhost VM object"
+}

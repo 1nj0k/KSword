@@ -1,0 +1,48 @@
+BEFORE_BOOT=2026-09-15T10:18:32.0326920-04:00
+BEFORE_VMWARE_PID=10492
+DRIVER_SHA256=3E131F93D8C3C09BAA34B486AC19BB5BC53DA85180A220642C6E872A9D20F1AC
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":1,"active":0,"retired":0,"residentProcessors":2,"ept12Pointer":"0x0000000000000000","guestPhysicalPage":"0x0000000000000000","shadowPhysicalPage":"0x0000000000000000","originalPhysicalPage":"0x0000000000000000","composedCount":0,"roots":["0x000000001CAC605E"]}
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":2,"active":1,"retired":0,"residentProcessors":2,"ept12Pointer":"0x000000001CAC605E","guestPhysicalPage":"0x0000000007000000","shadowPhysicalPage":"0x0000000204FE5000","originalPhysicalPage":"0x0000000000000000","composedCount":0,"roots":["0x000000001CAC605E"]}
+MAP_EXIT=0
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":2,"active":1,"retired":0,"residentProcessors":2,"ept12Pointer":"0x000000001CAC605E","guestPhysicalPage":"0x0000000007000000","shadowPhysicalPage":"0x0000000204FE5000","originalPhysicalPage":"0x00000001043D3000","composedCount":3,"roots":["0x000000001CAC605E"]}
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":3,"active":0,"retired":0,"residentProcessors":2,"ept12Pointer":"0x0000000000000000","guestPhysicalPage":"0x0000000000000000","shadowPhysicalPage":"0x0000000000000000","originalPhysicalPage":"0x0000000000000000","composedCount":0,"roots":["0x000000001CAC605E"]}
+REMOVE_EXIT=0
+AFTER_BOOT=2026-09-15T10:18:32.0326920-04:00
+AFTER_VMWARE_PID=10492
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":3,"active":0,"retired":0,"residentProcessors":2,"ept12Pointer":"0x0000000000000000","guestPhysicalPage":"0x0000000000000000","shadowPhysicalPage":"0x0000000000000000","originalPhysicalPage":"0x0000000000000000","composedCount":0,"roots":["0x000000001CAC605E"]}
+SERIAL_EVIDENCE_BEGIN
+07000000-07000fff : Reserved
+6.18.35-tinycore64
+crw-rw-r--    1 root     staff       1,   1 Jun 23 13:51 [1;35m/dev/mem[m
+final-before
+1+0 records in
+1+0 records out
+4 bytes (4B) copied, 0.006134 seconds, 652B/s
+1+0 records in
+1+0 records out
+ a5a5a5a5
+4 bytes (4B) copied, 0.011646 seconds, 343B/s
+final-shadow
+1+0 records in
+1+0 records out
+ d1d1d1d1
+4 bytes (4B) copied, 0.001041 seconds, 3.8KB/s
+final-shadow-write
+1+0 records in
+1+0 records out
+4 bytes (4B) copied, 0.006517 seconds, 613B/s
+1+0 records in
+1+0 records out
+ b2b2b2b2
+4 bytes (4B) copied, 0.000771 seconds, 5.1KB/s
+final-restored
+1+0 records in
+1+0 records out
+ a5a5a5a5
+4 bytes (4B) copied, 0.000517 seconds, 7.6KB/s
+
+SERIAL_EVIDENCE_END
+GUEST_READ_WRITE_ISOLATION=PASS
+WINDOWS_AND_VMWARE_CONTINUITY=PASS
+OUTER_HOST_DEVICE_GUARD={"VirtualizationBasedSecurityStatus":2,"SecurityServicesConfigured":[2],"SecurityServicesRunning":[2]}
+OUTER_HOST_HVCI=RUNNING

@@ -477,6 +477,8 @@
  * 里做同样检查的软件都仍然会看到真相 —— 那时读数会直接告诉我们，再谈要不要放宽。
  */
 #define KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR 0x00002000UL
+/* Same-binary performance reference: retain unused CPUID diagnostic VMREADs. */
+#define KSWORD_ARK_HVM_CONTROL_FLAG_FULL_EXIT_SNAPSHOT 0x00004000UL
 
 #define KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN 0x48564D43UL
 
@@ -603,6 +605,8 @@
 #define KSWORD_ARK_HVM_EVENT_TYPE_NESTED_VMX      3UL
 #define KSWORD_ARK_HVM_EVENT_TYPE_FATAL_EXIT      4UL
 #define KSWORD_ARK_HVM_EVENT_TYPE_LIFECYCLE       5UL
+/* Page-control stages use ruleId as operation id, not an EPT rule id. */
+#define KSWORD_ARK_HVM_EVENT_TYPE_NESTED_PAGE     6UL
 
 #define KSWORD_ARK_HVM_EVENT_QUERY_READ  1UL
 #define KSWORD_ARK_HVM_EVENT_QUERY_CLEAR 2UL
@@ -1935,6 +1939,8 @@ typedef struct _KSWORD_ARK_HVM_INJECT_RESPONSE
 #define KSWORD_ARK_HVM_NESTED_PROBE_STATUS_NO_RESOURCES 4UL
 /* CR4.VMXE 置不上，后续每一步都不执行。 */
 #define KSWORD_ARK_HVM_NESTED_PROBE_STATUS_VMXE_REFUSED 5UL
+/* A required VMCS12 configuration write failed; L2 was not entered. */
+#define KSWORD_ARK_HVM_NESTED_PROBE_STATUS_CONFIGURATION_FAILED 6UL
 
 /* 这一步根本没有执行到。 */
 #define KSWORD_ARK_HVM_NESTED_PROBE_STEP_SKIPPED 3UL
@@ -2281,7 +2287,8 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_ROW
     unsigned long l2FuseTripped;
     unsigned long l2FuseReason;
     unsigned long l2FuseCount;
-    unsigned long l2FuseReserved;
+    /* Formerly reserved: host bits 0..4, memory operands bit 5, L2 SSE bit 6. */
+    unsigned long hostStateChecks;
     unsigned long long l2FuseRip;
 } KSWORD_ARK_HVM_NESTED_PROBE_ROW;
 
@@ -2305,3 +2312,63 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE
     KSWORD_ARK_HVM_NESTED_PROBE_ROW rows[
         KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS];
 } KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE;
+
+/* One live L2 page override, keyed by EPT12 root and L2 GPA. */
+#define KSWORD_ARK_IOCTL_FUNCTION_HVM_NESTED_PAGE 0x915UL
+#define IOCTL_KSWORD_ARK_HVM_NESTED_PAGE \
+    CTL_CODE(KSWORD_ARK_IOCTL_DEVICE_TYPE, KSWORD_ARK_IOCTL_FUNCTION_HVM_NESTED_PAGE, METHOD_BUFFERED, FILE_WRITE_ACCESS)
+#define KSWORD_ARK_HVM_NESTED_PAGE_VERSION 3UL
+/* Revocation withdraws the policy; backing still requires an acknowledged drain. */
+#define KSWORD_ARK_HVM_PAGE_LEASE_VALID 0UL
+#define KSWORD_ARK_HVM_PAGE_LEASE_OWNER_EXITED 1UL
+#define KSWORD_ARK_HVM_PAGE_LEASE_TRANSLATION_CHANGED 2UL
+#define KSWORD_ARK_HVM_PAGE_LEASE_SOURCE_UNREADABLE 3UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_QUERY 0UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_MAP 1UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_REMOVE 2UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED 1UL
+/* Explicit lab faults are local to this one request and never remain armed. */
+#define KSWORD_ARK_HVM_NESTED_PAGE_FAULT_SHIFT 8UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_FAULT_MASK 0x700UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_FAULT_ALLOCATE 1UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_FAULT_CANCEL 2UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_FAULT_ROLLBACK 3UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_FAULT_COMMIT_FLUSH 4UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_FAULT_REMOVE_FLUSH 5UL
+/* Stage ids are carried in the NESTED_PAGE event's exitReason field. */
+#define KSW_HVM_PAGE_BEGIN 1UL
+#define KSW_HVM_PAGE_ALLOCATE_BEGIN 2UL
+#define KSW_HVM_PAGE_ALLOCATE_END 3UL
+#define KSW_HVM_PAGE_PUBLISHED 4UL
+#define KSW_HVM_PAGE_FLUSH_BEGIN 5UL
+#define KSW_HVM_PAGE_FLUSH_END 6UL
+#define KSW_HVM_PAGE_UNPUBLISHED 7UL
+#define KSW_HVM_PAGE_ROLLBACK_BEGIN 8UL
+#define KSW_HVM_PAGE_ROLLBACK_END 9UL
+#define KSW_HVM_PAGE_RECLAIMED 10UL
+#define KSW_HVM_PAGE_END 11UL
+typedef struct _KSWORD_ARK_HVM_NESTED_PAGE_REQUEST {
+    unsigned long version, size, operation, flags;
+    unsigned long long confirmationToken;
+    unsigned long long ept12Pointer, guestPhysicalPage;
+    unsigned long expectedGeneration, ownerProcessId;
+    unsigned char shadow[4096];
+    /* Exact Windows process creation time; prevents PID reuse at map admission. */
+    unsigned long long ownerCreationTime;
+} KSWORD_ARK_HVM_NESTED_PAGE_REQUEST;
+typedef struct _KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE {
+    unsigned long version, size, status, lastStatus;
+    unsigned long generation, active, retired, residentProcessors;
+    unsigned long long ept12Pointer, guestPhysicalPage, shadowPhysicalPage;
+    unsigned long long originalPhysicalPage, composedCount;
+    unsigned long rootCount, operationId;
+    unsigned long long ept12Roots[KSWORD_ARK_HVM_MAX_PROCESSORS];
+    /* Process exit revokes the lease; explicit removal drains and frees backing. */
+    unsigned long ownerProcessId, ownerExited;
+    unsigned long long ownerCreationTime;
+    /* A revoked lease is retained until removal acknowledges every CPU. */
+    unsigned long leaseRevocationReason, sourceEntryCount;
+    /* Source backing and normalized path captured before publication. */
+    unsigned long long sourcePhysicalPage;
+    unsigned long long sourceEntryAddress[4], sourceEntryValue[4];
+} KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE;

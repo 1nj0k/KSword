@@ -242,6 +242,38 @@ KswordARKHvmEptFindLeafEntry(
     return &((ULONGLONG*)split->PageTable)[pageIndex];
 }
 
+
+BOOLEAN
+KswordARKHvmEptReadLeaf(
+    _Inout_ KSW_HVM_RUNTIME* Runtime,
+    _In_ ULONGLONG PhysicalAddress,
+    _Out_ ULONGLONG* Leaf,
+    _Out_ ULONG* LeafShift
+    )
+{
+    volatile ULONGLONG* entry = NULL;
+
+    if (Leaf == NULL || LeafShift == NULL) { return FALSE; }
+    *Leaf = 0ULL;
+    *LeafShift = 0UL;
+    if (Runtime == NULL ||
+        PhysicalAddress >= Runtime->HighestMappedPhysicalAddress) {
+        return FALSE;
+    }
+    entry = KswordARKHvmEptFindParentEntry(Runtime, PhysicalAddress);
+    if (entry == NULL) { return FALSE; }
+    if ((*entry & KSW_EPT_LARGE_PAGE) != 0ULL) {
+        *Leaf = *entry;
+        *LeafShift = 21UL;
+        return TRUE;
+    }
+    entry = KswordARKHvmEptFindLeafEntry(Runtime, PhysicalAddress);
+    if (entry == NULL) { return FALSE; }
+    *Leaf = *entry;
+    *LeafShift = 12UL;
+    return TRUE;
+}
+
 /* Apply every active overlapping rule to one four-KiB EPT entry. */
 static VOID
 KswordARKHvmEptRecomputePageLocked(

@@ -1,0 +1,9 @@
+# Preserve collected bytes, including CRLF, BOM and serial trailing whitespace.
+# These files are evidence, not source formatting targets.
+*.json -text -whitespace
+*.jsonl -text -whitespace
+*.txt -text -whitespace
+*.csv -text -whitespace
+*.png binary
+*.svg -text -whitespace
+*.md text eol=lf

@@ -455,6 +455,7 @@ namespace ksword::ark
         // queryHvmStatus/controlHvm：读取 VT-x/EPT 能力并执行准备、自检、
         // 一次性 VMCALL 来宾、VM-exit 采集或资源释放。
         HvmStatusResult queryHvmStatus() const;
+        HvmMetricsResult queryHvmMetrics() const;
         HvmControlResult controlHvm(
             unsigned long command,
             unsigned long expectedGeneration,
@@ -492,7 +493,8 @@ namespace ksword::ark
             bool enableEptpSwitch = false,
             // soakMilliseconds：仅 KSWORD_ARK_HVM_CONTROL_SOAK 读取，
             // 表示常驻保持时长；驱动侧会把它夹到协议规定的上下界之间。
-            unsigned long soakMilliseconds = 0) const;
+            unsigned long soakMilliseconds = 0,
+            bool hideHypervisor = false) const;
         HvmEptRuleResult controlHvmEptRule(
             unsigned long operation,
             unsigned long expectedGeneration,

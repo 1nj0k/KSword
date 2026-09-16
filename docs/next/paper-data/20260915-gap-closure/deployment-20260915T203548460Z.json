@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "kind": "measurement-deployment",
+  "startedUtc": "2026-09-15T20:35:48.3943335Z",
+  "status": "deployed_query_verified",
+  "driverSha256": "667D21B398B7C6A6FA9D00BAC203576C05E32B6F33F0536573C99011D3EFC407",
+  "controlSha256": "DEDD4598BD918B09C263D287195B307CC1BBD38998D0BF5DE7CA8DE37C1B2FF1",
+  "sourceBase": "0fa9bf4968be3f41666c9103ed865d51ba74ba47",
+  "variantSigning": false,
+  "preflight": {
+    "bootUtc": "2026-09-15T20:34:57.6847200Z",
+    "imagePath": "C:\\ksword\\gui\\KswordARK.sys",
+    "oldDriverSha256": "35380F712EE4A1C0E2923696D66B401B636083D3FCFB865C7C4327D158A32487",
+    "PSComputerName": "KSword-HVM-Target",
+    "RunspaceId": "5d1f7551-0438-4460-834e-48a31e106db9",
+    "PSShowComputerName": true
+  },
+  "result": {
+    "utc": "2026-09-15T20:35:52.0455491Z",
+    "driverSha256": "667D21B398B7C6A6FA9D00BAC203576C05E32B6F33F0536573C99011D3EFC407",
+    "controlSha256": "DEDD4598BD918B09C263D287195B307CC1BBD38998D0BF5DE7CA8DE37C1B2FF1",
+    "service": "Running",
+    "metricsRaw": "{\"kind\":\"hvm-metrics\",\"version\":1,\"transitionCoherent\":false,\"transitionSequence\":0,\"command\":0,\"lastStatus\":\"0x00000000\",\"processorCount\":0,\"qpcFrequency\":\"10000000\",\"snapshotBeginQpc\":\"544897249\",\"snapshotEndQpc\":\"544897259\",\"commandBeginQpc\":\"0\",\"commandEndQpc\":\"0\",\"inveptAttempts\":\"0\",\"inveptSucceeded\":\"0\",\"inveptFailed\":\"0\",\"ruleAllocations\":\"0\",\"ruleFrees\":\"0\",\"replacementAllocations\":\"0\",\"replacementFrees\":\"0\",\"globalValidMask\":0,\"globalQpc\":{\"resourcesBegin\":\"0\",\"resourcesEnd\":\"0\",\"eptBegin\":\"0\",\"eptEnd\":\"0\",\"rendezvousBegin\":\"0\",\"rendezvousEnd\":\"0\"},\"processors\":[]}\r\n",
+    "metricsExit": 0,
+    "statusRaw": "{\"kind\":\"query\",\"queryStatus\":0,\"stateFlags\":524289,\"stateFlagsHex\":\"0x00080001\",\"stateNames\":[\"INITIALIZED\",\"EVMCS_PARTIAL\"],\"featureNames\":[\"INTEL\",\"VMX\",\"FEATURE_CONTROL_LOCKED\",\"VMX_OUTSIDE_SMX\",\"TRUE_CONTROLS\",\"EPT\",\"EPT_WB\",\"EPT_4_LEVEL\",\"EPT_2MB\",\"EPT_AD\",\"INVEPT\",\"INVEPT_SINGLE\",\"INVEPT_ALL\",\"VPID\",\"HYPERVISOR_PRESENT\",\"NESTED_VMX_EXPOSED\",\"ONE_SHOT_GUEST\",\"VMEXIT_TELEMETRY\",\"RESIDENT_VMM\",\"MULTICORE_RENDEZVOUS\",\"EPT_4KB_SPLIT\",\"EPT_RULES\",\"EPT_EVENT_RING\",\"MTRR_AWARE_EPT\",\"HYPERV_EVMCS_CAPABLE\",\"HYPERV_EVMCS_V1\",\"POWER_STATE_GUARD\",\"PROCESSOR_TOPOLOGY_GUARD\",\"DRIVER_UNLOAD_GUARD\",\"RESIDENT_LIFECYCLE_GUARDED\",\"MSR_BITMAP\",\"EXIT_EMULATION\",\"VE_SUPPRESSED_BY_DEFAULT\"],\"generation\":1,\"processorCount\":0,\"preparedProcessorCount\":0,\"selfTestPassedProcessorCount\":0,\"residentProcessorCount\":0,\"residentImplementation\":\"CAPABILITY_ONLY\",\"eptImplementation\":\"CAPABILITY_ONLY\",\"nestedImplementation\":\"CAPABILITY_ONLY\",\"evmcsImplementation\":\"PARTIAL\",\"featureFlags\":\"0x0001003F30FFFFFF\",\"vmxEptVpidCapabilities\":\"0x00000F0106F34041\",\"eptExecuteOnly\":true,\"eptPointer\":\"0x0000000000000000\",\"eptPageCount\":0,\"mappedRamMiB\":0,\"vmExitCount\":0,\"lastExitReason\":4294967295,\"lastExitQualification\":\"0x0000000000000000\",\"lastGuestRip\":\"0x0000000000000000\",\"lastGuestRsp\":\"0x0000000000000000\",\"lastExitInstructionLength\":0,\"lastStatus\":\"0x00000000\",\"vmxBasic\":\"0x01D8100000000001\",\"cr0Fixed0\":\"0x0000000080000021\",\"cr0Fixed1\":\"0x00000000FFFFFFFF\",\"cr4Fixed0\":\"0x0000000000002000\",\"cr4Fixed1\":\"0x0000000000B72FFF\",\"lastVmInstructionError\":0,\"eventCount\":0,\"droppedEventCount\":0,\"overwrittenEventCount\":0,\"publishedEventCount\":0,\"nestedL2LaunchRefusedCount\":0,\"nestedVmcs12EvictionCount\":0,\"nestedFuseTripCount\":0,\"nestedLastRefusalSite\":0,\"nestedLastRefusalSiteText\":\"µ▓íµ£ëµïÆτ╗¥Φ┐ç\",\"exitReasonCount\":{},\"processors\":[]}\r\n",
+    "PSComputerName": "KSword-HVM-Target",
+    "RunspaceId": "5d1f7551-0438-4460-834e-48a31e106db9",
+    "PSShowComputerName": true
+  },
+  "endedUtc": "2026-09-15T20:35:52.0733962Z"
+}

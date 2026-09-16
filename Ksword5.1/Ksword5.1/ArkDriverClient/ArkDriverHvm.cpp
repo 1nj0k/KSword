@@ -1,4 +1,5 @@
 #include "ArkDriverClient.h"
+#include "../../../shared/driver/KswordArkHvmRequest.h"
 
 #include <algorithm>
 #include <cstring>
@@ -49,6 +50,39 @@ namespace ksword::ark
         return result;
     }
 
+    HvmMetricsResult DriverClient::queryHvmMetrics() const
+    {
+        HvmMetricsResult result{};
+        KSWORD_ARK_HVM_METRICS_REQUEST request{};
+        request.version = KSWORD_ARK_HVM_METRICS_VERSION;
+        request.size = sizeof(request);
+        result.io = deviceIoControl(IOCTL_KSWORD_ARK_HVM_METRICS,
+            &request, sizeof(request), &result.response, sizeof(result.response));
+        result.unsupported = !result.io.ok && isUnsupportedHvmError(result.io.win32Error);
+        if (result.io.ok && (result.io.bytesReturned != sizeof(result.response) ||
+            result.response.version != KSWORD_ARK_HVM_METRICS_VERSION ||
+            result.response.size != sizeof(result.response) ||
+            result.response.processorCount > KSWORD_ARK_HVM_MAX_PROCESSORS ||
+            result.response.qpcFrequency == 0))
+        {
+            result.io.ok = false;
+            result.io.win32Error = ERROR_INVALID_DATA;
+        }
+        std::ostringstream stream;
+        stream << "HVM metrics coherent=" << result.response.transitionCoherent
+            << ", sequence=" << result.response.transitionSequence
+            << ", qpcFrequency=" << result.response.qpcFrequency
+            << ", processors=" << result.response.processorCount
+            << ", inveptAttempts=" << result.response.inveptAttempts
+            << ", inveptFailed=" << result.response.inveptFailed
+            << ", ruleAllocations=" << result.response.ruleAllocations
+            << ", ruleFrees=" << result.response.ruleFrees
+            << ", replacementAllocations=" << result.response.replacementAllocations
+            << ", replacementFrees=" << result.response.replacementFrees;
+        result.io.message = stream.str();
+        return result;
+    }
+
     HvmControlResult DriverClient::controlHvm(
         const unsigned long command,
         const unsigned long expectedGeneration,
@@ -62,7 +96,8 @@ namespace ksword::ark
         const bool enableVmFunc,
         const bool enableLocalEpt,
         const bool enableEptpSwitch,
-        const unsigned long soakMilliseconds) const
+        const unsigned long soakMilliseconds,
+        const bool hideHypervisor) const
     {
         HvmControlResult result{};
         KSWORD_ARK_CONTROL_HVM_REQUEST request{};
@@ -116,14 +151,13 @@ namespace ksword::ark
         {
             request.flags |= KSWORD_ARK_HVM_CONTROL_FLAG_ONE_SHOT_GUEST;
         }
-        // 驱动只允许 SOAK 携带非零时长，其它命令必须保持该字段为零。
-        if (command == KSWORD_ARK_HVM_CONTROL_SOAK)
+        if (hideHypervisor)
         {
-            request.soakMilliseconds = soakMilliseconds;
+            request.flags |= KSWORD_ARK_HVM_CONTROL_FLAG_HIDE_HYPERVISOR;
         }
-        request.confirmationToken =
-            KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN;
-        request.expectedGeneration = expectedGeneration;
+        const unsigned long flags = request.flags;
+        KswordArkHvmBuildControlRequest(&request, command, flags,
+                                       expectedGeneration, soakMilliseconds);
 
         result.io = deviceIoControl(
             IOCTL_KSWORD_ARK_CONTROL_HVM,

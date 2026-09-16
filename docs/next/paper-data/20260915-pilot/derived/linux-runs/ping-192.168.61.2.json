@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "runId": "ping-192.168.61.2",
+  "destination": "192.168.61.2",
+  "transmitted": 3,
+  "received": 3,
+  "rttMs": [
+    17.405,
+    9.795,
+    3.382
+  ],
+  "status": "ok",
+  "raw": "PING 192.168.61.2 (192.168.61.2): 56 data bytes\n64 bytes from 192.168.61.2: seq=0 ttl=128 time=17.405 ms\n64 bytes from 192.168.61.2: seq=1 ttl=128 time=9.795 ms\n64 bytes from 192.168.61.2: seq=2 ttl=128 time=3.382 ms\n\n--- 192.168.61.2 ping statistics ---\n3 packets transmitted, 3 packets received, 0% packet loss\nround-trip min/avg/max = 3.382/10.194/17.405 ms\n",
+  "source": "tinycore-serial.txt",
+  "repetitionsNote": "Packets in one invocation, not independent runs."
+}

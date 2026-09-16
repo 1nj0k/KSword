@@ -1,0 +1,11 @@
+{
+    "kind":  "leave-inner-hyperv-configuration",
+    "utc":  "2026-09-16T01:23:45.9359111Z",
+    "oldChildState":  "Running",
+    "childVmId":  "74eb68a3-c16a-4e98-827a-05d363bdf3f6",
+    "reason":  "Run VMX-dependent KSword performance and lifecycle validation; inner Hyper-V role and VM definition retained.",
+    "bcd":  [
+                "The operation completed successfully."
+            ],
+    "bcdExit":  0
+}

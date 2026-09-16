@@ -34,6 +34,7 @@ namespace ksword::kvm
         // 嵌套派发也不落设置键。它打开的是「任何 ring 0 代码都能在我们底下开
         // 一台虚拟机」，跨会话残留下来的话，下一次开机没人记得它开着。
         std::atomic<bool> g_nestedDispatchEnabled{ false };
+        std::atomic<bool> g_hideHypervisor{ false };
 
         // 进程内缓存：按钮刷新是高频路径，不能每次都读注册表。
         // -1 表示尚未从 QSettings 读入。
@@ -451,7 +452,7 @@ namespace ksword::kvm
     KvmCommandResult ensurePrepared()
     {
         ksword::ark::DriverClient client;
-        const auto status = client.queryHvmStatus();
+        auto status = client.queryHvmStatus();
         if (!status.io.ok || status.unsupported)
         {
             KvmCommandResult failure;
@@ -498,6 +499,23 @@ namespace ksword::kvm
             }
             generation = prepared.response.newGeneration;
         }
+        // PREPARE may select a different backend from the requested one. Read back
+        // the actual armed bits before reporting readiness or entering residency.
+        status = client.queryHvmStatus();
+        if (!status.io.ok || status.unsupported || status.response.queryStatus != 0)
+        {
+            KvmCommandResult failure;
+            failure.message = ks::i18n::sourceText(QStringLiteral("准备后状态查询失败，未继续自检或启动。"));
+            return failure;
+        }
+        generation = status.response.generation;
+        if ((isEptpSwitchEnabled() && !(status.response.featureFlags & KSWORD_ARK_HVM_FEATURE_EPTP_SWITCH_ARMED)) ||
+            (isLocalEptEnabled() && !(status.response.featureFlags & KSWORD_ARK_HVM_FEATURE_LOCAL_EPT_ARMED)))
+        {
+            KvmCommandResult failure;
+            failure.message = ks::i18n::sourceText(QStringLiteral("请求的 EPT 后端未实际武装。请停止常驻、释放资源后重新准备，并检查硬件能力。"));
+            return failure;
+        }
         // 自检证明每个逻辑处理器都能进出 VMX root，是常驻启动的前置条件。
         if ((status.response.stateFlags &
                 KSWORD_ARK_HVM_STATE_SELF_TEST_PASSED) == 0UL)
@@ -535,6 +553,12 @@ namespace ksword::kvm
          * 而每处理器私有根会让这个合成变成处理器相关的。所以这里说清楚是哪两
          * 个开关冲突、为什么冲突。
          */
+        if (isHypervisorHidden() && !isNestedDispatchEnabled())
+        {
+            KvmCommandResult failure;
+            failure.message = ks::i18n::sourceText(QStringLiteral("隐藏 Hypervisor 身份要求同时开启嵌套派发。"));
+            return failure;
+        }
         if (isLocalEptEnabled() && isNestedDispatchEnabled())
         {
             KvmCommandResult conflict;
@@ -551,9 +575,14 @@ namespace ksword::kvm
         ksword::ark::DriverClient client;
         // 准备与自检都会推进代次，因此重新读取而不是沿用调用方传入的值。
         const auto refreshed = client.queryHvmStatus();
-        const unsigned long generation = refreshed.io.ok
-            ? refreshed.response.generation
-            : expectedGeneration;
+        if (!refreshed.io.ok || refreshed.unsupported || refreshed.response.queryStatus != 0)
+        {
+            KvmCommandResult failure;
+            failure.message = ks::i18n::sourceText(QStringLiteral("操作前状态查询失败，未使用旧代次继续执行。"));
+            return failure;
+        }
+        (void)expectedGeneration;
+        const unsigned long generation = refreshed.response.generation;
         const auto started = client.controlHvm(
             KSWORD_ARK_HVM_CONTROL_START_RESIDENT,
             generation,
@@ -571,7 +600,8 @@ namespace ksword::kvm
             false,
             isVeEnabled(),
             isVmFuncEnabled(),
-            isLocalEptEnabled());
+            isLocalEptEnabled(),
+            false, 0UL, isHypervisorHidden());
         // enableEptpSwitch 刻意留在默认的 false：后端在上面的 ensurePrepared
         // 里就随 PREPARE 定下来了，这一位出现在 START_RESIDENT 上会被驱动的
         // 白名单判成 INVALID_REQUEST。
@@ -605,9 +635,14 @@ namespace ksword::kvm
         }
         ksword::ark::DriverClient client;
         const auto refreshed = client.queryHvmStatus();
-        const unsigned long generation = refreshed.io.ok
-            ? refreshed.response.generation
-            : expectedGeneration;
+        if (!refreshed.io.ok || refreshed.unsupported || refreshed.response.queryStatus != 0)
+        {
+            KvmCommandResult failure;
+            failure.message = ks::i18n::sourceText(QStringLiteral("操作前状态查询失败，未使用旧代次继续执行。"));
+            return failure;
+        }
+        (void)expectedGeneration;
+        const unsigned long generation = refreshed.response.generation;
         const auto soaked = client.controlHvm(
             KSWORD_ARK_HVM_CONTROL_SOAK,
             generation,
@@ -711,6 +746,9 @@ namespace ksword::kvm
         g_nestedAllowedCache.store(allowed ? 1 : 0, std::memory_order_relaxed);
     }
 
+    bool isHypervisorHidden() { return g_hideHypervisor.load(std::memory_order_relaxed); }
+    void setHypervisorHidden(bool enabled) { g_hideHypervisor.store(enabled, std::memory_order_relaxed); }
+
     bool isNestedDispatchEnabled()
     {
         // 进程内状态，刻意不落 QSettings：重启客户端即回到关闭。
@@ -723,6 +761,7 @@ namespace ksword::kvm
     void setNestedDispatchEnabled(const bool enabled)
     {
         g_nestedDispatchEnabled.store(enabled, std::memory_order_relaxed);
+        if (!enabled) { g_hideHypervisor.store(false, std::memory_order_relaxed); }
     }
 
     bool isVeEnabled()

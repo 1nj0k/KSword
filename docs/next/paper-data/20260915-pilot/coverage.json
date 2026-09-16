@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "missingOrExcluded": [
+    {
+      "fields": [
+        "quiesce",
+        "state_capture",
+        "vmcs_setup",
+        "ept_build",
+        "resume",
+        "exact_total_pause"
+      ],
+      "reason": "Current driver/CLI does not export phase timestamps. QPC execution gaps are separate observations.",
+      "area": "internal_transition_phases",
+      "value": null,
+      "status": "not_instrumented"
+    },
+    {
+      "reason": "No deterministic allocation-failure control in the measured driver.",
+      "area": "replacement_allocation_failure",
+      "value": null,
+      "status": "not_injected"
+    },
+    {
+      "reason": "Synchronous map interface has no prepare/commit/cancel transaction.",
+      "area": "cancel_before_commit",
+      "value": null,
+      "status": "not_injected"
+    },
+    {
+      "reason": "TinyCore uses one virtual CPU and nosmp. Windows 1 has two KSword resident CPUs.",
+      "area": "concurrent_guest_multicore",
+      "value": null,
+      "status": "not_run"
+    },
+    {
+      "reason": "Slot active/retired state is exposed; total outstanding allocations and per-tag leak counters are not.",
+      "area": "global_allocation_balance",
+      "value": null,
+      "status": "not_instrumented"
+    },
+    {
+      "reason": "Exit histogram 50/53 counts nested VMX instruction exits, not all invalidations executed by every layer.",
+      "area": "total_hardware_invept_invvpid",
+      "value": null,
+      "status": "not_instrumented"
+    },
+    {
+      "reason": "PID/creation time and executable/config disk SHA256 are recorded. No complete independently verified VMM memory baseline.",
+      "area": "in_memory_vmm_integrity",
+      "value": null,
+      "status": "not_measured"
+    },
+    {
+      "reason": "Live EPT replacement preserves an already running VMware guest. Residency transitions were measured with VMware absent.",
+      "area": "vmware_running_during_windows_topology_transition",
+      "value": null,
+      "status": "not_proven"
+    },
+    {
+      "reason": "No equivalent TinyCore no-KSword baseline; raw on-state workloads remain separate.",
+      "area": "nested_guest_steady_overhead",
+      "value": null,
+      "status": "baseline_missing"
+    },
+    {
+      "reason": "A separate Hyper-V-under-KSword descendant fixture is not configured.",
+      "area": "hyperv_descendant_ept",
+      "value": null,
+      "status": "not_run"
+    },
+    {
+      "reason": "User requested temporarily skipping this part.",
+      "area": "windows10_ltsc",
+      "value": null,
+      "status": "skipped_by_user"
+    },
+    {
+      "reason": "One physical CPU and one Windows 1 build in this pilot.",
+      "area": "other_cpu_windows_builds",
+      "value": null,
+      "status": "not_available"
+    },
+    {
+      "reason": "A ten-minute monitor run was collected; no continuous hour-long evidence.",
+      "area": "stability_1hour_or_longer",
+      "value": null,
+      "status": "not_run"
+    },
+    {
+      "reason": "SMBIOS version and exposed Hyper-V configuration are recorded; no vendor firmware variable dump.",
+      "area": "native_bios_switch_dump",
+      "value": null,
+      "status": "not_measured"
+    },
+    {
+      "reason": "User requested no further GUI tests.",
+      "area": "gui_runtime",
+      "value": null,
+      "status": "skipped_by_user"
+    },
+    {
+      "reason": "Normal remove/restore was tested; retained-page recovery after INVEPT failure was not injected.",
+      "value": null,
+      "area": "invalidation_failure_rollback",
+      "status": "not_injected"
+    }
+  ]
+}

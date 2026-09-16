@@ -165,7 +165,24 @@ KvmDock* MainWindow::createKvmDockContent()
     dockContent->setActionHandler([this](const KvmDock::Action action) {
         handleKvmDockAction(action);
     });
+    dockContent->setCommandOperationHandler([this](bool running) {
+        m_kvmOperationRunning = running;
+        applyKvmButtonState();
+        if (!running) { refreshKvmStatusAsync(); }
+    });
     return dockContent;
+}
+
+void MainWindow::focusKvmCommands()
+{
+    activateDockForSearchNavigation(m_dockKvm);
+    if (m_kvmWidget) { m_kvmWidget->showCommandPanel(); }
+}
+
+int MainWindow::runHvmCommandCoverageTest(const QString& reportPath)
+{
+    focusKvmCommands();
+    return m_kvmWidget ? m_kvmWidget->runCommandCoverageTest(reportPath) : 1;
 }
 
 void MainWindow::handleKvmDockAction(const KvmDock::Action action)
@@ -199,6 +216,9 @@ void MainWindow::handleKvmDockAction(const KvmDock::Action action)
         // 向导自己管非模态生命周期与 WA_DeleteOnClose（openWizard 的契约），
         // 所以这一条不走 showKvmDialog —— 走了会重复设置属性并多一层 show。
         ks::ui::KvmHookWizard::openWizard(this);
+        return;
+    case KvmDock::Action::OpenCommandPanel:
+        focusKvmCommands();
         return;
     case KvmDock::Action::OpenViewDialog:
         showKvmDialog(new KvmViewDialog(this));
@@ -722,6 +742,14 @@ void MainWindow::showKvmMenu(const QPoint& globalPosition)
 
     menu.addSeparator();
 
+    auto* hideHypervisorAction = menu.addAction(ks::i18n::sourceText(QStringLiteral("对来宾用户态隐藏 Hypervisor 身份")));
+    hideHypervisorAction->setCheckable(true);
+    hideHypervisorAction->setChecked(ksword::kvm::isHypervisorHidden());
+    hideHypervisorAction->setEnabled(!m_kvmResidentActive && !m_kvmOperationRunning && ksword::kvm::isNestedDispatchEnabled());
+    connect(hideHypervisorAction, &QAction::toggled, this, [](bool enabled) {
+        ksword::kvm::setHypervisorHidden(enabled);
+    });
+
     // 私有 EPT：不放开能力，只是让已有的视图/授权在多核上安全，所以不走
     // 高风险确认——真正危险的是视图本身，那由写权限门管。
     QAction* const localEptAction = menu.addAction(
@@ -1028,5 +1056,10 @@ void MainWindow::showKvmMenu(const QPoint& globalPosition)
         runKvmFaultReset();
     });
 
+    menu.addSeparator();
+    QAction* const commandsAction = menu.addAction(ks::i18n::sourceText(QStringLiteral("KVM 完整命令面板")));
+    connect(commandsAction, &QAction::triggered, this, [this]() {
+        handleKvmDockAction(KvmDock::Action::OpenCommandPanel);
+    });
     menu.exec(globalPosition);
 }

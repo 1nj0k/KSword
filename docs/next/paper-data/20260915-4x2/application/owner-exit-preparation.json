@@ -1,0 +1,75 @@
+{
+  "kind": "owner-exit-preparation",
+  "startedUtc": "2026-09-15T23:53:32.1048634Z",
+  "endedUtc": "2026-09-15T23:53:35.1397658Z",
+  "before": {
+    "kind": "nested-page",
+    "operationId": 75,
+    "faultMode": 0,
+    "status": 0,
+    "lastStatus": "0x00000000",
+    "generation": 71,
+    "active": 0,
+    "retired": 0,
+    "residentProcessors": 4,
+    "ept12Pointer": "0x0000000000000000",
+    "guestPhysicalPage": "0x0000000000000000",
+    "shadowPhysicalPage": "0x0000000000000000",
+    "originalPhysicalPage": "0x0000000000000000",
+    "composedCount": 0,
+    "ownerProcessId": 0,
+    "ownerExited": 0,
+    "ownerCreationTime": "0",
+    "roots": [
+      "0x000000000AF0C05E"
+    ]
+  },
+  "map": {
+    "kind": "nested-page",
+    "operationId": 76,
+    "faultMode": 0,
+    "status": 0,
+    "lastStatus": "0x00000000",
+    "generation": 72,
+    "active": 1,
+    "retired": 0,
+    "residentProcessors": 4,
+    "ept12Pointer": "0x000000000AF0C05E",
+    "guestPhysicalPage": "0x00000000171A5000",
+    "shadowPhysicalPage": "0x0000000204FD4000",
+    "originalPhysicalPage": "0x0000000000000000",
+    "composedCount": 0,
+    "ownerProcessId": 6444,
+    "ownerExited": 0,
+    "ownerCreationTime": "134339877861798584",
+    "roots": [
+      "0x000000000AF0C05E"
+    ]
+  },
+  "observed": {
+    "kind": "nested-page",
+    "operationId": 76,
+    "faultMode": 0,
+    "status": 0,
+    "lastStatus": "0x00000000",
+    "generation": 72,
+    "active": 1,
+    "retired": 0,
+    "residentProcessors": 4,
+    "ept12Pointer": "0x000000000AF0C05E",
+    "guestPhysicalPage": "0x00000000171A5000",
+    "shadowPhysicalPage": "0x0000000204FD4000",
+    "originalPhysicalPage": "0x0000000037EEC000",
+    "composedCount": 3,
+    "ownerProcessId": 6444,
+    "ownerExited": 0,
+    "ownerCreationTime": "134339877861798584",
+    "roots": [
+      "0x000000000AF0C05E"
+    ]
+  },
+  "scope": "Separate destructive owner-exit test after the completed HTTP application trials.",
+  "PSComputerName": "KSword-HVM-Target",
+  "RunspaceId": "f39806f5-045d-49e1-9ce7-da2901f4d437",
+  "PSShowComputerName": true
+}

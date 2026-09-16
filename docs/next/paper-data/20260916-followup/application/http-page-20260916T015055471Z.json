@@ -1,0 +1,562 @@
+{
+    "schemaVersion":  2,
+    "kind":  "http-page-fault",
+    "runId":  "http-page-20260916T015055471Z",
+    "iteration":  3,
+    "status":  "error",
+    "expectedResidentProcessors":  4,
+    "gpa":  "0x2479000",
+    "guestIdentity":  "paper-http-identity e4b22249-5b20-4048-b466-f308c7e04a85 0-1",
+    "holderPid":  4557,
+    "controlScope":  "Local Windows APIs, local read-only serial, and KSword IOCTLs. Observer launched before interval; no vmrun, VMM injection, hook, or Hyper-V management command in this controller.",
+    "steps":  [
+                  {
+                      "stage":  "before",
+                      "serialOffset":  181943,
+                      "serialEnd":  188331,
+                      "sampleCount":  10,
+                      "utc":  "2026-09-16T01:51:10.1488004Z",
+                      "status":  "recorded"
+                  },
+                  {
+                      "stage":  "mapped",
+                      "serialOffset":  188331,
+                      "serialEnd":  195747,
+                      "sampleCount":  5,
+                      "utc":  "2026-09-16T01:51:40.3270103Z",
+                      "status":  "timeout"
+                  }
+              ],
+    "mapAttempted":  true,
+    "startedUtc":  "2026-09-16T01:50:55.4716363Z",
+    "before":  {
+                   "utc":  "2026-09-16T01:50:55.4746213Z",
+                   "bootUtc":  "2026-09-16T01:23:55.3350600Z",
+                   "vmx":  [
+                               {
+                                   "pid":  10748,
+                                   "createdUtc":  "2026-09-16T01:38:09.2394941Z",
+                                   "path":  "C:\\Program Files (x86)\\VMware\\VMware Workstation\\x64\\vmware-vmx.exe",
+                                   "sha256":  "7F58CF026DE36ECF522249D3FA26F87416D78061C456FE518F4F9D999B2B862A"
+                               }
+                           ],
+                   "vmxConfigSha256":  "57E6557ACF92F386C5F62153DD042204840448B10E922887E91B4A451867F913",
+                   "hvm":  {
+                               "arguments":  [
+                                                 "status"
+                                             ],
+                               "startedUtc":  "2026-09-16T01:50:55.5126860Z",
+                               "endedUtc":  "2026-09-16T01:50:55.5191378Z",
+                               "beginQpc":  16202915777,
+                               "endQpc":  16202981617,
+                               "frequency":  10000000,
+                               "exitCode":  0,
+                               "raw":  "{\"kind\":\"query\",\"queryStatus\":0,\"stateFlags\":13254943,\"stateFlagsHex\":\"0x00CA411F\",\"stateNames\":[\"INITIALIZED\",\"RESOURCES_READY\",\"EPT_READY\",\"SELF_TESTED\",\"SELF_TEST_PASSED\",\"GUEST_READY\",\"RESIDENT_ACTIVE\",\"EVENTS_AVAILABLE\",\"EVMCS_PARTIAL\",\"UNLOAD_GUARD_ARMED\",\"RESIDENT_NESTED\"],\"featureNames\":[\"INTEL\",\"VMX\",\"FEATURE_CONTROL_LOCKED\",\"VMX_OUTSIDE_SMX\",\"TRUE_CONTROLS\",\"EPT\",\"EPT_WB\",\"EPT_4_LEVEL\",\"EPT_2MB\",\"EPT_AD\",\"INVEPT\",\"INVEPT_SINGLE\",\"INVEPT_ALL\",\"VPID\",\"HYPERVISOR_PRESENT\",\"NESTED_VMX_EXPOSED\",\"ONE_SHOT_GUEST\",\"VMEXIT_TELEMETRY\",\"RESIDENT_VMM\",\"MULTICORE_RENDEZVOUS\",\"EPT_4KB_SPLIT\",\"EPT_RULES\",\"EPT_EVENT_RING\",\"MTRR_AWARE_EPT\",\"HYPERV_EVMCS_CAPABLE\",\"HYPERV_EVMCS_V1\",\"POWER_STATE_GUARD\",\"PROCESSOR_TOPOLOGY_GUARD\",\"DRIVER_UNLOAD_GUARD\",\"RESIDENT_LIFECYCLE_GUARDED\",\"MSR_BITMAP\",\"EXIT_EMULATION\",\"VE_INFO_READY\",\"VE_SUPPRESSED_BY_DEFAULT\",\"EPTP_LIST_READY\",\"EPTP_SWITCH_ARMED\"],\"generation\":95,\"processorCount\":4,\"preparedProcessorCount\":4,\"selfTestPassedProcessorCount\":4,\"residentProcessorCount\":4,\"residentImplementation\":\"ACTIVE\",\"eptImplementation\":\"ACTIVE\",\"nestedImplementation\":\"CAPABILITY_ONLY\",\"evmcsImplementation\":\"PARTIAL\",\"featureFlags\":\"0x0029803F30FFFFFF\",\"vmxEptVpidCapabilities\":\"0x00000F0106F34041\",\"eptExecuteOnly\":true,\"eptPointer\":\"0x0000000207FD905E\",\"eptPageCount\":515,\"mappedRamMiB\":8190,\"vmExitCount\":98427591,\"lastExitReason\":12,\"lastExitQualification\":\"0x0000000000000000\",\"lastGuestRip\":\"0xFFFFF80068210A2E\",\"lastGuestRsp\":\"0xFFFFFA8D7EA77578\",\"lastExitInstructionLength\":1,\"lastStatus\":\"0x00000000\",\"vmxBasic\":\"0x01D8100000000001\",\"cr0Fixed0\":\"0x0000000080000021\",\"cr0Fixed1\":\"0x00000000FFFFFFFF\",\"cr4Fixed0\":\"0x0000000000002000\",\"cr4Fixed1\":\"0x0000000000B72FFF\",\"lastVmInstructionError\":12,\"eventCount\":8192,\"droppedEventCount\":0,\"overwrittenEventCount\":163770,\"publishedEventCount\":171962,\"nestedL2LaunchRefusedCount\":0,\"nestedVmcs12EvictionCount\":0,\"nestedFuseTripCount\":0,\"nestedLastRefusalSite\":0,\"nestedLastRefusalSiteText\":\"µ▓íµ£ëµïÆτ╗¥Φ┐ç\",\"exitReasonCount\":{\"0\":120995,\"1\":177317,\"7\":19969,\"10\":5128438,\"12\":30010190,\"16\":549,\"18\":178385,\"19\":921330,\"20\":802500,\"21\":921335,\"23\":22377065,\"24\":947444,\"25\":9243397,\"26\":921779,\"27\":921780,\"28\":52485,\"29\":44,\"30\":499214,\"31\":1106198,\"32\":1422997,\"48\":20461816,\"50\":929042,\"53\":975523,\"55\":287799},\"processors\":[{\"index\":0,\"group\":0,\"number\":0,\"vmxInstructionResult\":0,\"stateFlags\":1383,\"stateHex\":\"0x00000567\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":25,\"vmExitCount\":33484218,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"RESIDENT_ACTIVE\",\"DEVIRTUALIZED\"]},{\"index\":1,\"group\":0,\"number\":1,\"vmxInstructionResult\":0,\"stateFlags\":1383,\"stateHex\":\"0x00000567\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":32,\"vmExitCount\":28268751,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"RESIDENT_ACTIVE\",\"DEVIRTUALIZED\"]},{\"index\":2,\"group\":0,\"number\":2,\"vmxInstructionResult\":0,\"stateFlags\":1383,\"stateHex\":\"0x00000567\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":12,\"vmExitCount\":22478051,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"RESIDENT_ACTIVE\",\"DEVIRTUALIZED\"]},{\"index\":3,\"group\":0,\"number\":3,\"vmxInstructionResult\":0,\"stateFlags\":1383,\"stateHex\":\"0x00000567\",\"lastStatus\":\"0x00000000\",\"lastExitReason\":12,\"vmExitCount\":14196571,\"stateNames\":[\"RESOURCE_READY\",\"SELF_TESTED\",\"VMXON_SUCCEEDED\",\"VMCS_LOADED\",\"GUEST_LAUNCHED\",\"RESIDENT_ACTIVE\",\"DEVIRTUALIZED\"]}]}\r\n",
+                               "parsed":  {
+                                              "kind":  "query",
+                                              "queryStatus":  0,
+                                              "stateFlags":  13254943,
+                                              "stateFlagsHex":  "0x00CA411F",
+                                              "stateNames":  [
+                                                                 "INITIALIZED",
+                                                                 "RESOURCES_READY",
+                                                                 "EPT_READY",
+                                                                 "SELF_TESTED",
+                                                                 "SELF_TEST_PASSED",
+                                                                 "GUEST_READY",
+                                                                 "RESIDENT_ACTIVE",
+                                                                 "EVENTS_AVAILABLE",
+                                                                 "EVMCS_PARTIAL",
+                                                                 "UNLOAD_GUARD_ARMED",
+                                                                 "RESIDENT_NESTED"
+                                                             ],
+                                              "featureNames":  [
+                                                                   "INTEL",
+                                                                   "VMX",
+                                                                   "FEATURE_CONTROL_LOCKED",
+                                                                   "VMX_OUTSIDE_SMX",
+                                                                   "TRUE_CONTROLS",
+                                                                   "EPT",
+                                                                   "EPT_WB",
+                                                                   "EPT_4_LEVEL",
+                                                                   "EPT_2MB",
+                                                                   "EPT_AD",
+                                                                   "INVEPT",
+                                                                   "INVEPT_SINGLE",
+                                                                   "INVEPT_ALL",
+                                                                   "VPID",
+                                                                   "HYPERVISOR_PRESENT",
+                                                                   "NESTED_VMX_EXPOSED",
+                                                                   "ONE_SHOT_GUEST",
+                                                                   "VMEXIT_TELEMETRY",
+                                                                   "RESIDENT_VMM",
+                                                                   "MULTICORE_RENDEZVOUS",
+                                                                   "EPT_4KB_SPLIT",
+                                                                   "EPT_RULES",
+                                                                   "EPT_EVENT_RING",
+                                                                   "MTRR_AWARE_EPT",
+                                                                   "HYPERV_EVMCS_CAPABLE",
+                                                                   "HYPERV_EVMCS_V1",
+                                                                   "POWER_STATE_GUARD",
+                                                                   "PROCESSOR_TOPOLOGY_GUARD",
+                                                                   "DRIVER_UNLOAD_GUARD",
+                                                                   "RESIDENT_LIFECYCLE_GUARDED",
+                                                                   "MSR_BITMAP",
+                                                                   "EXIT_EMULATION",
+                                                                   "VE_INFO_READY",
+                                                                   "VE_SUPPRESSED_BY_DEFAULT",
+                                                                   "EPTP_LIST_READY",
+                                                                   "EPTP_SWITCH_ARMED"
+                                                               ],
+                                              "generation":  95,
+                                              "processorCount":  4,
+                                              "preparedProcessorCount":  4,
+                                              "selfTestPassedProcessorCount":  4,
+                                              "residentProcessorCount":  4,
+                                              "residentImplementation":  "ACTIVE",
+                                              "eptImplementation":  "ACTIVE",
+                                              "nestedImplementation":  "CAPABILITY_ONLY",
+                                              "evmcsImplementation":  "PARTIAL",
+                                              "featureFlags":  "0x0029803F30FFFFFF",
+                                              "vmxEptVpidCapabilities":  "0x00000F0106F34041",
+                                              "eptExecuteOnly":  true,
+                                              "eptPointer":  "0x0000000207FD905E",
+                                              "eptPageCount":  515,
+                                              "mappedRamMiB":  8190,
+                                              "vmExitCount":  98427591,
+                                              "lastExitReason":  12,
+                                              "lastExitQualification":  "0x0000000000000000",
+                                              "lastGuestRip":  "0xFFFFF80068210A2E",
+                                              "lastGuestRsp":  "0xFFFFFA8D7EA77578",
+                                              "lastExitInstructionLength":  1,
+                                              "lastStatus":  "0x00000000",
+                                              "vmxBasic":  "0x01D8100000000001",
+                                              "cr0Fixed0":  "0x0000000080000021",
+                                              "cr0Fixed1":  "0x00000000FFFFFFFF",
+                                              "cr4Fixed0":  "0x0000000000002000",
+                                              "cr4Fixed1":  "0x0000000000B72FFF",
+                                              "lastVmInstructionError":  12,
+                                              "eventCount":  8192,
+                                              "droppedEventCount":  0,
+                                              "overwrittenEventCount":  163770,
+                                              "publishedEventCount":  171962,
+                                              "nestedL2LaunchRefusedCount":  0,
+                                              "nestedVmcs12EvictionCount":  0,
+                                              "nestedFuseTripCount":  0,
+                                              "nestedLastRefusalSite":  0,
+                                              "nestedLastRefusalSiteText":  "µ▓íµ£ëµïÆτ╗¥Φ┐ç",
+                                              "exitReasonCount":  {
+                                                                      "0":  120995,
+                                                                      "1":  177317,
+                                                                      "7":  19969,
+                                                                      "10":  5128438,
+                                                                      "12":  30010190,
+                                                                      "16":  549,
+                                                                      "18":  178385,
+                                                                      "19":  921330,
+                                                                      "20":  802500,
+                                                                      "21":  921335,
+                                                                      "23":  22377065,
+                                                                      "24":  947444,
+                                                                      "25":  9243397,
+                                                                      "26":  921779,
+                                                                      "27":  921780,
+                                                                      "28":  52485,
+                                                                      "29":  44,
+                                                                      "30":  499214,
+                                                                      "31":  1106198,
+                                                                      "32":  1422997,
+                                                                      "48":  20461816,
+                                                                      "50":  929042,
+                                                                      "53":  975523,
+                                                                      "55":  287799
+                                                                  },
+                                              "processors":  [
+                                                                 {
+                                                                     "index":  0,
+                                                                     "group":  0,
+                                                                     "number":  0,
+                                                                     "vmxInstructionResult":  0,
+                                                                     "stateFlags":  1383,
+                                                                     "stateHex":  "0x00000567",
+                                                                     "lastStatus":  "0x00000000",
+                                                                     "lastExitReason":  25,
+                                                                     "vmExitCount":  33484218,
+                                                                     "stateNames":  [
+                                                                                        "RESOURCE_READY",
+                                                                                        "SELF_TESTED",
+                                                                                        "VMXON_SUCCEEDED",
+                                                                                        "VMCS_LOADED",
+                                                                                        "GUEST_LAUNCHED",
+                                                                                        "RESIDENT_ACTIVE",
+                                                                                        "DEVIRTUALIZED"
+                                                                                    ]
+                                                                 },
+                                                                 {
+                                                                     "index":  1,
+                                                                     "group":  0,
+                                                                     "number":  1,
+                                                                     "vmxInstructionResult":  0,
+                                                                     "stateFlags":  1383,
+                                                                     "stateHex":  "0x00000567",
+                                                                     "lastStatus":  "0x00000000",
+                                                                     "lastExitReason":  32,
+                                                                     "vmExitCount":  28268751,
+                                                                     "stateNames":  [
+                                                                                        "RESOURCE_READY",
+                                                                                        "SELF_TESTED",
+                                                                                        "VMXON_SUCCEEDED",
+                                                                                        "VMCS_LOADED",
+                                                                                        "GUEST_LAUNCHED",
+                                                                                        "RESIDENT_ACTIVE",
+                                                                                        "DEVIRTUALIZED"
+                                                                                    ]
+                                                                 },
+                                                                 {
+                                                                     "index":  2,
+                                                                     "group":  0,
+                                                                     "number":  2,
+                                                                     "vmxInstructionResult":  0,
+                                                                     "stateFlags":  1383,
+                                                                     "stateHex":  "0x00000567",
+                                                                     "lastStatus":  "0x00000000",
+                                                                     "lastExitReason":  12,
+                                                                     "vmExitCount":  22478051,
+                                                                     "stateNames":  [
+                                                                                        "RESOURCE_READY",
+                                                                                        "SELF_TESTED",
+                                                                                        "VMXON_SUCCEEDED",
+                                                                                        "VMCS_LOADED",
+                                                                                        "GUEST_LAUNCHED",
+                                                                                        "RESIDENT_ACTIVE",
+                                                                                        "DEVIRTUALIZED"
+                                                                                    ]
+                                                                 },
+                                                                 {
+                                                                     "index":  3,
+                                                                     "group":  0,
+                                                                     "number":  3,
+                                                                     "vmxInstructionResult":  0,
+                                                                     "stateFlags":  1383,
+                                                                     "stateHex":  "0x00000567",
+                                                                     "lastStatus":  "0x00000000",
+                                                                     "lastExitReason":  12,
+                                                                     "vmExitCount":  14196571,
+                                                                     "stateNames":  [
+                                                                                        "RESOURCE_READY",
+                                                                                        "SELF_TESTED",
+                                                                                        "VMXON_SUCCEEDED",
+                                                                                        "VMCS_LOADED",
+                                                                                        "GUEST_LAUNCHED",
+                                                                                        "RESIDENT_ACTIVE",
+                                                                                        "DEVIRTUALIZED"
+                                                                                    ]
+                                                                 }
+                                                             ]
+                                          }
+                           },
+                   "page":  {
+                                "arguments":  [
+                                                  "nested-page-query"
+                                              ],
+                                "startedUtc":  "2026-09-16T01:50:55.5196383Z",
+                                "endedUtc":  "2026-09-16T01:50:55.5242273Z",
+                                "beginQpc":  16202985272,
+                                "endQpc":  16203030319,
+                                "frequency":  10000000,
+                                "exitCode":  0,
+                                "raw":  "{\"kind\":\"nested-page\",\"operationId\":34,\"faultMode\":0,\"status\":0,\"lastStatus\":\"0x00000000\",\"generation\":29,\"active\":0,\"retired\":0,\"residentProcessors\":4,\"ept12Pointer\":\"0x0000000000000000\",\"guestPhysicalPage\":\"0x0000000000000000\",\"shadowPhysicalPage\":\"0x0000000000000000\",\"originalPhysicalPage\":\"0x0000000000000000\",\"composedCount\":0,\"ownerProcessId\":0,\"ownerExited\":0,\"ownerCreationTime\":\"0\",\"leaseRevocationReason\":0,\"sourcePhysicalPage\":\"0x0000000000000000\",\"sourceEntryCount\":0,\"sourcePath\":[],\"roots\":[\"0x000000000930905E\"]}\r\n",
+                                "parsed":  {
+                                               "kind":  "nested-page",
+                                               "operationId":  34,
+                                               "faultMode":  0,
+                                               "status":  0,
+                                               "lastStatus":  "0x00000000",
+                                               "generation":  29,
+                                               "active":  0,
+                                               "retired":  0,
+                                               "residentProcessors":  4,
+                                               "ept12Pointer":  "0x0000000000000000",
+                                               "guestPhysicalPage":  "0x0000000000000000",
+                                               "shadowPhysicalPage":  "0x0000000000000000",
+                                               "originalPhysicalPage":  "0x0000000000000000",
+                                               "composedCount":  0,
+                                               "ownerProcessId":  0,
+                                               "ownerExited":  0,
+                                               "ownerCreationTime":  "0",
+                                               "leaseRevocationReason":  0,
+                                               "sourcePhysicalPage":  "0x0000000000000000",
+                                               "sourceEntryCount":  0,
+                                               "sourcePath":  [
+
+                                                              ],
+                                               "roots":  [
+                                                             "0x000000000930905E"
+                                                         ]
+                                           }
+                            },
+                   "metrics":  {
+                                   "arguments":  [
+                                                     "metrics"
+                                                 ],
+                                   "startedUtc":  "2026-09-16T01:50:55.5242273Z",
+                                   "endedUtc":  "2026-09-16T01:50:55.5302282Z",
+                                   "beginQpc":  16203032697,
+                                   "endQpc":  16203093395,
+                                   "frequency":  10000000,
+                                   "exitCode":  0,
+                                   "raw":  "{\"kind\":\"hvm-metrics\",\"version\":2,\"transitionCoherent\":true,\"transitionSequence\":186,\"command\":5,\"lastStatus\":\"0x00000000\",\"processorCount\":4,\"qpcFrequency\":\"10000000\",\"snapshotBeginQpc\":\"16203061052\",\"snapshotEndQpc\":\"16203061079\",\"commandBeginQpc\":\"8486494064\",\"commandEndQpc\":\"8486521385\",\"inveptAttempts\":\"929648\",\"inveptSucceeded\":\"929648\",\"inveptFailed\":\"0\",\"ruleAllocations\":\"20\",\"ruleFrees\":\"20\",\"replacementAllocations\":\"17\",\"replacementFrees\":\"17\",\"globalValidMask\":51,\"globalQpc\":{\"resourcesBegin\":\"8486494076\",\"resourcesEnd\":\"8486520248\",\"eptBegin\":\"0\",\"eptEnd\":\"0\",\"rendezvousBegin\":\"8486520261\",\"rendezvousEnd\":\"8486521368\"},\"processors\":[{\"group\":0,\"number\":0,\"validMask\":127,\"qpc\":{\"ipiEnter\":\"8486520584\",\"ipiLeave\":\"8486521320\",\"vmcsBegin\":\"8486520785\",\"stateCaptured\":\"8486520929\",\"vmcsWritten\":\"8486520978\",\"entryBefore\":\"8486521083\",\"entryAfter\":\"8486521318\"}},{\"group\":0,\"number\":1,\"validMask\":127,\"qpc\":{\"ipiEnter\":\"8486520590\",\"ipiLeave\":\"8486521365\",\"vmcsBegin\":\"8486520784\",\"stateCaptured\":\"8486520930\",\"vmcsWritten\":\"8486520976\",\"entryBefore\":\"8486521087\",\"entryAfter\":\"8486521359\"}},{\"group\":0,\"number\":2,\"validMask\":127,\"qpc\":{\"ipiEnter\":\"8486520589\",\"ipiLeave\":\"8486521318\",\"vmcsBegin\":\"8486520785\",\"stateCaptured\":\"8486520929\",\"vmcsWritten\":\"8486520976\",\"entryBefore\":\"8486521087\",\"entryAfter\":\"8486521316\"}},{\"group\":0,\"number\":3,\"validMask\":127,\"qpc\":{\"ipiEnter\":\"8486520590\",\"ipiLeave\":\"8486521329\",\"vmcsBegin\":\"8486520784\",\"stateCaptured\":\"8486520930\",\"vmcsWritten\":\"8486520977\",\"entryBefore\":\"8486521087\",\"entryAfter\":\"8486521326\"}}],\"shadowEpt\":[{\"index\":0,\"pagesUsed\":27,\"trackedPages\":27,\"trackedOverflow\":0,\"fills\":4678122,\"denied\":47149,\"exhausted\":0,\"kept\":295957,\"dropped\":28358,\"adPending\":123,\"adPropagated\":0,\"adOverflow\":0,\"verifyMismatch\":0},{\"index\":1,\"pagesUsed\":101,\"trackedPages\":101,\"trackedOverflow\":0,\"fills\":5349851,\"denied\":51391,\"exhausted\":0,\"kept\":240709,\"dropped\":27595,\"adPending\":995,\"adPropagated\":0,\"adOverflow\":0,\"verifyMismatch\":0},{\"index\":2,\"pagesUsed\":114,\"trackedPages\":114,\"trackedOverflow\":0,\"fills\":6897141,\"denied\":70956,\"exhausted\":0,\"kept\":161648,\"dropped\":34424,\"adPending\":1391,\"adPropagated\":0,\"adOverflow\":0,\"verifyMismatch\":0},{\"index\":3,\"pagesUsed\":114,\"trackedPages\":114,\"trackedOverflow\":0,\"fills\":3324386,\"denied\":42876,\"exhausted\":0,\"kept\":120469,\"dropped\":19889,\"adPending\":1403,\"adPropagated\":0,\"adOverflow\":0,\"verifyMismatch\":0}]}\r\n",
+                                   "parsed":  {
+                                                  "kind":  "hvm-metrics",
+                                                  "version":  2,
+                                                  "transitionCoherent":  true,
+                                                  "transitionSequence":  186,
+                                                  "command":  5,
+                                                  "lastStatus":  "0x00000000",
+                                                  "processorCount":  4,
+                                                  "qpcFrequency":  "10000000",
+                                                  "snapshotBeginQpc":  "16203061052",
+                                                  "snapshotEndQpc":  "16203061079",
+                                                  "commandBeginQpc":  "8486494064",
+                                                  "commandEndQpc":  "8486521385",
+                                                  "inveptAttempts":  "929648",
+                                                  "inveptSucceeded":  "929648",
+                                                  "inveptFailed":  "0",
+                                                  "ruleAllocations":  "20",
+                                                  "ruleFrees":  "20",
+                                                  "replacementAllocations":  "17",
+                                                  "replacementFrees":  "17",
+                                                  "globalValidMask":  51,
+                                                  "globalQpc":  {
+                                                                    "resourcesBegin":  "8486494076",
+                                                                    "resourcesEnd":  "8486520248",
+                                                                    "eptBegin":  "0",
+                                                                    "eptEnd":  "0",
+                                                                    "rendezvousBegin":  "8486520261",
+                                                                    "rendezvousEnd":  "8486521368"
+                                                                },
+                                                  "processors":  [
+                                                                     {
+                                                                         "group":  0,
+                                                                         "number":  0,
+                                                                         "validMask":  127,
+                                                                         "qpc":  {
+                                                                                     "ipiEnter":  "8486520584",
+                                                                                     "ipiLeave":  "8486521320",
+                                                                                     "vmcsBegin":  "8486520785",
+                                                                                     "stateCaptured":  "8486520929",
+                                                                                     "vmcsWritten":  "8486520978",
+                                                                                     "entryBefore":  "8486521083",
+                                                                                     "entryAfter":  "8486521318"
+                                                                                 }
+                                                                     },
+                                                                     {
+                                                                         "group":  0,
+                                                                         "number":  1,
+                                                                         "validMask":  127,
+                                                                         "qpc":  {
+                                                                                     "ipiEnter":  "8486520590",
+                                                                                     "ipiLeave":  "8486521365",
+                                                                                     "vmcsBegin":  "8486520784",
+                                                                                     "stateCaptured":  "8486520930",
+                                                                                     "vmcsWritten":  "8486520976",
+                                                                                     "entryBefore":  "8486521087",
+                                                                                     "entryAfter":  "8486521359"
+                                                                                 }
+                                                                     },
+                                                                     {
+                                                                         "group":  0,
+                                                                         "number":  2,
+                                                                         "validMask":  127,
+                                                                         "qpc":  {
+                                                                                     "ipiEnter":  "8486520589",
+                                                                                     "ipiLeave":  "8486521318",
+                                                                                     "vmcsBegin":  "8486520785",
+                                                                                     "stateCaptured":  "8486520929",
+                                                                                     "vmcsWritten":  "8486520976",
+                                                                                     "entryBefore":  "8486521087",
+                                                                                     "entryAfter":  "8486521316"
+                                                                                 }
+                                                                     },
+                                                                     {
+                                                                         "group":  0,
+                                                                         "number":  3,
+                                                                         "validMask":  127,
+                                                                         "qpc":  {
+                                                                                     "ipiEnter":  "8486520590",
+                                                                                     "ipiLeave":  "8486521329",
+                                                                                     "vmcsBegin":  "8486520784",
+                                                                                     "stateCaptured":  "8486520930",
+                                                                                     "vmcsWritten":  "8486520977",
+                                                                                     "entryBefore":  "8486521087",
+                                                                                     "entryAfter":  "8486521326"
+                                                                                 }
+                                                                     }
+                                                                 ],
+                                                  "shadowEpt":  [
+                                                                    {
+                                                                        "index":  0,
+                                                                        "pagesUsed":  27,
+                                                                        "trackedPages":  27,
+                                                                        "trackedOverflow":  0,
+                                                                        "fills":  4678122,
+                                                                        "denied":  47149,
+                                                                        "exhausted":  0,
+                                                                        "kept":  295957,
+                                                                        "dropped":  28358,
+                                                                        "adPending":  123,
+                                                                        "adPropagated":  0,
+                                                                        "adOverflow":  0,
+                                                                        "verifyMismatch":  0
+                                                                    },
+                                                                    {
+                                                                        "index":  1,
+                                                                        "pagesUsed":  101,
+                                                                        "trackedPages":  101,
+                                                                        "trackedOverflow":  0,
+                                                                        "fills":  5349851,
+                                                                        "denied":  51391,
+                                                                        "exhausted":  0,
+                                                                        "kept":  240709,
+                                                                        "dropped":  27595,
+                                                                        "adPending":  995,
+                                                                        "adPropagated":  0,
+                                                                        "adOverflow":  0,
+                                                                        "verifyMismatch":  0
+                                                                    },
+                                                                    {
+                                                                        "index":  2,
+                                                                        "pagesUsed":  114,
+                                                                        "trackedPages":  114,
+                                                                        "trackedOverflow":  0,
+                                                                        "fills":  6897141,
+                                                                        "denied":  70956,
+                                                                        "exhausted":  0,
+                                                                        "kept":  161648,
+                                                                        "dropped":  34424,
+                                                                        "adPending":  1391,
+                                                                        "adPropagated":  0,
+                                                                        "adOverflow":  0,
+                                                                        "verifyMismatch":  0
+                                                                    },
+                                                                    {
+                                                                        "index":  3,
+                                                                        "pagesUsed":  114,
+                                                                        "trackedPages":  114,
+                                                                        "trackedOverflow":  0,
+                                                                        "fills":  3324386,
+                                                                        "denied":  42876,
+                                                                        "exhausted":  0,
+                                                                        "kept":  120469,
+                                                                        "dropped":  19889,
+                                                                        "adPending":  1403,
+                                                                        "adPropagated":  0,
+                                                                        "adOverflow":  0,
+                                                                        "verifyMismatch":  0
+                                                                    }
+                                                                ]
+                                              }
+                               }
+               },
+    "map":  {
+                "arguments":  [
+                                  "nested-page-map",
+                                  "0x000000000930905E",
+                                  "2479000",
+                                  "00",
+                                  "10748"
+                              ],
+                "startedUtc":  "2026-09-16T01:51:10.1592523Z",
+                "endedUtc":  "2026-09-16T01:51:10.1662730Z",
+                "beginQpc":  16349380690,
+                "endQpc":  16349453713,
+                "frequency":  10000000,
+                "exitCode":  0,
+                "raw":  "{\"kind\":\"nested-page\",\"operationId\":35,\"faultMode\":0,\"status\":0,\"lastStatus\":\"0x00000000\",\"generation\":30,\"active\":1,\"retired\":0,\"residentProcessors\":4,\"ept12Pointer\":\"0x000000000930905E\",\"guestPhysicalPage\":\"0x0000000002479000\",\"shadowPhysicalPage\":\"0x0000000204FD4000\",\"originalPhysicalPage\":\"0x0000000000000000\",\"composedCount\":0,\"ownerProcessId\":10748,\"ownerExited\":0,\"ownerCreationTime\":\"134339962892394941\",\"leaseRevocationReason\":0,\"sourcePhysicalPage\":\"0x00000000CCF89000\",\"sourceEntryCount\":4,\"sourcePath\":[{\"address\":\"0x0000000009309000\",\"value\":\"0x0000000009308007\"},{\"address\":\"0x0000000009308000\",\"value\":\"0x000000000C0AC007\"},{\"address\":\"0x000000000C0AC090\",\"value\":\"0x000000000C0E1007\"},{\"address\":\"0x000000000C0E13C8\",\"value\":\"0x00000000CCF89077\"}],\"roots\":[\"0x000000000930905E\"]}\r\n",
+                "parsed":  {
+                               "kind":  "nested-page",
+                               "operationId":  35,
+                               "faultMode":  0,
+                               "status":  0,
+                               "lastStatus":  "0x00000000",
+                               "generation":  30,
+                               "active":  1,
+                               "retired":  0,
+                               "residentProcessors":  4,
+                               "ept12Pointer":  "0x000000000930905E",
+                               "guestPhysicalPage":  "0x0000000002479000",
+                               "shadowPhysicalPage":  "0x0000000204FD4000",
+                               "originalPhysicalPage":  "0x0000000000000000",
+                               "composedCount":  0,
+                               "ownerProcessId":  10748,
+                               "ownerExited":  0,
+                               "ownerCreationTime":  "134339962892394941",
+                               "leaseRevocationReason":  0,
+                               "sourcePhysicalPage":  "0x00000000CCF89000",
+                               "sourceEntryCount":  4,
+                               "sourcePath":  [
+                                                  {
+                                                      "address":  "0x0000000009309000",
+                                                      "value":  "0x0000000009308007"
+                                                  },
+                                                  {
+                                                      "address":  "0x0000000009308000",
+                                                      "value":  "0x000000000C0AC007"
+                                                  },
+                                                  {
+                                                      "address":  "0x000000000C0AC090",
+                                                      "value":  "0x000000000C0E1007"
+                                                  },
+                                                  {
+                                                      "address":  "0x000000000C0E13C8",
+                                                      "value":  "0x00000000CCF89077"
+                                                  }
+                                              ],
+                               "roots":  [
+                                             "0x000000000930905E"
+                                         ]
+                           }
+            },
+    "error":  "HTTP observer timed out while mapped; cleanup required.",
+    "cleanup":  {
+                    "arguments":  [
+                                      "nested-page-remove"
+                                  ],
+                    "startedUtc":  "2026-09-16T01:51:40.3324791Z",
+                    "endedUtc":  "2026-09-16T01:51:40.3385331Z",
+                    "beginQpc":  16651118365,
+                    "endQpc":  16651173057,
+                    "frequency":  10000000,
+                    "exitCode":  0,
+                    "raw":  "{\"kind\":\"nested-page\",\"operationId\":36,\"faultMode\":0,\"status\":0,\"lastStatus\":\"0x00000000\",\"generation\":31,\"active\":0,\"retired\":0,\"residentProcessors\":4,\"ept12Pointer\":\"0x0000000000000000\",\"guestPhysicalPage\":\"0x0000000000000000\",\"shadowPhysicalPage\":\"0x0000000000000000\",\"originalPhysicalPage\":\"0x0000000000000000\",\"composedCount\":0,\"ownerProcessId\":0,\"ownerExited\":0,\"ownerCreationTime\":\"0\",\"leaseRevocationReason\":0,\"sourcePhysicalPage\":\"0x0000000000000000\",\"sourceEntryCount\":0,\"sourcePath\":[],\"roots\":[\"0x000000000930905E\"]}\r\n",
+                    "parsed":  {
+                                   "kind":  "nested-page",
+                                   "operationId":  36,
+                                   "faultMode":  0,
+                                   "status":  0,
+                                   "lastStatus":  "0x00000000",
+                                   "generation":  31,
+                                   "active":  0,
+                                   "retired":  0,
+                                   "residentProcessors":  4,
+                                   "ept12Pointer":  "0x0000000000000000",
+                                   "guestPhysicalPage":  "0x0000000000000000",
+                                   "shadowPhysicalPage":  "0x0000000000000000",
+                                   "originalPhysicalPage":  "0x0000000000000000",
+                                   "composedCount":  0,
+                                   "ownerProcessId":  0,
+                                   "ownerExited":  0,
+                                   "ownerCreationTime":  "0",
+                                   "leaseRevocationReason":  0,
+                                   "sourcePhysicalPage":  "0x0000000000000000",
+                                   "sourceEntryCount":  0,
+                                   "sourcePath":  [
+
+                                                  ],
+                                   "roots":  [
+                                                 "0x000000000930905E"
+                                             ]
+                               }
+                },
+    "endedUtc":  "2026-09-16T01:51:40.3394732Z"
+}

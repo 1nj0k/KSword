@@ -270,6 +270,8 @@ typedef struct _KSW_HVM_RESIDENT_VCPU
     ULONGLONG HltBlockedWithIfSet;
     ULONGLONG HltBlockedWithPendingEvent;
     ULONG HltLastInterruptibility;
+    /* CPUID.0 has no dynamic OS state; refresh on this CPU at each insertion. */
+    int CpuidVendorLeaf[4];
 } KSW_HVM_RESIDENT_VCPU;
 
 EXTERN_C_START
@@ -398,5 +400,7 @@ VOID
 KswordARKHvmAsmHostNmiStub(
     VOID
     );
+
+VOID KswordARKHvmResidentNestedRoots(KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE* Response);
 
 EXTERN_C_END

@@ -1,0 +1,153 @@
+{
+  "kind": "hvm-metrics",
+  "version": 2,
+  "transitionCoherent": true,
+  "transitionSequence": 88,
+  "command": 5,
+  "lastStatus": "0x00000000",
+  "processorCount": 4,
+  "qpcFrequency": "10000000",
+  "snapshotBeginQpc": "11223814163",
+  "snapshotEndQpc": "11223814187",
+  "commandBeginQpc": "8148959531",
+  "commandEndQpc": "8148982162",
+  "inveptAttempts": "539487",
+  "inveptSucceeded": "539487",
+  "inveptFailed": "0",
+  "ruleAllocations": "0",
+  "ruleFrees": "0",
+  "replacementAllocations": "0",
+  "replacementFrees": "0",
+  "globalValidMask": 51,
+  "globalQpc": {
+    "resourcesBegin": "8148959542",
+    "resourcesEnd": "8148980713",
+    "eptBegin": "0",
+    "eptEnd": "0",
+    "rendezvousBegin": "8148980725",
+    "rendezvousEnd": "8148982135"
+  },
+  "processors": [
+    {
+      "group": 0,
+      "number": 0,
+      "validMask": 127,
+      "qpc": {
+        "ipiEnter": "8148981372",
+        "ipiLeave": "8148982079",
+        "vmcsBegin": "8148981561",
+        "stateCaptured": "8148981698",
+        "vmcsWritten": "8148981744",
+        "entryBefore": "8148981888",
+        "entryAfter": "8148982078"
+      }
+    },
+    {
+      "group": 0,
+      "number": 1,
+      "validMask": 127,
+      "qpc": {
+        "ipiEnter": "8148981387",
+        "ipiLeave": "8148982081",
+        "vmcsBegin": "8148981560",
+        "stateCaptured": "8148981698",
+        "vmcsWritten": "8148981745",
+        "entryBefore": "8148981846",
+        "entryAfter": "8148982078"
+      }
+    },
+    {
+      "group": 0,
+      "number": 2,
+      "validMask": 127,
+      "qpc": {
+        "ipiEnter": "8148981375",
+        "ipiLeave": "8148982132",
+        "vmcsBegin": "8148981560",
+        "stateCaptured": "8148981699",
+        "vmcsWritten": "8148981745",
+        "entryBefore": "8148981844",
+        "entryAfter": "8148982130"
+      }
+    },
+    {
+      "group": 0,
+      "number": 3,
+      "validMask": 127,
+      "qpc": {
+        "ipiEnter": "8148981389",
+        "ipiLeave": "8148982089",
+        "vmcsBegin": "8148981560",
+        "stateCaptured": "8148981697",
+        "vmcsWritten": "8148981745",
+        "entryBefore": "8148981885",
+        "entryAfter": "8148982087"
+      }
+    }
+  ],
+  "shadowEpt": [
+    {
+      "index": 0,
+      "pagesUsed": 1,
+      "trackedPages": 0,
+      "trackedOverflow": 0,
+      "fills": 3729698,
+      "denied": 37530,
+      "exhausted": 0,
+      "kept": 148272,
+      "dropped": 29080,
+      "adPending": 0,
+      "adPropagated": 0,
+      "adOverflow": 0,
+      "verifyMismatch": 0
+    },
+    {
+      "index": 1,
+      "pagesUsed": 38,
+      "trackedPages": 41,
+      "trackedOverflow": 0,
+      "fills": 3994515,
+      "denied": 47732,
+      "exhausted": 0,
+      "kept": 76878,
+      "dropped": 22021,
+      "adPending": 199,
+      "adPropagated": 0,
+      "adOverflow": 0,
+      "verifyMismatch": 0
+    },
+    {
+      "index": 2,
+      "pagesUsed": 22,
+      "trackedPages": 22,
+      "trackedOverflow": 0,
+      "fills": 6729148,
+      "denied": 66931,
+      "exhausted": 0,
+      "kept": 117584,
+      "dropped": 34341,
+      "adPending": 35,
+      "adPropagated": 0,
+      "adOverflow": 0,
+      "verifyMismatch": 0
+    },
+    {
+      "index": 3,
+      "pagesUsed": 17,
+      "trackedPages": 17,
+      "trackedOverflow": 0,
+      "fills": 2312859,
+      "denied": 33846,
+      "exhausted": 0,
+      "kept": 96806,
+      "dropped": 14329,
+      "adPending": 44,
+      "adPropagated": 0,
+      "adOverflow": 0,
+      "verifyMismatch": 0
+    }
+  ],
+  "PSComputerName": "KSword-HVM-Target",
+  "RunspaceId": "d9abf46e-27db-411b-abb7-531b8b6befe6",
+  "PSShowComputerName": true
+}

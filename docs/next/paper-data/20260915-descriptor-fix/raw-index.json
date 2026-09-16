@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "SHA256",
+  "files": [
+    {
+      "path": "descriptor-20260915T182935564Z-launch-test-guest.json",
+      "bytes": 13523,
+      "sha256": "B89F4FBF228E92B6CD047FE608FB5E9A675E507D803AFFF3D955F6EFB4D5F40E"
+    },
+    {
+      "path": "descriptor-20260915T182935787Z-resident-nested-hidehv.json",
+      "bytes": 13666,
+      "sha256": "C76D4E86A87C6B9185F357DB32781388E1ED23C2B59B1566477BA079CA0C73D3"
+    },
+    {
+      "path": "descriptor-20260915T182935907Z-nested-probe-all.json",
+      "bytes": 71231,
+      "sha256": "334F1203C5ACB00F11E50243CD4E29999383F0CBDE9CFBF05E4CD84BAC8E6F97"
+    },
+    {
+      "path": "descriptor-20260915T182936090Z-nested-selfvirt-all.json",
+      "bytes": 117158,
+      "sha256": "A2550892E713F402528F3A78BB82FB0B0B10BC2874F50B9C7A21B608394BC472"
+    },
+    {
+      "path": "descriptor-20260915T182936322Z-stop.json",
+      "bytes": 121263,
+      "sha256": "A5667921901417969FC723B3A239774E63C0DB1CCBB9B0D687BBF0662FB4E9B1"
+    },
+    {
+      "path": "descriptor-20260915T182936544Z-launch-test-guest.json",
+      "bytes": 121320,
+      "sha256": "E7C3B6735A0FE04E8E75DA0BD7D704ABBFBBC8C5F206D9C2939341522AA983AA"
+    },
+    {
+      "path": "descriptor-20260915T182936783Z-resident-nested-hidehv.json",
+      "bytes": 121091,
+      "sha256": "19D0962605E727D45EEC4059744FB7D177A2F6B520A9607B1264028B5F8D642B"
+    },
+    {
+      "path": "descriptor-20260915T182936988Z-nested-probe-all.json",
+      "bytes": 178743,
+      "sha256": "7CF524D5504CF784F4A8C45E59B091A55AD60E213E57D7CA670C03029F488635"
+    },
+    {
+      "path": "descriptor-20260915T182937272Z-nested-selfvirt-all.json",
+      "bytes": 229961,
+      "sha256": "DBC6B54B914FDE1E4B493209D53A806DF9355D0E88A057B08148CC2A19466326"
+    },
+    {
+      "path": "descriptor-20260915T182937557Z-stop.json",
+      "bytes": 233983,
+      "sha256": "82B81C51ED55CEF1955D0726FA72AE9E29F5CBC6DF98CC77F25BE6E110D38997"
+    },
+    {
+      "path": "descriptor-20260915T182937884Z-launch-test-guest.json",
+      "bytes": 233978,
+      "sha256": "AF823FFD238E7D6CDDD078B758C92A8BFB804B1883286C0C929B6F97A95EEC98"
+    },
+    {
+      "path": "descriptor-20260915T182938232Z-resident-nested-hidehv.json",
+      "bytes": 233750,
+      "sha256": "F328BC25B5573A19B2904FC3169E8F108737EC962BFF8BE7050BDE399795DA43"
+    },
+    {
+      "path": "descriptor-20260915T182938535Z-nested-probe-all.json",
+      "bytes": 292394,
+      "sha256": "8672E3A94884A710DA2B9CD1434EC1EB7FA1BB201941F72A80DF2FD60A1AEC2B"
+    },
+    {
+      "path": "descriptor-20260915T182938867Z-nested-selfvirt-all.json",
+      "bytes": 344517,
+      "sha256": "8B98C160F0991CEB63F16AC4DB457ADBA8CC86552CD7FBBF4099806F4B823C81"
+    },
+    {
+      "path": "descriptor-20260915T182939282Z-stop.json",
+      "bytes": 348544,
+      "sha256": "DA472B963148396CD8493DDD25197BD1286BB9C23BE8220799207DCA8EE33158"
+    },
+    {
+      "path": "final-state.json",
+      "bytes": 127468,
+      "sha256": "6EE5D4E383DC471E52CABA05D8B133E1EA1CA022E9A9EACBA283865CFAD7DE6A"
+    },
+    {
+      "path": "forensics-manifest.json",
+      "bytes": 499,
+      "sha256": "7C5395CFFB77CBF7D9F61DCED79148DC6F943CB2C8E31EC94C25FC7B5B5686AC"
+    },
+    {
+      "path": "host-environment.json",
+      "bytes": 6195,
+      "sha256": "3E0D9A0CF171DFCC1D1B3D46E04B260D7A6A6E43B756FEB0F84B32BD14EDDF9A"
+    },
+    {
+      "path": "normal-init/shell-capture.json",
+      "bytes": 126940,
+      "sha256": "D353FD893DF1E727E959AA435CF5DDDB2371201C7FB500C601408CE44F8AC9BC"
+    },
+    {
+      "path": "normal-init/stability-20260915T185445Z-summary.json",
+      "bytes": 257,
+      "sha256": "2D40A2A645A70CF05D5DB457DCD92273EA40F1D4B45298DCC3288B5AB4C23F13"
+    },
+    {
+      "path": "normal-init/stability-20260915T185445Z.jsonl",
+      "bytes": 246124,
+      "sha256": "98E13C0EECA111197274D63EBFDF93DA73439D4CD6336E1AE700192ACA3C9D6E"
+    },
+    {
+      "path": "normal-init/write-isolation-20260915T190653Z.json",
+      "bytes": 264552,
+      "sha256": "60D0458A21556F7A60E75589186BA48F622E18BE4F3513B9AD1766E9D9D53C0D"
+    },
+    {
+      "path": "source-manifest.json",
+      "bytes": 2013,
+      "sha256": "FBA969B6CE13F93C383A126A8BCB0196F925FAAB79EFA14415BE3B4A664A0F2A"
+    },
+    {
+      "path": "teardown/hpet-enabled-capture.json",
+      "bytes": 132462,
+      "sha256": "5AA7CB1FA5AC0E3E04CA1B3F86CD457446221F31715524C699FF2C9249DEE42E"
+    },
+    {
+      "path": "teardown/vmware-teardown-20260915T183944813Z.json",
+      "bytes": 12617,
+      "sha256": "EE2DDCC3B23CC010EDEC5785CDAEFBD13392B20491D3831D3684FD3C295E778C"
+    },
+    {
+      "path": "teardown/vmware-teardown-20260915T184556119Z.json",
+      "bytes": 12630,
+      "sha256": "F3C64E8DFE455057D36F2781FDD8A416F72498972F181F1D8A52DA6D5B4265E7"
+    },
+    {
+      "path": "teardown/vmware-teardown-20260915T185115049Z.json",
+      "bytes": 12650,
+      "sha256": "09FD60FF633FFF0DB8A571A6CD2A8AEE0C975012CFC15B82FBA0152ABF5AE5DC"
+    },
+    {
+      "path": "teardown/write-isolation-20260915T184354Z.json",
+      "bytes": 222526,
+      "sha256": "F80330407BF5CA769FD14FF9A9F4305E3530EA1414D4C575CC0EDCB9DBFF76D3"
+    },
+    {
+      "path": "verified/descriptor-20260915T183226031Z-launch-test-guest.json",
+      "bytes": 14025,
+      "sha256": "D2F43872C173D9819905C725010ED2B6BB0FD5B928F24B1FF9A973E166EED218"
+    },
+    {
+      "path": "verified/descriptor-20260915T183226232Z-resident-nested-hidehv.json",
+      "bytes": 14112,
+      "sha256": "04F9AC317BF49EB7D948CEADD10E61AABFAF5143B3309ECFAC7DCAC112EE570C"
+    },
+    {
+      "path": "verified/descriptor-20260915T183226353Z-nested-probe-all.json",
+      "bytes": 79784,
+      "sha256": "9A67B7D2D4A71E01DB11DD06BABAAB9DA09164B860A9995D586F868DE61FC8E9"
+    },
+    {
+      "path": "verified/descriptor-20260915T183226519Z-nested-selfvirt-all.json",
+      "bytes": 143152,
+      "sha256": "0256E0E3EB3F6786F8FC9717150553EB8582DB6890F59B9F5BFD9555E9C12D3A"
+    },
+    {
+      "path": "verified/descriptor-20260915T183226753Z-stop.json",
+      "bytes": 147751,
+      "sha256": "FAFDAE8F1B0F7F2F0FB8D100B97CA73F5C9964901DFBFF93A1E4DC48C1A6871D"
+    },
+    {
+      "path": "verified/descriptor-20260915T183227007Z-launch-test-guest.json",
+      "bytes": 147822,
+      "sha256": "AA1CBFA2920B0A77E756A7FA40F54029CF05B43D221B040283E81A5480FD985C"
+    },
+    {
+      "path": "verified/descriptor-20260915T183227257Z-resident-nested-hidehv.json",
+      "bytes": 147538,
+      "sha256": "1615E556E2AD655D6928C8E6FD4BD87DA94273E2824F712CE6856FEF9E6E31F3"
+    },
+    {
+      "path": "verified/descriptor-20260915T183227484Z-nested-probe-all.json",
+      "bytes": 213259,
+      "sha256": "98C3255C85FD5C81236E83E8E5E71763D1F39A7460F6FF6CBB34A6E6EE6ECCAC"
+    },
+    {
+      "path": "verified/descriptor-20260915T183227784Z-nested-selfvirt-all.json",
+      "bytes": 269162,
+      "sha256": "7F1CC223F577B8537475B568BDC7B966D33230CA21DC375BFE22B08ABE0D2CD8"
+    },
+    {
+      "path": "verified/descriptor-20260915T183228102Z-stop.json",
+      "bytes": 273684,
+      "sha256": "C68492B3DDF8EE4595D53E19560CE519C3D7EF8D91FF57E5F724357B0A1C86C3"
+    },
+    {
+      "path": "verified/descriptor-20260915T183228463Z-launch-test-guest.json",
+      "bytes": 273695,
+      "sha256": "6D785C6F8AB9B9E01AB73C5EF6D1F4D77F2B3384FDF909F9A76C60C33014447E"
+    },
+    {
+      "path": "verified/descriptor-20260915T183228847Z-resident-nested-hidehv.json",
+      "bytes": 273413,
+      "sha256": "35BC4F9C03B65EEC350674B2779E9D724302B24420049FC7F013B04209B285AA"
+    },
+    {
+      "path": "verified/descriptor-20260915T183229170Z-nested-probe-all.json",
+      "bytes": 338764,
+      "sha256": "137F4611206AA464335FA47734543AC50740FEA59688593131D4AF8B0FECE467"
+    },
+    {
+      "path": "verified/descriptor-20260915T183229549Z-nested-selfvirt-all.json",
+      "bytes": 393550,
+      "sha256": "99B2ABBF1C864734194A88A43BFC21DA50653C932797D60BA37538A4F1BDA310"
+    },
+    {
+      "path": "verified/descriptor-20260915T183229973Z-stop.json",
+      "bytes": 398074,
+      "sha256": "503D1D9EC4C6185EC20CE535416A877C05B8C9F8D1600FF1FB0B15AAFDF827FD"
+    },
+    {
+      "path": "verified/gdt-query-0.json",
+      "bytes": 5786,
+      "sha256": "1FA74CBD94DEE41FBFDD569970E27B317D1C4FCAD8DC1B430B27D10299B63C86"
+    },
+    {
+      "path": "verified/gdt-query-1.json",
+      "bytes": 5786,
+      "sha256": "B764876EA0637ED6D5AF83D43AB480739ED74677D98D85FB1CACCF390A5B5BAD"
+    },
+    {
+      "path": "verified/gdt-query-2.json",
+      "bytes": 5822,
+      "sha256": "C08DB72D85FC00EBED175BC93C60490ECE69E1F386F4E246AA819C09BF1D6198"
+    },
+    {
+      "path": "verified/gdt-query-64.json",
+      "bytes": 5837,
+      "sha256": "DC02B9DCA7C4AEE17B246608DD0AD3ADFE44150431F5EE35D35F7337583638C5"
+    }
+  ]
+}

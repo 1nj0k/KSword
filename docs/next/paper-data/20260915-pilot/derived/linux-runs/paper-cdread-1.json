@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "runId": "paper-cdread-1",
+  "workload": "buffered-cdrom-read-32MiB",
+  "iteration": 1,
+  "warmup": false,
+  "source": "tinycore-serial.txt",
+  "raw": "paper-cdread-1\n7855.35 7589.25\n32+0 records in\n32+0 records out\n33554432 bytes (32.0MB) copied, 0.890196 seconds, 35.9MB/s\nrc=0\n7856.40 7589.25\n",
+  "guestUptimeSamples": [
+    7855.35,
+    7856.4
+  ],
+  "status": "ok",
+  "hostTimestamp": null,
+  "timestampNote": "Raw serial has guest uptime only; no synchronized host timestamp per command.",
+  "uptimeBracketSeconds": 1.0499999999992724,
+  "ddReportedSeconds": 0.890196,
+  "MiBPerSecond": 35.94713973102553
+}

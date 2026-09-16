@@ -16,6 +16,7 @@ Environment:
 --*/
 
 #include "hvm_resident.h"
+#include "hvm_metrics.h"
 
 /* Tag the per-processor private-hierarchy descriptor array. */
 #define KSW_HVM_EPT_LOCAL_ARRAY_POOL_TAG 'AvHK'
@@ -24,6 +25,7 @@ Environment:
 /* The multicore start gate asks the view records whether any would flip a leaf. */
 #include "hvm_ept_view.h"
 #include "hvm_vmcs.h"
+#include "hvm_descriptor.h"
 #include "../../platform/pool_compat.h"
 
 #if defined(_M_AMD64)
@@ -133,6 +135,48 @@ typedef struct _KSW_HVM_RENDEZVOUS
 
 /* Own the process-wide resident contexts under the runtime lifecycle lock. */
 static KSW_HVM_RESIDENT_STATE g_KswordHvmResident;
+
+VOID KswordARKHvmResidentMetrics(KSWORD_ARK_HVM_METRICS_RESPONSE* Response)
+{
+    /* Resource locking prevents prepare/free from replacing these contexts. */
+    ULONG index;
+    /* Timing rows may describe an older stop, so use a separate current count. */
+    Response->shadowProcessorCount = g_KswordHvmResident.ProcessorCount;
+    /* Each CPU publishes its own naturally aligned observational counters. */
+    for (index = 0UL; index < Response->shadowProcessorCount; ++index) {
+        /* Read static per-CPU storage without dereferencing its heap allocations. */
+        const KSW_HVM_SHADOW_EPT_STATE* shadow = &g_KswordHvmResident.Processors[index].Nested.ShadowEpt;
+        /* Select the separately versioned wire row. */
+        KSWORD_ARK_HVM_SHADOW_METRICS* row = &Response->shadowProcessors[index];
+        /* Preserve stable processor-array identity. */
+        row->index = index;
+        /* Sample PageUsed; the enclosing QPC interval bounds this observation. */
+        row->pagesUsed = shadow->PageUsed;
+        /* Sample TrackedCount; the enclosing QPC interval bounds this observation. */
+        row->trackedPages = shadow->TrackedCount;
+        /* Sample TrackedOverflowCount; the enclosing QPC interval bounds this observation. */
+        row->trackedOverflow = shadow->TrackedOverflowCount;
+        /* Sample FillCount; the enclosing QPC interval bounds this observation. */
+        row->fills = shadow->FillCount;
+        /* Sample DenyCount; the enclosing QPC interval bounds this observation. */
+        row->denied = shadow->DenyCount;
+        /* Sample ExhaustionCount; the enclosing QPC interval bounds this observation. */
+        row->exhausted = shadow->ExhaustionCount;
+        /* Sample InvalidateKeptCount; the enclosing QPC interval bounds this observation. */
+        row->kept = shadow->InvalidateKeptCount;
+        /* Sample InvalidateDroppedCount; the enclosing QPC interval bounds this observation. */
+        row->dropped = shadow->InvalidateDroppedCount;
+        /* Sample AdRecordCount; the enclosing QPC interval bounds this observation. */
+        row->adPending = shadow->AdRecordCount;
+        /* Sample AdPropagatedCount; the enclosing QPC interval bounds this observation. */
+        row->adPropagated = shadow->AdPropagatedCount;
+        /* Sample AdOverflowCount; the enclosing QPC interval bounds this observation. */
+        row->adOverflow = shadow->AdOverflowCount;
+        /* Sample VerifyMismatchCount; the enclosing QPC interval bounds this observation. */
+        row->verifyMismatch = shadow->VerifyMismatchCount;
+    }
+}
+
 
 /* Keep assembly offsets synchronized with the resident context contract. */
 C_ASSERT(FIELD_OFFSET(
@@ -722,6 +766,9 @@ KswordARKHvmResidentPrepareContexts(
         Runtime->ProcessorCount;
     /* Preserve the exact resident start flags. */
     g_KswordHvmResident.Flags = Flags;
+    /* Reset the reference mode at each start so experiments never inherit it. */
+    InterlockedExchange(&Runtime->FullExitSnapshot,
+        (Flags & KSWORD_ARK_HVM_CONTROL_FLAG_FULL_EXIT_SNAPSHOT) != 0UL ? 1L : 0L);
     /*
      * Publish the VMREAD measurement request where the exit path can see it.
      *
@@ -974,6 +1021,8 @@ KswordARKHvmConfigureResidentVmcsFromAsm(
     input.GuestRflags = Context->LaunchRflags;
     /* Select resident controls rather than one-shot HLT interception. */
     input.ResidentMode = 1U;
+    /* Index timing by the runtime's processor identity. */
+    input.MetricsCpuIndex = (ULONG)(Context->Resource - Context->Runtime->Processors);
     /*
      * Record what ends up enforced, so the protocol can report which control
      * bits this machine made mandatory rather than which ones we asked for.
@@ -1021,9 +1070,12 @@ KswordARKHvmConfigureResidentVmcsFromAsm(
     Context->UinvStateManaged = 0U;
     Context->DebugStateManaged = 0U;
     /* Program the complete current VMCS. */
+    KswordARKHvmMetricsCpuStamp(input.MetricsCpuIndex, KSW_HVM_TIME_VMCS_BEGIN);
     status = KswordARKHvmConfigureVmcs(
         &input,
         &Context->LastVmInstructionError);
+    /* A failed builder retains an endpoint and its failed status. */
+    KswordARKHvmMetricsCpuStamp(input.MetricsCpuIndex, KSW_HVM_TIME_VMCS_WRITTEN);
     if (!NT_SUCCESS(status)) {
         Context->LastStatus = status;
         return status;
@@ -1147,6 +1199,11 @@ KswordARKHvmConfigureResidentVmcsFromAsm(
                 break;
             }
         }
+    }
+    /* Last measured C boundary before the assembly entry continuation. */
+    if (NT_SUCCESS(status)) {
+        /* Includes remaining SSP/entry assembly, not only the VMLAUNCH instruction. */
+        KswordARKHvmMetricsCpuStamp(input.MetricsCpuIndex, KSW_HVM_TIME_ENTRY_BEFORE);
     }
     /* Preserve the authoritative per-processor VMCS status. */
     Context->LastStatus = status;
@@ -1359,6 +1416,8 @@ KswordARKHvmResidentStartCurrent(
          * is the point where that is guaranteed to be this context's own.
          */
         Context->ApicId = KswordARKHvmReadInitialApicId();
+        /* Cache only the invariant vendor/max-basic leaf on its owning CPU. */
+        __cpuidex(Context->CpuidVendorLeaf, 0, 0);
         /* Publish active ownership before any valid VM exit can occur. */
         InterlockedExchange(&Context->Active, 1L);
         /*
@@ -1389,6 +1448,9 @@ KswordARKHvmResidentStartCurrent(
             &Context->Runtime->ResidentProcessorCount);
         /* Attempt resident VM entry through the exact assembly continuation. */
         vmxResult = KswordARKHvmAsmLaunchResident(Context);
+        /* First C boundary after launch, not the exact VMLAUNCH cycle. */
+        KswordARKHvmMetricsCpuStamp((ULONG)(Context->Resource - Context->Runtime->Processors),
+            KSW_HVM_TIME_ENTRY_AFTER);
         /* Preserve the wrapper VM-entry result. */
         Context->Resource->Row.vmxInstructionResult =
             vmxResult;
@@ -1508,6 +1570,8 @@ KswordARKHvmResidentDeactivateCurrent(
     NTSTATUS status = STATUS_SUCCESS;
     BOOLEAN transientRestored = TRUE;
     BOOLEAN safeToResumeNative = TRUE;
+    /* Preserve the current guest tables independently of VMX host state. */
+    KSW_HVM_SEGMENT_SNAPSHOT guestTables = { 0 };
 
     /* Reject a missing or inactive current processor context. */
     if (Context == NULL ||
@@ -1568,6 +1632,13 @@ KswordARKHvmResidentDeactivateCurrent(
         /* Preserve an unsafe VMREAD failure. */
         Context->LastStatus = STATUS_HV_OPERATION_FAILED;
         /* Report that no safe devirtualization occurred. */
+        return FALSE;
+    }
+    /* Capture current guest tables before VMCLEAR, including nested changes. */
+    if (!KswordARKHvmCaptureGuestDescriptorTables(&guestTables)) {
+        /* Do not leave VMX with only the host's tables available. */
+        Context->LastStatus = STATUS_HV_OPERATION_FAILED;
+        /* Refuse an unverified native continuation. */
         return FALSE;
     }
     /* Preserve every optional guest component before VMCLEAR. */
@@ -1641,6 +1712,14 @@ KswordARKHvmResidentDeactivateCurrent(
      * requesting process quietly losing its user half after it resumes.
      */
     __writecr3((ULONG_PTR)Context->GuestCr3);
+    /* Remove the private host IDT and restore exact guest table limits. */
+    if (!KswordARKHvmRestoreDescriptorTables(
+            &guestTables, KSW_HVM_DESCRIPTOR_RESIDENT)) {
+        /* Retain a failed hardware readback instead of reporting clean stop. */
+        status = STATUS_HV_OPERATION_FAILED;
+        /* Keep the continuation fail-closed until its tables are verified. */
+        safeToResumeNative = FALSE;
+    }
     /* Publish completed VMX root cleanup. */
     InterlockedExchange(&Context->VmxRoot, 0L);
     /* Restore non-CET state before entering the final assembly continuation. */
@@ -1715,6 +1794,12 @@ KswordARKHvmResidentIpiWorker(
     NTSTATUS status = STATUS_SUCCESS;
 
     /* Reject an invalid rendezvous or an unrepresented processor. */
+    if (context != NULL && rendezvous != NULL &&
+        rendezvous->Operation != KSW_HVM_RENDEZVOUS_INVEPT) {
+        /* KeIpiGenericCall has reached this processor's callback. */
+        KswordARKHvmMetricsCpuStamp((ULONG)(context->Resource - context->Runtime->Processors),
+            KSW_HVM_TIME_IPI_ENTER);
+    }
     if (rendezvous == NULL ||
         context == NULL) {
         /* Select the explicit processor-capacity failure. */
@@ -1776,6 +1861,12 @@ KswordARKHvmResidentIpiWorker(
         status = STATUS_INVALID_PARAMETER;
     }
     /* Publish this exact processor's operation result. */
+    if (context != NULL && rendezvous != NULL &&
+        rendezvous->Operation != KSW_HVM_RENDEZVOUS_INVEPT) {
+        /* The Windows IPI return barrier follows this callback endpoint. */
+        KswordARKHvmMetricsCpuStamp((ULONG)(context->Resource - context->Runtime->Processors),
+            KSW_HVM_TIME_IPI_LEAVE);
+    }
     KswordARKHvmResidentRecordResult(
         rendezvous,
         status);
@@ -1801,9 +1892,18 @@ KswordARKHvmResidentRendezvous(
     /* Publish success as the initial compare-exchange sentinel. */
     rendezvous.FirstStatus = STATUS_SUCCESS;
     /* Interrupt every active processor and execute the nonpaged worker. */
+    if (Operation != KSW_HVM_RENDEZVOUS_INVEPT) {
+        /* Bound rendezvous disruption, including Windows barriers. */
+        KswordARKHvmMetricsStamp(KSW_HVM_TIME_RENDEZVOUS_BEGIN);
+    }
     (void)KeIpiGenericCall(
         KswordARKHvmResidentIpiWorker,
         (ULONG_PTR)&rendezvous);
+    /* Mapping invalidations are outside insertion/stop timing. */
+    if (Operation != KSW_HVM_RENDEZVOUS_INVEPT) {
+        /* All callbacks have returned before this endpoint. */
+        KswordARKHvmMetricsStamp(KSW_HVM_TIME_RENDEZVOUS_END);
+    }
     /* Return the successful target count when requested. */
     if (SuccessCount != NULL) {
         /* Publish the complete interlocked success count. */
@@ -2141,6 +2241,8 @@ KswordARKHvmResidentStart(
         return STATUS_DEVICE_BUSY;
     }
     /* Allocate every nonpaged host-stack context before raising IRQL. */
+    /* Host stacks and nested contexts are allocated before quiescence. */
+    KswordARKHvmMetricsStamp(KSW_HVM_TIME_RESOURCES_BEGIN);
     status = KswordARKHvmResidentPrepareContexts(
         Runtime,
         Flags);
@@ -2258,6 +2360,7 @@ KswordARKHvmResidentStart(
         }
     }
     /* Own the transition phase without holding its state lock over the IPI. */
+    KswordARKHvmMetricsStamp(KSW_HVM_TIME_RESOURCES_END);
     status = KswordARKHvmAcquireResidentTransition(Runtime);
     if (!NT_SUCCESS(status)) {
         (void)KswordARKHvmResidentReleaseContexts();
@@ -2602,6 +2705,8 @@ KswordARKHvmResidentInvalidateEpt(
 {
     KSW_HVM_RUNTIME* runtime =
         g_KswordHvmResident.Runtime;
+    LONG successCount = 0L;
+    NTSTATUS status;
 
     /* Treat a stopped resident lifecycle as requiring no invalidation. */
     if (runtime == NULL ||
@@ -2619,13 +2724,53 @@ KswordARKHvmResidentInvalidateEpt(
         return STATUS_INVALID_PARAMETER;
     }
     /* Execute one private INVEPT hypercall on every active processor. */
-    return KswordARKHvmResidentRendezvous(
+    status = KswordARKHvmResidentRendezvous(
         KSW_HVM_RENDEZVOUS_INVEPT,
         EptPointer,
-        NULL);
+        &successCount);
+    /* No allocation may be freed on an incomplete all-processor drain. */
+    if (NT_SUCCESS(status) && successCount != (LONG)runtime->ProcessorCount) {
+        /* Keep callers' retired backing pinned when a participant is absent. */
+        return STATUS_HV_OPERATION_FAILED;
+    }
+    /* Preserve the first failed participant's status. */
+    return status;
+}
+
+VOID KswordARKHvmResidentNestedRoots(KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE* Response)
+{
+    ULONG index;
+    Response->rootCount = 0UL;
+    for (index = 0UL; index < KSWORD_ARK_HVM_MAX_PROCESSORS; ++index) {
+        KSW_HVM_RESIDENT_VCPU* context = &g_KswordHvmResident.Processors[index];
+        ULONGLONG root;
+        ULONG existing;
+        if (InterlockedCompareExchange(&context->Active, 0L, 0L) == 0L) { continue; }
+        root = (ULONGLONG)InterlockedCompareExchange64(
+            (volatile LONG64*)&context->Nested.ShadowEpt.L1EptPointer, 0LL, 0LL);
+        if (root == 0ULL) { continue; }
+        for (existing = 0UL; existing < Response->rootCount; ++existing) {
+            if (Response->ept12Roots[existing] == root) { break; }
+        }
+        if (existing == Response->rootCount) {
+            Response->ept12Roots[Response->rootCount++] = root;
+        }
+    }
 }
 
 #else
+
+VOID KswordARKHvmResidentMetrics(KSWORD_ARK_HVM_METRICS_RESPONSE* Response)
+{
+    /* Nested VMX counters are unavailable on this architecture. */
+    Response->shadowProcessorCount = 0UL;
+}
+
+
+VOID KswordARKHvmResidentNestedRoots(KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE* Response)
+{
+    Response->rootCount = 0UL;
+}
 
 NTSTATUS
 KswordARKHvmResidentStart(

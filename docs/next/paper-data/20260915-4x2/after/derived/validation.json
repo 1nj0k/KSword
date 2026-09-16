@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "scope": "pilot dataset integrity, not runtime correctness",
+  "status": "pass",
+  "rawFilesChecked": 189,
+  "uniqueRunIds": 188,
+  "matchedBootIds": [
+    "2026-09-15T23:02:45.9386870Z"
+  ],
+  "matchedBinaryHashes": [
+    "A37D9D1B3FC22D5539C51C3DC364B7C1BAA0061913B72EFEF8183E020D464E0D"
+  ],
+  "issues": []
+}

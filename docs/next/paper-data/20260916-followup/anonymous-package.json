@@ -1,0 +1,10 @@
+{
+  "archive": "dist/hvm-anonymous-20260916-pro-followup-final/anonymous-evidence.zip",
+  "sha256": "d90ed459a5937000ff0df8d148086d2d603405dab2cd6726121fe62a8fdf6bef",
+  "bytes": 11122891,
+  "files": 1557,
+  "reproduction": "passed",
+  "identityScan": "passed",
+  "zipIntegrity": "passed",
+  "scope": "Evidence and offline analysis only; private provenance excluded; full buildable source artifact not included"
+}

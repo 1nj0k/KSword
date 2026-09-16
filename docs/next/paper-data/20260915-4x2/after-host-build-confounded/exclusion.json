@@ -1,0 +1,6 @@
+{
+  "status": "excluded_from_primary_performance",
+  "reason": "Host main-program compilation overlapped the entire A/B collection.",
+  "retained": true,
+  "hostBuildLog": "docs/next/logs/hvm-4x2-main-build.txt"
+}

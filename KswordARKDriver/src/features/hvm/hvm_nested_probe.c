@@ -19,6 +19,7 @@ Environment:
 #include "hvm_resident.h"
 #include "hvm_runtime.h"
 #include "hvm_vmcs.h"
+#include "hvm_descriptor.h"
 #include "hvm_ept.h"
 #include "driver/KswordArkHvmIoctl.h"
 /* For the capability MSR indices the in-guest readout below names. */
@@ -315,11 +316,23 @@ typedef struct _KSW_HVM_PROBE_SLOT
     volatile ULONGLONG L2ExitReason;
     volatile ULONGLONG L2Qualification;
     volatile ULONGLONG L2GuestRip;
+    /* Invalidate the probe's populated EPT12 before the final VMXOFF. */
+    KSWORD_ARK_HVM_NESTED_PROBE_ROW* InvalidationResponse;
+    volatile ULONGLONG* InvalidationRoot;
+    ULONGLONG InvalidationEptp;
+    BOOLEAN ConfigurationFailed;
+    BOOLEAN MemoryOperandsPassed;
+    volatile LONG FxPassed;
     DECLSPEC_ALIGN(16) CONTEXT ResumeContext;
+    /* RtlRestoreContext does not restore descriptor-table registers. */
+    KSW_HVM_SEGMENT_SNAPSHOT OriginalTables;
 } KSW_HVM_PROBE_SLOT;
 
 static KSW_HVM_PROBE_SLOT g_KswordProbeSlots[
     KSWORD_ARK_HVM_NESTED_PROBE_MAX_ROWS];
+
+EXTERN_C ULONG KswordARKHvmAsmProbeVmcsMemory(
+    SIZE_T Field, const VOID* Source, VOID* Destination);
 
 /*
  * The one thing L2 writes that depends on nothing.
@@ -362,7 +375,7 @@ EXTERN_C
  */
 ULONG
 KswordARKHvmAsmProbeLaunchL2(
-    VOID
+    _Out_ volatile LONG* FxPassed
     );
 
 EXTERN_C
@@ -421,6 +434,45 @@ KswordARKHvmNestedProbeL1Host(
             KeStallExecutionProcessor(1000UL);
         }
     }
+    if (slot->InvalidationResponse != NULL) {
+        KSW_HVM_SEGMENT_SNAPSHOT actual = { 0 };
+        SIZE_T expectedGdt = 0U;
+        SIZE_T expectedIdt = 0U;
+        SIZE_T expectedGs = 0U;
+        SIZE_T expectedCs = 0U;
+        SIZE_T expectedEsp = 0U;
+        SIZE_T expectedEip = 0U;
+        ULONG checks = 0UL;
+
+        KswordARKHvmCaptureSegments(&actual);
+        if (actual.Gdtr.Limit == 0xFFFFU && actual.Idtr.Limit == 0xFFFFU) {
+            checks |= 1UL;
+        }
+        if (__vmx_vmread(0x6C0CUL, &expectedGdt) == 0 &&
+            __vmx_vmread(0x6C0EUL, &expectedIdt) == 0 &&
+            expectedGdt != 0U && expectedIdt != 0U &&
+            actual.Gdtr.Base == expectedGdt && actual.Idtr.Base == expectedIdt) {
+            checks |= 2UL;
+        }
+        if (__vmx_vmread(0x6C08UL, &expectedGs) == 0 &&
+            __readmsr(0xC0000101UL) == expectedGs) {
+            checks |= 4UL;
+        }
+        if (__vmx_vmread(0x4C00UL, &expectedCs) == 0 &&
+            __vmx_vmread(0x6C10UL, &expectedEsp) == 0 &&
+            __vmx_vmread(0x6C12UL, &expectedEip) == 0 &&
+            __readmsr(0x174UL) == expectedCs &&
+            __readmsr(0x175UL) == expectedEsp &&
+            __readmsr(0x176UL) == expectedEip) {
+            checks |= 8UL;
+        }
+        if (__readdr(7) == 0x400ULL && __readmsr(0x1D9UL) == 0ULL) {
+            checks |= 16UL;
+        }
+        if (slot->MemoryOperandsPassed) { checks |= 32UL; }
+        if (slot->FxPassed == 1L) { checks |= 64UL; }
+        slot->InvalidationResponse->hostStateChecks = checks;
+    }
     if (__vmx_vmread((SIZE_T)KSW_PROBE_EXIT_REASON, &value) == 0) {
         slot->L2ExitReason = (ULONGLONG)value;
     }
@@ -477,9 +529,40 @@ KswordARKHvmNestedProbeL1Host(
          * how far it got.
          */
     }
+    if (slot->InvalidationResponse != NULL &&
+        slot->InvalidationRoot != NULL && slot->InvalidationEptp != 0ULL) {
+        KSW_HVM_RESIDENT_VCPU* vcpu = KswordARKHvmResidentFindCurrent();
+
+        if (vcpu != NULL && vcpu->Nested.ShadowEpt.Active &&
+            vcpu->Nested.ShadowEpt.L1EptPointer == slot->InvalidationEptp) {
+            const ULONG generation = vcpu->Nested.ShadowEpt.Generation;
+            const LONG64 root = InterlockedAnd64(
+                (volatile LONG64*)slot->InvalidationRoot, ~2LL);
+
+            /*
+             * Remove write permission in a table L2 actually used, then
+             * invalidate that exact EPTP. An untouched or foreign hierarchy
+             * may correctly be retained, so testing before L2 entered could
+             * not establish whether stale composed leaves were discarded.
+             */
+            slot->InvalidationResponse->inveptResult =
+                (ULONG)KswordARKHvmAsmInveptSingle(slot->InvalidationEptp);
+            slot->InvalidationResponse->shadowGenerationAdvanced =
+                (vcpu->Nested.ShadowEpt.Generation != generation &&
+                 !vcpu->Nested.ShadowEpt.Faulted) ? 1UL : 0UL;
+            (void)InterlockedExchange64(
+                (volatile LONG64*)slot->InvalidationRoot, root);
+        }
+    }
     InterlockedExchange(&slot->L2Exited, 1L);
     /* Leave emulated VMX operation before abandoning this stack. */
     __vmx_off();
+    /* Undo the emulated VM-exit's 0xFFFF limits before returning to Windows. */
+    if (!KswordARKHvmRestoreDescriptorTables(
+            &slot->OriginalTables, KSW_HVM_DESCRIPTOR_PROBE)) {
+        /* Stop instead of returning a PASS with corrupted descriptor state. */
+        KeBugCheckEx(0x00020001UL, 0x48564D03UL, 0U, 0U, 0U);
+    }
     /*
      * Return to the launcher by restoring the context it captured.
      *
@@ -545,14 +628,17 @@ KswordARKHvmNestedProbeBuildEpt12(
     return TRUE;
 }
 
-/* Write one field into vmcs12 through nested dispatch, ignoring refusal. */
+/* Keep a refused configuration write from becoming a destructive VM entry. */
 static VOID
 KswordARKHvmNestedProbeVmcs12Write(
     _In_ ULONG Field,
     _In_ ULONGLONG Value
     )
 {
-    (void)__vmx_vmwrite((SIZE_T)Field, (SIZE_T)Value);
+    if (__vmx_vmwrite((SIZE_T)Field, (SIZE_T)Value) != 0) {
+        KSW_HVM_PROBE_SLOT* slot = KswordARKHvmNestedProbeSlot();
+        if (slot != NULL) { slot->ConfigurationFailed = TRUE; }
+    }
 }
 
 /* Program one segment's four guest-state fields from a resolved descriptor. */
@@ -587,7 +673,7 @@ KswordARKHvmNestedProbeWriteSegment(
  * guest state that VM entry accepts, and the surest source of state that a
  * processor accepts is the state that processor is running right now.
  */
-static VOID
+static BOOLEAN
 KswordARKHvmNestedProbeBuildVmcs12(
     _In_ const KSW_HVM_NESTED_PROBE_CONTEXT* Probe
     )
@@ -595,8 +681,36 @@ KswordARKHvmNestedProbeBuildVmcs12(
     KSW_HVM_SEGMENT_SNAPSHOT snapshot = { 0 };
     KSW_HVM_SEGMENT_STATE segment = { 0 };
     ULONGLONG efer = __readmsr(KSW_PROBE_IA32_EFER);
+    KSW_HVM_PROBE_SLOT* slot = KswordARKHvmNestedProbeSlot();
 
+    if (slot == NULL) { return FALSE; }
+    slot->ConfigurationFailed = FALSE;
+    slot->MemoryOperandsPassed = FALSE;
     KswordARKHvmCaptureSegments(&snapshot);
+    if (snapshot.Gdtr.Base == 0ULL || snapshot.Idtr.Base == 0ULL) { return FALSE; }
+    {
+        const ULONG_PTR boundary =
+            ((ULONG_PTR)Probe->L1StackVirtual + PAGE_SIZE) & ~(ULONG_PTR)(PAGE_SIZE - 1UL);
+        ULONG index;
+        /* Exercise both memory operands at every alignment and across a page. */
+        for (index = 0UL; index < 16UL; ++index) {
+            PUCHAR crossing = (PUCHAR)(boundary - 8UL + (index & 7UL));
+            PUCHAR local = (PUCHAR)Probe->L1StackVirtual + 128UL + (index & 7UL);
+            PUCHAR source = index < 8UL ? crossing : local;
+            PUCHAR destination = index < 8UL ? local : crossing;
+            const ULONGLONG expected = 0xA591736BC024E80FULL ^ index;
+            ULONGLONG actual = 0ULL;
+            RtlCopyMemory(source, &expected, sizeof(expected));
+            RtlZeroMemory(destination, sizeof(actual));
+            if (KswordARKHvmAsmProbeVmcsMemory(
+                    KSW_PROBE_VMCS_GUEST_RIP, source, destination) != 0UL) {
+                return FALSE;
+            }
+            RtlCopyMemory(&actual, destination, sizeof(actual));
+            if (actual != expected) { return FALSE; }
+        }
+        slot->MemoryOperandsPassed = TRUE;
+    }
     /* Controls: 64-bit entry and exit, plus EPT when one was built. */
     KswordARKHvmNestedProbeVmcs12Write(KSW_PROBE_PIN_CONTROLS, 0ULL);
     /*
@@ -713,16 +827,23 @@ KswordARKHvmNestedProbeBuildVmcs12(
         (ULONGLONG)(ULONG_PTR)Probe->L2CodeVirtual + (PAGE_SIZE - 256ULL));
     KswordARKHvmNestedProbeVmcs12Write(KSW_PROBE_GUEST_RFLAGS, 0x2ULL);
     /* Host state: where L1 wants control back, and on which stack. */
-    KswordARKHvmNestedProbeVmcs12Write(0x0C00UL, snapshot.Es);
-    KswordARKHvmNestedProbeVmcs12Write(0x0C02UL, snapshot.Cs);
-    KswordARKHvmNestedProbeVmcs12Write(0x0C04UL, snapshot.Ss);
-    KswordARKHvmNestedProbeVmcs12Write(0x0C06UL, snapshot.Ds);
-    KswordARKHvmNestedProbeVmcs12Write(0x0C08UL, snapshot.Fs);
-    KswordARKHvmNestedProbeVmcs12Write(0x0C0AUL, snapshot.Gs);
-    KswordARKHvmNestedProbeVmcs12Write(0x0C0CUL, snapshot.Tr);
+    KswordARKHvmNestedProbeVmcs12Write(0x0C00UL, snapshot.Es & ~7U);
+    KswordARKHvmNestedProbeVmcs12Write(0x0C02UL, snapshot.Cs & ~7U);
+    KswordARKHvmNestedProbeVmcs12Write(0x0C04UL, snapshot.Ss & ~7U);
+    KswordARKHvmNestedProbeVmcs12Write(0x0C06UL, snapshot.Ds & ~7U);
+    KswordARKHvmNestedProbeVmcs12Write(0x0C08UL, snapshot.Fs & ~7U);
+    KswordARKHvmNestedProbeVmcs12Write(0x0C0AUL, snapshot.Gs & ~7U);
+    KswordARKHvmNestedProbeVmcs12Write(0x0C0CUL, snapshot.Tr & ~7U);
     KswordARKHvmNestedProbeVmcs12Write(0x6C00UL, __readcr0());
     KswordARKHvmNestedProbeVmcs12Write(0x6C02UL, __readcr3());
     KswordARKHvmNestedProbeVmcs12Write(0x6C04UL, __readcr4());
+    KswordARKHvmNestedProbeVmcs12Write(0x6C06UL, __readmsr(0xC0000100UL));
+    KswordARKHvmNestedProbeVmcs12Write(0x6C08UL, __readmsr(0xC0000101UL));
+    (void)KswordARKHvmReadSegment(&snapshot, snapshot.Tr, &segment);
+    KswordARKHvmNestedProbeVmcs12Write(0x6C0AUL, segment.Base);
+    KswordARKHvmNestedProbeVmcs12Write(0x4C00UL, __readmsr(0x174UL));
+    KswordARKHvmNestedProbeVmcs12Write(0x6C10UL, __readmsr(0x175UL));
+    KswordARKHvmNestedProbeVmcs12Write(0x6C12UL, __readmsr(0x176UL));
     KswordARKHvmNestedProbeVmcs12Write(0x6C0CUL, snapshot.Gdtr.Base);
     KswordARKHvmNestedProbeVmcs12Write(0x6C0EUL, snapshot.Idtr.Base);
     KswordARKHvmNestedProbeVmcs12Write(
@@ -730,8 +851,9 @@ KswordARKHvmNestedProbeBuildVmcs12(
         (ULONGLONG)(ULONG_PTR)&KswordARKHvmNestedProbeL1Host);
     KswordARKHvmNestedProbeVmcs12Write(
         KSW_PROBE_HOST_RSP,
-        ((ULONGLONG)(ULONG_PTR)Probe->L1StackVirtual +
-            KSW_PROBE_L1_STACK_BYTES - 256ULL) & ~0xFULL);
+        (((ULONGLONG)(ULONG_PTR)Probe->L1StackVirtual +
+            KSW_PROBE_L1_STACK_BYTES - 256ULL) & ~0xFULL) - 8ULL);
+    return !slot->ConfigurationFailed;
 }
 
 /*
@@ -760,6 +882,7 @@ KswordARKHvmNestedProbeExecute(
     ULONGLONG readBack = 0ULL;
     ULONGLONG storedPointer = 0ULL;
     ULONGLONG startingCount = 0ULL;
+    UCHAR clearResult = 0U;
 
     response->processorIndex =
         (ULONG)KeGetCurrentProcessorNumberEx(NULL);
@@ -779,6 +902,11 @@ KswordARKHvmNestedProbeExecute(
         return;
     }
     startingCount = vcpu->Nested.InstructionCount;
+    /* Capture the caller's tables on this pinned CPU before its VMX sequence. */
+    if (slot != NULL) {
+        /* Preserve the original limits, not the synthetic host's 0xFFFF ones. */
+        KswordARKHvmCaptureSegments(&slot->OriginalTables);
+    }
     /*
      * Set CR4.VMXE and read it back.
      *
@@ -801,6 +929,25 @@ KswordARKHvmNestedProbeExecute(
         response->vmptrldResult =
             (ULONG)__vmx_vmptrld(&vmcs12Physical);
         if (response->vmptrldResult == 0UL) {
+            /*
+             * VMXOFF preserves launch state. An allocator can reuse the same
+             * physical page on the next probe, so a first VMLAUNCH requires
+             * VMCLEAR even when our newly allocated buffer was zeroed.
+             * Load first so VMCLEAR also flushes the current cached copy.
+             */
+            clearResult = __vmx_vmclear(&vmcs12Physical);
+            if (clearResult == 0U) {
+                response->vmptrldResult =
+                    (ULONG)__vmx_vmptrld(&vmcs12Physical);
+            } else {
+                SIZE_T clearError = 0U;
+
+                if (__vmx_vmread(0x4400U, &clearError) == 0) {
+                    response->lastInstructionError = (ULONG)clearError;
+                }
+            }
+        }
+        if (response->vmptrldResult == 0UL && clearResult == 0U) {
             /* Write a recognizable value into a field and read it back. */
             response->vmwriteResult = (ULONG)__vmx_vmwrite(
                 (SIZE_T)KSW_PROBE_VMCS_GUEST_RIP,
@@ -970,33 +1117,6 @@ KswordARKHvmNestedProbeExecute(
                 }
             }
             /*
-             * Issue INVEPT from L1 and see whether we accept it.
-             *
-             * Reusing the driver's own stub is deliberate: executed from guest
-             * context it exits to our nested dispatch rather than running
-             * natively, so what it returns is our answer to L1 - the exact
-             * thing under test.
-             *
-             * Placed here, while VMX operation is still held.  After the L2
-             * section is too late: the L1 exit handler executes VMXOFF before
-             * returning control, so an INVEPT issued there is outside VMX
-             * operation and gets refused for a reason that has nothing to do
-             * with what this step is checking.
-             */
-            {
-                const ULONG generationBefore =
-                    vcpu->Nested.ShadowEpt.Generation;
-
-                response->inveptResult =
-                    (ULONG)KswordARKHvmAsmInveptSingle(
-                        (Probe->Ept12Pointer != 0ULL)
-                            ? Probe->Ept12Pointer
-                            : Probe->Vmcs12Physical);
-                response->shadowGenerationAdvanced =
-                    (vcpu->Nested.ShadowEpt.Generation !=
-                        generationBefore) ? 1UL : 0UL;
-            }
-            /*
              * Only attempt L2 once the field plumbing demonstrably works.
              *
              * A VMLAUNCH built on a vmcs12 whose writes are not landing would
@@ -1004,15 +1124,26 @@ KswordARKHvmNestedProbeExecute(
              * statement about the wrong layer.
              */
             if (response->vmreadMatched == 1UL && slot != NULL) {
-                KswordARKHvmNestedProbeBuildVmcs12(Probe);
+                if (!KswordARKHvmNestedProbeBuildVmcs12(Probe)) {
+                    __vmx_off();
+                    __writecr4(originalCr4);
+                    response->status = KSWORD_ARK_HVM_NESTED_PROBE_STATUS_CONFIGURATION_FAILED;
+                    response->vmxoffResult = 0UL;
+                    return;
+                }
                 slot->L2ExitReason = 0ULL;
                 slot->L2Qualification = 0ULL;
                 slot->L2GuestRip = 0ULL;
+                slot->InvalidationResponse = response;
+                slot->InvalidationRoot =
+                    (volatile ULONGLONG*)Probe->Ept12Pml4Virtual;
+                slot->InvalidationEptp = Probe->Ept12Pointer;
                 InterlockedExchange(&slot->L2Exited, 0L);
                 InterlockedExchange(&slot->SelfStage, 0L);
                 InterlockedExchange(&slot->L2SelfMarker, 0L);
                 InterlockedExchange(&slot->L2ResumeCount, 0L);
                 InterlockedExchange(&slot->L2AsyncResumeCount, 0L);
+                InterlockedExchange(&slot->FxPassed, 0L);
                 /* Baseline the cumulative counters, so the run reports a delta. */
                 slot->BaseEntryCount = vcpu->Nested.L2EntryCount;
                 slot->BaseReflectCount = vcpu->Nested.L2ExitReflectedCount;
@@ -1101,7 +1232,7 @@ KswordARKHvmNestedProbeExecute(
                             KSW_PROBE_GUEST_RFLAGS,
                             ((ULONGLONG)slot->ResumeContext.EFlags &
                                 ~0x200ULL) | 0x2ULL);
-                    if (KswordARKHvmAsmProbeLaunchL2() == 0UL) {
+                    if (KswordARKHvmAsmProbeLaunchL2(&slot->FxPassed) == 0UL) {
                         /*
                          * The launcher returned zero, so this code is now
                          * executing as L2 - same instructions, same stack,

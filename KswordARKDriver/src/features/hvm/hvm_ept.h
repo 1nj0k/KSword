@@ -72,6 +72,17 @@ KswordARKHvmEptFindLeafEntry(
     _In_ ULONGLONG PhysicalAddress
     );
 
+
+/* Read the actual base leaf, including unsplit MTRR-aware large pages.
+ * VM-exit safe while residency freezes the EPT allocation/split ledger. */
+BOOLEAN
+KswordARKHvmEptReadLeaf(
+    _Inout_ KSW_HVM_RUNTIME* Runtime,
+    _In_ ULONGLONG PhysicalAddress,
+    _Out_ ULONGLONG* Leaf,
+    _Out_ ULONG* LeafShift
+    );
+
 /* Build a continuous RAM-plus-MMIO identity window under the runtime lock. */
 NTSTATUS
 KswordARKHvmBuildEptLocked(

@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "capturedUtc": "2026-09-15T21:23:56.4976834Z",
+  "machine": "DESKTOP-KJE7JPM",
+  "role": "hyperv-root",
+  "os": {
+    "caption": "Microsoft Windows 11 Pro for Workstations Insider Preview",
+    "version": "10.0.26300",
+    "build": "26300",
+    "ubr": 9022,
+    "displayVersion": "26H2",
+    "bootUtc": "2026-09-13T16:46:40.5000000Z",
+    "uptimeSeconds": 189437.8102809
+  },
+  "cpu": [
+    {
+      "Name": "13th Gen Intel(R) Core(TM) i7-13700F",
+      "Description": "Intel64 Family 6 Model 183 Stepping 1",
+      "ProcessorId": "BFEBFBFF000B0671",
+      "NumberOfCores": 16,
+      "NumberOfLogicalProcessors": 24,
+      "MaxClockSpeed": 2100,
+      "VirtualizationFirmwareEnabled": false,
+      "SecondLevelAddressTranslationExtensions": false
+    }
+  ],
+  "bios": {
+    "Manufacturer": "ASUSTeK COMPUTER INC. (Licensed by AMI, LLC.)",
+    "SMBIOSBIOSVersion": "S501ME.331",
+    "Version": "_ASUS_ - 1072009",
+    "ReleaseDate": "2025-11-06T19:00:00-05:00"
+  },
+  "processes": [
+    {
+      "name": "System",
+      "pid": 4,
+      "parentPid": 0,
+      "createdUtc": "2026-09-13T16:46:45.5785610Z",
+      "userTime100ns": 0,
+      "kernelTime100ns": 170421250000,
+      "workingSetBytes": 27635712,
+      "privateBytes": 114688,
+      "path": null
+    },
+    {
+      "name": "wininit.exe",
+      "pid": 1608,
+      "parentPid": 1316,
+      "createdUtc": "2026-09-13T16:46:55.3954720Z",
+      "userTime100ns": 1250000,
+      "kernelTime100ns": 1875000,
+      "workingSetBytes": 7467008,
+      "privateBytes": 1765376,
+      "path": null
+    },
+    {
+      "name": "services.exe",
+      "pid": 1692,
+      "parentPid": 1608,
+      "createdUtc": "2026-09-13T16:46:55.4776060Z",
+      "userTime100ns": 2511406250,
+      "kernelTime100ns": 7054375000,
+      "workingSetBytes": 15773696,
+      "privateBytes": 8691712,
+      "path": null
+    },
+    {
+      "name": "lsass.exe",
+      "pid": 1788,
+      "parentPid": 1608,
+      "createdUtc": "2026-09-13T16:46:55.5142770Z",
+      "userTime100ns": 4707500000,
+      "kernelTime100ns": 6444062500,
+      "workingSetBytes": 35651584,
+      "privateBytes": 16711680,
+      "path": null
+    },
+    {
+      "name": "explorer.exe",
+      "pid": 17500,
+      "parentPid": 17476,
+      "createdUtc": "2026-09-13T16:47:18.2371060Z",
+      "userTime100ns": 9287656250,
+      "kernelTime100ns": 6235156250,
+      "workingSetBytes": 215752704,
+      "privateBytes": 315723776,
+      "path": "C:\\WINDOWS\\Explorer.EXE"
+    },
+    {
+      "name": "explorer.exe",
+      "pid": 40140,
+      "parentPid": 1932,
+      "createdUtc": "2026-09-13T17:11:37.7762750Z",
+      "userTime100ns": 30072500000,
+      "kernelTime100ns": 8813750000,
+      "workingSetBytes": 170115072,
+      "privateBytes": 311603200,
+      "path": "C:\\WINDOWS\\explorer.exe"
+    }
+  ],
+  "memory": {
+    "visibleKiB": 33212940,
+    "freeKiB": 5816488
+  },
+  "powerScheme": "电源方案 GUID: 6fecc5ae-f350-48a5-b669-b472cb895ccf  (Turbo)",
+  "deviceGuard": {
+    "VirtualizationBasedSecurityStatus": 2,
+    "SecurityServicesConfigured": [
+      2
+    ],
+    "SecurityServicesRunning": [
+      2
+    ],
+    "AvailableSecurityProperties": [
+      1,
+      2,
+      3,
+      5,
+      7,
+      8
+    ],
+    "RequiredSecurityProperties": [
+      0
+    ]
+  },
+  "hypervBinaries": [
+    {
+      "path": "C:\\Windows\\System32\\vmms.exe",
+      "fileVersion": "10.0.26100.8875 (WinBuild.160101.0800)",
+      "sha256": "F8D39F97D48D376E190FAA80A306CE85FF7233F955BC3970B25497D540059606"
+    },
+    {
+      "path": "C:\\Windows\\System32\\hvix64.exe",
+      "fileVersion": "10.0.26100.9022 (WinBuild.160101.0800)",
+      "sha256": "9140DDF9D4C1DB25F665DC73591B75A5D73A82894B1083901383DB1F143A9584"
+    },
+    {
+      "path": "C:\\Windows\\System32\\drivers\\vid.sys",
+      "fileVersion": "10.0.26100.8941 (WinBuild.160101.0800)",
+      "sha256": "F4E4FB2DD72E3F81BA6A35039048BBE8ABE56CA0A2CE0B797440A6E8CD6B841D"
+    }
+  ],
+  "virtualMachines": [
+    {
+      "Name": "新建虚拟机",
+      "Id": "26ef7321-dab1-458e-b564-dcd55a486d88",
+      "State": 3,
+      "Generation": 2,
+      "Version": "12.0",
+      "ProcessorCount": 2,
+      "MemoryAssigned": 0,
+      "Uptime": {
+        "Ticks": 0,
+        "Days": 0,
+        "Hours": 0,
+        "Milliseconds": 0,
+        "Microseconds": 0,
+        "Nanoseconds": 0,
+        "Minutes": 0,
+        "Seconds": 0,
+        "TotalDays": 0.0,
+        "TotalHours": 0.0,
+        "TotalMilliseconds": 0.0,
+        "TotalMicroseconds": 0.0,
+        "TotalNanoseconds": 0.0,
+        "TotalMinutes": 0.0,
+        "TotalSeconds": 0.0
+      },
+      "ConfigurationLocation": "C:\\ProgramData\\Microsoft\\Windows\\Hyper-V"
+    },
+    {
+      "Name": "KSword-HVM-Target",
+      "Id": "01f7b608-bf8f-462d-983b-f6bda6b5d178",
+      "State": 2,
+      "Generation": 2,
+      "Version": "12.0",
+      "ProcessorCount": 2,
+      "MemoryAssigned": 8589934592,
+      "Uptime": {
+        "Ticks": 799150000,
+        "Days": 0,
+        "Hours": 0,
+        "Milliseconds": 915,
+        "Microseconds": 0,
+        "Nanoseconds": 0,
+        "Minutes": 1,
+        "Seconds": 19,
+        "TotalDays": 0.0009249421296296296,
+        "TotalHours": 0.02219861111111111,
+        "TotalMilliseconds": 79915.0,
+        "TotalMicroseconds": 79915000.0,
+        "TotalNanoseconds": 79915000000.0,
+        "TotalMinutes": 1.3319166666666666,
+        "TotalSeconds": 79.915
+      },
+      "ConfigurationLocation": "C:\\Hyper-V\\KSword-HVM-Target"
+    }
+  ],
+  "targetProcessor": {
+    "Count": 2,
+    "ExposeVirtualizationExtensions": true,
+    "HwThreadCountPerCore": 0,
+    "CompatibilityForMigrationEnabled": false,
+    "CompatibilityForOlderOperatingSystemsEnabled": false
+  },
+  "targetFirmware": {
+    "SecureBoot": 1,
+    "SecureBootTemplate": "MicrosoftWindows"
+  },
+  "targetMemory": {
+    "DynamicMemoryEnabled": false,
+    "Startup": 8589934592,
+    "Minimum": 536870912,
+    "Maximum": 1099511627776
+  },
+  "captureDurationMs": 2861.4137
+}
