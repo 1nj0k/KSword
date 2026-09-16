@@ -1,0 +1,427 @@
+{
+    "eptp":  "0x000000001583605E",
+    "base":  "0x60000000",
+    "leafShift":  21,
+    "stageIndex":  300,
+    "outOfRangeIndex":  512,
+    "idleSeconds":  30,
+    "steps":  {
+                  "publish":  {
+                                  "kind":  "nested-page",
+                                  "operationId":  154,
+                                  "faultMode":  0,
+                                  "status":  0,
+                                  "lastStatus":  "0x00000000",
+                                  "generation":  83,
+                                  "active":  1,
+                                  "retired":  0,
+                                  "residentProcessors":  4,
+                                  "ept12Pointer":  "0x000000001583605E",
+                                  "guestPhysicalPage":  "0x0000000060000000",
+                                  "shadowPhysicalPage":  "0x00000001DBA00000",
+                                  "originalPhysicalPage":  "0x0000000000000000",
+                                  "composedCount":  0,
+                                  "ownerProcessId":  3104,
+                                  "ownerExited":  0,
+                                  "ownerCreationTime":  "134340709105442711",
+                                  "leafShift":  21,
+                                  "sourceLeafShift":  12,
+                                  "regionBytes":  2097152,
+                                  "regionPageCount":  512,
+                                  "stagedPageCount":  0,
+                                  "admittedByScan":  1,
+                                  "scannedLeafCount":  512,
+                                  "scannedSharedBits":  "0x0000000000000077",
+                                  "sourceDigest":  "0x0000000000000000",
+                                  "backingDigest":  "0x0000000000000000",
+                                  "digestBytes":  0,
+                                  "leaseRevocationReason":  0,
+                                  "sourcePhysicalPage":  "0x00000000B80B8000",
+                                  "sourceEntryCount":  4,
+                                  "sourcePath":  [
+                                                     {
+                                                         "address":  "0x0000000015836000",
+                                                         "value":  "0x0000000015835007"
+                                                     },
+                                                     {
+                                                         "address":  "0x0000000015835008",
+                                                         "value":  "0x000000001F49D007"
+                                                     },
+                                                     {
+                                                         "address":  "0x000000001F49D800",
+                                                         "value":  "0x0000000041E59007"
+                                                     },
+                                                     {
+                                                         "address":  "0x0000000041E59000",
+                                                         "value":  "0x00000000B80B8077"
+                                                     }
+                                                 ],
+                                  "roots":  [
+                                                "0x000000001583605E"
+                                            ]
+                              },
+                  "t0":  {
+                             "kind":  "nested-page",
+                             "operationId":  154,
+                             "faultMode":  0,
+                             "status":  0,
+                             "lastStatus":  "0x00000000",
+                             "generation":  83,
+                             "active":  1,
+                             "retired":  0,
+                             "residentProcessors":  4,
+                             "ept12Pointer":  "0x000000001583605E",
+                             "guestPhysicalPage":  "0x0000000060000000",
+                             "shadowPhysicalPage":  "0x00000001DBA00000",
+                             "originalPhysicalPage":  "0x0000000000000000",
+                             "composedCount":  0,
+                             "ownerProcessId":  3104,
+                             "ownerExited":  0,
+                             "ownerCreationTime":  "134340709105442711",
+                             "leafShift":  21,
+                             "sourceLeafShift":  12,
+                             "regionBytes":  2097152,
+                             "regionPageCount":  512,
+                             "stagedPageCount":  0,
+                             "admittedByScan":  1,
+                             "scannedLeafCount":  0,
+                             "scannedSharedBits":  "0x0000000000000000",
+                             "sourceDigest":  "0x366386A5407B111F",
+                             "backingDigest":  "0x366386A5407B111F",
+                             "digestBytes":  2097152,
+                             "leaseRevocationReason":  0,
+                             "sourcePhysicalPage":  "0x00000000B80B8000",
+                             "sourceEntryCount":  4,
+                             "sourcePath":  [
+                                                {
+                                                    "address":  "0x0000000015836000",
+                                                    "value":  "0x0000000015835007"
+                                                },
+                                                {
+                                                    "address":  "0x0000000015835008",
+                                                    "value":  "0x000000001F49D007"
+                                                },
+                                                {
+                                                    "address":  "0x000000001F49D800",
+                                                    "value":  "0x0000000041E59007"
+                                                },
+                                                {
+                                                    "address":  "0x0000000041E59000",
+                                                    "value":  "0x00000000B80B8077"
+                                                }
+                                            ],
+                             "roots":  [
+                                           "0x000000001583605E"
+                                       ]
+                         },
+                  "t1":  {
+                             "kind":  "nested-page",
+                             "operationId":  154,
+                             "faultMode":  0,
+                             "status":  0,
+                             "lastStatus":  "0x00000000",
+                             "generation":  83,
+                             "active":  1,
+                             "retired":  0,
+                             "residentProcessors":  4,
+                             "ept12Pointer":  "0x000000001583605E",
+                             "guestPhysicalPage":  "0x0000000060000000",
+                             "shadowPhysicalPage":  "0x00000001DBA00000",
+                             "originalPhysicalPage":  "0x0000000000000000",
+                             "composedCount":  0,
+                             "ownerProcessId":  3104,
+                             "ownerExited":  0,
+                             "ownerCreationTime":  "134340709105442711",
+                             "leafShift":  21,
+                             "sourceLeafShift":  12,
+                             "regionBytes":  2097152,
+                             "regionPageCount":  512,
+                             "stagedPageCount":  0,
+                             "admittedByScan":  1,
+                             "scannedLeafCount":  0,
+                             "scannedSharedBits":  "0x0000000000000000",
+                             "sourceDigest":  "0x366386A5407B111F",
+                             "backingDigest":  "0x366386A5407B111F",
+                             "digestBytes":  2097152,
+                             "leaseRevocationReason":  0,
+                             "sourcePhysicalPage":  "0x00000000B80B8000",
+                             "sourceEntryCount":  4,
+                             "sourcePath":  [
+                                                {
+                                                    "address":  "0x0000000015836000",
+                                                    "value":  "0x0000000015835007"
+                                                },
+                                                {
+                                                    "address":  "0x0000000015835008",
+                                                    "value":  "0x000000001F49D007"
+                                                },
+                                                {
+                                                    "address":  "0x000000001F49D800",
+                                                    "value":  "0x0000000041E59007"
+                                                },
+                                                {
+                                                    "address":  "0x0000000041E59000",
+                                                    "value":  "0x00000000B80B8077"
+                                                }
+                                            ],
+                             "roots":  [
+                                           "0x000000001583605E"
+                                       ]
+                         },
+                  "stage":  {
+                                "kind":  "nested-page",
+                                "operationId":  155,
+                                "faultMode":  0,
+                                "status":  0,
+                                "lastStatus":  "0x00000000",
+                                "generation":  83,
+                                "active":  1,
+                                "retired":  0,
+                                "residentProcessors":  4,
+                                "ept12Pointer":  "0x000000001583605E",
+                                "guestPhysicalPage":  "0x0000000060000000",
+                                "shadowPhysicalPage":  "0x00000001DBA00000",
+                                "originalPhysicalPage":  "0x0000000000000000",
+                                "composedCount":  0,
+                                "ownerProcessId":  3104,
+                                "ownerExited":  0,
+                                "ownerCreationTime":  "134340709105442711",
+                                "leafShift":  21,
+                                "sourceLeafShift":  12,
+                                "regionBytes":  2097152,
+                                "regionPageCount":  512,
+                                "stagedPageCount":  1,
+                                "admittedByScan":  1,
+                                "scannedLeafCount":  0,
+                                "scannedSharedBits":  "0x0000000000000000",
+                                "sourceDigest":  "0x0000000000000000",
+                                "backingDigest":  "0x0000000000000000",
+                                "digestBytes":  0,
+                                "leaseRevocationReason":  0,
+                                "sourcePhysicalPage":  "0x00000000B80B8000",
+                                "sourceEntryCount":  4,
+                                "sourcePath":  [
+                                                   {
+                                                       "address":  "0x0000000015836000",
+                                                       "value":  "0x0000000015835007"
+                                                   },
+                                                   {
+                                                       "address":  "0x0000000015835008",
+                                                       "value":  "0x000000001F49D007"
+                                                   },
+                                                   {
+                                                       "address":  "0x000000001F49D800",
+                                                       "value":  "0x0000000041E59007"
+                                                   },
+                                                   {
+                                                       "address":  "0x0000000041E59000",
+                                                       "value":  "0x00000000B80B8077"
+                                                   }
+                                               ],
+                                "roots":  [
+                                              "0x000000001583605E"
+                                          ]
+                            },
+                  "t2":  {
+                             "kind":  "nested-page",
+                             "operationId":  155,
+                             "faultMode":  0,
+                             "status":  0,
+                             "lastStatus":  "0x00000000",
+                             "generation":  83,
+                             "active":  1,
+                             "retired":  0,
+                             "residentProcessors":  4,
+                             "ept12Pointer":  "0x000000001583605E",
+                             "guestPhysicalPage":  "0x0000000060000000",
+                             "shadowPhysicalPage":  "0x00000001DBA00000",
+                             "originalPhysicalPage":  "0x0000000000000000",
+                             "composedCount":  0,
+                             "ownerProcessId":  3104,
+                             "ownerExited":  0,
+                             "ownerCreationTime":  "134340709105442711",
+                             "leafShift":  21,
+                             "sourceLeafShift":  12,
+                             "regionBytes":  2097152,
+                             "regionPageCount":  512,
+                             "stagedPageCount":  1,
+                             "admittedByScan":  1,
+                             "scannedLeafCount":  0,
+                             "scannedSharedBits":  "0x0000000000000000",
+                             "sourceDigest":  "0x366386A5407B111F",
+                             "backingDigest":  "0xF4D2813AA84BC813",
+                             "digestBytes":  2097152,
+                             "leaseRevocationReason":  0,
+                             "sourcePhysicalPage":  "0x00000000B80B8000",
+                             "sourceEntryCount":  4,
+                             "sourcePath":  [
+                                                {
+                                                    "address":  "0x0000000015836000",
+                                                    "value":  "0x0000000015835007"
+                                                },
+                                                {
+                                                    "address":  "0x0000000015835008",
+                                                    "value":  "0x000000001F49D007"
+                                                },
+                                                {
+                                                    "address":  "0x000000001F49D800",
+                                                    "value":  "0x0000000041E59007"
+                                                },
+                                                {
+                                                    "address":  "0x0000000041E59000",
+                                                    "value":  "0x00000000B80B8077"
+                                                }
+                                            ],
+                             "roots":  [
+                                           "0x000000001583605E"
+                                       ]
+                         },
+                  "stageOutOfRange":  {
+                                          "kind":  "nested-page",
+                                          "operationId":  156,
+                                          "faultMode":  0,
+                                          "status":  1,
+                                          "lastStatus":  "0xC000000D",
+                                          "generation":  83,
+                                          "active":  1,
+                                          "retired":  0,
+                                          "residentProcessors":  4,
+                                          "ept12Pointer":  "0x000000001583605E",
+                                          "guestPhysicalPage":  "0x0000000060000000",
+                                          "shadowPhysicalPage":  "0x00000001DBA00000",
+                                          "originalPhysicalPage":  "0x0000000000000000",
+                                          "composedCount":  0,
+                                          "ownerProcessId":  3104,
+                                          "ownerExited":  0,
+                                          "ownerCreationTime":  "134340709105442711",
+                                          "leafShift":  21,
+                                          "sourceLeafShift":  12,
+                                          "regionBytes":  2097152,
+                                          "regionPageCount":  512,
+                                          "stagedPageCount":  1,
+                                          "admittedByScan":  1,
+                                          "scannedLeafCount":  0,
+                                          "scannedSharedBits":  "0x0000000000000000",
+                                          "sourceDigest":  "0x0000000000000000",
+                                          "backingDigest":  "0x0000000000000000",
+                                          "digestBytes":  0,
+                                          "leaseRevocationReason":  0,
+                                          "sourcePhysicalPage":  "0x00000000B80B8000",
+                                          "sourceEntryCount":  4,
+                                          "sourcePath":  [
+                                                             {
+                                                                 "address":  "0x0000000015836000",
+                                                                 "value":  "0x0000000015835007"
+                                                             },
+                                                             {
+                                                                 "address":  "0x0000000015835008",
+                                                                 "value":  "0x000000001F49D007"
+                                                             },
+                                                             {
+                                                                 "address":  "0x000000001F49D800",
+                                                                 "value":  "0x0000000041E59007"
+                                                             },
+                                                             {
+                                                                 "address":  "0x0000000041E59000",
+                                                                 "value":  "0x00000000B80B8077"
+                                                             }
+                                                         ],
+                                          "roots":  [
+                                                        "0x000000001583605E"
+                                                    ]
+                                      },
+                  "t3":  {
+                             "kind":  "nested-page",
+                             "operationId":  156,
+                             "faultMode":  0,
+                             "status":  0,
+                             "lastStatus":  "0x00000000",
+                             "generation":  83,
+                             "active":  1,
+                             "retired":  0,
+                             "residentProcessors":  4,
+                             "ept12Pointer":  "0x000000001583605E",
+                             "guestPhysicalPage":  "0x0000000060000000",
+                             "shadowPhysicalPage":  "0x00000001DBA00000",
+                             "originalPhysicalPage":  "0x0000000000000000",
+                             "composedCount":  0,
+                             "ownerProcessId":  3104,
+                             "ownerExited":  0,
+                             "ownerCreationTime":  "134340709105442711",
+                             "leafShift":  21,
+                             "sourceLeafShift":  12,
+                             "regionBytes":  2097152,
+                             "regionPageCount":  512,
+                             "stagedPageCount":  1,
+                             "admittedByScan":  1,
+                             "scannedLeafCount":  0,
+                             "scannedSharedBits":  "0x0000000000000000",
+                             "sourceDigest":  "0x366386A5407B111F",
+                             "backingDigest":  "0xF4D2813AA84BC813",
+                             "digestBytes":  2097152,
+                             "leaseRevocationReason":  0,
+                             "sourcePhysicalPage":  "0x00000000B80B8000",
+                             "sourceEntryCount":  4,
+                             "sourcePath":  [
+                                                {
+                                                    "address":  "0x0000000015836000",
+                                                    "value":  "0x0000000015835007"
+                                                },
+                                                {
+                                                    "address":  "0x0000000015835008",
+                                                    "value":  "0x000000001F49D007"
+                                                },
+                                                {
+                                                    "address":  "0x000000001F49D800",
+                                                    "value":  "0x0000000041E59007"
+                                                },
+                                                {
+                                                    "address":  "0x0000000041E59000",
+                                                    "value":  "0x00000000B80B8077"
+                                                }
+                                            ],
+                             "roots":  [
+                                           "0x000000001583605E"
+                                       ]
+                         },
+                  "remove":  {
+                                 "kind":  "nested-page",
+                                 "operationId":  157,
+                                 "faultMode":  0,
+                                 "status":  0,
+                                 "lastStatus":  "0x00000000",
+                                 "generation":  84,
+                                 "active":  0,
+                                 "retired":  0,
+                                 "residentProcessors":  4,
+                                 "ept12Pointer":  "0x0000000000000000",
+                                 "guestPhysicalPage":  "0x0000000000000000",
+                                 "shadowPhysicalPage":  "0x0000000000000000",
+                                 "originalPhysicalPage":  "0x0000000000000000",
+                                 "composedCount":  0,
+                                 "ownerProcessId":  0,
+                                 "ownerExited":  0,
+                                 "ownerCreationTime":  "0",
+                                 "leafShift":  0,
+                                 "sourceLeafShift":  0,
+                                 "regionBytes":  0,
+                                 "regionPageCount":  0,
+                                 "stagedPageCount":  0,
+                                 "admittedByScan":  0,
+                                 "scannedLeafCount":  0,
+                                 "scannedSharedBits":  "0x0000000000000000",
+                                 "sourceDigest":  "0x0000000000000000",
+                                 "backingDigest":  "0x0000000000000000",
+                                 "digestBytes":  0,
+                                 "leaseRevocationReason":  0,
+                                 "sourcePhysicalPage":  "0x0000000000000000",
+                                 "sourceEntryCount":  0,
+                                 "sourcePath":  [
+
+                                                ],
+                                 "roots":  [
+                                               "0x000000001583605E"
+                                           ]
+                             }
+              }
+}
