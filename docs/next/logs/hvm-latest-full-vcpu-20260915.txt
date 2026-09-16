@@ -1,0 +1,264 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.016 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.6584 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Felix\CLionProjects\KSword\docs\next\logs\hvm-latest-full-20260915.dmp]
+Kernel Bitmap Dump File: Kernel address space is available, User address space may not be available.
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release
+Deferred                                       srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release;srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 22621 MP (2 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS Personal
+Edition build lab: 22621.2506.amd64fre.ni_release_svc_prod3.231018-1809
+Kernel base = 0xfffff806`50800000 PsLoadedModuleList = 0xfffff806`514134b0
+Debug session time: Tue Sep 15 13:39:08.282 2026 (UTC - 4:00)
+System Uptime: 0 days 1:06:00.014
+Loading Kernel Symbols
+...............................................................
+................................................................
+.................................................
+Loading User Symbols
+
+Loading unloaded module list
+........
+For analysis of this file, run !analyze -v
+0: kd> cdb: Reading initial command '.reload /f KswordARK.sys; dt KswordARK!_KSW_HVM_RUNTIME fffff80657286290 Resident*; dt KswordARK!_KSW_HVM_RUNTIME fffff80657286290 CrPolicy*; dx -r1 KswordARK!g_KswordHvmResident.Processors[0]; dx -r1 KswordARK!g_KswordHvmResident.Processors[1]; u ffffa98be0818036 L45; q'
+   +0x028 ResidentProcessorCount : 0n2
+   +0x02c ResidentImplementation : 3
+   +0x5a550 ResidentTransitionStateLock : 0
+   +0x5a558 ResidentTransitionIdleEvent : _KEVENT
+   +0x5a570 ResidentTransitionActive : 0n0
+   +0x5a5a0 ResidentContextPreparing : 0n0
+   +0x5a5b0 ResidentFaultStopRequested : 0n0
+   +0x5a5b4 ResidentStartAllowed : 0x1 ''
+   +0x5a510 CrPolicyFlags : 0
+   +0x5a518 CrPolicyCr0PinnedMask : 0
+   +0x5a520 CrPolicyCr4PinnedMask : 0
+   +0x5a528 CrPolicyCr0PinnedValue : 0
+   +0x5a530 CrPolicyCr4PinnedValue : 0
+   +0x5a538 CrPolicyRefusedWriteCount : 0n0
+   +0x5a540 CrPolicyCr3SwitchCount : 0n0
+   +0x5a548 CrPolicyDebugAccessCount : 0n0
+KswordARK!g_KswordHvmResident.Processors[0]                 [Type: _KSW_HVM_RESIDENT_VCPU]
+    [+0x000] LaunchStackPointer : 0xffff928a02ee6e08 [Type: unsigned __int64]
+    [+0x008] LaunchRflags     : 0x40282 [Type: unsigned __int64]
+    [+0x010] Runtime          : 0xfffff80657286290 [Type: _KSW_HVM_RUNTIME *]
+    [+0x018] Resource         : 0xfffff80657287138 [Type: _KSW_HVM_CPU_RESOURCE *]
+    [+0x020] HostStack        : 0xffffa98bd9f43000 [Type: void *]
+    [+0x028] HostStackPointer : 0xffffa98bd9f4aff8 [Type: unsigned __int64]
+    [+0x030] OriginalCr4      : 0xb50ef8 [Type: unsigned __int64]
+    [+0x038] DevirtualizeRsp  : 0x0 [Type: unsigned __int64]
+    [+0x040] DevirtualizeRip  : 0x0 [Type: unsigned __int64]
+    [+0x048] DevirtualizeRflags : 0x0 [Type: unsigned __int64]
+    [+0x050] GuestSCet        : 0x0 [Type: unsigned __int64]
+    [+0x058] GuestSsp         : 0x0 [Type: unsigned __int64]
+    [+0x060] GuestInterruptSspTable : 0x0 [Type: unsigned __int64]
+    [+0x068] GuestPkrs        : 0x0 [Type: unsigned __int64]
+    [+0x070] GuestUinv        : 0x0 [Type: unsigned __int64]
+    [+0x078] GuestDebugControl : 0x0 [Type: unsigned __int64]
+    [+0x080] GuestDr7         : 0x0 [Type: unsigned __int64]
+    [+0x088] CetStateManaged  : 0x1 [Type: unsigned char]
+    [+0x089] PkrsStateManaged : 0x0 [Type: unsigned char]
+    [+0x08a] UinvStateManaged : 0x0 [Type: unsigned char]
+    [+0x08b] DebugStateManaged : 0x1 [Type: unsigned char]
+    [+0x08c] ExtendedStateReserved : 0x0 [Type: unsigned long]
+    [+0x090] FxState          [Type: unsigned char [512]]
+    [+0x290] Active           : 1 [Type: long]
+    [+0x294] VmxRoot          : 1 [Type: long]
+    [+0x298] StopRequested    : 0 [Type: long]
+    [+0x29c] ProcessorIndex   : 0x0 [Type: unsigned long]
+    [+0x2a0] LastStatus       : 0 [Type: long]
+    [+0x2a4] LastVmInstructionError : 0x0 [Type: unsigned long]
+    [+0x2a8] EptLocal         : 0x0 [Type: _KSW_HVM_EPT_LOCAL *]
+    [+0x2b0] EptTransient     [Type: _KSW_HVM_EPT_TRANSIENT]
+    [+0x2d0] Nested           [Type: _KSW_HVM_NESTED_VCPU]
+    [+0x9dd0] PhysWindow       : 0xfffff806573a5870 [Type: _KSW_HVM_PHYS_WINDOW *]
+    [+0x9dd8] GuestCr3         : 0x0 [Type: unsigned __int64]
+    [+0x9de0] ActiveEptpIndex  : 0x0 [Type: unsigned long]
+    [+0x9de8] EptpSwitchProgress [Type: _KSWORD_ARK_HVM_EPTSW_PROGRESS]
+    [+0x9e18] ApicId           : 0x0 [Type: unsigned long]
+    [+0x9e1c] PendingGuestNmi  : 0 [Type: long]
+    [+0x9e20] CostExits        : 0xc76a6c [Type: unsigned __int64]
+    [+0x9e28] CostTotalCycles  : 0x5c3060d6e13 [Type: unsigned __int64]
+    [+0x9e30] CostTelemetryCycles : 0x66485116 [Type: unsigned __int64]
+    [+0x9e38] CostNestedCycles : 0x1fae2c3e9 [Type: unsigned __int64]
+    [+0x9e40] CostReflectCycles : 0x3cf9f6e28 [Type: unsigned __int64]
+    [+0x9e48] CostVmcsReadCycles : 0x52f286f4 [Type: unsigned __int64]
+    [+0x9e50] CostEptCycles    : 0x167aca77 [Type: unsigned __int64]
+    [+0x9e58] CostReasonCycles [Type: unsigned __int64 [6]]
+    [+0x9e88] CostReasonCount  [Type: unsigned __int64 [6]]
+    [+0x9eb8] CostLastBucket   : 0x5 [Type: unsigned long]
+    [+0x9ec0] HltEnteredCount  : 0x0 [Type: unsigned __int64]
+    [+0x9ec8] HltSkipNoActivitySupport : 0x0 [Type: unsigned __int64]
+    [+0x9ed0] HltSkipReadFailed : 0x0 [Type: unsigned __int64]
+    [+0x9ed8] HltSkipBlockedCount : 0x3c87b0 [Type: unsigned __int64]
+    [+0x9ee0] HltBlockedWithIfSet : 0x3c87b0 [Type: unsigned __int64]
+    [+0x9ee8] HltBlockedWithPendingEvent : 0x0 [Type: unsigned __int64]
+    [+0x9ef0] HltLastInterruptibility : 0x1 [Type: unsigned long]
+KswordARK!g_KswordHvmResident.Processors[1]                 [Type: _KSW_HVM_RESIDENT_VCPU]
+    [+0x000] LaunchStackPointer : 0xffff9901c10b7de8 [Type: unsigned __int64]
+    [+0x008] LaunchRflags     : 0x40286 [Type: unsigned __int64]
+    [+0x010] Runtime          : 0xfffff80657286290 [Type: _KSW_HVM_RUNTIME *]
+    [+0x018] Resource         : 0xfffff80657287350 [Type: _KSW_HVM_CPU_RESOURCE *]
+    [+0x020] HostStack        : 0xffffa98bdb255000 [Type: void *]
+    [+0x028] HostStackPointer : 0xffffa98bdb25cff8 [Type: unsigned __int64]
+    [+0x030] OriginalCr4      : 0xb50ef8 [Type: unsigned __int64]
+    [+0x038] DevirtualizeRsp  : 0x0 [Type: unsigned __int64]
+    [+0x040] DevirtualizeRip  : 0x0 [Type: unsigned __int64]
+    [+0x048] DevirtualizeRflags : 0x0 [Type: unsigned __int64]
+    [+0x050] GuestSCet        : 0x0 [Type: unsigned __int64]
+    [+0x058] GuestSsp         : 0x0 [Type: unsigned __int64]
+    [+0x060] GuestInterruptSspTable : 0x0 [Type: unsigned __int64]
+    [+0x068] GuestPkrs        : 0x0 [Type: unsigned __int64]
+    [+0x070] GuestUinv        : 0x0 [Type: unsigned __int64]
+    [+0x078] GuestDebugControl : 0x0 [Type: unsigned __int64]
+    [+0x080] GuestDr7         : 0x0 [Type: unsigned __int64]
+    [+0x088] CetStateManaged  : 0x1 [Type: unsigned char]
+    [+0x089] PkrsStateManaged : 0x0 [Type: unsigned char]
+    [+0x08a] UinvStateManaged : 0x0 [Type: unsigned char]
+    [+0x08b] DebugStateManaged : 0x1 [Type: unsigned char]
+    [+0x08c] ExtendedStateReserved : 0x0 [Type: unsigned long]
+    [+0x090] FxState          [Type: unsigned char [512]]
+    [+0x290] Active           : 1 [Type: long]
+    [+0x294] VmxRoot          : 1 [Type: long]
+    [+0x298] StopRequested    : 0 [Type: long]
+    [+0x29c] ProcessorIndex   : 0x1 [Type: unsigned long]
+    [+0x2a0] LastStatus       : 0 [Type: long]
+    [+0x2a4] LastVmInstructionError : 0x0 [Type: unsigned long]
+    [+0x2a8] EptLocal         : 0x0 [Type: _KSW_HVM_EPT_LOCAL *]
+    [+0x2b0] EptTransient     [Type: _KSW_HVM_EPT_TRANSIENT]
+    [+0x2d0] Nested           [Type: _KSW_HVM_NESTED_VCPU]
+    [+0x9dd0] PhysWindow       : 0xfffff806573a58a8 [Type: _KSW_HVM_PHYS_WINDOW *]
+    [+0x9dd8] GuestCr3         : 0x0 [Type: unsigned __int64]
+    [+0x9de0] ActiveEptpIndex  : 0x0 [Type: unsigned long]
+    [+0x9de8] EptpSwitchProgress [Type: _KSWORD_ARK_HVM_EPTSW_PROGRESS]
+    [+0x9e18] ApicId           : 0x1 [Type: unsigned long]
+    [+0x9e1c] PendingGuestNmi  : 0 [Type: long]
+    [+0x9e20] CostExits        : 0x14f4743 [Type: unsigned __int64]
+    [+0x9e28] CostTotalCycles  : 0x5aae91bb8ec [Type: unsigned __int64]
+    [+0x9e30] CostTelemetryCycles : 0x99a7af1a [Type: unsigned __int64]
+    [+0x9e38] CostNestedCycles : 0x56ab3eac2 [Type: unsigned __int64]
+    [+0x9e40] CostReflectCycles : 0x795bae10e [Type: unsigned __int64]
+    [+0x9e48] CostVmcsReadCycles : 0x8b44a0d5 [Type: unsigned __int64]
+    [+0x9e50] CostEptCycles    : 0x22c9ddc1 [Type: unsigned __int64]
+    [+0x9e58] CostReasonCycles [Type: unsigned __int64 [6]]
+    [+0x9e88] CostReasonCount  [Type: unsigned __int64 [6]]
+    [+0x9eb8] CostLastBucket   : 0x5 [Type: unsigned long]
+    [+0x9ec0] HltEnteredCount  : 0x0 [Type: unsigned __int64]
+    [+0x9ec8] HltSkipNoActivitySupport : 0x0 [Type: unsigned __int64]
+    [+0x9ed0] HltSkipReadFailed : 0x0 [Type: unsigned __int64]
+    [+0x9ed8] HltSkipBlockedCount : 0x451bb8 [Type: unsigned __int64]
+    [+0x9ee0] HltBlockedWithIfSet : 0x451bb8 [Type: unsigned __int64]
+    [+0x9ee8] HltBlockedWithPendingEvent : 0x0 [Type: unsigned __int64]
+    [+0x9ef0] HltLastInterruptibility : 0x1 [Type: unsigned long]
+ffffa98b`e0818036 418b8b28090000  mov     ecx,dword ptr [r11+928h]
+ffffa98b`e081803d 85c9            test    ecx,ecx
+ffffa98b`e081803f 0f84e0000000    je      ffffa98b`e0818125
+ffffa98b`e0818045 440f20c0        mov     rax,cr8
+ffffa98b`e0818049 413ac1          cmp     al,r9b
+ffffa98b`e081804c 730f            jae     ffffa98b`e081805d
+ffffa98b`e081804e 440f20c0        mov     rax,cr8
+ffffa98b`e0818052 450f22c1        mov     cr8,r9
+ffffa98b`e0818056 418b8b28090000  mov     ecx,dword ptr [r11+928h]
+ffffa98b`e081805d 85c9            test    ecx,ecx
+ffffa98b`e081805f 0f84c0000000    je      ffffa98b`e0818125
+ffffa98b`e0818065 83e901          sub     ecx,1
+ffffa98b`e0818068 0f84aa000000    je      ffffa98b`e0818118
+ffffa98b`e081806e 83e901          sub     ecx,1
+ffffa98b`e0818071 0f8498000000    je      ffffa98b`e081810f
+ffffa98b`e0818077 83e901          sub     ecx,1
+ffffa98b`e081807a 0f8486000000    je      ffffa98b`e0818106
+ffffa98b`e0818080 83e901          sub     ecx,1
+ffffa98b`e0818083 7445            je      ffffa98b`e08180ca
+ffffa98b`e0818085 83f901          cmp     ecx,1
+ffffa98b`e0818088 7419            je      ffffa98b`e08180a3
+ffffa98b`e081808a 498b83b0050000  mov     rax,qword ptr [r11+5B0h]
+ffffa98b`e0818091 b901000000      mov     ecx,1
+ffffa98b`e0818096 f048098840030000 lock or qword ptr [rax+340h],rcx
+ffffa98b`e081809e e982000000      jmp     ffffa98b`e0818125
+ffffa98b`e08180a3 65488b0c2520000000 mov   rcx,qword ptr gs:[20h]
+ffffa98b`e08180ac 498b8350060000  mov     rax,qword ptr [r11+650h]
+ffffa98b`e08180b3 418b9390090000  mov     edx,dword ptr [r11+990h]
+ffffa98b`e08180ba c1ea0a          shr     edx,0Ah
+ffffa98b`e08180bd 83e21f          and     edx,1Fh
+ffffa98b`e08180c0 488b0c08        mov     rcx,qword ptr [rax+rcx]
+ffffa98b`e08180c4 f00fab11        lock bts dword ptr [rcx],edx
+ffffa98b`e08180c8 eb5b            jmp     ffffa98b`e0818125
+ffffa98b`e08180ca 65488b0c2520000000 mov   rcx,qword ptr gs:[20h]
+ffffa98b`e08180d3 498b8350060000  mov     rax,qword ptr [r11+650h]
+ffffa98b`e08180da 458b8390090000  mov     r8d,dword ptr [r11+990h]
+ffffa98b`e08180e1 41c1e80a        shr     r8d,0Ah
+ffffa98b`e08180e5 4183e01f        and     r8d,1Fh
+ffffa98b`e08180e9 488b0c08        mov     rcx,qword ptr [rax+rcx]
+ffffa98b`e08180ed 49038bb0060000  add     rcx,qword ptr [r11+6B0h]
+ffffa98b`e08180f4 498b8390060000  mov     rax,qword ptr [r11+690h]
+ffffa98b`e08180fb 488b1401        mov     rdx,qword ptr [rcx+rax]
+ffffa98b`e08180ff f0440fab02      lock bts dword ptr [rdx],r8d
+ffffa98b`e0818104 eb1f            jmp     ffffa98b`e0818125
+ffffa98b`e0818106 498b8358050000  mov     rax,qword ptr [r11+558h]
+ffffa98b`e081810d eb10            jmp     ffffa98b`e081811f
+ffffa98b`e081810f 498b8350050000  mov     rax,qword ptr [r11+550h]
+ffffa98b`e0818116 eb07            jmp     ffffa98b`e081811f
+ffffa98b`e0818118 498b8340050000  mov     rax,qword ptr [r11+540h]
+ffffa98b`e081811f f0480fba2800    lock bts qword ptr [rax],0
+ffffa98b`e0818125 498b8398060000  mov     rax,qword ptr [r11+698h]
+ffffa98b`e081812c 4d891406        mov     qword ptr [r14+rax],r10
+ffffa98b`e0818130 498b83a8060000  mov     rax,qword ptr [r11+6A8h]
+ffffa98b`e0818137 4d891406        mov     qword ptr [r14+rax],r10
+ffffa98b`e081813b 498b8b58010000  mov     rcx,qword ptr [r11+158h]
+ffffa98b`e0818142 e89d620000      call    ffffa98b`e081e3e4
+ffffa98b`e0818147 488b85800a0000  mov     rax,qword ptr [rbp+0A80h]
+ffffa98b`e081814e 4d8bcd          mov     r9,r13
+ffffa98b`e0818151 4889742430      mov     qword ptr [rsp+30h],rsi
+ffffa98b`e0818156 4c8bc3          mov     r8,rbx
+ffffa98b`e0818159 488bd7          mov     rdx,rdi
+ffffa98b`e081815c b909010000      mov     ecx,109h
+ffffa98b`e0818161 488b8058010000  mov     rax,qword ptr [rax+158h]
+ffffa98b`e0818168 4889442428      mov     qword ptr [rsp+28h],rax
+ffffa98b`e081816d 4c89642420      mov     qword ptr [rsp+20h],r12
+ffffa98b`e0818172 e8ad5f0000      call    ffffa98b`e081e124
+ffffa98b`e0818177 cc              int     3
+ffffa98b`e0818178 cc              int     3
+ffffa98b`e0818179 cc              int     3
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'

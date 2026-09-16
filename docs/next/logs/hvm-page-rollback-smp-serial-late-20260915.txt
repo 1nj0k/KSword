@@ -1,0 +1,25 @@
+串口 95863 字节
+[   75.571035] sched_clock: Marking stable (62217519879, 13351577078)->(137089831845, -61520734888)
+[   75.787597] registered taskstats version 1
+[   76.641252] Key type .fscrypt registered
+[   76.741550] Key type fscrypt-provisioning registered
+[   76.861733] Key type encrypted registered
+[   77.077963] clk: Disabling unused clocks
+[   77.144406] PM: genpd: Disabling unused power domains
+[   77.292154] Freeing unused decrypted memory: 2028K
+[   77.399142] Freeing unused kernel image (initmem) memory: 2656K
+[   77.485499] Write protecting the kernel read-only data: 18432k
+[   77.589830] Freeing unused kernel image (text/rodata gap) memory: 1548K
+[   77.769687] Freeing unused kernel image (rodata/data gap) memory: 1360K
+[   77.931733] x86/mm: Checked W+X mappings: passed, no W+X pages found.
+[   78.008727] Run /init as init process
+[   78.057874]   with arguments:
+[   78.142263]     /init
+[   78.177957]   with environment:
+[   78.229583]     HOME=/
+[   78.269291]     TERM=linux
+[   78.329853]     vga=normal
+[   82.899006] hrtimer: interrupt took 16352703 ns
+[   89.439139] loop: module loaded
+[   93.940742] ACPI: AC: AC Adapter [ACAD] (on-line)
+

@@ -1,0 +1,117 @@
+{
+  "results": {
+    "resident-nested-hidehv:True": 10,
+    "stop:True": 10
+  },
+  "preparationRuns": [
+    {
+      "source": "ab-preflight-20260915T231144Z.json",
+      "valid": true,
+      "prepareBodyUs": 6336.4,
+      "eptBuildUs": 6091.8
+    }
+  ],
+  "distributionsUs": [
+    {
+      "command": "resident-nested-hidehv",
+      "metric": "commandBodyUs",
+      "n": 10,
+      "median": 2800.5,
+      "mean": 2746.69,
+      "min": 2280.5,
+      "max": 3231.9,
+      "sampleSd": 310.866507434372
+    },
+    {
+      "command": "resident-nested-hidehv",
+      "metric": "entryReturnSkewUs",
+      "n": 10,
+      "median": 4.6,
+      "mean": 6.97,
+      "min": 4.0,
+      "max": 28.3,
+      "sampleSd": 7.507041139268298
+    },
+    {
+      "command": "resident-nested-hidehv",
+      "metric": "ipiArrivalSkewUs",
+      "n": 10,
+      "median": 0.4,
+      "mean": 0.64,
+      "min": 0.2,
+      "max": 1.7,
+      "sampleSd": 0.5232377832092956
+    },
+    {
+      "command": "resident-nested-hidehv",
+      "metric": "ipiDepartureSkewUs",
+      "n": 10,
+      "median": 4.5,
+      "mean": 6.86,
+      "min": 3.6,
+      "max": 28.3,
+      "sampleSd": 7.548980799492811
+    },
+    {
+      "command": "resident-nested-hidehv",
+      "metric": "rendezvousEnvelopeUs",
+      "n": 10,
+      "median": 149.5,
+      "mean": 155.24,
+      "min": 111.5,
+      "max": 203.4,
+      "sampleSd": 35.319909399657305
+    },
+    {
+      "command": "resident-nested-hidehv",
+      "metric": "resourcePreparationUs",
+      "n": 10,
+      "median": 2653.75,
+      "mean": 2587.88,
+      "min": 2076.3,
+      "max": 3096.9,
+      "sampleSd": 323.65136867383154
+    },
+    {
+      "command": "stop",
+      "metric": "commandBodyUs",
+      "n": 10,
+      "median": 990.2,
+      "mean": 1042.71,
+      "min": 827.5,
+      "max": 1316.3,
+      "sampleSd": 175.2892114953646
+    },
+    {
+      "command": "stop",
+      "metric": "ipiArrivalSkewUs",
+      "n": 10,
+      "median": 0.3,
+      "mean": 3.27,
+      "min": 0.2,
+      "max": 30.0,
+      "sampleSd": 9.39243785653591
+    },
+    {
+      "command": "stop",
+      "metric": "ipiDepartureSkewUs",
+      "n": 10,
+      "median": 0.3,
+      "mean": 4.05,
+      "min": 0.1,
+      "max": 23.3,
+      "sampleSd": 8.196238974879474
+    },
+    {
+      "command": "stop",
+      "metric": "rendezvousEnvelopeUs",
+      "n": 10,
+      "median": 96.15,
+      "mean": 119.13,
+      "min": 44.7,
+      "max": 410.2,
+      "sampleSd": 108.47055975394122
+    }
+  ],
+  "scope": "Instrumented C boundaries within one Windows QPC domain. Parallel CPU intervals must not be summed. Rendezvous envelope is a disruption upper bound, not application pause. Entry continuation includes assembly around VMLAUNCH. CPU entry skew does not prove simultaneous entry. Cold resource preparation and warmed repetitions are retained separately by iteration."
+}

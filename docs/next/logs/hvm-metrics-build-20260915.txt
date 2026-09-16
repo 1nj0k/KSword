@@ -1,0 +1,43 @@
+适用于 .NET Framework MSBuild 版本 17.14.51+25f168cee
+
+  Building 'KswordARKDriver' with toolset 'WindowsKernelModeDriver10.0' and the 'Universal' target platform.
+  Stamping x64\Release\KswordARKDriver.inf
+  Stamping [Version] section with DriverVer=04/24/2026,16.6.18.166
+  Assembling src\features\hvm\hvm_entry.asm...
+  Assembling src\features\rxpf\page_fault_stub.asm...
+  ioctl_registry.c
+  hvm_runtime.c
+  hvm_mtrr.c
+  hvm_event.c
+  hvm_ept.c
+  hvm_ept_builder.c
+  hvm_evmcs.c
+  hvm_nested_probe.c
+  hvm_nested_l2.c
+  hvm_phys_window.c
+  hvm_nested_decode.c
+  hvm_nested_vmcs.c
+  hvm_nested_bitmap.c
+  hvm_nested_ept.c
+  hvm_nested.c
+  hvm_exit.c
+  hvm_exit_emulate.c
+  hvm_ept_view.c
+  hvm_process.c
+  hvm_inject.c
+  hvm_ept_domain.c
+  hvm_ept_local.c
+  hvm_ept_switch.c
+  hvm_msr_policy.c
+  hvm_cr_policy.c
+  hvm_resident.c
+  hvm_vmcs.c
+  hvm_descriptor.c
+  hvm_metrics.c
+  hvm_guest.c
+  hvm_ioctl.c
+    正在创建库 C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release\KswordARK.lib 和对象 C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release\KswordARK.exp
+  KswordARKDriver.vcxproj -> C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release\KswordARK.sys
+ApiValidation : error : Could not find file 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\ARM64\aitstatic.exe'. Exception: 指定的可执行文件不是此操作系统平台的有效应用程序。 [C:\Users\Felix\CLionProjects\KSword\KswordARKDriver\KswordARKDriver.vcxproj]
+ApiValidation : error : Test failed with error message: 指定的可执行文件不是此操作系统平台的有效应用程序。 [C:\Users\Felix\CLionProjects\KSword\KswordARKDriver\KswordARKDriver.vcxproj]
+C:\Program Files (x86)\Windows Kits\10\build\10.0.26100.0\WindowsDriver.common.targets(2002,5): error MSB3721: 命令“"C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\arm64\ApiValidator.exe" -DriverPackagePath:C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release\KswordARK.sys -SupportedApiXmlFiles:"C:\Program Files (x86)\Windows Kits\10\build\10.0.26100.0\universalDDIs\x64\UniversalDDIs.xml" -ModuleWhiteListXmlFiles:"C:\Program Files (x86)\Windows Kits\10\build\10.0.26100.0\universalDDIs\x64\ModuleWhiteList.xml" -ApiExtractorExePath:"C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\ARM64" ”已退出，返回代码为 -2。 [C:\Users\Felix\CLionProjects\KSword\KswordARKDriver\KswordARKDriver.vcxproj]

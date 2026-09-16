@@ -1,0 +1,441 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="504.566929pt" height="562pt" viewBox="0 0 504.566929 562" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<title>Live interposition and descendant-page control</title>
+<desc>Two separately evaluated experiments. Windows 1 live interposition is tested without an intermediate VMM running. Descendant page replacement is tested with VMware and TinyCore already running beneath the monitor. Windows 0 and HVCI occupy the sibling outer Hyper-V root partition. One TinyCore GPA is redirected after EPT composition; observed bytes change A5, D1, B2, A5. Intermediate Hyper-V testing remains pending.</desc>
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:description>Two separately evaluated experiments. Windows 1 live interposition is tested without an intermediate VMM running. Descendant page replacement is tested with VMware and TinyCore already running beneath the monitor. Windows 0 and HVCI occupy the sibling outer Hyper-V root partition. One TinyCore GPA is redirected after EPT composition; observed bytes change A5, D1, B2, A5. Intermediate Hyper-V testing remains pending.</dc:description>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.10.8, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 562 
+L 504.566929 562 
+L 504.566929 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 12 6 
+L 23 6 
+Q 27 6 27 10 
+L 27 21 
+Q 27 25 23 25 
+L 12 25 
+Q 8 25 8 21 
+L 8 10 
+Q 8 6 12 6 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #123958; stroke: #123958; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 13 34 
+L 491 34 
+Q 496 34 496 39 
+L 496 127 
+Q 496 132 491 132 
+L 13 132 
+Q 8 132 8 127 
+L 8 39 
+Q 8 34 13 34 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #f5f7f9; stroke: #dae0e5; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 25 59 
+L 160 59 
+Q 165 59 165 64 
+L 165 97 
+Q 165 102 160 102 
+L 25 102 
+Q 20 102 20 97 
+L 20 64 
+Q 20 59 25 59 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #ffffff; stroke: #a3b0ba; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 287 45 
+L 479 45 
+Q 484 45 484 50 
+L 484 101 
+Q 484 106 479 106 
+L 287 106 
+Q 282 106 282 101 
+L 282 50 
+Q 282 45 287 45 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #eaf5f5; stroke: #087d85; stroke-width: 1.6; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 298 53 
+L 468 53 
+Q 473 53 473 58 
+L 473 76 
+Q 473 81 468 81 
+L 298 81 
+Q 293 81 293 76 
+L 293 58 
+Q 293 53 298 53 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #ffffff; stroke: #087d85; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 12 144 
+L 23 144 
+Q 27 144 27 148 
+L 27 159 
+Q 27 163 23 163 
+L 12 163 
+Q 8 163 8 159 
+L 8 148 
+Q 8 144 12 144 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #123958; stroke: #123958; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 13 177 
+L 127 177 
+Q 132 177 132 182 
+L 132 325 
+Q 132 330 127 330 
+L 13 330 
+Q 8 330 8 325 
+L 8 182 
+Q 8 177 13 177 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #f5f7f9; stroke: #a3b0ba; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 26 246 
+L 114 246 
+Q 119 246 119 251 
+L 119 268 
+Q 119 273 114 273 
+L 26 273 
+Q 21 273 21 268 
+L 21 251 
+Q 21 246 26 246 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #ffffff; stroke: #a3b0ba; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 151 177 
+L 491 177 
+Q 496 177 496 182 
+L 496 325 
+Q 496 330 491 330 
+L 151 330 
+Q 146 330 146 325 
+L 146 182 
+Q 146 177 151 177 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #f5f7f9; stroke: #a3b0ba; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 163 210 
+L 479 210 
+Q 484 210 484 215 
+L 484 314 
+Q 484 319 479 319 
+L 163 319 
+Q 158 319 158 314 
+L 158 215 
+Q 158 210 163 210 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #eaf5f5; stroke: #087d85; stroke-width: 1.6; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 175 221 
+L 467 221 
+Q 472 221 472 226 
+L 472 285 
+Q 472 290 467 290 
+L 175 290 
+Q 170 290 170 285 
+L 170 226 
+Q 170 221 175 221 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #ffffff; stroke: #087d85; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 265 232 
+L 456 232 
+Q 461 232 461 237 
+L 461 281 
+Q 461 286 456 286 
+L 265 286 
+Q 260 286 260 281 
+L 260 237 
+Q 260 232 265 232 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #f2f5f8; stroke: #a3b0ba; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 291 253 
+L 447 253 
+Q 452 253 452 258 
+L 452 277 
+Q 452 282 447 282 
+L 291 282 
+Q 286 282 286 277 
+L 286 258 
+Q 286 253 291 253 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #ffffff; stroke: #123958; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 13 345 
+L 491 345 
+Q 496 345 496 350 
+L 496 367 
+Q 496 372 491 372 
+L 13 372 
+Q 8 372 8 367 
+L 8 350 
+Q 8 345 13 345 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #123958; stroke: #123958; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_16">
+    <path d="M 12 404 
+L 23 404 
+Q 27 404 27 408 
+L 27 419 
+Q 27 423 23 423 
+L 12 423 
+Q 8 423 8 419 
+L 8 408 
+Q 8 404 12 404 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #123958; stroke: #123958; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_17">
+    <path d="M 13 448 
+L 148 448 
+Q 153 448 153 453 
+L 153 490 
+Q 153 495 148 495 
+L 13 495 
+Q 8 495 8 490 
+L 8 453 
+Q 8 448 13 448 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #f5f7f9; stroke: #a3b0ba; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_18">
+    <path d="M 197 444 
+L 324 444 
+Q 329 444 329 449 
+L 329 494 
+Q 329 499 324 499 
+L 197 499 
+Q 192 499 192 494 
+L 192 449 
+Q 192 444 197 444 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #eaf5f5; stroke: #087d85; stroke-width: 1.5; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_19">
+    <path d="M 374 436 
+L 491 436 
+Q 496 436 496 441 
+L 496 462 
+Q 496 467 491 467 
+L 374 467 
+Q 369 467 369 462 
+L 369 441 
+Q 369 436 374 436 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #ffffff; stroke-dasharray: 3.5,2.5; stroke-dashoffset: 0; stroke: #a3b0ba; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_20">
+    <path d="M 374 485 
+L 491 485 
+Q 496 485 496 490 
+L 496 511 
+Q 496 516 491 516 
+L 374 516 
+Q 369 516 369 511 
+L 369 490 
+Q 369 485 374 485 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #eaf5f5; stroke: #087d85; stroke-width: 1.5; stroke-linejoin: miter"/>
+   </g>
+   <g id="line2d_1">
+    <path d="M 70 330 
+L 70 345 
+" clip-path="url(#pcc7428c617)" style="fill: none; stroke: #17283a; stroke-width: 1.2; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_2">
+    <path d="M 321 330 
+L 321 345 
+" clip-path="url(#pcc7428c617)" style="fill: none; stroke: #17283a; stroke-width: 1.2; stroke-linecap: square"/>
+   </g>
+   <g id="patch_21">
+    <path d="M 181.56775 85 
+Q 224.000151 85 266.432553 85 
+" clip-path="url(#pcc7428c617)" style="fill: none; stroke: #087d85; stroke-width: 1.4; stroke-linecap: round"/>
+    <path d="M 185.96775 87.2 
+L 181.56775 85 
+L 185.96775 82.8 
+" clip-path="url(#pcc7428c617)" style="fill: none; stroke: #087d85; stroke-width: 1.4; stroke-linecap: round"/>
+    <path d="M 262.032553 82.8 
+L 266.432553 85 
+L 262.032553 87.2 
+" clip-path="url(#pcc7428c617)" style="fill: none; stroke: #087d85; stroke-width: 1.4; stroke-linecap: round"/>
+   </g>
+   <g id="patch_22">
+    <path d="M 156.996094 471.5 
+Q 171.99658 471.5 185.431818 471.5 
+" clip-path="url(#pcc7428c617)" style="fill: none; stroke: #123958; stroke-width: 1.4; stroke-linecap: round"/>
+    <path d="M 181.031818 469.3 
+L 185.431818 471.5 
+L 181.031818 473.7 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #123958; stroke: #123958; stroke-width: 1.4; stroke-linecap: round"/>
+   </g>
+   <g id="patch_23">
+    <path d="M 331.936035 465.635986 
+Q 349.003608 458.998597 364.612364 452.928525 
+" clip-path="url(#pcc7428c617)" style="fill: none; stroke-dasharray: 4.9,3.5; stroke-dashoffset: 0; stroke: #455564; stroke-width: 1.4; stroke-linecap: round"/>
+    <path d="M 359.714161 452.472879 
+L 364.612364 452.928525 
+L 361.308925 456.573699 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #455564; stroke-dasharray: 4.9,3.5; stroke-dashoffset: 0; stroke: #455564; stroke-width: 1.4; stroke-linecap: round"/>
+   </g>
+   <g id="patch_24">
+    <path d="M 331.863525 479.503723 
+Q 349.000706 489.500412 364.785859 498.708418 
+" clip-path="url(#pcc7428c617)" style="fill: none; stroke: #087d85; stroke-width: 1.4; stroke-linecap: round"/>
+    <path d="M 362.093748 494.591072 
+L 364.785859 498.708418 
+L 359.876716 498.391699 
+z
+" clip-path="url(#pcc7428c617)" style="fill: #087d85; stroke: #087d85; stroke-width: 1.4; stroke-linecap: round"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="17.5" y="18.035313" transform="rotate(-0 17.5 18.035313)">a</text>
+   </g>
+   <g id="text_2">
+    <text style="font-weight: 700; font-size: 11.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #17283a" x="35" y="18.128359" transform="rotate(-0 35 18.128359)">Insert a monitor beneath the running Windows OS</text>
+   </g>
+   <g id="text_3">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #455564" x="93" y="49.759375" transform="rotate(-0 93 49.759375)">BEFORE</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; fill: #17283a" transform="translate(64.058945 77.119574)">Windows 1</text>
+    <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; fill: #17283a" transform="translate(60.079609 89.675113)">current boot</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #087d85" x="222" y="67.759375" transform="rotate(-0 222 67.759375)">insert / remove</text>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #17283a" x="383" y="69.897344" transform="rotate(-0 383 69.897344)">Windows 1 · same boot</text>
+   </g>
+   <g id="text_7">
+    <text style="font-weight: 700; font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #087d85" x="383" y="96.897344" transform="rotate(-0 383 96.897344)">VMX monitor</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #455564" x="20" y="121.759375" transform="rotate(-0 20 121.759375)">7 pairs · same boot/process identities · VMware absent</text>
+   </g>
+   <g id="text_9">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="17.5" y="156.035312" transform="rotate(-0 17.5 156.035312)">b</text>
+   </g>
+   <g id="text_10">
+    <text style="font-weight: 700; font-size: 11.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #17283a" x="35" y="156.128359" transform="rotate(-0 35 156.128359)">Control a descendant while VMware is already running</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #455564" x="70" y="196.759375" transform="rotate(-0 70 196.759375)">Root partition</text>
+   </g>
+   <g id="text_12">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #17283a" x="70" y="228.31125" transform="rotate(-0 70 228.31125)">Windows 0</text>
+   </g>
+   <g id="text_13">
+    <text style="font-weight: 700; font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #17283a" x="70" y="262.397344" transform="rotate(-0 70 262.397344)">HVCI active</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #455564" x="70" y="306.759375" transform="rotate(-0 70 306.759375)">Outside monitor</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #455564" x="321" y="196.759375" transform="rotate(-0 321 196.759375)">Hyper-V guest partition</text>
+   </g>
+   <g id="text_16">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #17283a" x="183" y="240.035312" transform="rotate(-0 183 240.035312)">Windows 1</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #455564" transform="translate(183 264.780547)">2 vCPUs</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #455564" transform="translate(183 276.738203)">VBS off</text>
+   </g>
+   <g id="text_18">
+    <text style="font-weight: 700; font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #17283a" x="272" y="247.897344" transform="rotate(-0 272 247.897344)">VMware</text>
+   </g>
+   <g id="text_19">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #17283a" transform="translate(347.014844 264.280547)">TinyCore</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #17283a" transform="translate(320.604688 276.238203)">1 vCPU · diagnostic</text>
+   </g>
+   <g id="text_20">
+    <text style="font-weight: 700; font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #087d85" x="321" y="307.897344" transform="rotate(-0 321 307.897344)">VMX monitor · 2 resident CPUs</text>
+   </g>
+   <g id="text_21">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="252" y="361.492344" transform="rotate(-0 252 361.492344)">Outer Hyper-V · Intel VT-x / EPT</text>
+   </g>
+   <g id="text_22">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #455564" x="252" y="390.759375" transform="rotate(-0 252 390.759375)">Page operations preserve Windows / VMware / TinyCore identities.</text>
+   </g>
+   <g id="text_23">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="17.5" y="416.035313" transform="rotate(-0 17.5 416.035313)">c</text>
+   </g>
+   <g id="text_24">
+    <text style="font-weight: 700; font-size: 11.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #17283a" x="35" y="416.128359" transform="rotate(-0 35 416.128359)">Redirect one descendant page, then restore</text>
+   </g>
+   <g id="text_25">
+    <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; fill: #17283a" transform="translate(45.256914 468.119574)">TinyCore GPA</text>
+    <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; fill: #17283a" transform="translate(47.329844 480.675113)">0x07000000</text>
+   </g>
+   <g id="text_26">
+    <text style="font-weight: 700; font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #17283a" x="260.5" y="459.897344" transform="rotate(-0 260.5 459.897344)">Composed EPT02</text>
+   </g>
+   <g id="text_27">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #17283a" x="260.5" y="474.759375" transform="rotate(-0 260.5 474.759375)">EPT12 → EPT01</text>
+   </g>
+   <g id="text_28">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #087d85" x="260.5" y="489.759375" transform="rotate(-0 260.5 489.759375)">+ page policy</text>
+   </g>
+   <g id="text_29">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #17283a" x="432.5" y="454.259375" transform="rotate(-0 432.5 454.259375)">Original backing</text>
+   </g>
+   <g id="text_30">
+    <text style="font-weight: 700; font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #087d85" x="432.5" y="503.397344" transform="rotate(-0 432.5 503.397344)">Replacement</text>
+   </g>
+   <g id="text_31">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #986109" x="252" y="537.720312" transform="rotate(-0 252 537.720312)">A5 original  →  D1 remap  →  B2 guest write  →  A5 restored</text>
+   </g>
+   <g id="text_32">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #455564" x="252" y="556.759375" transform="rotate(-0 252 556.759375)">Hyper-V as an intermediate VMM: not yet evaluated.</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pcc7428c617">
+   <rect x="0" y="0" width="504.566929" height="562"/>
+  </clipPath>
+ </defs>
+</svg>

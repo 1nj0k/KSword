@@ -1,0 +1,109 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.015 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.6584 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Felix\CLionProjects\KSword\docs\next\logs\hvm-host-state-probe-crash-20260915.dmp]
+Mini Kernel Dump File: Only registers and stack trace are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release
+Deferred                                       srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release;srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 22621 MP (2 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS Personal
+Edition build lab: 22621.2506.amd64fre.ni_release_svc_prod3.231018-1809
+Kernel base = 0xfffff806`24400000 PsLoadedModuleList = 0xfffff806`250134b0
+Debug session time: Tue Sep 15 09:21:18.378 2026 (UTC - 4:00)
+System Uptime: 0 days 0:01:03.842
+Loading Kernel Symbols
+...............................................................
+................................................................
+.........................................
+Loading User Symbols
+
+Loading unloaded module list
+........
+For analysis of this file, run !analyze -v
+0: kd> cdb: Reading initial command '.reload /f KswordARK.sys; r cr4; r cr0; x KswordARK!*HvmRuntime*; x KswordARK!*HvmResident*; uf KswordARK!KswordARKHvmCaptureSegments; q'
+cr4=0000000000b50ef8
+cr0=0000000080050033
+fffff806`3f359220 KswordARK!g_KswordHvmResident = struct _KSW_HVM_RESIDENT_STATE
+fffff806`3efe0b24 KswordARK!KswordARKHvmResidentStop (struct _KSW_HVM_RUNTIME *)
+fffff806`3efd9920 KswordARK!KswordARKHvmResidentVmResumeFailure (struct _KSW_HVM_RESIDENT_VCPU *, unsigned char)
+fffff806`3efb1289 KswordARK!KswordARKHvmResidentVmExitEntry (void)
+fffff806`3efe0844 KswordARK!KswordARKHvmResidentStartCurrent (struct _KSW_HVM_RESIDENT_VCPU *)
+fffff806`3efd8c80 KswordARK!KswordARKHvmResidentVmExitDispatch (struct _KSW_HVM_GPR_FRAME *, struct _KSW_HVM_RESIDENT_VCPU *)
+fffff806`3efdf950 KswordARK!KswordARKHvmResidentClaimTlbNmi (unsigned long)
+fffff806`3efe01ec KswordARK!KswordARKHvmResidentStart (struct _KSW_HVM_RUNTIME *, unsigned long)
+fffff806`3efdfc90 KswordARK!KswordARKHvmResidentInvalidateEpt (unsigned int64)
+fffff806`3efb1278 KswordARK!KswordARKHvmResidentGuestResume (void)
+fffff806`3efdffb8 KswordARK!KswordARKHvmResidentReleaseContexts (void)
+fffff806`3efe00bc KswordARK!KswordARKHvmResidentRendezvous (unsigned long, unsigned int64, long *)
+fffff806`3efdfc24 KswordARK!KswordARKHvmResidentFindCurrent (void)
+fffff806`3efdfdb4 KswordARK!KswordARKHvmResidentPrepareContexts (struct _KSW_HVM_RUNTIME *, unsigned long)
+fffff806`3efe0140 KswordARK!KswordARKHvmResidentRequestTlbNmi (struct _KSW_HVM_RESIDENT_VCPU *)
+fffff806`3efdfcd0 KswordARK!KswordARKHvmResidentIpiWorker (unsigned int64)
+fffff806`3efdf978 KswordARK!KswordARKHvmResidentDeactivateCurrent (struct _KSW_HVM_RESIDENT_VCPU *, unsigned long, unsigned char)
+fffff806`3efd8d10 KswordARK!KswordARKHvmResidentVmExitDispatchBody (struct _KSW_HVM_GPR_FRAME *, struct _KSW_HVM_RESIDENT_VCPU *)
+fffff806`3efdfc3b KswordARK!KswordARKHvmResidentFindProcessor =  (inline caller) KswordARK!KswordARKHvmResidentFindCurrent+17
+fffff806`3efdfd7b KswordARK!KswordARKHvmResidentRecordResult =  (inline caller) KswordARK!KswordARKHvmResidentIpiWorker+ab
+KswordARK!KswordARKHvmCaptureSegments:
+fffff806`3efb1000 0f0101          sgdt    tbyte ptr [rcx]
+fffff806`3efb1003 0f01490a        sidt    tbyte ptr [rcx+0Ah]
+fffff806`3efb1007 668cc0          mov     ax,es
+fffff806`3efb100a 66894114        mov     word ptr [rcx+14h],ax
+fffff806`3efb100e 668cc8          mov     ax,cs
+fffff806`3efb1011 66894116        mov     word ptr [rcx+16h],ax
+fffff806`3efb1015 668cd0          mov     ax,ss
+fffff806`3efb1018 66894118        mov     word ptr [rcx+18h],ax
+fffff806`3efb101c 668cd8          mov     ax,ds
+fffff806`3efb101f 6689411a        mov     word ptr [rcx+1Ah],ax
+fffff806`3efb1023 668ce0          mov     ax,fs
+fffff806`3efb1026 6689411c        mov     word ptr [rcx+1Ch],ax
+fffff806`3efb102a 668ce8          mov     ax,gs
+fffff806`3efb102d 6689411e        mov     word ptr [rcx+1Eh],ax
+fffff806`3efb1031 660f00c0        sldt    ax
+fffff806`3efb1035 66894120        mov     word ptr [rcx+20h],ax
+fffff806`3efb1039 660f00c8        str     ax
+fffff806`3efb103d 66894122        mov     word ptr [rcx+22h],ax
+fffff806`3efb1041 c3              ret
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'

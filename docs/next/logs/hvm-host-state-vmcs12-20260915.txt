@@ -1,0 +1,144 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.031 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.6584 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Felix\CLionProjects\KSword\artifacts\hvm-host-state-probe-full.dmp]
+Kernel Bitmap Dump File: Kernel address space is available, User address space may not be available.
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release
+Deferred                                       srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release;srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 22621 MP (2 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS Personal
+Edition build lab: 22621.2506.amd64fre.ni_release_svc_prod3.231018-1809
+Kernel base = 0xfffff806`24400000 PsLoadedModuleList = 0xfffff806`250134b0
+Debug session time: Tue Sep 15 09:21:18.378 2026 (UTC - 4:00)
+System Uptime: 0 days 0:01:03.842
+Loading Kernel Symbols
+...............................................................
+................................................................
+.........................................
+Loading User Symbols
+
+Loading unloaded module list
+........
+For analysis of this file, run !analyze -v
+0: kd> cdb: Reading initial command '.reload /f KswordARK.sys; dt KswordARK!_KSW_HVM_NESTED_PROBE_ROW ffffb70be8edc1d0 hostStateChecks; dt -r1 KswordARK!_KSW_HVM_VMCS12_POOL ffffb70be8f43000; !dq 204fe6000 L80; q'
+Symbol KswordARK!_KSW_HVM_NESTED_PROBE_ROW not found.
+   +0x000 Stamp            : [8] 0n64
+   +0x040 Clock            : 0n65
+   +0x048 Count            : 8
+   +0x04c Reserved0        : 0
+   +0x050 Slots            : [8] _KSW_HVM_VMCS12_STATE
+      +0x000 Current          : 0x1 ''
+      +0x001 Launched         : 0 ''
+      +0x002 Reserved0        : 0
+      +0x004 InstructionError : 0
+      +0x008 WriteSerial      : 1
+      +0x010 PhysicalAddress  : 0x00000002`04fc0000
+      +0x018 Fields           : [2048] 0
+#204fe6000 00000000`00000001 00000001`5657534b
+#204fe6010 00000000`00000000 00000000`0000681e
+#204fe6020 00005357`444e3142 00000000`00000000
+#204fe6030 00000000`00000000 00000000`00000000
+#204fe6040 00000000`00000000 00000000`00000000
+#204fe6050 00000000`00000000 00000000`00000000
+#204fe6060 00000000`00000000 00000000`00000000
+#204fe6070 00000000`00000000 00000000`00000000
+#204fe6080 00000000`00000000 00000000`00000000
+#204fe6090 00000000`00000000 00000000`00000000
+#204fe60a0 00000000`00000000 00000000`00000000
+#204fe60b0 00000000`00000000 00000000`00000000
+#204fe60c0 00000000`00000000 00000000`00000000
+#204fe60d0 00000000`00000000 00000000`00000000
+#204fe60e0 00000000`00000000 00000000`00000000
+#204fe60f0 00000000`00000000 00000000`00000000
+#204fe6100 00000000`00000000 00000000`00000000
+#204fe6110 00000000`00000000 00000000`00000000
+#204fe6120 00000000`00000000 00000000`00000000
+#204fe6130 00000000`00000000 00000000`00000000
+#204fe6140 00000000`00000000 00000000`00000000
+#204fe6150 00000000`00000000 00000000`00000000
+#204fe6160 00000000`00000000 00000000`00000000
+#204fe6170 00000000`00000000 00000000`00000000
+#204fe6180 00000000`00000000 00000000`00000000
+#204fe6190 00000000`00000000 00000000`00000000
+#204fe61a0 00000000`00000000 00000000`00000000
+#204fe61b0 00000000`00000000 00000000`00000000
+#204fe61c0 00000000`00000000 00000000`00000000
+#204fe61d0 00000000`00000000 00000000`00000000
+#204fe61e0 00000000`00000000 00000000`00000000
+#204fe61f0 00000000`00000000 00000000`00000000
+#204fe6200 00000000`00000000 00000000`00000000
+#204fe6210 00000000`00000000 00000000`00000000
+#204fe6220 00000000`00000000 00000000`00000000
+#204fe6230 00000000`00000000 00000000`00000000
+#204fe6240 00000000`00000000 00000000`00000000
+#204fe6250 00000000`00000000 00000000`00000000
+#204fe6260 00000000`00000000 00000000`00000000
+#204fe6270 00000000`00000000 00000000`00000000
+#204fe6280 00000000`00000000 00000000`00000000
+#204fe6290 00000000`00000000 00000000`00000000
+#204fe62a0 00000000`00000000 00000000`00000000
+#204fe62b0 00000000`00000000 00000000`00000000
+#204fe62c0 00000000`00000000 00000000`00000000
+#204fe62d0 00000000`00000000 00000000`00000000
+#204fe62e0 00000000`00000000 00000000`00000000
+#204fe62f0 00000000`00000000 00000000`00000000
+#204fe6300 00000000`00000000 00000000`00000000
+#204fe6310 00000000`00000000 00000000`00000000
+#204fe6320 00000000`00000000 00000000`00000000
+#204fe6330 00000000`00000000 00000000`00000000
+#204fe6340 00000000`00000000 00000000`00000000
+#204fe6350 00000000`00000000 00000000`00000000
+#204fe6360 00000000`00000000 00000000`00000000
+#204fe6370 00000000`00000000 00000000`00000000
+#204fe6380 00000000`00000000 00000000`00000000
+#204fe6390 00000000`00000000 00000000`00000000
+#204fe63a0 00000000`00000000 00000000`00000000
+#204fe63b0 00000000`00000000 00000000`00000000
+#204fe63c0 00000000`00000000 00000000`00000000
+#204fe63d0 00000000`00000000 00000000`00000000
+#204fe63e0 00000000`00000000 00000000`00000000
+#204fe63f0 00000000`00000000 00000000`00000000
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'

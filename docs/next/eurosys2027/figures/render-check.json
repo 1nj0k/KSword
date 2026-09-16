@@ -1,0 +1,21 @@
+{
+  "scope": "figure geometry, not experiment validation",
+  "figures": [
+    {
+      "variant": "architecture",
+      "labels": 32,
+      "minimumFontPt": 10,
+      "widthMm": 178,
+      "heightMm": 198.2611,
+      "textOutsideCanvas": []
+    },
+    {
+      "variant": "architecture-gray",
+      "labels": 32,
+      "minimumFontPt": 10,
+      "widthMm": 178,
+      "heightMm": 198.2611,
+      "textOutsideCanvas": []
+    }
+  ]
+}

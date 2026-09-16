@@ -1,0 +1,42 @@
+BEFORE_BOOT=2026-09-15T10:06:11.4805320-04:00
+VMWARE_PID=2764
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":2,"active":1,"retired":0,"residentProcessors":2,"ept12Pointer":"0x00000000136C705E","guestPhysicalPage":"0x0000000007000000","shadowPhysicalPage":"0x0000000204FE4000","originalPhysicalPage":"0x0000000000000000","composedCount":0,"roots":["0x00000000136C705E"]}
+MAP_EXIT=0
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":2,"active":1,"retired":0,"residentProcessors":2,"ept12Pointer":"0x00000000136C705E","guestPhysicalPage":"0x0000000007000000","shadowPhysicalPage":"0x0000000204FE4000","originalPhysicalPage":"0x00000001BB0F6000","composedCount":1,"roots":["0x00000000136C705E"]}
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":3,"active":0,"retired":0,"residentProcessors":2,"ept12Pointer":"0x0000000000000000","guestPhysicalPage":"0x0000000000000000","shadowPhysicalPage":"0x0000000000000000","originalPhysicalPage":"0x0000000000000000","composedCount":0,"roots":["0x00000000136C705E"]}
+REMOVE_EXIT=0
+AFTER_BOOT=2026-09-15T10:06:11.4805320-04:00
+VMWARE_PID=2764
+{"kind":"nested-page","status":0,"lastStatus":"0x00000000","generation":3,"active":0,"retired":0,"residentProcessors":2,"ept12Pointer":"0x0000000000000000","guestPhysicalPage":"0x0000000000000000","shadowPhysicalPage":"0x0000000000000000","originalPhysicalPage":"0x0000000000000000","composedCount":0,"roots":["0x00000000136C705E"]}
+[   61.471219] Write protecting the kernel read-only data: 18432k
+[   61.528094] Freeing unused kernel image (text/rodata gap) memory: 1548K
+[   61.587399] Freeing unused kernel image (rodata/data gap) memory: 1360K
+[   61.678416] x86/mm: Checked W+X mappings: passed, no W+X pages found.
+[   61.717674] Run /bin/sh as init process
+[   61.742429]   with arguments:
+[   61.761992]     /bin/sh
+[   61.779781]   with environment:
+[   61.801069]     HOME=/
+[   61.822604]     TERM=linux
+[   61.844077]     vga=normal
+07000000-07000fff : Reserved
+crw-rw-r--    1 root     staff       1,   1 Jun 23 13:51 [1;35m/dev/mem[m
+before
+1+0 records in
+1+0 records out
+4 bytes (4B) copied, 0.004449 seconds, 899B/s
+1+0 records in
+1+0 records out
+ a5a5a5a5
+4 bytes (4B) copied, 0.004391 seconds, 910B/s
+shadow
+1+0 records in
+1+0 records out
+ d1d1d1d1
+4 bytes (4B) copied, 0.000482 seconds, 8.1KB/s
+restored
+1+0 records in
+1+0 records out
+ a5a5a5a5
+4 bytes (4B) copied, 0.010062 seconds, 397B/s
+

@@ -1,0 +1,21 @@
+串口 46962 字节
+[   27.176117] pci_bus 0000:00: on NUMA node 0
+[   27.606149] ACPI: PCI: Interrupt link LNKA configured for IRQ 9
+[   27.612186] ACPI: PCI: Interrupt link LNKB configured for IRQ 11
+[   27.617521] ACPI: PCI: Interrupt link LNKC configured for IRQ 10
+[   27.624374] ACPI: PCI: Interrupt link LNKD configured for IRQ 7
+[   27.787005] iommu: Default domain type: Translated
+[   27.790138] iommu: DMA domain TLB invalidation policy: lazy mode
+[   27.798637] SCSI subsystem initialized
+[   27.810550] libata version 3.00 loaded.
+[   27.819716] ACPI: bus type USB registered
+[   27.820513] usbcore: registered new interface driver usbfs
+[   27.825390] usbcore: registered new interface driver hub
+[   27.834270] usbcore: registered new device driver usb
+[   27.841143] mc: Linux media interface: v0.10
+[   27.847409] videodev: Linux video capture interface: v2.00
+[   27.856179] pps_core: LinuxPPS API ver. 1 registered
+[   27.860353] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[   27.863711] PTP clock support registered
+[   27.919785] PCI: Using ACPI for IRQ routing
+

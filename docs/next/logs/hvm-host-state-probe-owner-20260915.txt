@@ -1,0 +1,170 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.000 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.6584 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Felix\CLionProjects\KSword\docs\next\logs\hvm-host-state-probe-crash-20260915.dmp]
+Mini Kernel Dump File: Only registers and stack trace are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release
+Deferred                                       srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release;srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 22621 MP (2 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS Personal
+Edition build lab: 22621.2506.amd64fre.ni_release_svc_prod3.231018-1809
+Kernel base = 0xfffff806`24400000 PsLoadedModuleList = 0xfffff806`250134b0
+Debug session time: Tue Sep 15 09:21:18.378 2026 (UTC - 4:00)
+System Uptime: 0 days 0:01:03.842
+Loading Kernel Symbols
+...............................................................
+................................................................
+.........................................
+Loading User Symbols
+
+Loading unloaded module list
+........
+For analysis of this file, run !analyze -v
+0: kd> cdb: Reading initial command '.reload /f KswordARK.sys; dt KswordARK!_KSW_HVM_RESIDENT_STATE KswordARK!g_KswordHvmResident; u KswordARK!KswordARKHvmNestedProbeL1Host L65; q'
+Cannot find specified field members.
+KswordARK!KswordARKHvmNestedProbeL1Host:
+fffff806`3efd06f0 488bc4          mov     rax,rsp
+fffff806`3efd06f3 48895808        mov     qword ptr [rax+8],rbx
+fffff806`3efd06f7 48897010        mov     qword ptr [rax+10h],rsi
+fffff806`3efd06fb 48897818        mov     qword ptr [rax+18h],rdi
+fffff806`3efd06ff 4c896020        mov     qword ptr [rax+20h],r12
+fffff806`3efd0703 55              push    rbp
+fffff806`3efd0704 4156            push    r14
+fffff806`3efd0706 4157            push    r15
+fffff806`3efd0708 488d68a1        lea     rbp,[rax-5Fh]
+fffff806`3efd070c 4881ec90000000  sub     rsp,90h
+fffff806`3efd0713 488b05a65a2600  mov     rax,qword ptr [KswordARK!__security_cookie (fffff806`3f2361c0)]
+fffff806`3efd071a 4833c4          xor     rax,rsp
+fffff806`3efd071d 48894537        mov     qword ptr [rbp+37h],rax
+fffff806`3efd0721 33c9            xor     ecx,ecx
+fffff806`3efd0723 ff15afcb0b00    call    qword ptr [KswordARK!_imp_KeGetCurrentProcessorNumberEx (fffff806`3f08d2d8)]
+fffff806`3efd0729 83f840          cmp     eax,40h
+fffff806`3efd072c 7208            jb      KswordARK!KswordARKHvmNestedProbeL1Host+0x46 (fffff806`3efd0736)
+fffff806`3efd072e 33ff            xor     edi,edi
+fffff806`3efd0730 48897dd7        mov     qword ptr [rbp-29h],rdi
+fffff806`3efd0734 eb1e            jmp     KswordARK!KswordARKHvmNestedProbeL1Host+0x64 (fffff806`3efd0754)
+fffff806`3efd0736 8bc0            mov     eax,eax
+fffff806`3efd0738 bf00000000      mov     edi,0
+fffff806`3efd073d 4869d830050000  imul    rbx,rax,530h
+fffff806`3efd0744 488d0505013700  lea     rax,[KswordARK!g_KswordProbeSlots (fffff806`3f340850)]
+fffff806`3efd074b 48897dd7        mov     qword ptr [rbp-29h],rdi
+fffff806`3efd074f 4803d8          add     rbx,rax
+fffff806`3efd0752 7510            jne     KswordARK!KswordARKHvmNestedProbeL1Host+0x74 (fffff806`3efd0764)
+fffff806`3efd0754 0f01c4          vmxoff
+fffff806`3efd0757 b9e8030000      mov     ecx,3E8h
+fffff806`3efd075c ff151ec90b00    call    qword ptr [KswordARK!_imp_KeStallExecutionProcessor (fffff806`3f08d080)]
+fffff806`3efd0762 ebf3            jmp     KswordARK!KswordARKHvmNestedProbeL1Host+0x67 (fffff806`3efd0757)
+fffff806`3efd0764 41be01000000    mov     r14d,1
+fffff806`3efd076a 48397b48        cmp     qword ptr [rbx+48h],rdi
+fffff806`3efd076e 0f8428010000    je      KswordARK!KswordARKHvmNestedProbeL1Host+0x1ac (fffff806`3efd089c)
+fffff806`3efd0774 0f57c0          xorps   xmm0,xmm0
+fffff806`3efd0777 48897ddf        mov     qword ptr [rbp-21h],rdi
+fffff806`3efd077b 33c0            xor     eax,eax
+fffff806`3efd077d 48897de7        mov     qword ptr [rbp-19h],rdi
+fffff806`3efd0781 488d4d0f        lea     rcx,[rbp+0Fh]
+fffff806`3efd0785 89452f          mov     dword ptr [rbp+2Fh],eax
+fffff806`3efd0788 0f11450f        movups  xmmword ptr [rbp+0Fh],xmm0
+fffff806`3efd078c 48897def        mov     qword ptr [rbp-11h],rdi
+fffff806`3efd0790 8bf7            mov     esi,edi
+fffff806`3efd0792 0f11451f        movups  xmmword ptr [rbp+1Fh],xmm0
+fffff806`3efd0796 48897df7        mov     qword ptr [rbp-9],rdi
+fffff806`3efd079a 48897dff        mov     qword ptr [rbp-1],rdi
+fffff806`3efd079e 48897d07        mov     qword ptr [rbp+7],rdi
+fffff806`3efd07a2 e85908feff      call    KswordARK!KswordARKHvmCaptureSegments (fffff806`3efb1000)
+fffff806`3efd07a7 b8ffff0000      mov     eax,0FFFFh
+fffff806`3efd07ac 6639450f        cmp     word ptr [rbp+0Fh],ax
+fffff806`3efd07b0 7508            jne     KswordARK!KswordARKHvmNestedProbeL1Host+0xca (fffff806`3efd07ba)
+fffff806`3efd07b2 66394519        cmp     word ptr [rbp+19h],ax
+fffff806`3efd07b6 410f44f6        cmove   esi,r14d
+fffff806`3efd07ba b80c6c0000      mov     eax,6C0Ch
+fffff806`3efd07bf 0f78c2          vmread  rdx,rax
+fffff806`3efd07c2 488955df        mov     qword ptr [rbp-21h],rdx
+fffff806`3efd07c6 761e            jbe     KswordARK!KswordARKHvmNestedProbeL1Host+0xf6 (fffff806`3efd07e6)
+fffff806`3efd07c8 b80e6c0000      mov     eax,6C0Eh
+fffff806`3efd07cd 410f78c0        vmread  r8,rax
+fffff806`3efd07d1 4c8945e7        mov     qword ptr [rbp-19h],r8
+fffff806`3efd07d5 760f            jbe     KswordARK!KswordARKHvmNestedProbeL1Host+0xf6 (fffff806`3efd07e6)
+fffff806`3efd07d7 48395511        cmp     qword ptr [rbp+11h],rdx
+fffff806`3efd07db 7509            jne     KswordARK!KswordARKHvmNestedProbeL1Host+0xf6 (fffff806`3efd07e6)
+fffff806`3efd07dd 4c39451b        cmp     qword ptr [rbp+1Bh],r8
+fffff806`3efd07e1 7503            jne     KswordARK!KswordARKHvmNestedProbeL1Host+0xf6 (fffff806`3efd07e6)
+fffff806`3efd07e3 83ce02          or      esi,2
+fffff806`3efd07e6 b8086c0000      mov     eax,6C08h
+fffff806`3efd07eb 410f78c0        vmread  r8,rax
+fffff806`3efd07ef 4c8945ef        mov     qword ptr [rbp-11h],r8
+fffff806`3efd07f3 7616            jbe     KswordARK!KswordARKHvmNestedProbeL1Host+0x11b (fffff806`3efd080b)
+fffff806`3efd07f5 b9010100c0      mov     ecx,0C0000101h
+fffff806`3efd07fa 0f32            rdmsr
+fffff806`3efd07fc 48c1e220        shl     rdx,20h
+fffff806`3efd0800 480bc2          or      rax,rdx
+fffff806`3efd0803 493bc0          cmp     rax,r8
+fffff806`3efd0806 7503            jne     KswordARK!KswordARKHvmNestedProbeL1Host+0x11b (fffff806`3efd080b)
+fffff806`3efd0808 83ce04          or      esi,4
+fffff806`3efd080b b8004c0000      mov     eax,4C00h
+fffff806`3efd0810 410f78c0        vmread  r8,rax
+fffff806`3efd0814 4c8945f7        mov     qword ptr [rbp-9],r8
+fffff806`3efd0818 765a            jbe     KswordARK!KswordARKHvmNestedProbeL1Host+0x184 (fffff806`3efd0874)
+fffff806`3efd081a b8106c0000      mov     eax,6C10h
+fffff806`3efd081f 410f78c1        vmread  r9,rax
+fffff806`3efd0823 4c894dff        mov     qword ptr [rbp-1],r9
+fffff806`3efd0827 764b            jbe     KswordARK!KswordARKHvmNestedProbeL1Host+0x184 (fffff806`3efd0874)
+fffff806`3efd0829 b8126c0000      mov     eax,6C12h
+fffff806`3efd082e 410f78c2        vmread  r10,rax
+fffff806`3efd0832 4c895507        mov     qword ptr [rbp+7],r10
+fffff806`3efd0836 763c            jbe     KswordARK!KswordARKHvmNestedProbeL1Host+0x184 (fffff806`3efd0874)
+fffff806`3efd0838 b974010000      mov     ecx,174h
+fffff806`3efd083d 0f32            rdmsr
+fffff806`3efd083f 48c1e220        shl     rdx,20h
+fffff806`3efd0843 480bc2          or      rax,rdx
+fffff806`3efd0846 493bc0          cmp     rax,r8
+fffff806`3efd0849 7529            jne     KswordARK!KswordARKHvmNestedProbeL1Host+0x184 (fffff806`3efd0874)
+fffff806`3efd084b b975010000      mov     ecx,175h
+fffff806`3efd0850 0f32            rdmsr
+fffff806`3efd0852 48c1e220        shl     rdx,20h
+fffff806`3efd0856 480bc2          or      rax,rdx
+fffff806`3efd0859 493bc1          cmp     rax,r9
+fffff806`3efd085c 7516            jne     KswordARK!KswordARKHvmNestedProbeL1Host+0x184 (fffff806`3efd0874)
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'

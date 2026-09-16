@@ -1,0 +1,3 @@
+GUI_FORM_COMMAND_PARITY=PASS (56 commands)
+CATALOG_TRANSLATIONS=PASS (56 commands, 2 languages)
+ARGUMENT_CONTRACTS=PASS (22 valid, 18 refused)

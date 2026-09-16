@@ -1,0 +1,17 @@
+warning: in the working copy of 'Ksword5.1/Ksword5.1/ArkDriverClient/HvmCommandCatalog.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'KswordARKDriver/src/features/hvm/hvm_exit.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'KswordARKDriver/src/features/hvm/hvm_internal.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'KswordARKDriver/src/features/hvm/hvm_nested_page.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'KswordARKDriver/src/features/hvm/hvm_resident.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'KswordARKDriver/src/features/hvm/hvm_runtime.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/CLI使用文档.md', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'shared/driver/KswordArkHvmIoctl.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tools/hvm_ctl/test_command_parity.py', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'tools/hvm_paper/README.md', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'tools/hvm_paper/Run-NestedPageCycles.ps1', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tools/hvm_paper/Run-Transition.ps1', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tools/hvm_paper/Run-WindowsAB.ps1', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tools/hvm_paper/Run-WindowsBenchmarks.ps1', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tools/hvm_paper/Test-NestedPageFaults.ps1', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tools/hvm_paper/Test-VmwareTeardown.ps1', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tools/hvm_paper/transition_metrics.py', CRLF will be replaced by LF the next time Git touches it

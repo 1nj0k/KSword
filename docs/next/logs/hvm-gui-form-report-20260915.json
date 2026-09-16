@@ -1,0 +1,1115 @@
+{
+    "count": 56,
+    "passed": true,
+    "rows": [
+        {
+            "arguments": [
+            ],
+            "name": "status",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "status",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "cpuid-view",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "cpuid-view",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "probe-platform",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "probe-platform",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "selfcheck",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "selfcheck",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "0"
+            ],
+            "name": "gdt-dump",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "0"
+                ],
+                "command": "gdt-dump",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                    "0x0000000000000000"
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "0",
+                "64"
+            ],
+            "name": "events",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "0",
+                    "64"
+                ],
+                "command": "events",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                    "0x0000000000000000",
+                    "0x0000000000000040"
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "0"
+            ],
+            "name": "ept-leaf",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "0"
+                ],
+                "command": "ept-leaf",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                    "0x0000000000000000"
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "prepare",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "prepare",
+                "controlRequest": {
+                    "command": 1,
+                    "expectedGeneration": 0,
+                    "flags": 5,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 5,
+                "kind": "validated",
+                "operation": 1,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "prepare-eptpsw",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "prepare-eptpsw",
+                "controlRequest": {
+                    "command": 1,
+                    "expectedGeneration": 0,
+                    "flags": 1029,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 1029,
+                "kind": "validated",
+                "operation": 1,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "prepare-localept",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "prepare-localept",
+                "controlRequest": {
+                    "command": 1,
+                    "expectedGeneration": 0,
+                    "flags": 517,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 517,
+                "kind": "validated",
+                "operation": 1,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "self-test",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "self-test",
+                "controlRequest": {
+                    "command": 2,
+                    "expectedGeneration": 0,
+                    "flags": 7,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 7,
+                "kind": "validated",
+                "operation": 2,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "resident",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "resident",
+                "controlRequest": {
+                    "command": 5,
+                    "expectedGeneration": 0,
+                    "flags": 7,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 7,
+                "kind": "validated",
+                "operation": 5,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "resident-nested",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "resident-nested",
+                "controlRequest": {
+                    "command": 5,
+                    "expectedGeneration": 0,
+                    "flags": 39,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 39,
+                "kind": "validated",
+                "operation": 5,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "resident-nested-hidehv",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "resident-nested-hidehv",
+                "controlRequest": {
+                    "command": 5,
+                    "expectedGeneration": 0,
+                    "flags": 8231,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 8231,
+                "kind": "validated",
+                "operation": 5,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "512"
+            ],
+            "name": "resident-vmreadbench",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "512"
+                ],
+                "command": "resident-vmreadbench",
+                "controlRequest": {
+                    "command": 5,
+                    "expectedGeneration": 0,
+                    "flags": 2055,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 512
+                },
+                "flags": 2055,
+                "kind": "validated",
+                "operation": 5,
+                "values": [
+                    "0x0000000000000200"
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "resident-trace",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "resident-trace",
+                "controlRequest": {
+                    "command": 5,
+                    "expectedGeneration": 0,
+                    "flags": 4103,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 4103,
+                "kind": "validated",
+                "operation": 5,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "1000"
+            ],
+            "name": "soak",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "1000"
+                ],
+                "command": "soak",
+                "controlRequest": {
+                    "command": 9,
+                    "expectedGeneration": 0,
+                    "flags": 7,
+                    "size": 32,
+                    "soakMilliseconds": 1000,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 7,
+                "kind": "validated",
+                "operation": 9,
+                "values": [
+                    "0x00000000000003E8"
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "stop",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "stop",
+                "controlRequest": {
+                    "command": 6,
+                    "expectedGeneration": 0,
+                    "flags": 1,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 1,
+                "kind": "validated",
+                "operation": 6,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "teardown",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "teardown",
+                "controlRequest": {
+                    "command": 3,
+                    "expectedGeneration": 0,
+                    "flags": 1,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 1,
+                "kind": "validated",
+                "operation": 3,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "reset-fault",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "reset-fault",
+                "controlRequest": {
+                    "command": 8,
+                    "expectedGeneration": 0,
+                    "flags": 3,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 3,
+                "kind": "validated",
+                "operation": 8,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "launch-test-guest",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "launch-test-guest",
+                "controlRequest": {
+                    "command": 4,
+                    "expectedGeneration": 0,
+                    "flags": 15,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 15,
+                "kind": "validated",
+                "operation": 4,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "validate-nested",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "validate-nested",
+                "controlRequest": {
+                    "command": 7,
+                    "expectedGeneration": 0,
+                    "flags": 103,
+                    "size": 32,
+                    "soakMilliseconds": 0,
+                    "version": 4,
+                    "vmreadBenchIterations": 0
+                },
+                "flags": 103,
+                "kind": "validated",
+                "operation": 7,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "nested-probe",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "nested-probe",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "nested-probe-all",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "nested-probe-all",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "nested-ad",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "nested-ad",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "nested-selfvirt",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "nested-selfvirt",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "nested-selfvirt-all",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "nested-selfvirt-all",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "acl-probe",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "acl-probe",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "probe-flags",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "probe-flags",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "probe-xonly",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "probe-xonly",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "rule-allowonce",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "rule-allowonce",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "1000"
+            ],
+            "name": "tlb-probe",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "1000"
+                ],
+                "command": "tlb-probe",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                    "0x00000000000003E8"
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "1000"
+            ],
+            "name": "tlb-probe-exit",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "1000"
+                ],
+                "command": "tlb-probe-exit",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                    "0x00000000000003E8"
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "view-query",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "view-query",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "view-probe",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "view-probe",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "view-effect",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "view-effect",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "view-verify",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "view-verify",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "nested-page-query",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "nested-page-query",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "12345000",
+                "7000000",
+                "d1"
+            ],
+            "name": "nested-page-map",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "12345000",
+                    "7000000",
+                    "d1"
+                ],
+                "command": "nested-page-map",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                    "0x0000000012345000",
+                    "0x0000000007000000",
+                    "0x00000000000000D1"
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "nested-page-remove",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "nested-page-remove",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "10"
+            ],
+            "name": "msr-log",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "10"
+                ],
+                "command": "msr-log",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                    "0x0000000000000010"
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "msr-clear",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "msr-clear",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "cr-track-cr3-on",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "cr-track-cr3-on",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "cr-track-cr3-off",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "cr-track-cr3-off",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "inject-query",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "inject-query",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "4242",
+                "12346000",
+                "12347000",
+                "4B535744"
+            ],
+            "name": "inject-test",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "4242",
+                    "12346000",
+                    "12347000",
+                    "4B535744"
+                ],
+                "command": "inject-test",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                    "0x0000000000001092",
+                    "0x0000000012346000",
+                    "0x0000000012347000",
+                    "0x000000004B535744"
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "4242",
+                "12346000",
+                "12347000",
+                "C:/HVM test/中文 测试.dll"
+            ],
+            "name": "inject-dll",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "4242",
+                    "12346000",
+                    "12347000",
+                    "C:/HVM test/中文 测试.dll"
+                ],
+                "command": "inject-dll",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                    "0x0000000000001092",
+                    "0x0000000012346000",
+                    "0x0000000012347000",
+                    "0x0000000000000000"
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "4242"
+            ],
+            "name": "inject-release",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "4242"
+                ],
+                "command": "inject-release",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                    "0x0000000000001092"
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "inject-release-all",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "inject-release-all",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "proc-query",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "proc-query",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "4242",
+                "12346000"
+            ],
+            "name": "proc-freeze",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "4242",
+                    "12346000"
+                ],
+                "command": "proc-freeze",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                    "0x0000000000001092",
+                    "0x0000000012346000"
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "4242",
+                "12346000"
+            ],
+            "name": "proc-terminate",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "4242",
+                    "12346000"
+                ],
+                "command": "proc-terminate",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                    "0x0000000000001092",
+                    "0x0000000012346000"
+                ]
+            }
+        },
+        {
+            "arguments": [
+                "4242"
+            ],
+            "name": "proc-release",
+            "ok": true,
+            "result": {
+                "arguments": [
+                    "4242"
+                ],
+                "command": "proc-release",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                    "0x0000000000001092"
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "proc-release-all",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "proc-release-all",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "help",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "help",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        },
+        {
+            "arguments": [
+            ],
+            "name": "commands",
+            "ok": true,
+            "result": {
+                "arguments": [
+                ],
+                "command": "commands",
+                "flags": 0,
+                "kind": "validated",
+                "operation": 0,
+                "values": [
+                ]
+            }
+        }
+    ]
+}

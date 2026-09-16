@@ -1,0 +1,53 @@
+适用于 .NET Framework MSBuild 版本 17.14.51+25f168cee
+
+  Building 'KswordARKDriver' with toolset 'WindowsKernelModeDriver10.0' and the 'Universal' target platform.
+  Stamping x64\Release\KswordARKDriver.inf
+  Stamping [Version] section with DriverVer=04/24/2026,18.38.22.66
+  ioctl_registry.c
+  cpu_power_ioctl.c
+  research_topic_ioctl.c
+  win32k_detail.c
+  win32k_event_hook.c
+  win32k_fallback.c
+  win32k_ioctl.c
+  win32k_message_hook.c
+  win32k_query.c
+  win32k_queue_layout.c
+  win32k_runtime_query.c
+  win32k_support.c
+  win32k_timer.c
+  window_band.c
+  driver_entry.c
+  hvm_cr_policy.c
+  hvm_descriptor.c
+  hvm_ept.c
+  hvm_ept_builder.c
+  hvm_ept_domain.c
+  hvm_ept_local.c
+  hvm_ept_switch.c
+  hvm_ept_view.c
+  hvm_event.c
+  hvm_evmcs.c
+  hvm_exit.c
+  hvm_exit_emulate.c
+  hvm_guest.c
+  hvm_inject.c
+  hvm_ioctl.c
+  hvm_memory.c
+  hvm_metrics.c
+  hvm_msr_policy.c
+  hvm_mtrr.c
+  hvm_nested.c
+  hvm_nested_bitmap.c
+  hvm_nested_decode.c
+  hvm_nested_ept.c
+  hvm_nested_l2.c
+  hvm_nested_page.c
+  hvm_nested_probe.c
+  hvm_nested_vmcs.c
+  hvm_phys_window.c
+  hvm_process.c
+  hvm_resident.c
+  hvm_runtime.c
+  hvm_vmcs.c
+C:\Users\Felix\CLionProjects\KSword\KswordARKDriver\src\features\hvm\hvm_nested_page.c(77,14): error C4013: “PsLookupProcessByProcessId”未定义；假设外部返回 int [C:\Users\Felix\CLionProjects\KSword\KswordARKDriver\KswordARKDriver.vcxproj]

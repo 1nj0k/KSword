@@ -1,0 +1,67 @@
+2026-09-15T08:44:18.4934570-04:00
+{"kind":"query","queryStatus":0,"stateFlags":13254943,"stateFlagsHex":"0x00CA411F","stateNames":["INITIALIZED","RESOURCES_READY","EPT_READY","SELF_TESTED","SELF_TEST_PASSED","GUEST_READY","RESIDENT_ACTIVE","EVENTS_AVAILABLE","EVMCS_PARTIAL","UNLOAD_GUARD_ARMED","RESIDENT_NESTED"],"featureNames":["INTEL","VMX","FEATURE_CONTROL_LOCKED","VMX_OUTSIDE_SMX","TRUE_CONTROLS","EPT","EPT_WB","EPT_4_LEVEL","EPT_2MB","EPT_AD","INVEPT","INVEPT_SINGLE","INVEPT_ALL","VPID","HYPERVISOR_PRESENT","NESTED_VMX_EXPOSED","ONE_SHOT_GUEST","VMEXIT_TELEMETRY","RESIDENT_VMM","MULTICORE_RENDEZVOUS","EPT_4KB_SPLIT","EPT_RULES","EPT_EVENT_RING","MTRR_AWARE_EPT","HYPERV_EVMCS_CAPABLE","HYPERV_EVMCS_V1","POWER_STATE_GUARD","PROCESSOR_TOPOLOGY_GUARD","DRIVER_UNLOAD_GUARD","RESIDENT_LIFECYCLE_GUARDED","MSR_BITMAP","EXIT_EMULATION","VE_INFO_READY","VE_SUPPRESSED_BY_DEFAULT","EPTP_LIST_READY","EPTP_SWITCH_ARMED"],"generation":8,"processorCount":2,"preparedProcessorCount":2,"selfTestPassedProcessorCount":2,"residentProcessorCount":2,"residentImplementation":"ACTIVE","eptImplementation":"ACTIVE","nestedImplementation":"CAPABILITY_ONLY","evmcsImplementation":"PARTIAL","featureFlags":"0x0029803F30FFFFFF","vmxEptVpidCapabilities":"0x00000F0106F34041","eptExecuteOnly":true,"eptPointer":"0x0000000207FE905E","eptPageCount":515,"mappedRamMiB":8190,"vmExitCount":46357843,"lastExitReason":25,"lastExitQualification":"0x0000000000000000","lastGuestRip":"0xFFFFFFFFFC07F8F3","lastGuestRsp":"0xFFFFFFFFFC407D90","lastExitInstructionLength":4,"lastStatus":"0x00000000","vmxBasic":"0x01D8100000000001","cr0Fixed0":"0x0000000080000021","cr0Fixed1":"0x00000000FFFFFFFF","cr4Fixed0":"0x0000000000002000","cr4Fixed1":"0x0000000000B72FFF","lastVmInstructionError":12,"eventCount":8192,"droppedEventCount":0,"overwrittenEventCount":17533,"publishedEventCount":25725,"nestedL2LaunchRefusedCount":0,"nestedVmcs12EvictionCount":0,"nestedFuseTripCount":0,"nestedLastRefusalSite":0,"nestedLastRefusalSiteText":"µ▓íµ£ëµïÆτ╗¥Φ┐ç","exitReasonCount":{"0":14468,"10":12389,"12":13466770,"18":48352,"19":840771,"20":802760,"21":840776,"23":18804029,"24":543969,"25":7919573,"26":841571,"27":841572,"31":119373,"32":154433,"50":840449,"53":1055497,"55":557820},"processors":[{"index":0,"group":0,"number":0,"vmxInstructionResult":0,"stateFlags":1383,"stateHex":"0x00000567","lastStatus":"0x00000000","lastExitReason":10,"vmExitCount":17920783,"stateNames":["RESOURCE_READY","SELF_TESTED","VMXON_SUCCEEDED","VMCS_LOADED","GUEST_LAUNCHED","RESIDENT_ACTIVE","DEVIRTUALIZED"]},{"index":1,"group":0,"number":1,"vmxInstructionResult":0,"stateFlags":1383,"stateHex":"0x00000567","lastStatus":"0x00000000","lastExitReason":25,"vmExitCount":28437060,"stateNames":["RESOURCE_READY","SELF_TESTED","VMXON_SUCCEEDED","VMCS_LOADED","GUEST_LAUNCHED","RESIDENT_ACTIVE","DEVIRTUALIZED"]}]}
+τö¿µ│ò: hvm_ctl.exe [--json] <σæ╜Σ╗ñ> [σÅéµò░]
+
+  status           σÅ¬Φ»╗µƒÑΦ»ó∩╝îΣ╕ìµö╣τè╢µÇü
+  cpuid-view       Σ╗Äτö¿µê╖µÇüµëºΦíî CPUID∩╝îµèÑσæèµ¥Ñσ«╛τ£ïσ╛ùσç║Σ╕ïΘ¥óµ£ëµ▓íµ£ë hypervisorπÇé
+                   Σ╕ìτó░Θ⌐▒σè¿∩╝îΣ╣ƒΣ╕ìΘ£ÇΦªüσ╕╕Θ⌐╗σ£¿Φ╖æπÇéΦ┐Öµÿ» resident-nested-hidehv τÜäσêñµì« ΓÇöΓÇö
+                   σ«âΦ╡░τÜäσ░▒µÿ» VMware σêñµû¡σñûσ▒éΦ║½Σ╗╜µù╢Φ╡░τÜäΘéúµ¥íΦ╖»πÇé
+  probe-platform   σ╣│σÅ░µÄóΘÆê∩╝êσÅ¬Φ»╗∩╝îΣ╕ìΦ┐¢ VMX∩╝ÜCET / KVA shadow / GS base∩╝ë
+  probe-flags      Φ┤ƒσÉæµÄóΘÆê∩╝êENFORCEπÇüΦâ╜σè¢ flagπÇüΣ║ÆµûÑτ╗äσÉêµÿ»σÉªΦó½**µ¡úτí«σ£░**µïÆτ╗¥∩╝ë
+  acl-probe        Φ«┐Θù«Σ╜ìΘù╕Θù¿Θ¬îµö╢∩╝Üµï┐**σÅ¬Φ»╗σÅÑµƒä**σÄ╗Φ░âτá┤σ¥ÅµÇº IOCTL∩╝îσ┐àΘí╗Φó½ I/O τ«íτÉåσÖ¿µîíµÄë∩╝êwin32=5∩╝ë∩╝î
+                   σÉîΣ╕Çµ¥íσ£¿Φ»╗σåÖσÅÑµƒäΣ╕èσ┐àΘí╗**Σ╕ìµÿ»** 5 ΓÇöΓÇö σÉÄΦÇàµÄÆΘÖñ"Θ⌐▒σè¿Σ╕Äσ«óµê╖τ½»µÄºσê╢τáüσ»╣Σ╕ìΣ╕è"Φ┐ÖΣ╕¬Θò┐σ╛ùΣ╕Çµá╖τÜäσÄƒσ¢áπÇé
+  nested-probe     σ╡îσÑù VMX Φç¬µúÇ∩╝Üσ£¿**σ«óµê╖µ£║Σ╕èΣ╕ïµûç**Θçîτ£ƒτÜäµëºΦíîΣ╕ÇΘüì VMXON/VMPTRLD/VMWRITE/VMREAD/VMPTRST/VMXOFF∩╝îΘÇÉµ¥íτ£ïµ₧╢µ₧äτ╗ôµ₧£πÇé
+                   σëìµÅÉ∩╝Üσ╕╕Θ⌐╗σ£¿Φ╖æ**Σ╕ö**Φ╡╖σ╕╕Θ⌐╗µù╢τ╗ÖΣ║å ENABLE_NESTED_VMX∩╝¢Σ╕ìµ╗íΦ╢│Σ╝ÜΦó½µïÆτ╗¥ΦÇîΣ╕ìµÿ»σÄ╗Φ»ò∩╝êΦ»òσ░▒µÿ»Φç¬σ╖▒σÉâ #UD∩╝ëπÇé
+  nested-probe-all σÉîΣ╕è∩╝îΣ╜å**µ»ÅΣ╕¬σñäτÉåσÖ¿σÉäΦ╡╖Σ╕ÇΣ╕¬τ║┐τ¿ïσ╣╢σÅæΦ╖æ**πÇé
+                   σìòµá╕Φ╖æΘÇÜµÄ¿Σ╕ìσç║σñÜµá╕Φ╖æΘÇÜ∩╝Üµ»Åµá╕µ£ëΦç¬σ╖▒τÜä vmcs02πÇüσ╜▒σ¡Éσ▒éµ¼íΣ╕Äµÿáσ░äτ¬ùσÅú∩╝î
+                   σ«âΣ╗¼τ╗ôµ₧äΣ╕èΣ║ÆΣ╕ìσ╣▓µ╢ëΓÇöΓÇöΦÇîµ£¼Σ╗ôσ║ôΘçîΦ┐ÖσÅÑΦ»¥σ╖▓τ╗Åµá╜Φ┐çΣ╕ìµ¡óΣ╕Çµ¼íπÇéΣ╗╗Σ╕ÇΦíî FAIL σì│µò┤Σ╜ô FAILπÇé
+  nested-selfvirt-all σÉîΣ╕è∩╝îΣ╜åµ»ÅΣ╕¬σñäτÉåσÖ¿σÉäΦ╡╖Σ╕ÇΣ╕¬τ║┐τ¿ïσ╣╢σÅæΦ╖æπÇéΣ╗╗Σ╕ÇΦíî FAIL σì│µò┤Σ╜ô FAILπÇé
+  nested-selfvirt  Φç¬ΦÖÜµïƒσîû∩╝ÜΦ«⌐ L1 µèè**σ«âΦç¬σ╖▒µ¡úσ£¿Φ╖æτÜäΣ╕èΣ╕ïµûç**σÅÿµêÉµ¥Ñσ«╛πÇé
+                   Σ╕ÄΣ╕èΘ¥óΘéúΣ╕ñµ¥íτÜäσî║σê½µÿ» L2 Σ╕ìσåìµÿ»Σ╕ÇΘí╡σÉêµêÉΣ╗úτáüΓÇöΓÇöτ£ƒ hypervisor∩╝êµêæΣ╗¼Φç¬σ╖▒τÜä
+                   σ╕╕Θ⌐╗Φ╖»σ╛äπÇüVMware τÜä VMM∩╝ëσüÜτÜäµ¡úµÿ»Φ┐ÖΣ╗╢Σ║ï∩╝îµ«╡/CR3/Θí╡Φí¿σà¿Θâ╜σ╛ùσ╜ôτ£ƒπÇé
+                   Σ╕ëµá╝Θ╜Éσà¿µëìτ«ùΦ┐ç∩╝ÜΦ┐¢σ╛ùσÄ╗πÇüL2 τÜäΘÇÇσç║Φó½µèòΘÇÆτ╗Ö L1πÇüL1 µï┐σ¢₧µÄºσê╢µ¥âπÇé
+  probe-xonly      execute-only µÄóΘÆê∩╝êΦªüµ▒éσ╕╕Θ⌐╗**µ▓íσ£¿Φ╖æ**∩╝¢Φç¬σ╖▒Φ╡░σ«î ΦúàΦºäσêÖΓåÆΦ╡╖σ╕╕Θ⌐╗ΓåÆΦ»╗ΓåÆσü£ΓåÆµ╕à∩╝ë
+  rule-allowonce   ALLOW_ONCE ΦºäσêÖ**σ«ëΦúàµ£ƒ**τÜäΘù¿∩╝êΦªüµ▒éσ╕╕Θ⌐╗µ▓íσ£¿Φ╖æ∩╝¢ΦúàΣ╕èΣ╝Üτ½ïσê╗σêáµÄë∩╝ë
+  tlb-probe        Φ╖¿σñäτÉåσÖ¿ TLB σñ▒µòêµÄóΘÆê∩╝îµ»½τºÆµò░τö▒τ¼¼Σ║îΣ╕¬σÅéµò░τ╗Öσç║∩╝êτ║»τö¿µê╖µÇü∩╝îΦ╡╖σü£σ╕╕Θ⌐╗τö▒σñûΘ¥óµÄºσê╢∩╝ë
+  tlb-probe-exit   σÉîΣ╕è∩╝îΣ╜åµ»Åµ¼íΦ»╗Σ╣ïσëìσàêµëºΦíî CPUID σ╝║σê╢Σ╕Çµ¼í VM exit∩╝êΘ¬îΦ»üπÇîµëôσç║σÄ╗Σ╕Çµ¼íσ░▒σñƒπÇìΦ┐ÖΣ╕¬σëìµÅÉ∩╝ë
+  view-query       σêùσç║σ╖▓σ«ëΦúàτÜä EPT σêåτª╗Φºåσ¢╛∩╝êσÅ¬Φ»╗∩╝îµùáΘ£Çτí«Φ«ñ∩╝ë
+  view-probe       σêåτª╗Φºåσ¢╛σ«ëΦúàµ£ƒ**σ╜Æσ¢á**µÄóΘÆê∩╝êσëìµÅÉ∩╝Üprepare Φ┐çπÇüσ╕╕Θ⌐╗µ▓íσ£¿Φ╖æ∩╝¢ΦúàΣ╕èΣ╝Üτ½ïσê╗σì╕µÄë∩╝ë
+  view-effect      σêåτª╗Φºåσ¢╛**µÿ»σÉªτ£ƒτÜäτöƒµòê**∩╝êΦúà CLOAKΓåÆΦ╡╖σ╕╕Θ⌐╗ΓåÆσåàµá╕µÇüΦ»╗ΓåÆµ»öσ»╣σ╜▒σ¡É∩╝¢σëìµÅÉ∩╝Üprepare-eptpsw + self-test∩╝ë
+  selfcheck        Σ╜┐τö¿σëìΦç¬µúÇ∩╝êσÅ¬Φ»╗∩╝îΣ╕ìΦ┐¢ VMX∩╝ë∩╝ÜΦâ╜σè¢ / σÉÄτ½»σÅ»τö¿µÇº / τè╢µÇüµÿ»σÉªσ╣▓σçÇ∩╝îµ»ÅΘí╣Θâ╜τ╗ÖσÅ»µôìΣ╜£τÜäΦºúΘçè
+  view-verify      µ╖╗σèáσÉÄΦç¬µúÇ∩╝ÜΘÇÉµ¥íσ╖▓ΦúàΦºåσ¢╛σêåσê½Θ¬î**τ╗ôµ₧ä**∩╝êσÅ╢µÿ»Σ╕ìµÿ»Σ╕╗σÇ╝∩╝ëΣ╕Ä**τöƒµòê**∩╝êΦ»╗µÿ»σÉªτ£ƒΦó½Θçìσ«ÜσÉæ∩╝ë∩╝îΣ╕ñσ▒éσêåσ╝ÇµèÑ
+  ept-leaf <PA>    Φ╡░Σ╕ÇΘüìσƒ║σ║º EPT∩╝îµëôσç║σ¢¢τ║ºΘí╣Σ╕Ä R/W/X∩╝êσìüσà¡Φ┐¢σê╢σ£░σ¥Ç∩╝ë
+  events [after]   ΘÇÉΦíîΦ»╗Σ║ïΣ╗╢τÄ»∩╝êσìüΦ┐¢σê╢σ║ÅσÅ╖∩╝îσÅ¬Φ»╗σñºΣ║Äσ«âτÜäΦíî∩╝ë
+  cr-track-cr3-on  µëôσ╝Ç CR3 Φ┐╜Φ╕¬∩╝êR-1 Φ┐¢τ¿ïσñäτ╜«τÜäσëìµÅÉ∩╝¢σ╕╕Θ⌐╗Φ╡╖µ¥ÑσÉÄµö╣Σ╕ìΣ║å∩╝ë
+  cr-track-cr3-off σà│Θù¡ CR3 Φ┐╜Φ╕¬
+  inject-query     σêùσç║ R-1 Φ┐¢τ¿ïµ│¿σàÑ∩╝êσÅ¬Φ»╗∩╝ë
+  inject-test <pid> <Θ¥╢Θí╡GLA> <µáçΦ«░σ£░σ¥Ç> [σÇ╝]   µ£Çσ░ÅσÅ»Φºéµ╡ïµ│¿σàÑ∩╝Üσ╛ÇµáçΦ«░σ£░σ¥ÇσåÖΣ╕ÇΣ╕¬σ╕╕µò░
+  inject-dll <pid> <Θ¥╢Θí╡GLA> <LoadLibraryWσ£░σ¥Ç> <DLLΦ╖»σ╛ä>   µ│¿σàÑΣ╕ÇΣ╕¬ DLL
+  inject-release <pid> / inject-release-all     µÆñΘöÇµ│¿σàÑ
+     Θ¥╢Θí╡ GLA Σ╕ÄµáçΦ«░σ£░σ¥ÇΘâ╜µÿ»**σìüσà¡Φ┐¢σê╢**πÇéhvm_target.exe σÉ»σè¿µù╢Σ╝Üµèè
+     probe Θí╡Σ╕Ä marker τÜäσ£░σ¥Çµëôσç║µ¥Ñ∩╝îΘªûµ¼íΘ¬îΦ»üτ¢┤µÄÑτö¿ΘéúΣ╕ñΣ╕¬πÇé
+  proc-query       σêùσç║ R-1 Φ┐¢τ¿ïσñäτ╜«∩╝êσÅ¬Φ»╗∩╝ë
+  proc-freeze <pid> <GLA>      σå╗τ╗ô∩╝ÜµïÆµëºΦíî + µ│¿ #PF∩╝îσÅ»ΘÇå∩╝îΦó½σå╗τ║┐τ¿ïΣ╝ÜΦç¬µùï
+  proc-terminate <pid> <GLA>   τ╗ôµ¥ƒ∩╝ÜµïÆµëºΦíî + µ│¿ #UD∩╝îτö▒σ«óµê╖µ£║Φç¬σ╖▒µïåΦ┐¢τ¿ï
+  proc-release <pid>           µÆñΘöÇΣ╕Çµ¥íσñäτ╜«
+  proc-release-all             µ╕àτ⌐║µò┤σ╝áΦí¿
+     GLA µÿ»**σìüσà¡Φ┐¢σê╢**σ«óµê╖τ║┐µÇºσ£░σ¥Ç∩╝îΣ╕ìΦâ╜τ£ü∩╝ÜΘ⌐▒σè¿Σ╕ìτî£σô¬Σ╕ÇΘí╡Σ╗úΦí¿Φ┐ÖΣ╕¬
+     Φ┐¢τ¿ï∩╝îτî£ΘöÖσ░▒µÿ»µïÆτ╗¥ΦÉ╜σ£¿Σ╕ÇΘí╡µ░╕Σ╕ìµëºΦíîτÜäσ£░σ¥ÇΣ╕èΓÇöΓÇöΘéúσÆîµêÉσèƒΘò┐σ╛ùΣ╕Çµá╖πÇé
+     σëìµÅÉΣ╕ëµ¥í∩╝ÜTRACK_CR3 σ╖▓σ╝ÇπÇüEPTP σêçµìóσÉÄτ½»σ╖▓µ¡ªΦúàπÇüσ«ëΦúàµù╢σ╕╕Θ⌐╗σü£τ¥ÇπÇé
+  prepare          σêåΘàìµ»ÅσñäτÉåσÖ¿Φ╡äµ║É∩╝îΣ╕ìΦ┐¢ VMX
+  prepare-eptpsw   σÉî prepare∩╝îΣ╜åΦ»╖µ▒é EPTP σêçµìóσêåτª╗Φºåσ¢╛σÉÄτ½»∩╝êΘ£Ç execute-only + INVEPT_SINGLE∩╝ë
+  prepare-localept σÉî prepare∩╝îΣ╜åµ¡ªΦúàµ»ÅσñäτÉåσÖ¿τºüµ£ë EPT∩╝êview-probe σ£¿σñÜµá╕Σ╕èσ╜Æσ¢áτÜäσëìµÅÉ∩╝ë
+  self-test        ΘÇÉσñäτÉåσÖ¿ VMXON/VMXOFF
+  resident         σà¿σñäτÉåσÖ¿σ╕╕Θ⌐╗ VMM + EPT
+  resident-nested  σÉî resident∩╝îΣ╜åσ╝ÇσÉ»σ╡îσÑù VMX µîçΣ╗ñµ┤╛σÅæ∩╝ênested-probe τÜäσëìµÅÉ∩╝ë
+  resident-nested-hidehv σÉî resident-nested∩╝îσÅªσ»╣µ¥Ñσ«╛τö¿µê╖µÇüτÜä CPUID ΘÜÉΦùÅ hypervisor Φ║½Σ╗╜
+  resident-vmreadbench σÉî resident∩╝îΣ╜åµ»Åµ¼íΘÇÇσç║σñÜσüÜ N µ¼í VMREAD∩╝êτ¼¼Σ║îΣ╕¬σÅéµò░τ╗Ö N∩╝îτ╝║τ£ü 512∩╝¢σÅ¬Σ╕║µ╡ïΘçÅ∩╝îΣ╝ÜσÅÿµàó∩╝ë
+  resident-trace   σÉî resident∩╝îΣ╜åµÖ«ΘÇÜΘÇÇσç║Σ╣ƒΘÇÉµ¥íΦ┐¢Σ║ïΣ╗╢τÄ»∩╝êτÄ»Σ╝Üσçáσìüµ»½τºÆτ┐╗Σ╕ÇΘüì∩╝îσÅ¬σ£¿ΦªüΦ╜¿Φ┐╣µù╢τö¿∩╝ë
+  soak             µ£ëτòîσ╕╕Θ⌐╗∩╝îµ»½τºÆµò░τö▒τ¼¼Σ║îΣ╕¬σÅéµò░τ╗Öσç║
+  stop             σü£µ¡óσ╕╕Θ⌐╗
+  teardown         Θçèµö╛σà¿Θâ¿σÅ»ΘÇåΦ╡äµ║É
+  reset-fault      µ╕à FAULTED / ROLLBACK_REQUIRED
+  launch-test-guest Σ╕Çµ¼íµÇº VMLAUNCH + VMCALL σÅùµÄº guest
+  validate-nested  σ╡îσÑù VMX Σ╕Ä eVMCS τÜäΘâ¿σêåΦâ╜σè¢µáíΘ¬î
+
+σêåτ║ºµÄ¿Φ┐¢∩╝îΣ╕ìΦªüΦ╖│µ¡Ñ∩╝Üstatus -> prepare -> self-test -> resident
+ΘÇÇσç║τáü∩╝Ü0=σìÅΦ«« OK∩╝î2=σìÅΦ««Θ¥₧ OK∩╝î1=Σ╝áΦ╛ôσ▒éσñ▒Φ┤Ñ∩╝î3=**τ⌐║Φ┐ç**∩╝êσëìµÅÉµ▓íσ╗║τ½ï∩╝îΦ┐Öµ¼íΣ╗ÇΣ╣êΘâ╜µ▓íµ╡ïσê░∩╝ë

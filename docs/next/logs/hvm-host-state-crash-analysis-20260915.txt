@@ -1,0 +1,87 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.031 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.6584 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Felix\CLionProjects\KSword\docs\next\logs\hvm-host-state-probe-crash-20260915.dmp]
+Mini Kernel Dump File: Only registers and stack trace are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 22621 MP (2 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS Personal
+Edition build lab: 22621.2506.amd64fre.ni_release_svc_prod3.231018-1809
+Kernel base = 0xfffff806`24400000 PsLoadedModuleList = 0xfffff806`250134b0
+Debug session time: Tue Sep 15 09:21:18.378 2026 (UTC - 4:00)
+System Uptime: 0 days 0:01:03.842
+Loading Kernel Symbols
+...............................................................
+................................................................
+.........................................
+Loading User Symbols
+
+Loading unloaded module list
+........
+For analysis of this file, run !analyze -v
+0: kd> cdb: Reading initial command 'kv; r; q'
+ # Child-SP          RetAddr               : Args to Child                                                           : Call Site
+00 fffff806`21207608 fffff806`248c7d2c     : 00000000`000001aa ffffb70b`e2ef7e58 00000000`00000003 fffff806`21207900 : nt!KeBugCheckEx
+01 fffff806`21207610 fffff806`2462e8b8     : ffffb70b`e2ef7c00 ffffb70b`e2ef7c18 00000000`00000000 00000000`00000001 : nt!RtlpGetStackLimitsEx+0x18112c
+02 fffff806`21207660 fffff806`2471813e     : ffffffff`ffffffff ffffb70b`e2ef7cc0 ffffb70b`e2ef7cc0 fffff806`21207900 : nt!RtlDispatchException+0xe8
+03 fffff806`212078d0 fffff806`24816012     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : nt!KiDispatchException+0x1ae
+04 fffff806`21207fb0 fffff806`24815fe0     : fffff806`2482ae75 00000000`00000000 00000000`00000000 00000000`00000000 : nt!KxExceptionDispatchOnExceptionStack+0x12 (TrapFrame @ fffff806`21207e70)
+05 ffffb70b`e2ef7ad8 fffff806`2482ae75     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : nt!KiExceptionDispatchOnExceptionStackContinue
+06 ffffb70b`e2ef7ae0 fffff806`24824042     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : nt!KiExceptionDispatch+0x135
+07 ffffb70b`e2ef7cc0 fffff806`3efd07bf     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : nt!KiInvalidOpcodeFault+0x342 (TrapFrame @ ffffb70b`e2ef7cc0)
+*** WARNING: Unable to verify timestamp for KswordARK.sys
+08 ffffb70b`e2ef7e58 00000000`00000000     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : KswordARK+0x207bf
+rax=ffffb70be2ef7c18 rbx=ffffb70be2ef7e58 rcx=00000000000001aa
+rdx=ffffb70be2ef7e58 rsi=ffffb70be2ef7c18 rdi=fffff80621207900
+rip=fffff80624814df0 rsp=fffff80621207608 rbp=fffff806212076c0
+ r8=0000000000000003  r9=fffff80621207900 r10=fffff80621207800
+r11=fffff806212078a0 r12=ffffb70be2ef7c18 r13=0000000000000000
+r14=000000000010001f r15=0000000000000000
+iopl=0         nv up di ng nz na po nc
+cs=0010  ss=0018  ds=0028  es=0028  fs=0050  gs=0028             efl=00000086
+nt!KeBugCheckEx:
+fffff806`24814df0 48894c2408      mov     qword ptr [rsp+8],rcx ss:0018:fffff806`21207610=00000000000001aa
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'

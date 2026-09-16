@@ -1,0 +1,248 @@
+{
+  "attribution": [
+    {
+      "condition": "off",
+      "workload": "cpuid",
+      "n": 5,
+      "nsPerOperation": {
+        "median": 332.792,
+        "min": 316.16,
+        "max": 348.257
+      }
+    },
+    {
+      "condition": "off",
+      "workload": "ping",
+      "n": 5,
+      "nsPerOperation": {
+        "median": 13100.25,
+        "min": 12736.95,
+        "max": 13968.85
+      }
+    },
+    {
+      "condition": "resident",
+      "workload": "cpuid",
+      "n": 5,
+      "nsPerOperation": {
+        "median": 2905.918,
+        "min": 2897.314,
+        "max": 3060.281
+      }
+    },
+    {
+      "condition": "resident",
+      "workload": "ping",
+      "n": 5,
+      "nsPerOperation": {
+        "median": 16777.65,
+        "min": 16669.55,
+        "max": 18694.25
+      }
+    },
+    {
+      "condition": "resident-nested-fullsnapshot",
+      "workload": "cpuid",
+      "n": 5,
+      "nsPerOperation": {
+        "median": 2944.212,
+        "min": 2903.576,
+        "max": 3615.709
+      }
+    },
+    {
+      "condition": "resident-nested-fullsnapshot",
+      "workload": "ping",
+      "n": 5,
+      "nsPerOperation": {
+        "median": 16741.55,
+        "min": 16345.55,
+        "max": 17474.45
+      }
+    },
+    {
+      "condition": "resident-nested-hidehv",
+      "workload": "cpuid",
+      "n": 5,
+      "nsPerOperation": {
+        "median": 2915.062,
+        "min": 2901.263,
+        "max": 3068.975
+      }
+    },
+    {
+      "condition": "resident-nested-hidehv",
+      "workload": "ping",
+      "n": 5,
+      "nsPerOperation": {
+        "median": 17120.9,
+        "min": 16803.0,
+        "max": 18642.15
+      }
+    },
+    {
+      "condition": "resident-vmread256",
+      "workload": "cpuid",
+      "n": 5,
+      "nsPerOperation": {
+        "median": 4942.857,
+        "min": 4897.176,
+        "max": 5043.447
+      }
+    },
+    {
+      "condition": "resident-vmread256",
+      "workload": "ping",
+      "n": 5,
+      "nsPerOperation": {
+        "median": 16842.0,
+        "min": 16584.9,
+        "max": 16956.05
+      }
+    },
+    {
+      "condition": "resident-vmread512",
+      "workload": "cpuid",
+      "n": 5,
+      "nsPerOperation": {
+        "median": 6875.552,
+        "min": 6810.723,
+        "max": 6998.526
+      }
+    },
+    {
+      "condition": "resident-vmread512",
+      "workload": "ping",
+      "n": 5,
+      "nsPerOperation": {
+        "median": 16935.25,
+        "min": 16819.05,
+        "max": 17519.2
+      }
+    }
+  ],
+  "latency": [
+    {
+      "condition": "insert",
+      "workload": "",
+      "n": 5,
+      "rttP50Us": {
+        "median": 72.6,
+        "min": 57.9,
+        "max": 81.3
+      },
+      "rttP99Us": {
+        "median": 212.21899999999823,
+        "min": 197.7359999999997,
+        "max": 224.42499999999987
+      },
+      "rttMaxUs": {
+        "median": 3342.7,
+        "min": 2396.6,
+        "max": 4475.2
+      },
+      "commandOverlapGapMaxUs": {
+        "median": 2121.7,
+        "min": 2067.6,
+        "max": 6230.0
+      },
+      "commandDurationMs": {
+        "median": 19.92,
+        "min": 18.8662,
+        "max": 20.3926
+      }
+    },
+    {
+      "condition": "remove",
+      "workload": "",
+      "n": 5,
+      "rttP50Us": {
+        "median": 72.5,
+        "min": 63.3,
+        "max": 82.1
+      },
+      "rttP99Us": {
+        "median": 187.4720000000002,
+        "min": 182.65200000000004,
+        "max": 247.07599999999988
+      },
+      "rttMaxUs": {
+        "median": 3134.1,
+        "min": 2857.5,
+        "max": 3533.1
+      },
+      "commandOverlapGapMaxUs": {
+        "median": 2087.3,
+        "min": 2043.7,
+        "max": 4770.1
+      },
+      "commandDurationMs": {
+        "median": 19.5551,
+        "min": 18.785,
+        "max": 24.2306
+      }
+    },
+    {
+      "condition": "sham-off",
+      "workload": "",
+      "n": 5,
+      "rttP50Us": {
+        "median": 65.35,
+        "min": 49.8,
+        "max": 71.8
+      },
+      "rttP99Us": {
+        "median": 166.99000000000015,
+        "min": 139.1130000000001,
+        "max": 196.04400000000004
+      },
+      "rttMaxUs": {
+        "median": 3024.7,
+        "min": 2568.2,
+        "max": 4183.7
+      },
+      "commandOverlapGapMaxUs": {
+        "median": 2103.4,
+        "min": 2068.2,
+        "max": 2812.2
+      },
+      "commandDurationMs": {
+        "median": 19.1702,
+        "min": 18.8103,
+        "max": 21.252
+      }
+    },
+    {
+      "condition": "sham-on",
+      "workload": "",
+      "n": 5,
+      "rttP50Us": {
+        "median": 81.5,
+        "min": 65.95,
+        "max": 83.3
+      },
+      "rttP99Us": {
+        "median": 209.60599999999985,
+        "min": 181.30900000000008,
+        "max": 234.57399999999998
+      },
+      "rttMaxUs": {
+        "median": 3463.6,
+        "min": 2380.4,
+        "max": 16182.3
+      },
+      "commandOverlapGapMaxUs": {
+        "median": 2154.7,
+        "min": 2046.9,
+        "max": 3894.4
+      },
+      "commandDurationMs": {
+        "median": 21.1752,
+        "min": 20.6321,
+        "max": 22.2616
+      }
+    }
+  ],
+  "failedRecords": [],
+  "scope": "One machine/boot; paced closed-loop TCP. Gaps include Sleep(1), logging, scheduler and socket costs. Control-call overlap is not exact driver pause."
+}
