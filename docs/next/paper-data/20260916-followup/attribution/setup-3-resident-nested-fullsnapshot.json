@@ -1,0 +1,7 @@
+{
+    "kind":  "mode-setup",
+    "round":  3,
+    "condition":  "resident-nested-fullsnapshot",
+    "status":  "ready",
+    "utc":  "2026-09-16T01:32:07.2995347Z"
+}

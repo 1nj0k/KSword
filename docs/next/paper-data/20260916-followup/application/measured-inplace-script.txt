@@ -1,0 +1,38 @@
+#!/bin/sh
+# Run autonomously inside the descendant after the page-holder/httpd setup.
+set -eu
+dir=/tmp/page-app
+bin=/tmp/paper-bin
+case "$1" in
+ observe)
+    echo "paper-http-identity $(cat /proc/sys/kernel/random/boot_id) $(cat /sys/devices/system/cpu/online)"
+    i=0
+    while [ "$i" -lt 360 ]; do
+        rc=0
+        wget -q -O "$dir/response" http://127.0.0.1:18081/policy-inplace.json || rc=$?
+        server=$(cat "$dir/server.pid")
+        printf 'paper-http-sample-v2 %s %s %s %s %s %s %s %s %s\n' "$i" \
+            "$(cut -d' ' -f1 /proc/uptime)" "$rc" "$(wc -c <"$dir/response")" \
+            "$(md5sum "$dir/response" | cut -d' ' -f1)" "$server" \
+            "$(cut -d' ' -f22 "/proc/$server/stat")" 1 "$(cat /proc/sys/kernel/random/boot_id)"
+        tail -n 1 "$dir/pfn-inplace.jsonl"
+        "$bin/http-policy-oracle" "$dir/response"
+        i=$((i+1));sleep 1
+    done
+    ;;
+ inplace)
+    # Comparator: writes the original cache page and therefore needs saved bytes.
+    # Its controls are explicitly guest-side, unlike the EPT intervention.
+    test ! -e "$dir/original-for-inplace"
+    cp "$dir/policy-inplace.json" "$dir/original-for-inplace"
+    echo policy-inplace-before;md5sum "$dir/policy-inplace.json"
+    sleep 12
+    echo policy-inplace-write;cat /proc/uptime
+    dd if=/dev/zero of="$dir/policy-inplace.json" bs=4096 count=1 conv=notrunc 2>/dev/null
+    sleep 12
+    echo policy-inplace-restore;cat /proc/uptime
+    dd if="$dir/original-for-inplace" of="$dir/policy-inplace.json" bs=4096 count=1 conv=notrunc 2>/dev/null
+    md5sum "$dir/policy-inplace.json"
+    ;;
+ *) exit 2;;
+esac

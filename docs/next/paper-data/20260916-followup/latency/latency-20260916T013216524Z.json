@@ -1,0 +1,600 @@
+﻿{
+    "schemaVersion":  1,
+    "kind":  "application-latency",
+    "runId":  "latency-20260916T013216524Z",
+    "round":  0,
+    "warmup":  true,
+    "condition":  "sham-off",
+    "command":  "status",
+    "identity":  {
+                     "driverSha256":  "3B44132F82FEBCE3FCDF059B697D938479B9F791A628C00B55BC2CF397D5D500",
+                     "controlSha256":  "4DD0D8DABB3019503E15D70692759FF0502CAC46635D53F266A577CAAD5972AE",
+                     "applicationSha256":  "1AE25CA955DD01EA44AB3C45E22F6FC1175C0B407CC80A796FF79F073570E4F9",
+                     "scriptSha256":  "38E3BDD0B017F0C0C061C6F6776779E3D7F90B1643603918E2EC392EA268F5A8"
+                 },
+    "before":  {
+                   "utc":  "2026-09-16T01:32:16.5396735Z",
+                   "bootUtc":  "2026-09-16T01:23:55.3350600Z",
+                   "status":  {
+                                  "kind":  "query",
+                                  "queryStatus":  0,
+                                  "stateFlags":  9044255,
+                                  "stateFlagsHex":  "0x008A011F",
+                                  "stateNames":  [
+                                                     "INITIALIZED",
+                                                     "RESOURCES_READY",
+                                                     "EPT_READY",
+                                                     "SELF_TESTED",
+                                                     "SELF_TEST_PASSED",
+                                                     "GUEST_READY",
+                                                     "EVENTS_AVAILABLE",
+                                                     "EVMCS_PARTIAL",
+                                                     "RESIDENT_NESTED"
+                                                 ],
+                                  "featureNames":  [
+                                                       "INTEL",
+                                                       "VMX",
+                                                       "FEATURE_CONTROL_LOCKED",
+                                                       "VMX_OUTSIDE_SMX",
+                                                       "TRUE_CONTROLS",
+                                                       "EPT",
+                                                       "EPT_WB",
+                                                       "EPT_4_LEVEL",
+                                                       "EPT_2MB",
+                                                       "EPT_AD",
+                                                       "INVEPT",
+                                                       "INVEPT_SINGLE",
+                                                       "INVEPT_ALL",
+                                                       "VPID",
+                                                       "HYPERVISOR_PRESENT",
+                                                       "NESTED_VMX_EXPOSED",
+                                                       "ONE_SHOT_GUEST",
+                                                       "VMEXIT_TELEMETRY",
+                                                       "RESIDENT_VMM",
+                                                       "MULTICORE_RENDEZVOUS",
+                                                       "EPT_4KB_SPLIT",
+                                                       "EPT_RULES",
+                                                       "EPT_EVENT_RING",
+                                                       "MTRR_AWARE_EPT",
+                                                       "HYPERV_EVMCS_CAPABLE",
+                                                       "HYPERV_EVMCS_V1",
+                                                       "POWER_STATE_GUARD",
+                                                       "PROCESSOR_TOPOLOGY_GUARD",
+                                                       "DRIVER_UNLOAD_GUARD",
+                                                       "RESIDENT_LIFECYCLE_GUARDED",
+                                                       "MSR_BITMAP",
+                                                       "EXIT_EMULATION",
+                                                       "VE_INFO_READY",
+                                                       "VE_SUPPRESSED_BY_DEFAULT",
+                                                       "EPTP_LIST_READY",
+                                                       "EPTP_SWITCH_ARMED"
+                                                   ],
+                                  "generation":  71,
+                                  "processorCount":  4,
+                                  "preparedProcessorCount":  4,
+                                  "selfTestPassedProcessorCount":  4,
+                                  "residentProcessorCount":  0,
+                                  "residentImplementation":  "CAPABILITY_ONLY",
+                                  "eptImplementation":  "ACTIVE",
+                                  "nestedImplementation":  "CAPABILITY_ONLY",
+                                  "evmcsImplementation":  "PARTIAL",
+                                  "featureFlags":  "0x0029803F30FFFFFF",
+                                  "vmxEptVpidCapabilities":  "0x00000F0106F34041",
+                                  "eptExecuteOnly":  true,
+                                  "eptPointer":  "0x0000000207FD905E",
+                                  "eptPageCount":  515,
+                                  "mappedRamMiB":  8190,
+                                  "vmExitCount":  3951225,
+                                  "lastExitReason":  18,
+                                  "lastExitQualification":  "0x0000000000000000",
+                                  "lastGuestRip":  "0xFFFFF80078921300",
+                                  "lastGuestRsp":  "0xFFFF868146D3BE68",
+                                  "lastExitInstructionLength":  3,
+                                  "lastStatus":  "0x00000000",
+                                  "vmxBasic":  "0x01D8100000000001",
+                                  "cr0Fixed0":  "0x0000000080000021",
+                                  "cr0Fixed1":  "0x00000000FFFFFFFF",
+                                  "cr4Fixed0":  "0x0000000000002000",
+                                  "cr4Fixed1":  "0x0000000000B72FFF",
+                                  "lastVmInstructionError":  12,
+                                  "eventCount":  420,
+                                  "droppedEventCount":  0,
+                                  "overwrittenEventCount":  0,
+                                  "publishedEventCount":  420,
+                                  "nestedL2LaunchRefusedCount":  0,
+                                  "nestedVmcs12EvictionCount":  0,
+                                  "nestedFuseTripCount":  0,
+                                  "nestedLastRefusalSite":  0,
+                                  "nestedLastRefusalSiteText":  "µ▓íµ£ëµïÆτ╗¥Φ┐ç",
+                                  "exitReasonCount":  {
+                                                          "0":  14450,
+                                                          "10":  3005895,
+                                                          "12":  794570,
+                                                          "18":  9396,
+                                                          "31":  42904,
+                                                          "32":  84010
+                                                      },
+                                  "processors":  [
+                                                     {
+                                                         "index":  0,
+                                                         "group":  0,
+                                                         "number":  0,
+                                                         "vmxInstructionResult":  0,
+                                                         "stateFlags":  1127,
+                                                         "stateHex":  "0x00000467",
+                                                         "lastStatus":  "0x00000000",
+                                                         "lastExitReason":  18,
+                                                         "vmExitCount":  3526650,
+                                                         "stateNames":  [
+                                                                            "RESOURCE_READY",
+                                                                            "SELF_TESTED",
+                                                                            "VMXON_SUCCEEDED",
+                                                                            "VMCS_LOADED",
+                                                                            "GUEST_LAUNCHED",
+                                                                            "DEVIRTUALIZED"
+                                                                        ]
+                                                     },
+                                                     {
+                                                         "index":  1,
+                                                         "group":  0,
+                                                         "number":  1,
+                                                         "vmxInstructionResult":  0,
+                                                         "stateFlags":  1127,
+                                                         "stateHex":  "0x00000467",
+                                                         "lastStatus":  "0x00000000",
+                                                         "lastExitReason":  18,
+                                                         "vmExitCount":  191032,
+                                                         "stateNames":  [
+                                                                            "RESOURCE_READY",
+                                                                            "SELF_TESTED",
+                                                                            "VMXON_SUCCEEDED",
+                                                                            "VMCS_LOADED",
+                                                                            "GUEST_LAUNCHED",
+                                                                            "DEVIRTUALIZED"
+                                                                        ]
+                                                     },
+                                                     {
+                                                         "index":  2,
+                                                         "group":  0,
+                                                         "number":  2,
+                                                         "vmxInstructionResult":  0,
+                                                         "stateFlags":  1127,
+                                                         "stateHex":  "0x00000467",
+                                                         "lastStatus":  "0x00000000",
+                                                         "lastExitReason":  18,
+                                                         "vmExitCount":  135091,
+                                                         "stateNames":  [
+                                                                            "RESOURCE_READY",
+                                                                            "SELF_TESTED",
+                                                                            "VMXON_SUCCEEDED",
+                                                                            "VMCS_LOADED",
+                                                                            "GUEST_LAUNCHED",
+                                                                            "DEVIRTUALIZED"
+                                                                        ]
+                                                     },
+                                                     {
+                                                         "index":  3,
+                                                         "group":  0,
+                                                         "number":  3,
+                                                         "vmxInstructionResult":  0,
+                                                         "stateFlags":  1127,
+                                                         "stateHex":  "0x00000467",
+                                                         "lastStatus":  "0x00000000",
+                                                         "lastExitReason":  18,
+                                                         "vmExitCount":  98452,
+                                                         "stateNames":  [
+                                                                            "RESOURCE_READY",
+                                                                            "SELF_TESTED",
+                                                                            "VMXON_SUCCEEDED",
+                                                                            "VMCS_LOADED",
+                                                                            "GUEST_LAUNCHED",
+                                                                            "DEVIRTUALIZED"
+                                                                        ]
+                                                     }
+                                                 ]
+                              },
+                   "metrics":  {
+                                   "kind":  "hvm-metrics",
+                                   "version":  2,
+                                   "transitionCoherent":  true,
+                                   "transitionSequence":  138,
+                                   "command":  6,
+                                   "lastStatus":  "0x00000000",
+                                   "processorCount":  4,
+                                   "qpcFrequency":  "10000000",
+                                   "snapshotBeginQpc":  "5013418218",
+                                   "snapshotEndQpc":  "5013418235",
+                                   "commandBeginQpc":  "5013145386",
+                                   "commandEndQpc":  "5013150180",
+                                   "inveptAttempts":  "240",
+                                   "inveptSucceeded":  "240",
+                                   "inveptFailed":  "0",
+                                   "ruleAllocations":  "0",
+                                   "ruleFrees":  "0",
+                                   "replacementAllocations":  "0",
+                                   "replacementFrees":  "0",
+                                   "globalValidMask":  0,
+                                   "globalQpc":  {
+                                                     "resourcesBegin":  "0",
+                                                     "resourcesEnd":  "0",
+                                                     "eptBegin":  "0",
+                                                     "eptEnd":  "0",
+                                                     "rendezvousBegin":  "0",
+                                                     "rendezvousEnd":  "0"
+                                                 },
+                                   "processors":  [
+                                                      {
+                                                          "group":  0,
+                                                          "number":  0,
+                                                          "validMask":  0,
+                                                          "qpc":  {
+                                                                      "ipiEnter":  "0",
+                                                                      "ipiLeave":  "0",
+                                                                      "vmcsBegin":  "0",
+                                                                      "stateCaptured":  "0",
+                                                                      "vmcsWritten":  "0",
+                                                                      "entryBefore":  "0",
+                                                                      "entryAfter":  "0"
+                                                                  }
+                                                      },
+                                                      {
+                                                          "group":  0,
+                                                          "number":  1,
+                                                          "validMask":  0,
+                                                          "qpc":  {
+                                                                      "ipiEnter":  "0",
+                                                                      "ipiLeave":  "0",
+                                                                      "vmcsBegin":  "0",
+                                                                      "stateCaptured":  "0",
+                                                                      "vmcsWritten":  "0",
+                                                                      "entryBefore":  "0",
+                                                                      "entryAfter":  "0"
+                                                                  }
+                                                      },
+                                                      {
+                                                          "group":  0,
+                                                          "number":  2,
+                                                          "validMask":  0,
+                                                          "qpc":  {
+                                                                      "ipiEnter":  "0",
+                                                                      "ipiLeave":  "0",
+                                                                      "vmcsBegin":  "0",
+                                                                      "stateCaptured":  "0",
+                                                                      "vmcsWritten":  "0",
+                                                                      "entryBefore":  "0",
+                                                                      "entryAfter":  "0"
+                                                                  }
+                                                      },
+                                                      {
+                                                          "group":  0,
+                                                          "number":  3,
+                                                          "validMask":  0,
+                                                          "qpc":  {
+                                                                      "ipiEnter":  "0",
+                                                                      "ipiLeave":  "0",
+                                                                      "vmcsBegin":  "0",
+                                                                      "stateCaptured":  "0",
+                                                                      "vmcsWritten":  "0",
+                                                                      "entryBefore":  "0",
+                                                                      "entryAfter":  "0"
+                                                                  }
+                                                      }
+                                                  ],
+                                   "shadowEpt":  [
+
+                                                 ]
+                               },
+                   "processes":  [
+                                     {
+                                         "name":  "lsass",
+                                         "pid":  984,
+                                         "createdUtc":  "2026-09-16T01:23:58.1032441Z"
+                                     },
+                                     {
+                                         "name":  "services",
+                                         "pid":  956,
+                                         "createdUtc":  "2026-09-16T01:23:58.0620751Z"
+                                     },
+                                     {
+                                         "name":  "wininit",
+                                         "pid":  812,
+                                         "createdUtc":  "2026-09-16T01:23:58.0343278Z"
+                                     }
+                                 ]
+               },
+    "status":  "ok",
+    "pid":  10440,
+    "createdUtc":  "2026-09-16T01:32:17.2759098Z",
+    "exitCode":  0,
+    "stderr":  "",
+    "after":  {
+                  "utc":  "2026-09-16T01:32:23.3112324Z",
+                  "bootUtc":  "2026-09-16T01:23:55.3350600Z",
+                  "status":  {
+                                 "kind":  "query",
+                                 "queryStatus":  0,
+                                 "stateFlags":  9044255,
+                                 "stateFlagsHex":  "0x008A011F",
+                                 "stateNames":  [
+                                                    "INITIALIZED",
+                                                    "RESOURCES_READY",
+                                                    "EPT_READY",
+                                                    "SELF_TESTED",
+                                                    "SELF_TEST_PASSED",
+                                                    "GUEST_READY",
+                                                    "EVENTS_AVAILABLE",
+                                                    "EVMCS_PARTIAL",
+                                                    "RESIDENT_NESTED"
+                                                ],
+                                 "featureNames":  [
+                                                      "INTEL",
+                                                      "VMX",
+                                                      "FEATURE_CONTROL_LOCKED",
+                                                      "VMX_OUTSIDE_SMX",
+                                                      "TRUE_CONTROLS",
+                                                      "EPT",
+                                                      "EPT_WB",
+                                                      "EPT_4_LEVEL",
+                                                      "EPT_2MB",
+                                                      "EPT_AD",
+                                                      "INVEPT",
+                                                      "INVEPT_SINGLE",
+                                                      "INVEPT_ALL",
+                                                      "VPID",
+                                                      "HYPERVISOR_PRESENT",
+                                                      "NESTED_VMX_EXPOSED",
+                                                      "ONE_SHOT_GUEST",
+                                                      "VMEXIT_TELEMETRY",
+                                                      "RESIDENT_VMM",
+                                                      "MULTICORE_RENDEZVOUS",
+                                                      "EPT_4KB_SPLIT",
+                                                      "EPT_RULES",
+                                                      "EPT_EVENT_RING",
+                                                      "MTRR_AWARE_EPT",
+                                                      "HYPERV_EVMCS_CAPABLE",
+                                                      "HYPERV_EVMCS_V1",
+                                                      "POWER_STATE_GUARD",
+                                                      "PROCESSOR_TOPOLOGY_GUARD",
+                                                      "DRIVER_UNLOAD_GUARD",
+                                                      "RESIDENT_LIFECYCLE_GUARDED",
+                                                      "MSR_BITMAP",
+                                                      "EXIT_EMULATION",
+                                                      "VE_INFO_READY",
+                                                      "VE_SUPPRESSED_BY_DEFAULT",
+                                                      "EPTP_LIST_READY",
+                                                      "EPTP_SWITCH_ARMED"
+                                                  ],
+                                 "generation":  71,
+                                 "processorCount":  4,
+                                 "preparedProcessorCount":  4,
+                                 "selfTestPassedProcessorCount":  4,
+                                 "residentProcessorCount":  0,
+                                 "residentImplementation":  "CAPABILITY_ONLY",
+                                 "eptImplementation":  "ACTIVE",
+                                 "nestedImplementation":  "CAPABILITY_ONLY",
+                                 "evmcsImplementation":  "PARTIAL",
+                                 "featureFlags":  "0x0029803F30FFFFFF",
+                                 "vmxEptVpidCapabilities":  "0x00000F0106F34041",
+                                 "eptExecuteOnly":  true,
+                                 "eptPointer":  "0x0000000207FD905E",
+                                 "eptPageCount":  515,
+                                 "mappedRamMiB":  8190,
+                                 "vmExitCount":  3951225,
+                                 "lastExitReason":  18,
+                                 "lastExitQualification":  "0x0000000000000000",
+                                 "lastGuestRip":  "0xFFFFF80078921300",
+                                 "lastGuestRsp":  "0xFFFF868146D3BE68",
+                                 "lastExitInstructionLength":  3,
+                                 "lastStatus":  "0x00000000",
+                                 "vmxBasic":  "0x01D8100000000001",
+                                 "cr0Fixed0":  "0x0000000080000021",
+                                 "cr0Fixed1":  "0x00000000FFFFFFFF",
+                                 "cr4Fixed0":  "0x0000000000002000",
+                                 "cr4Fixed1":  "0x0000000000B72FFF",
+                                 "lastVmInstructionError":  12,
+                                 "eventCount":  420,
+                                 "droppedEventCount":  0,
+                                 "overwrittenEventCount":  0,
+                                 "publishedEventCount":  420,
+                                 "nestedL2LaunchRefusedCount":  0,
+                                 "nestedVmcs12EvictionCount":  0,
+                                 "nestedFuseTripCount":  0,
+                                 "nestedLastRefusalSite":  0,
+                                 "nestedLastRefusalSiteText":  "µ▓íµ£ëµïÆτ╗¥Φ┐ç",
+                                 "exitReasonCount":  {
+                                                         "0":  14450,
+                                                         "10":  3005895,
+                                                         "12":  794570,
+                                                         "18":  9396,
+                                                         "31":  42904,
+                                                         "32":  84010
+                                                     },
+                                 "processors":  [
+                                                    {
+                                                        "index":  0,
+                                                        "group":  0,
+                                                        "number":  0,
+                                                        "vmxInstructionResult":  0,
+                                                        "stateFlags":  1127,
+                                                        "stateHex":  "0x00000467",
+                                                        "lastStatus":  "0x00000000",
+                                                        "lastExitReason":  18,
+                                                        "vmExitCount":  3526650,
+                                                        "stateNames":  [
+                                                                           "RESOURCE_READY",
+                                                                           "SELF_TESTED",
+                                                                           "VMXON_SUCCEEDED",
+                                                                           "VMCS_LOADED",
+                                                                           "GUEST_LAUNCHED",
+                                                                           "DEVIRTUALIZED"
+                                                                       ]
+                                                    },
+                                                    {
+                                                        "index":  1,
+                                                        "group":  0,
+                                                        "number":  1,
+                                                        "vmxInstructionResult":  0,
+                                                        "stateFlags":  1127,
+                                                        "stateHex":  "0x00000467",
+                                                        "lastStatus":  "0x00000000",
+                                                        "lastExitReason":  18,
+                                                        "vmExitCount":  191032,
+                                                        "stateNames":  [
+                                                                           "RESOURCE_READY",
+                                                                           "SELF_TESTED",
+                                                                           "VMXON_SUCCEEDED",
+                                                                           "VMCS_LOADED",
+                                                                           "GUEST_LAUNCHED",
+                                                                           "DEVIRTUALIZED"
+                                                                       ]
+                                                    },
+                                                    {
+                                                        "index":  2,
+                                                        "group":  0,
+                                                        "number":  2,
+                                                        "vmxInstructionResult":  0,
+                                                        "stateFlags":  1127,
+                                                        "stateHex":  "0x00000467",
+                                                        "lastStatus":  "0x00000000",
+                                                        "lastExitReason":  18,
+                                                        "vmExitCount":  135091,
+                                                        "stateNames":  [
+                                                                           "RESOURCE_READY",
+                                                                           "SELF_TESTED",
+                                                                           "VMXON_SUCCEEDED",
+                                                                           "VMCS_LOADED",
+                                                                           "GUEST_LAUNCHED",
+                                                                           "DEVIRTUALIZED"
+                                                                       ]
+                                                    },
+                                                    {
+                                                        "index":  3,
+                                                        "group":  0,
+                                                        "number":  3,
+                                                        "vmxInstructionResult":  0,
+                                                        "stateFlags":  1127,
+                                                        "stateHex":  "0x00000467",
+                                                        "lastStatus":  "0x00000000",
+                                                        "lastExitReason":  18,
+                                                        "vmExitCount":  98452,
+                                                        "stateNames":  [
+                                                                           "RESOURCE_READY",
+                                                                           "SELF_TESTED",
+                                                                           "VMXON_SUCCEEDED",
+                                                                           "VMCS_LOADED",
+                                                                           "GUEST_LAUNCHED",
+                                                                           "DEVIRTUALIZED"
+                                                                       ]
+                                                    }
+                                                ]
+                             },
+                  "metrics":  {
+                                  "kind":  "hvm-metrics",
+                                  "version":  2,
+                                  "transitionCoherent":  true,
+                                  "transitionSequence":  138,
+                                  "command":  6,
+                                  "lastStatus":  "0x00000000",
+                                  "processorCount":  4,
+                                  "qpcFrequency":  "10000000",
+                                  "snapshotBeginQpc":  "5081179959",
+                                  "snapshotEndQpc":  "5081179979",
+                                  "commandBeginQpc":  "5013145386",
+                                  "commandEndQpc":  "5013150180",
+                                  "inveptAttempts":  "240",
+                                  "inveptSucceeded":  "240",
+                                  "inveptFailed":  "0",
+                                  "ruleAllocations":  "0",
+                                  "ruleFrees":  "0",
+                                  "replacementAllocations":  "0",
+                                  "replacementFrees":  "0",
+                                  "globalValidMask":  0,
+                                  "globalQpc":  {
+                                                    "resourcesBegin":  "0",
+                                                    "resourcesEnd":  "0",
+                                                    "eptBegin":  "0",
+                                                    "eptEnd":  "0",
+                                                    "rendezvousBegin":  "0",
+                                                    "rendezvousEnd":  "0"
+                                                },
+                                  "processors":  [
+                                                     {
+                                                         "group":  0,
+                                                         "number":  0,
+                                                         "validMask":  0,
+                                                         "qpc":  {
+                                                                     "ipiEnter":  "0",
+                                                                     "ipiLeave":  "0",
+                                                                     "vmcsBegin":  "0",
+                                                                     "stateCaptured":  "0",
+                                                                     "vmcsWritten":  "0",
+                                                                     "entryBefore":  "0",
+                                                                     "entryAfter":  "0"
+                                                                 }
+                                                     },
+                                                     {
+                                                         "group":  0,
+                                                         "number":  1,
+                                                         "validMask":  0,
+                                                         "qpc":  {
+                                                                     "ipiEnter":  "0",
+                                                                     "ipiLeave":  "0",
+                                                                     "vmcsBegin":  "0",
+                                                                     "stateCaptured":  "0",
+                                                                     "vmcsWritten":  "0",
+                                                                     "entryBefore":  "0",
+                                                                     "entryAfter":  "0"
+                                                                 }
+                                                     },
+                                                     {
+                                                         "group":  0,
+                                                         "number":  2,
+                                                         "validMask":  0,
+                                                         "qpc":  {
+                                                                     "ipiEnter":  "0",
+                                                                     "ipiLeave":  "0",
+                                                                     "vmcsBegin":  "0",
+                                                                     "stateCaptured":  "0",
+                                                                     "vmcsWritten":  "0",
+                                                                     "entryBefore":  "0",
+                                                                     "entryAfter":  "0"
+                                                                 }
+                                                     },
+                                                     {
+                                                         "group":  0,
+                                                         "number":  3,
+                                                         "validMask":  0,
+                                                         "qpc":  {
+                                                                     "ipiEnter":  "0",
+                                                                     "ipiLeave":  "0",
+                                                                     "vmcsBegin":  "0",
+                                                                     "stateCaptured":  "0",
+                                                                     "vmcsWritten":  "0",
+                                                                     "entryBefore":  "0",
+                                                                     "entryAfter":  "0"
+                                                                 }
+                                                     }
+                                                 ],
+                                  "shadowEpt":  [
+
+                                                ]
+                              },
+                  "processes":  [
+                                    {
+                                        "name":  "lsass",
+                                        "pid":  984,
+                                        "createdUtc":  "2026-09-16T01:23:58.1032441Z"
+                                    },
+                                    {
+                                        "name":  "services",
+                                        "pid":  956,
+                                        "createdUtc":  "2026-09-16T01:23:58.0620751Z"
+                                    },
+                                    {
+                                        "name":  "wininit",
+                                        "pid":  812,
+                                        "createdUtc":  "2026-09-16T01:23:58.0343278Z"
+                                    }
+                                ]
+              }
+}

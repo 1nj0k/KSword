@@ -1,0 +1,93 @@
+policy-inplace-run-1
+policy-inplace-before
+53398dd1f3a4c282ace3b660acd92ff7  /tmp/page-app/policy-inplace.json
+paper-http-sample-v2 54 1694.94 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1693.195938243}
+{"kind":"policy-oracle","uptime":1695.053678641,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 55 1696.11 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1695.198858217}
+{"kind":"policy-oracle","uptime":1696.256224030,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 56 1697.35 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1697.202797961}
+{"kind":"policy-oracle","uptime":1697.485790285,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 57 1698.58 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1697.202797961}
+{"kind":"policy-oracle","uptime":1698.731227446,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 58 1699.87 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1699.209492786}
+{"kind":"policy-oracle","uptime":1700.124299202,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 59 1701.25 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1701.215774911}
+{"kind":"policy-oracle","uptime":1701.416889228,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 60 1702.50 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1701.215774911}
+{"kind":"policy-oracle","uptime":1702.642958753,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 61 1703.72 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1703.218569253}
+{"kind":"policy-oracle","uptime":1703.880644421,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 62 1704.97 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1703.218569253}
+{"kind":"policy-oracle","uptime":1705.150401993,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+policy-inplace-write
+1706.13 2847.39
+paper-http-sample-v2 63 1706.26 0 4096 620f0b67a91f7f74151bc5be745b7110 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1705.221919149}
+{"kind":"policy-oracle","uptime":1706.456649670,"bytes":4096,"validPolicy":false,"decision":"reject-corrupt-policy"}
+paper-http-sample-v2 64 1707.56 0 4096 620f0b67a91f7f74151bc5be745b7110 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1707.223882049}
+{"kind":"policy-oracle","uptime":1707.749898950,"bytes":4096,"validPolicy":false,"decision":"reject-corrupt-policy"}
+paper-http-sample-v2 65 1708.89 0 4096 620f0b67a91f7f74151bc5be745b7110 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1707.223882049}
+{"kind":"policy-oracle","uptime":1709.065924702,"bytes":4096,"validPolicy":false,"decision":"reject-corrupt-policy"}
+paper-http-sample-v2 66 1710.19 0 4096 620f0b67a91f7f74151bc5be745b7110 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1709.230273978}
+{"kind":"policy-oracle","uptime":1710.320911417,"bytes":4096,"validPolicy":false,"decision":"reject-corrupt-policy"}
+paper-http-sample-v2 67 1711.41 0 4096 620f0b67a91f7f74151bc5be745b7110 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1711.236190019}
+{"kind":"policy-oracle","uptime":1711.595063376,"bytes":4096,"validPolicy":false,"decision":"reject-corrupt-policy"}
+paper-http-sample-v2 68 1712.68 0 4096 620f0b67a91f7f74151bc5be745b7110 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1711.236190019}
+{"kind":"policy-oracle","uptime":1712.865207872,"bytes":4096,"validPolicy":false,"decision":"reject-corrupt-policy"}
+paper-http-sample-v2 69 1714.00 0 4096 620f0b67a91f7f74151bc5be745b7110 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1713.243810813}
+{"kind":"policy-oracle","uptime":1714.235382264,"bytes":4096,"validPolicy":false,"decision":"reject-corrupt-policy"}
+paper-http-sample-v2 70 1715.39 0 4096 620f0b67a91f7f74151bc5be745b7110 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1715.248097013}
+{"kind":"policy-oracle","uptime":1715.570587597,"bytes":4096,"validPolicy":false,"decision":"reject-corrupt-policy"}
+paper-http-sample-v2 71 1716.72 0 4096 620f0b67a91f7f74151bc5be745b7110 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1715.248097013}
+{"kind":"policy-oracle","uptime":1716.917086751,"bytes":4096,"validPolicy":false,"decision":"reject-corrupt-policy"}
+paper-http-sample-v2 72 1718.03 0 4096 620f0b67a91f7f74151bc5be745b7110 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1717.272703011}
+policy-inplace-restore
+{"kind":"policy-oracle","uptime":1718.180528253,"bytes":4096,"validPolicy":false,"decision":"reject-corrupt-policy"}
+1718.19 2867.51
+53398dd1f3a4c282ace3b660acd92ff7  /tmp/page-app/policy-inplace.json
+paper-http-sample-v2 73 1719.35 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1719.275889733}
+{"kind":"policy-oracle","uptime":1719.503841659,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 74 1720.59 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1719.275889733}
+{"kind":"policy-oracle","uptime":1720.758699344,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 75 1721.85 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1721.282021804}
+{"kind":"policy-oracle","uptime":1722.039369138,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 76 1723.14 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1721.282021804}
+{"kind":"policy-oracle","uptime":1723.279122634,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 77 1724.34 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1723.288196634}
+{"kind":"policy-oracle","uptime":1724.546443350,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 78 1725.66 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1725.291369763}
+{"kind":"policy-oracle","uptime":1725.868216968,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 79 1726.97 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1725.291369763}
+{"kind":"policy-oracle","uptime":1727.120689230,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 80 1728.23 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1727.297681478}
+{"kind":"policy-oracle","uptime":1728.389603459,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+paper-http-sample-v2 81 1729.43 0 4096 53398dd1f3a4c282ace3b660acd92ff7 4578 52514 1 e4b22249-5b20-4048-b466-f308c7e04a85
+{"kind":"application-page","pid":15449,"gpa":"0x170d1000","samePfn":true,"uptime":1729.300438681}
+{"kind":"policy-oracle","uptime":1729.599133829,"bytes":4096,"validPolicy":true,"decision":"quote-1250"}
+policy-inplace-end-1

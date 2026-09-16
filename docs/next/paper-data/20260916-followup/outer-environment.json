@@ -1,0 +1,40 @@
+{
+  "kind": "outer-environment",
+  "utc": "2026-09-16T02:14:31.2520077Z",
+  "os": {
+    "Caption": "Microsoft Windows 11 Pro for Workstations Insider Preview",
+    "Version": "10.0.26300",
+    "BuildNumber": "26300",
+    "LastBootUpTime": "2026-09-13T12:46:40.5-04:00"
+  },
+  "cpu": [
+    {
+      "Name": "13th Gen Intel(R) Core(TM) i7-13700F",
+      "Manufacturer": "GenuineIntel",
+      "Stepping": null,
+      "Revision": null,
+      "NumberOfCores": 16,
+      "NumberOfLogicalProcessors": 24,
+      "VirtualizationFirmwareEnabled": false,
+      "SecondLevelAddressTranslationExtensions": false,
+      "VMMonitorModeExtensions": false
+    }
+  ],
+  "bios": {
+    "Manufacturer": "ASUSTeK COMPUTER INC. (Licensed by AMI, LLC.)",
+    "SMBIOSBIOSVersion": "S501ME.331",
+    "ReleaseDate": "2025-11-06T19:00:00-05:00"
+  },
+  "hypervVersion": "10.0.26100.9022 (WinBuild.160101.0800)",
+  "target": {
+    "Name": "KSword-HVM-Target",
+    "Generation": 2,
+    "ProcessorCount": 4,
+    "MemoryAssigned": 8589934592,
+    "State": 2
+  },
+  "targetProcessor": {
+    "Count": 4,
+    "ExposeVirtualizationExtensions": true
+  }
+}

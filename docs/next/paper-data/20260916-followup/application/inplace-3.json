@@ -1,0 +1,17 @@
+{
+  "kind": "policy-comparator-run",
+  "runId": "inplace-3",
+  "status": "recorded_requires_analysis",
+  "persistedAfterRun": true,
+  "source": "serial.txt",
+  "serialOffset": 367396,
+  "serialEnd": 377012,
+  "file": "/tmp/page-app/policy-inplace.json",
+  "script": "measured-inplace-script.txt",
+  "method": "guest-side saved bytes, zero write, restore",
+  "continuity": [
+    "inplace-before.json",
+    "inplace-after.json"
+  ],
+  "note": "Per-run excerpt extracted from durable serial after execution; not a new live measurement."
+}

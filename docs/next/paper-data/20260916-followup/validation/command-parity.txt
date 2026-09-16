@@ -1,0 +1,2 @@
+CATALOG_TRANSLATIONS=PASS (60 commands, 2 languages)
+ARGUMENT_CONTRACTS=PASS (28 valid, 20 refused)

@@ -1,0 +1,58 @@
+{
+  "faults": {
+    "1:pass": 3,
+    "2:pass": 3,
+    "3:pass": 3,
+    "4:pass": 3,
+    "5:pass": 3
+  },
+  "loadPeriods": [],
+  "cycles": {
+    "idle:gpa-above-52-bits:clean_reject": 1,
+    "idle:remap-restore:pass": 3,
+    "idle:unaligned-gpa:clean_reject": 1,
+    "idle:unknown-ept-root:clean_reject": 1
+  },
+  "effectResults": {
+    "idle:True": 3
+  },
+  "latencyUs": {
+    "idle": {
+      "mapBodyUs": {
+        "n": 3,
+        "median": 102.4,
+        "mean": 111.66666666666667,
+        "min": 91.1,
+        "max": 141.5,
+        "sampleSd": 26.44699100717005
+      },
+      "restoreBodyUs": {
+        "n": 3,
+        "median": 104.3,
+        "mean": 110.2,
+        "min": 89.3,
+        "max": 137.0,
+        "sampleSd": 24.391186932988727
+      },
+      "commitDrainUs": {
+        "n": 3,
+        "median": 74.4,
+        "mean": 81.33333333333334,
+        "min": 55.4,
+        "max": 114.2,
+        "sampleSd": 30.006888098123962
+      },
+      "retireDrainUs": {
+        "n": 3,
+        "median": 80.2,
+        "mean": 83.23333333333333,
+        "min": 69.6,
+        "max": 99.9,
+        "sampleSd": 15.37606364884503
+      }
+    }
+  },
+  "writeIsolation": [],
+  "scope": "Two guest CPU-pinned observers; one reserved 4 KiB page and one boot. Sampled full-page MD5/readback, not arbitrary application atomicity or universal stale-translation freedom. Actual INVEPT deltas include background work. Fault modes 4/5 omit one drain call; not injected hardware INVEPT faults. Allocation ledger covers only page-control objects/backing.",
+  "incomplete": []
+}

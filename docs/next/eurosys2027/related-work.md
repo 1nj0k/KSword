@@ -24,10 +24,14 @@ The evaluation links these events to per-CPU guest readback and identity continu
 
 This is a **candidate contribution**, not a claim that the novelty threshold is
 already met. A port to a new platform plus a successful memory demonstration can
-still be judged insufficient. The paper needs a useful application whose benefit
-depends on this deployment boundary, and a comparison with the most relevant
-available alternative. The current marker-page/write-isolation experiment is a
-mechanism validation; it is not an application benchmark.
+still be judged insufficient. The follow-up adds a real HTTP server, a fixed-schema
+policy consumer, and a guest-side direct-write comparator. Both controls produce
+a corrupted policy followed by recovery. EPT intervention retains the original
+backing; direct writing requires saved original bytes and guest-side write authority.
+This distinguishes control requirements, but does not establish superior speed
+or a production reliability benefit. The oracle is a research fixture, and
+privileged in-guest instrumentation still selects and pins its page. Marker
+readback remains mechanism validation.
 
 ## Exact experimental contract
 
@@ -53,12 +57,15 @@ called or that no VMM-owned metadata changes would be false.
 
 ## Evaluation needed for a stronger paper
 
-- A workload with an externally checked correctness oracle, not only marker bytes.
+- A production workload beyond the new fixed-schema HTTP policy oracle, including
+  a matched performance comparison with alternative fault-injection mechanisms.
 - A matched guest baseline on a configuration where the same VMware backend starts
   without the monitor. WHP is a different backend and must be reported separately.
-- Independent machines/boots, CPU counts beyond two, and an actual Hyper-V
-  intermediate VMM. The present Windows 1 Home edition cannot host the full role;
-  component installation attempts are not compatibility evidence.
+- Independent machines/boots and configurations beyond four Windows/two guest
+  vCPUs. Windows 1 has now been upgraded to Pro. The inner Hyper-V/TinyCore
+  baseline boots normally, but monitor admission is refused because VMX is not
+  exposed to its Windows root partition. This is a measured negative result,
+  not successful hot insertion; see [the experiment](../hyperv-descendant-results.md).
 - Longer observed runs, page-table changes/root reuse, and failure cases involving
   partial CPU acknowledgement. Request-local omitted-drain tests do not reproduce
   arbitrary hardware failure.

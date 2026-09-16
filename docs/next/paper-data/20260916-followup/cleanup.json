@@ -1,0 +1,131 @@
+{
+    "kind":  "post-experiment-cleanup",
+    "utc":  "2026-09-16T02:19:08.0797399Z",
+    "pageBefore":  {
+                       "kind":  "nested-page",
+                       "operationId":  38,
+                       "faultMode":  0,
+                       "status":  0,
+                       "lastStatus":  "0x00000000",
+                       "generation":  33,
+                       "active":  0,
+                       "retired":  0,
+                       "residentProcessors":  4,
+                       "ept12Pointer":  "0x0000000000000000",
+                       "guestPhysicalPage":  "0x0000000000000000",
+                       "shadowPhysicalPage":  "0x0000000000000000",
+                       "originalPhysicalPage":  "0x0000000000000000",
+                       "composedCount":  0,
+                       "ownerProcessId":  0,
+                       "ownerExited":  0,
+                       "ownerCreationTime":  "0",
+                       "leaseRevocationReason":  0,
+                       "sourcePhysicalPage":  "0x0000000000000000",
+                       "sourceEntryCount":  0,
+                       "sourcePath":  [
+
+                                      ],
+                       "roots":  [
+                                     "0x000000000930905E"
+                                 ]
+                   },
+    "vmwareStopCode":  0,
+    "vmwareStopRaw":  "",
+    "removeRaw":  "{\"kind\":\"nested-page\",\"operationId\":39,\"faultMode\":0,\"status\":0,\"lastStatus\":\"0x00000000\",\"generation\":34,\"active\":0,\"retired\":0,\"residentProcessors\":4,\"ept12Pointer\":\"0x0000000000000000\",\"guestPhysicalPage\":\"0x0000000000000000\",\"shadowPhysicalPage\":\"0x0000000000000000\",\"originalPhysicalPage\":\"0x0000000000000000\",\"composedCount\":0,\"ownerProcessId\":0,\"ownerExited\":0,\"ownerCreationTime\":\"0\",\"leaseRevocationReason\":0,\"sourcePhysicalPage\":\"0x0000000000000000\",\"sourceEntryCount\":0,\"sourcePath\":[],\"roots\":[\"0x000000000930905E\"]}\r\n",
+    "residentStopRaw":  "{\"kind\":\"control\",\"command\":\"stop\",\"status\":0,\"statusName\":\"OK\",\"lastStatus\":\"0x00000000\",\"oldStateFlags\":13254943,\"newStateFlags\":9044255,\"oldStateHex\":\"0x00CA411F\",\"newStateHex\":\"0x008A011F\",\"newStateNames\":[\"INITIALIZED\",\"RESOURCES_READY\",\"EPT_READY\",\"SELF_TESTED\",\"SELF_TEST_PASSED\",\"GUEST_READY\",\"EVENTS_AVAILABLE\",\"EVMCS_PARTIAL\",\"RESIDENT_NESTED\"],\"oldGeneration\":95,\"newGeneration\":96,\"preparedProcessorCount\":4,\"selfTestPassedProcessorCount\":4,\"failedProcessorCount\":0,\"residentProcessorCount\":0,\"residentImplementation\":\"CAPABILITY_ONLY\",\"eptImplementation\":\"ACTIVE\",\"nestedImplementation\":\"CAPABILITY_ONLY\",\"evmcsImplementation\":\"PARTIAL\",\"eptPointer\":\"0x0000000207FD905E\",\"eptPageCount\":515,\"eptRuleCount\":0,\"mappedRamMiB\":8190,\"vmExitCount\":220933914,\"lastExitReason\":18,\"lastExitQualification\":\"0x0000000000000000\",\"lastGuestRip\":\"0xFFFFF80078921300\",\"lastGuestRsp\":\"0xFFFF868146DE8E68\",\"lastExitInstructionLength\":3,\"lastVmInstructionError\":12,\"soakElapsedMilliseconds\":0,\"soakUnexpectedDevirtualizations\":0}\r\n",
+    "metrics":  {
+                    "kind":  "hvm-metrics",
+                    "version":  2,
+                    "transitionCoherent":  true,
+                    "transitionSequence":  188,
+                    "command":  6,
+                    "lastStatus":  "0x00000000",
+                    "processorCount":  4,
+                    "qpcFrequency":  "10000000",
+                    "snapshotBeginQpc":  "33128563202",
+                    "snapshotEndQpc":  "33128563269",
+                    "commandBeginQpc":  "33128485113",
+                    "commandEndQpc":  "33128495569",
+                    "inveptAttempts":  "1951640",
+                    "inveptSucceeded":  "1951640",
+                    "inveptFailed":  "0",
+                    "ruleAllocations":  "22",
+                    "ruleFrees":  "22",
+                    "replacementAllocations":  "19",
+                    "replacementFrees":  "19",
+                    "globalValidMask":  48,
+                    "globalQpc":  {
+                                      "resourcesBegin":  "0",
+                                      "resourcesEnd":  "0",
+                                      "eptBegin":  "0",
+                                      "eptEnd":  "0",
+                                      "rendezvousBegin":  "33128485119",
+                                      "rendezvousEnd":  "33128485679"
+                                  },
+                    "processors":  [
+                                       {
+                                           "group":  0,
+                                           "number":  0,
+                                           "validMask":  3,
+                                           "qpc":  {
+                                                       "ipiEnter":  "33128485453",
+                                                       "ipiLeave":  "33128485674",
+                                                       "vmcsBegin":  "0",
+                                                       "stateCaptured":  "0",
+                                                       "vmcsWritten":  "0",
+                                                       "entryBefore":  "0",
+                                                       "entryAfter":  "0"
+                                                   }
+                                       },
+                                       {
+                                           "group":  0,
+                                           "number":  1,
+                                           "validMask":  3,
+                                           "qpc":  {
+                                                       "ipiEnter":  "33128485454",
+                                                       "ipiLeave":  "33128485675",
+                                                       "vmcsBegin":  "0",
+                                                       "stateCaptured":  "0",
+                                                       "vmcsWritten":  "0",
+                                                       "entryBefore":  "0",
+                                                       "entryAfter":  "0"
+                                                   }
+                                       },
+                                       {
+                                           "group":  0,
+                                           "number":  2,
+                                           "validMask":  3,
+                                           "qpc":  {
+                                                       "ipiEnter":  "33128485452",
+                                                       "ipiLeave":  "33128485674",
+                                                       "vmcsBegin":  "0",
+                                                       "stateCaptured":  "0",
+                                                       "vmcsWritten":  "0",
+                                                       "entryBefore":  "0",
+                                                       "entryAfter":  "0"
+                                                   }
+                                       },
+                                       {
+                                           "group":  0,
+                                           "number":  3,
+                                           "validMask":  3,
+                                           "qpc":  {
+                                                       "ipiEnter":  "33128485454",
+                                                       "ipiLeave":  "33128485674",
+                                                       "vmcsBegin":  "0",
+                                                       "stateCaptured":  "0",
+                                                       "vmcsWritten":  "0",
+                                                       "entryBefore":  "0",
+                                                       "entryAfter":  "0"
+                                                   }
+                                       }
+                                   ],
+                    "shadowEpt":  [
+
+                                  ]
+                },
+    "remainingVmx":  [
+
+                     ],
+    "restoreInnerHypervStartup":  "The operation completed successfully.\r\n"
+}

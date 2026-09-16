@@ -1,0 +1,39 @@
+{
+    "schemaVersion":  1,
+    "kind":  "hyperv-capability-refusal",
+    "utc":  "2026-09-16T01:23:44.6859876Z",
+    "vmId":  "74eb68a3-c16a-4e98-827a-05d363bdf3f6",
+    "vmState":  "Running",
+    "vmUptimeSeconds":  350.46799999999996,
+    "windowsBootUtc":  "2026-09-16T00:53:15.1584830Z",
+    "driverSha256":  "8850E28F7F43CF12F95116C862E0AA9FB4B609D60446EE1D46DDC1B900AB7A04",
+    "controlSha256":  "4DD0D8DABB3019503E15D70692759FF0502CAC46635D53F266A577CAAD5972AE",
+    "cpuid":  "{\"kind\":\"cpuidView\",\"hypervisorPresent\":true,\"leaf1Ecx\":\"0xFEFA3203\",\"hvLeafEax\":\"0x4000000C\",\"hvVendor\":\"Microsoft Hv\",\"hidden\":false}\r\n",
+    "attempts":  [
+                     {
+                         "command":  "prepare-eptpsw",
+                         "exitCode":  2,
+                         "raw":  "{\"kind\":\"control\",\"command\":\"prepare-eptpsw\",\"stage\":\"capability-query\",\"controlSubmitted\":false,\"queryStatus\":1,\"lastStatus\":\"0xC00000BB\",\"generation\":1,\"stateFlags\":1}\r\n"
+                     },
+                     {
+                         "command":  "resident-nested-hidehv",
+                         "exitCode":  2,
+                         "raw":  "{\"kind\":\"control\",\"command\":\"resident-nested-hidehv\",\"stage\":\"capability-query\",\"controlSubmitted\":false,\"queryStatus\":1,\"lastStatus\":\"0xC00000BB\",\"generation\":1,\"stateFlags\":1}\r\n"
+                     }
+                 ],
+    "status":  "{\"kind\":\"query\",\"queryStatus\":1,\"stateFlags\":1,\"stateFlagsHex\":\"0x00000001\",\"stateNames\":[\"INITIALIZED\"],\"featureNames\":[\"INTEL\",\"HYPERVISOR_PRESENT\"],\"generation\":1,\"processorCount\":0,\"preparedProcessorCount\":0,\"selfTestPassedProcessorCount\":0,\"residentProcessorCount\":0,\"residentImplementation\":\"UNSUPPORTED\",\"eptImplementation\":\"UNSUPPORTED\",\"nestedImplementation\":\"UNSUPPORTED\",\"evmcsImplementation\":\"UNSUPPORTED\",\"featureFlags\":\"0x0000000000004001\",\"vmxEptVpidCapabilities\":\"0x0000000000000000\",\"eptExecuteOnly\":false,\"eptPointer\":\"0x0000000000000000\",\"eptPageCount\":0,\"mappedRamMiB\":0,\"vmExitCount\":0,\"lastExitReason\":4294967295,\"lastExitQualification\":\"0x0000000000000000\",\"lastGuestRip\":\"0x0000000000000000\",\"lastGuestRsp\":\"0x0000000000000000\",\"lastExitInstructionLength\":0,\"lastStatus\":\"0xC00000BB\",\"vmxBasic\":\"0x0000000000000000\",\"cr0Fixed0\":\"0x0000000000000000\",\"cr0Fixed1\":\"0x0000000000000000\",\"cr4Fixed0\":\"0x0000000000000000\",\"cr4Fixed1\":\"0x0000000000000000\",\"lastVmInstructionError\":0,\"eventCount\":0,\"droppedEventCount\":0,\"overwrittenEventCount\":0,\"publishedEventCount\":0,\"nestedL2LaunchRefusedCount\":0,\"nestedVmcs12EvictionCount\":0,\"nestedFuseTripCount\":0,\"nestedLastRefusalSite\":0,\"nestedLastRefusalSiteText\":\"µ▓íµ£ëµïÆτ╗¥Φ┐ç\",\"exitReasonCount\":{},\"processors\":[]}\r\n",
+    "processes":  [
+                      {
+                          "name":  "vmms.exe",
+                          "pid":  2400,
+                          "createdUtc":  "2026-09-16T00:53:20.3716900Z",
+                          "commandLine":  "C:\\Windows\\system32\\vmms.exe"
+                      },
+                      {
+                          "name":  "vmwp.exe",
+                          "pid":  2824,
+                          "createdUtc":  "2026-09-16T01:17:54.1015160Z",
+                          "commandLine":  "\"C:\\Windows\\System32\\vmwp.exe\" 74EB68A3-C16A-4E98-827A-05D363BDF3F6 0x280"
+                      }
+                  ]
+}

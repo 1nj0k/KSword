@@ -1,0 +1,7 @@
+{
+    "kind":  "mode-setup",
+    "round":  3,
+    "condition":  "resident-vmread512",
+    "status":  "ready",
+    "utc":  "2026-09-16T01:32:08.2999194Z"
+}

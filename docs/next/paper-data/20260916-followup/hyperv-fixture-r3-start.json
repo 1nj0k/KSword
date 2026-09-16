@@ -1,0 +1,9 @@
+{
+    "schemaVersion":  1,
+    "beginUtc":  "2026-09-16T01:17:54.2092311Z",
+    "isoSha256":  "1092501BD8B841BBB1C6FC072AF6057917A7940EE4CF76D6D7315CD2C3A14182",
+    "serialReaderPid":  4560,
+    "vmId":  "74eb68a3-c16a-4e98-827a-05d363bdf3f6",
+    "previousAttempt":  "kernel_not_found_at_isolinux",
+    "change":  "explicit mkisofs El Torito boot-info-table rebuild"
+}

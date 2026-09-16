@@ -1,0 +1,7 @@
+{
+  "kind": "collection-failure",
+  "stage": "inplace-before-snapshot",
+  "utc": "2026-09-16T02:04:15.5898369Z",
+  "result": "incomplete",
+  "detail": "Read-only snapshot failed to return before the observer window expired. No comparator command was submitted and no hvm_ctl process remained. The bounded follow-up uses explicit identity fields."
+}

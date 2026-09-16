@@ -1,0 +1,7 @@
+﻿runId,source,case,condition,result,ruleAllocations,ruleFrees,replacementAllocations,replacementFrees,inveptAttempts,inveptSucceeded,inveptFailed,effectPass,originalBacking,replacementBacking,fill,mapBodyUs,restoreBodyUs,commitDrainUs,retireDrainUs
+nested-page-idle-gpa-above-52-bits-20260916T014651063Z,nested-page-idle-gpa-above-52-bits-20260916T014651063Z.json,gpa-above-52-bits,idle,clean_reject,0,0,0,0,1242,1242,0,,,,,,,,
+nested-page-idle-remap-restore-20260916T014510513Z,nested-page-idle-remap-restore-20260916T014510513Z.json,remap-restore,idle,pass,1,1,1,1,4980,4980,0,True,0x00000000CDB03000,0x0000000204FD4000,C1,141.5,137.0,114.2,99.9
+nested-page-idle-remap-restore-20260916T014516934Z,nested-page-idle-remap-restore-20260916T014516934Z.json,remap-restore,idle,pass,1,1,1,1,4414,4414,0,True,0x00000000CDB03000,0x0000000204FD4000,C2,91.1,89.3,55.4,69.6
+nested-page-idle-remap-restore-20260916T014523198Z,nested-page-idle-remap-restore-20260916T014523198Z.json,remap-restore,idle,pass,1,1,1,1,5048,5048,0,True,0x00000000CDB03000,0x0000000204FD4000,C3,102.4,104.3,74.4,80.2
+nested-page-idle-unaligned-gpa-20260916T014653196Z,nested-page-idle-unaligned-gpa-20260916T014653196Z.json,unaligned-gpa,idle,clean_reject,0,0,0,0,1646,1646,0,,,,,,,,
+nested-page-idle-unknown-ept-root-20260916T014655452Z,nested-page-idle-unknown-ept-root-20260916T014655452Z.json,unknown-ept-root,idle,clean_reject,0,0,0,0,1644,1644,0,,,,,,,,
