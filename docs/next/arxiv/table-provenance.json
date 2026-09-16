@@ -1,6 +1,9 @@
 {
   "inputs": {
     "20260916-followup/analysis-followup.json": "efd10e85aaf10aa795755c2e7c29bcd78e68fc5a43f5e7cc2bdf8d225b765461",
+    "20260916-followup/exit-cost-derived.json": "98fdd4f375544fbfcd45382cab108ea41a18afe60c5de721ef0862cbc58a0604",
+    "20260916-large-leaf/admission-probe.json": "dae6b87d42d494002f797c371ea539b1f1e6b578b140b3b4eae4828025d42918",
+    "20260916-large-leaf/published.json": "d769e0499128d783a6072fc69634eae1b80071d9364a1f01ed2d4202232ab34a",
     "20260916-followup/latency-runs.csv": "d103e8188dadc2abb4eb90796fe706edce9c1c0ebe423cc50128813f811afd73",
     "20260916-followup/lifecycle/derived/smp-summary.json": "86254878bd34a0646c7844e7c85319df0ed112b1052e55e9c4fd98235aebe0e1",
     "20260915-4x2/derived/nested-improvements.csv": "8852237127ac09ac715516a85d057ab8692ef918833a08e97310e9c186752c34",
@@ -35,7 +38,49 @@
         }
       }
     },
-    "metadataAbstractCharacters": 1610
+    "cpuidCostBudget": {
+      "cpuidOffNs": 332.792,
+      "cpuidNestedNs": 2915.062,
+      "cpuidAddedNs": 2582.27,
+      "profiledBodyNs": 180.87184929419914,
+      "instrumentNs": 65.10439601558215,
+      "timestampsPerExit": 11,
+      "dispatcherNsInstrumentRemoved": 115.76745327861698,
+      "dispatcherSharePercentRange": [
+        4.483166101090009,
+        7.004374031150853
+      ],
+      "residualNsRange": [
+        2401.3981507058006,
+        2466.502546721383
+      ],
+      "residualSharePercentRange": [
+        92.99562596884914,
+        95.51683389891
+      ],
+      "vmreadNsPerRead": {
+        "256": 7.956792968749999,
+        "512": 7.753191406249999
+      },
+      "dispatcherVmcsReadsImplied": 5.92377895652642,
+      "fullPathVmreadCount": 6,
+      "emptyTimestampPairCycles": 25,
+      "ceilingRatioIfBodyFree": 8.215913094983657,
+      "measuredRatio": 8.759411283925095
+    },
+    "largeLeafAdmission": {
+      "attempts": 9,
+      "captured": 8,
+      "distinctSourceShifts": [
+        "12"
+      ],
+      "publishedByCoarseSourceRule": 0,
+      "publishedByScanRule": 2,
+      "scannedLeavesPerRegion": 512,
+      "ept12Pointer": "0x1507C05E",
+      "liveEpt12Pointer": "0x151F905E"
+    },
+    "metadataAbstractCharacters": 1549
   },
   "note": "Inputs are derived evidence summaries, whose raw inputs are indexed in their datasets. Cohorts are not pooled."
 }

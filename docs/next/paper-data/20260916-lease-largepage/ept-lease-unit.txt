@@ -1,0 +1,2 @@
+EPT_LEASE=PASS: identity drift, all bits, A/D, unreadable sources, invalid requests, 2-MiB and 1-GiB leaves (drift, bit sweep, offset folding, short-path bounds)
+EPT_LEAF_PLAN=PASS: source granularity, geometry, backing, ownership, source uniformity scan

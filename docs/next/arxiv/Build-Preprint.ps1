@@ -27,4 +27,6 @@ if (-not (Test-Path -LiteralPath $generated) -or (Get-Item -LiteralPath $generat
 Move-Item -LiteralPath $generated -Destination (Join-Path $outputDir 'ksword-live-interposition-v1.pdf') -Force
 & $Python (Join-Path $sourceDir 'package_source.py') --output-dir $outputDir
 if ($LASTEXITCODE -ne 0) { throw 'Source-package validation failed.' }
+& $Python (Join-Path $sourceDir 'validate_build.py') --output-dir $outputDir
+if ($LASTEXITCODE -ne 0) { throw 'Build-validation record generation failed.' }
 Write-Output ('PREPRINT_OUTPUT=' + $outputDir)

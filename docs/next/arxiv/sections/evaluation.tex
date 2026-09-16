@@ -99,10 +99,109 @@ slots and balances allocation counts without the previously seen Hyper-V
 version~3 path.
 
 Portable adversarial tests compile the same lease walker used by the driver and
-exercise bit changes at each level, A/D modes, leaf sizes, unreadable paths,
-root/path reuse, and malformed requests. They validate comparator behavior but
-do not replace hardware source-EPT mutation, adversarial multicore, or actual
-hardware-failure tests. Those remain unmeasured.
+exercise bit changes at each level, A/D modes, unreadable paths, root/path reuse,
+and malformed requests.
+
+\paragraph{Leaves larger than 4 KiB.}
+A 2\,MiB or 1\,GiB EPT leaf terminates the walk one or two levels early, so a
+short capture must still expire on the same drift a full path does, and the
+levels it never read must stay outside verification. We extend the portable
+suite to cover both leaf sizes: capture and validation on each, a full 64-bit
+sweep of every captured entry requiring the ignored set to be exactly accessed at
+any level plus dirty at the terminating leaf, A/D-disabled behavior, unreadable
+leaves, and the guest offset folded into a large source frame. Two guest pages
+inside one 2\,MiB leaf are shown to share an entry path and differ only in source
+frame; both validate, which records that the lease proves path identity and never
+guest-page identity. Rejections specific to a 1\,GiB leaf are included: address
+bits inside its alignment, a non-writeback memory type, write without read, and a
+permission intersection emptied by an ancestor.
+
+Passing does not establish that a suite can detect anything, so we measure it.
+Nine defects were injected one at a time into a copy of the walker: unchecked
+reserved address bits under a large leaf, an unfolded guest offset, dirty treated
+as metadata only at the last level, a large-page bit accepted at the PTE level,
+validation that always walks four levels or that refuses short captures, an
+accepted empty permission intersection, a 4\,KiB offset mask applied to every
+leaf, and a capture that always reports four entries. The current suite kills all
+nine. Run against the suite as it stood before these cases were added, three
+survive, so the large-page cases are responsible for three of the nine and the
+remaining six were already covered. The harness is scripted and rebuilds both
+suite versions from the repository, so the count can be recomputed rather than
+taken on assertion.
+
+These tests validate comparator behavior against synthetic tables. They do not
+replace hardware source-EPT mutation by a live intermediate VMM, adversarial
+multicore, or actual hardware-failure tests.
+
+\paragraph{Publishing an override at a larger granularity.}
+\ks{} can publish an override as a 2\,MiB or 1\,GiB shadow leaf rather than a
+4\,KiB one, allocating aligned contiguous replacement backing, initializing the
+whole region from the original bytes so that publication changes nothing the
+descendant can observe, and replacing individual pages afterwards. Admission is
+gated on the granularity the intermediate VMM already uses: a leaf larger than
+4\,KiB applies one permission set to every page beneath it, so it is admitted
+only where EPT12's own leaf covers the whole region. Composing a 2\,MiB leaf over
+512 separately mapped source pages would grant the descendant whatever the
+sampled page allowed, including access the intermediate VMM revoked on one of the
+other 511. A request that cannot be honoured at the granularity asked for is
+refused rather than narrowed.
+
+On the evaluated stack that gate never opens. Table~\ref{tab:large-leaf} reports
+nine admission attempts against the running VMware/TinyCore instance. Seven
+addresses captured a source translation, and every one of them terminated on a
+4\,KiB EPT12 leaf; none reported 2\,MiB or 1\,GiB. All seven were refused with
+the source-granularity status, one was refused on geometry, one address was not
+mapped at all, and no override was published by any attempt.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Large-leaf admission attempts against the live descendant. Requested and
+source shifts are base-two exponents: 12, 21 and 30 are 4\,KiB, 2\,MiB and
+1\,GiB. No attempt published an override.}
+\label{tab:large-leaf}
+\input{tables/large-leaf}
+\end{table}
+
+That result measures the intermediate VMM rather than the mechanism: VMware backs
+this descendant's guest-physical memory at 4\,KiB granularity, so a rule phrased
+in terms of the source's granularity has nothing to admit.
+
+\paragraph{Admitting by inspection instead.}
+Coarse source granularity is sufficient for one leaf to stand for a region, but
+it is not necessary. What a large leaf actually requires is that every source
+entry under the region grant the same access and the same memory type, and that
+can be established by reading them. \ks{} implements this as a second, explicitly
+requested rule: it walks all 512 source entries of a 2\,MiB region and admits the
+leaf only if they agree, treating accessed and dirty as per-page metadata rather
+than disagreement. The rule is opt-in because it is paid for with a weaker lease
+-- drift on the region's first page path is still detected at every composition,
+while a change to one of the other entries is not, since re-reading 512 physical
+entries inside a path that runs on the order of $10^{5}$ times per second is not
+affordable. A caller that does not ask for it keeps the stronger lease and the
+stricter rule.
+
+Table~\ref{tab:large-leaf-scan} is that comparison on the live stack. The same
+guest-physical address, the same driver and the same 4\,KiB source granularity
+are refused under the coarse-source rule and admitted under the scanning rule,
+which published a 2\,MiB shadow leaf over 2\,MiB-aligned contiguous replacement
+backing; all 512 entries were read and reported the same access bits. Each
+published region was removed, returning the active slot to zero, and the
+descendant and its VMM ran throughout.
+
+\begin{table}[tbp]
+\centering\small
+\caption{The same addresses under both admission rules. Only the rule differs.
+``Leaves read'' is the number of source entries the scanning rule examined.}
+\label{tab:large-leaf-scan}
+\input{tables/large-leaf-scan}
+\end{table}
+
+What this does not establish is a performance effect. We publish a large leaf and
+remove it; we do not report an exit-rate or latency change from doing so, and the
+page interventions measured elsewhere in this paper all target 4\,KiB pages. Nor
+does the scanning rule make the lease equivalent: its weaker drift detection is a
+property of the published region, not an implementation detail, which is why the
+response reports which rule admitted it.
 
 \subsection{Remaining steady-state cost and attribution}
 \label{sec:performance}
@@ -130,14 +229,77 @@ per added read, including loop overhead. The 256-read result is consistent with
 a similar marginal scale. Removing two reads cannot account for a
 microsecond-scale end-to-end gap.
 
-A separate million-exit CPU~0 profile measures an average 382 TSC cycles for
-the C dispatcher, including 97 cycles for initial VMCS reads; an empty
-timestamp pair costs 25 cycles. An invariant-TSC calibration near 2.112\,GHz
-converts 382 cycles to approximately 181\,ns. This profile averages a mixture
-of exit types and excludes entry/exit assembly and outer-hypervisor work. It
-cannot be directly subtracted from a CPUID-only measurement to isolate Hyper-V
-cost. It identifies unmeasured paths for the next attribution step. RTT windows
-are dominated by HLT, MSR, and hypercall exits, so reducing CPUID work alone is
+\paragraph{Where the added CPUID cost goes.}
+A separate million-exit CPU~0 profile measures an average 382 TSC cycles for the
+C dispatcher body, including 97 cycles for VMCS reads and 19 for telemetry. An
+invariant-TSC calibration near 2.112\,GHz converts 382 cycles to 180.9\,ns.
+Table~\ref{tab:attribution-budget} places that figure inside the measured cost of
+one CPUID.
+
+The profile is not free, and charging its cost correctly changes the answer. The
+body takes eleven timestamps, and an empty back-to-back pair costs 25 cycles, so
+roughly 65\,ns of the profiled 180.9\,ns is the instrument reading itself.
+Subtracting one pair, which is the obvious correction, would credit the
+dispatcher with most of that. We therefore report the dispatcher as a band whose
+upper end is the raw profile and whose lower end removes all eleven readings.
+
+That same 25-cycle pair is also the control the whole profile depends on. This
+processor is itself a guest: if the outer hypervisor intercepted \code{RDTSC},
+each of those eleven timestamps would be a VM exit of its own, and the
+unexplained majority of the total would be the instrument rather than the
+monitor. Two back-to-back reads answer that directly -- tens of cycles means the
+readings stand, hundreds or thousands would invalidate every number here. The
+measured 25 cycles is a native read.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Cost budget for one CPUID in nested sparse-snapshot mode. The residual
+is kept as an explicit row because it is the larger term; an attribution that
+omitted it would imply the dispatcher explains the overhead.}
+\label{tab:attribution-budget}
+\input{tables/attribution-budget}
+\end{table}
+
+The dispatcher accounts for 4.48\% to 7.00\% of the 2582.3\,ns that residency
+adds to a CPUID, depending on which end of that band is taken. The residual is
+93.00\% to 95.52\%, and we name what is inside it rather than leaving it
+implicit: the hardware VM exit and entry, our own entry and exit assembly, and
+the outer hypervisor's handling of an exit it must reflect to us. We do not split
+those three. Every timestamp in this profile is taken inside our C dispatcher, so
+none of them can observe anything on the far side of that boundary, and we have
+no instrumentation inside the outer hypervisor. Reporting a finer split would
+mean assigning time to code we did not measure.
+
+Two independent measurements cross-check the one interior term that can be
+checked. Adding 256 and 512 VMREADs to ordinary residency yields 7.957 and
+7.753\,ns per added read, agreeing to 2.6\%. Dividing the profile's 45.9\,ns of
+VMCS reads by the 512-read price implies 5.92 reads. The full snapshot path
+issues exactly six VMREADs -- exit reason, exit qualification, guest RIP, guest
+RSP, exit instruction length, and VM-instruction error -- and the profiled window
+is dominated by exits that take it. The cycle count and the marginal-cost
+experiment were collected separately and were not fitted to each other.
+
+The same price explains why the sparse snapshot changes so little. It omits two
+of the six reads for CPUID exits, predicting about 15.5\,ns; the observed
+difference between full and sparse snapshots is 29.2\,ns with overlapping ranges,
+so a two-read saving is at the resolution limit of this experiment rather than a
+demonstrated effect.
+
+The budget bounds what dispatcher-side optimization can achieve. Removing the
+profiled body entirely -- not merely the telemetry or the VMCS reads -- would
+move CPUID from 8.759 to 8.216 times the off-mode median, a 6.20\% reduction in
+the on-mode cost, and that figure is generous because it credits the removal with
+the instrument's own share. The measured 0.99\% gain from sparse snapshots sits
+inside that ceiling, which is why we treat further telemetry trimming as
+exhausted rather than promising. Reducing the residual is not a code change
+available to us in this topology: it requires either fewer exits or a cheaper
+exit path through the outer hypervisor, and the second is not ours to change.
+
+RTT admits only a bound, not a budget. Residency adds 4020.7\,ns per loopback
+round trip, which is 23.8 dispatcher bodies. That is an upper bound on the
+dispatcher's contribution and is reached only if every one of those exits costs
+a full dispatcher body and nothing else changes. RTT windows are dominated by
+HLT, MSR, and hypercall exits rather than CPUID, so reducing CPUID work alone is
 not a demonstrated networking optimization.
 
 \paragraph{Historical optimization evidence.}

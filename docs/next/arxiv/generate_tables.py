@@ -8,6 +8,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import re
 import statistics
 from pathlib import Path
 
@@ -67,6 +68,169 @@ def main():
                      f'{ps["min"] / 1000:.3f}--{ps["max"] / 1000:.3f}'])
     table("attribution.tex", "@{}lrrrr@{}",
           ["Mode", r"CPUID (\us)", "Min--max", r"RTT (\us)", "Min--max"], rows)
+
+    # Cost budget for one CPUID exit. The only measured interior term is the C
+    # dispatcher profile; everything else in the added cost is a residual we can
+    # bound but not decompose, because no timestamp exists on the far side of our
+    # own entry/exit assembly. Keeping the residual as an explicit row is the
+    # point of the table: an attribution that silently omits it would read as if
+    # the dispatcher explained the overhead, and it explains under a tenth of it.
+    exit_cost = read_json("20260916-followup/exit-cost-derived.json")
+    tsc_hz = exit_cost["tscHzMedian"]
+    profile = exit_cost["samples"][0]
+    to_ns = lambda cycles: cycles * 1e9 / tsc_hz
+    off_ns = a["off", "cpuid"]["nsPerOperation"]["median"]
+    on_ns = a["resident-nested-hidehv", "cpuid"]["nsPerOperation"]["median"]
+    plain_ns = a["resident", "cpuid"]["nsPerOperation"]["median"]
+    added_ns = on_ns - off_ns
+
+    # The profiled body takes TIMESTAMPS_PER_EXIT readings of its own, and the
+    # empty pair prices two of them. Charging only one pair -- the obvious move --
+    # would credit the dispatcher with most of the instrument's cost and shrink
+    # the residual by the same amount. So the dispatcher is reported as a band:
+    # the raw profile is its upper bound, and the profile minus its own readings
+    # is its lower bound. The conclusion does not depend on which end is taken,
+    # which is exactly why both are printed.
+    TIMESTAMPS_PER_EXIT = 11
+    gross_ns = to_ns(profile["cDispatchCycles"])
+    instrument_ns = to_ns(profile["emptyTimingCycles"] / 2.0 * TIMESTAMPS_PER_EXIT)
+    dispatch_ns = gross_ns - instrument_ns
+    vmcs_ns = to_ns(profile["vmcsReadCycles"])
+    telemetry_ns = to_ns(profile["telemetryCycles"])
+    other_ns = dispatch_ns - vmcs_ns - telemetry_ns
+    assert other_ns > 0.0, (dispatch_ns, vmcs_ns, telemetry_ns)
+    residual_lo_ns = added_ns - gross_ns
+    residual_hi_ns = added_ns - dispatch_ns
+    share = lambda value: f"{100.0 * value / added_ns:.2f}"
+    # The basis column holds sentences, so it is a fixed-width wrapping column:
+    # an l column silently runs off the page as soon as one of them grows.
+    table("attribution-budget.tex",
+          r"@{}lrr>{\raggedright\arraybackslash}p{4.6cm}@{}",
+          ["Term", "ns", r"\% of added", "Basis"],
+          [["Off-mode CPUID", f"{off_ns:.1f}", "--", "5 measured runs"],
+           ["Nested CPUID", f"{on_ns:.1f}", "--", "5 measured runs"],
+           [r"\textbf{Added per CPUID}", rf"\textbf{{{added_ns:.1f}}}",
+            r"\textbf{100.00}", "difference of the two medians"],
+           [r"\quad Profiled body, as measured", f"{gross_ns:.1f}", share(gross_ns),
+            "million-exit profile, CPU~0, one sample"],
+           [rf"\quad\quad the profile's own {TIMESTAMPS_PER_EXIT} timestamps",
+            f"{instrument_ns:.1f}", share(instrument_ns), "empty-pair rate"],
+           [r"\quad\quad VMCS reads", f"{vmcs_ns:.1f}", share(vmcs_ns),
+            "same profile; 6 VMREADs on the full path"],
+           [r"\quad\quad telemetry", f"{telemetry_ns:.1f}", share(telemetry_ns),
+            "same profile"],
+           [r"\quad\quad remaining dispatch", f"{other_ns:.1f}", share(other_ns),
+            "subtraction within the profile"],
+           [r"\quad\textbf{Dispatcher, instrument removed}",
+            rf"\textbf{{{dispatch_ns:.1f}}}", rf"\textbf{{{share(dispatch_ns)}}}",
+            "profiled body less its own timestamps"],
+           [r"\quad\textbf{Unattributed residual}",
+            rf"\textbf{{{residual_lo_ns:.1f}--{residual_hi_ns:.1f}}}",
+            rf"\textbf{{{share(residual_lo_ns)}--{share(residual_hi_ns)}}}",
+            "not separable; see text"]])
+
+    # Two independent VMREAD costs; their agreement is what makes the per-read
+    # price usable as a cross-check on the profile's VMCS-read cycles.
+    per_read = {n: (a[f"resident-vmread{n}", "cpuid"]["nsPerOperation"]["median"]
+                    - plain_ns) / n for n in (256, 512)}
+    budget_claims = {
+        "cpuidOffNs": off_ns,
+        "cpuidNestedNs": on_ns,
+        "cpuidAddedNs": added_ns,
+        "profiledBodyNs": gross_ns,
+        "instrumentNs": instrument_ns,
+        "timestampsPerExit": TIMESTAMPS_PER_EXIT,
+        "dispatcherNsInstrumentRemoved": dispatch_ns,
+        "dispatcherSharePercentRange": [100.0 * dispatch_ns / added_ns,
+                                        100.0 * gross_ns / added_ns],
+        "residualNsRange": [residual_lo_ns, residual_hi_ns],
+        "residualSharePercentRange": [100.0 * residual_lo_ns / added_ns,
+                                      100.0 * residual_hi_ns / added_ns],
+        "vmreadNsPerRead": per_read,
+        "dispatcherVmcsReadsImplied": vmcs_ns / per_read[512],
+        "fullPathVmreadCount": 6,
+        "emptyTimestampPairCycles": profile["emptyTimingCycles"],
+        "ceilingRatioIfBodyFree": (on_ns - gross_ns) / off_ns,
+        "measuredRatio": on_ns / off_ns,
+    }
+
+    # Whether an override may be published as a leaf larger than 4 KiB is not a
+    # property of our code alone: it depends on the granularity the intermediate
+    # VMM already uses. This table reports what that granularity actually is on
+    # the evaluated stack, because the refusals are the result.
+    probe = read_json("20260916-large-leaf/admission-probe.json")
+    assert probe["kind"] == "large-leaf-admission-probe", probe["kind"]
+    status_meaning = {
+        "0xC00000BB": "Refused: source leaf finer than the request",
+        "0xC000000D": "Refused: region geometry",
+        "0xC0000141": "No capture: address not mapped by EPT12",
+    }
+    rows = []
+    source_shifts = set()
+    published = 0
+    for attempt in probe["attempts"]:
+        raw = attempt["raw"]
+        field = lambda name, pattern=r'([0-9]+)': (
+            re.search(rf'"{name}":{pattern}', raw).group(1)
+            if re.search(rf'"{name}":{pattern}', raw) else "--")
+        last = field("lastStatus", r'"(0x[0-9A-F]+)"')
+        shift = field("sourceLeafShift")
+        published += int(field("active"))
+        if last != "0xC0000141":
+            source_shifts.add(shift)
+        rows.append([attempt["requestedGpa"], str(attempt["requestedLeafShift"]),
+                     shift if last != "0xC0000141" else "--",
+                     status_meaning.get(last, last)])
+    # Every source leaf this machine offers is 4 KiB, so the coarse-source rule
+    # refuses everything and nothing is published by this probe.
+    assert published == 0, published
+    assert source_shifts == {"12"}, source_shifts
+    table("large-leaf.tex", r"@{}lrrl@{}",
+          ["Guest physical base", "Requested shift", "Source shift", "Outcome"], rows)
+
+    # The same addresses under the scanning rule. Same driver, same guest, same
+    # source granularity; only the admission rule differs, which is what makes
+    # the pair a comparison rather than two separate observations.
+    live = read_json("20260916-large-leaf/published.json")
+    assert live["kind"] == "large-leaf-published", live["kind"]
+    scan_rows = []
+    scan_published = 0
+    for attempt in live["attempts"]:
+        raw = attempt["map"]
+        field = lambda name, pattern=r'([0-9]+)': (
+            re.search(rf'"{name}":"?{pattern}"?', raw).group(1)
+            if re.search(rf'"{name}":"?{pattern}"?', raw) else "--")
+        active = field("active")
+        scan_published += int(active) if active != "--" else 0
+        removed = (re.search(r'"active":([0-9]+)', attempt["remove"]).group(1)
+                   if attempt["remove"] else "--")
+        scan_rows.append([
+            "scan" if attempt["command"].endswith("-scan") else "coarse source",
+            attempt["gpa"], field("sourceLeafShift"), field("scannedLeafCount"),
+            "yes" if active == "1" else "no",
+            status_meaning.get(field("lastStatus", r'"(0x[0-9A-F]+)"'), "Published")
+            if active != "1" else f"Published, removed to active={removed}"])
+    # Two published and two refused is the whole point; assert it rather than
+    # letting a future evidence file quietly turn this table into one column.
+    assert scan_published == 2, scan_published
+    # Same reason as the budget table: the last column holds sentences, so it
+    # wraps at a fixed width instead of running off the page.
+    table("large-leaf-scan.tex",
+          r"@{}llrr>{\raggedright\arraybackslash}p{5.2cm}@{}",
+          ["Rule", "Guest physical base", "Source shift", "Leaves read",
+           "Published"],
+          [[r[0], r[1], r[2], r[3], r[5] if r[4] == "no" else r[5]]
+           for r in scan_rows])
+    large_leaf_claims = {
+        "attempts": len(rows),
+        "captured": sum(1 for r in rows if r[2] != "--"),
+        "distinctSourceShifts": sorted(source_shifts),
+        "publishedByCoarseSourceRule": published,
+        "publishedByScanRule": scan_published,
+        "scannedLeavesPerRegion": 512,
+        "ept12Pointer": probe["ept12Pointer"],
+        "liveEpt12Pointer": live["ept12Pointer"],
+    }
 
     lat = {r["condition"]: r for r in current["latency"]}
     latency_runs = read_csv("20260916-followup/latency-runs.csv")
@@ -146,10 +310,14 @@ def main():
     manifest = {"inputs": INPUTS, "derivedClaims": {"cpuidRatio": cpuid_ratio,
                 "tcpRttOverheadPercent": rtt_overhead, "completeEptApplicationTrials": len(complete),
                 "pacedTcpResponses": response_count, "transitionTimesUs": transition_times,
+                "cpuidCostBudget": budget_claims,
+                "largeLeafAdmission": large_leaf_claims,
                 "metadataAbstractCharacters": len(abstract)},
                 "note": "Inputs are derived evidence summaries, whose raw inputs are indexed in their datasets. Cohorts are not pooled."}
     (HERE / "table-provenance.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    print(f"Generated 6 tables from {len(INPUTS)} evidence summaries; CPUID={cpuid_ratio:.4f}x, RTT={rtt_overhead:.4f}%")
+    print(f"Generated 9 tables from {len(INPUTS)} evidence summaries; CPUID={cpuid_ratio:.4f}x, "
+          f"RTT={rtt_overhead:.4f}%, dispatcher explains "
+          f"{budget_claims["dispatcherSharePercentRange"][0]:.2f}% of the added CPUID cost")
 
 
 if __name__ == "__main__":

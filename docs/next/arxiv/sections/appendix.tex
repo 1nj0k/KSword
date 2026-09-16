@@ -44,6 +44,28 @@ analysis summaries, measured scripts, and validation results. Its key groups are
       HVCI, source, and binary identities.
 \end{itemize}
 
+The large-leaf results are \path{docs/next/paper-data/20260916-large-leaf/}.
+\path{admission-probe.json} holds the coarse-source attempts and
+\path{published.json} the both-rules comparison, each with the driver and
+controller hashes, the live EPT12 pointer, the raw JSON of every attempt and its
+removal, and a status snapshot.
+
+The portable lease-walk results are
+\path{docs/next/paper-data/20260916-lease-largepage/}:
+\path{ept-lease-unit.txt} is the suite's own output, and
+\path{ept-lease-mutation.txt} is the mutation matrix, with a column
+for the suites as committed and a column for the current ones.
+\path{tools/hvm_paper/Test-EptLeaseMutation.sh} regenerates both without a VM; it
+fails if any mutation survives.
+
+The no-monitor VMware baseline attempts are
+\path{docs/next/paper-data/20260916-hot-insert/}. Each record states the driver
+service state, the resident-monitor state, the Windows boot identity, the
+observed \code{vmware-vmx} processes before and after, the launch result, and a
+status of either \code{vm\_started\_guest\_boot\_unverified} or
+\code{start\_rejected}. Neither is a usable baseline, and neither is reported as
+one.
+
 The historical cohort is \path{docs/next/paper-data/20260915-4x2/}.
 \path{derived/nested-improvements.csv} and
 \path{after/derived/windows-overhead.csv} supply the historical performance
@@ -130,8 +152,10 @@ silently inferred from a successful marker-page demonstration.
 
 \begin{center}\small
 \captionsetup{hypcap=false}
-\captionof{table}{Evidence scope as of this draft. ``Not measured'' is distinct from
-an observed refusal. Each successful result is limited to its recorded version.}
+\captionof{table}{Evidence scope as of this draft. ``Not measured'', an observed
+refusal, and a recorded attempt that produced no usable result are three distinct
+statuses and are not merged. Each successful result is limited to its recorded
+version.}
 \label{tab:matrix}
 \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.5cm}>{\raggedright\arraybackslash}p{4.2cm}>{\raggedright\arraybackslash}X@{}}
 \toprule
@@ -139,12 +163,16 @@ Configuration & Operation & Status \\
 \midrule
 Hyper-V / Windows 1, VMM absent & Enter and exit KSword residency & Measured; same observed Windows boot/processes \\
 KSword / VMware / TinyCore, 4-by-2 & Later startup; page remap, restore, retirement & Current 3/3 cycles; historical 20/20 including load \\
-Already-running VMware / TinyCore & Insert beneath whole running stack & Not implemented; ownership gate retained \\
+Already-running VMware / TinyCore & Insert beneath whole running stack & Outside the measured scope; ownership gate retained \\
 Inner Hyper-V / TinyCore, 4-by-2 & Normal boot; KSword admission & Baseline boots; VMX unavailable and admission refused \\
-Inner Hyper-V descendant & EPT control under inserted KSword & Not reached \\
+Inner Hyper-V descendant & EPT control under inserted KSword & Not reached; the refusal above precedes it \\
+VMware / TinyCore, monitor absent & No-monitor backend baseline & Attempted twice; guest boot unverified, then start refused \\
 Windows 10 LTSC descendant & Compatibility and page control & Deferred; not measured \\
 Other CPU / Windows builds & Portability & Not measured \\
 Current 4-by-2 build & Ten-minute or overnight soak & Not newly measured \\
+2-MiB / 1-GiB source leaves & Lease capture, drift and rejection & Portable suite only; no such source leaf seen on hardware \\
+Large-leaf override, coarse-source rule & Publish 2 MiB on the live descendant & Refused 9/9; VMware backs this guest at 4 KiB \\
+Large-leaf override, scanning rule & Same, admitting on 512 agreeing entries & Published and removed; weaker drift detection \\
 Arbitrary page reuse / DMA / hardware faults & General lifecycle and atomicity & Outside demonstrated contract \\
 \bottomrule
 \end{tabularx}

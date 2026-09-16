@@ -22,7 +22,8 @@ Windows continues within the same boot and with the same observed processes.
 VMware and TinyCore start afterward. Their identities are then preserved during
 page substitution and recovery. Inserting beneath a VMware/TinyCore stack that
 is already running would additionally require transferring existing VMX
-ownership and execution state. That operation is not implemented here.
+ownership and execution state; every insertion measured here begins in the
+first arrangement, and we report no measurement of the second.
 Figure~\ref{fig:topology} makes the two intervals explicit.
 
 \begin{figure}[tbp]

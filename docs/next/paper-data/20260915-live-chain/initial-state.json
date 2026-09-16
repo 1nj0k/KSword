@@ -1,0 +1,23 @@
+{
+  "utc": "2026-09-15T21:53:17.3556725Z",
+  "bcd": "\r\nWindows Boot Loader\r\n-------------------\r\nidentifier              {current}\r\ndevice                  partition=C:\r\npath                    \\Windows\\system32\\winload.efi\r\ndescription             Windows 11\r\nlocale                  en-US\r\ninherit                 {bootloadersettings}\r\nrecoverysequence        {facb51c5-a974-11f1-9952-00155d0acd00}\r\ndisplaymessageoverride  Recovery\r\nrecoveryenabled         Yes\r\ntestsigning             Yes\r\nisolatedcontext         Yes\r\nallowedinmemorysettings 0x15000075\r\nosdevice                partition=C:\r\nsystemroot              \\Windows\r\nresumeobject            {facb51c3-a974-11f1-9952-00155d0acd00}\r\nnx                      OptIn\r\nbootmenupolicy          Standard\r\nhypervisorlaunchtype    Off\r\ndebug                   No\r\n",
+  "cpuid": "{\"kind\":\"cpuidView\",\"hypervisorPresent\":true,\"leaf1Ecx\":\"0xFFFA3223\",\"hvLeafEax\":\"0x4000000B\",\"hvVendor\":\"Microsoft Hv\",\"hidden\":false}\r\n",
+  "status": {
+    "residentProcessorCount": null,
+    "stateNames": null
+  },
+  "vmware": [],
+  "vmwareConfig": "\r\nauthd.client.port = \"902\"\r\nauthd.proxy.nfc = \"vmware-hostd:ha-nfc\"\r\ninstallerDefaults.autoSoftwareUpdateEnabled = \"no\"\r\ninstallerDefaults.autoSoftwareUpdateEnabled.epoch = \"27770\"\r\ninstallerDefaults.componentDownloadEnabled = \"yes\"\r\ninstallerDefaults.dataCollectionEnabled = \"no\"\r\ninstallerDefaults.dataCollectionEnabled.epoch = \"27770\"\r\n",
+  "services": [
+    {
+      "Name": "VMAuthdService",
+      "Status": {
+        "value": 4,
+        "Value": "Running"
+      }
+    }
+  ],
+  "PSComputerName": "KSword-HVM-Target",
+  "RunspaceId": "51f7f10d-8595-4ec3-94c9-efda90c4e7b9",
+  "PSShowComputerName": true
+}

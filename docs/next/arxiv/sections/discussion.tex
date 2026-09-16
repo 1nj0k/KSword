@@ -54,12 +54,17 @@ other available fault-injection interfaces.
 \section{Limitations and threats to validity}
 \label{sec:limitations}
 \paragraph{Insertion scope.}
-Already-running VMware/TinyCore stacks cannot currently be moved beneath a
-newly inserted monitor. A CPUID policy change or removing an ownership gate
-would not implement the missing VMX/VMCS state handoff. The inner Hyper-V
-experiment demonstrates refused admission in one topology and build, not a
-general solution or a universal impossibility result. Attribution of the
-remaining hot-insertion problem solely to a vendor defect is not established.
+The measured insertion runs with descendant VMMs absent, and VMware starts
+afterward. We do not move an already-running VMware/TinyCore stack beneath the
+monitor, and we report no measurement of such a transfer. In the inner Hyper-V
+topology, admission is refused at capability discovery rather than at
+\code{VMXON}: with the monitor not resident, the inner Windows root partition
+reports no \code{CPUID.1:ECX[5]} VMX bit and no nested capability MSRs, and the
+driver declines the request before submission. Because the monitor is not
+resident during that reading, the absent VMX bit is not self-inflicted. The
+refusal is the inner hypervisor's decision for its own root partition in this
+topology and build; we do not generalize it to other topologies, and we do not
+attribute it to a vendor defect.
 
 \paragraph{Page semantics.}
 Process ownership and sampled source-path identity improve lifetime accounting
@@ -88,8 +93,16 @@ eliminate physical scheduling or host activity. The current performance suite
 has five measured repetitions and no descendant VMMs; the broader historical
 suite has block-order drift. The optimized nested comparison crosses driver
 versions and boots. Persistent descendant disk performance, external networking,
-a matched no-monitor VMware backend, and active-lease steady-state overhead
-remain missing. Windows 10 LTSC, other CPU families, and other Windows builds
+and active-lease steady-state overhead remain unmeasured. A matched no-monitor
+VMware backend is a different case, and we separate it rather than folding it
+into that list: two attempts are recorded with the driver service stopped and no
+monitor resident. One started a \code{vmware-vmx} process and wrote a new VMware
+log but left guest boot unverified; the other was refused at start with a
+cancellation, leaving no new process and no new log. Each attempt retains the
+Windows boot identity it ran under. These records establish that the comparison
+was attempted and did not yield a usable baseline; they do not attribute either
+outcome to the monitor's absence, and no no-monitor descendant comparison is
+reported. Windows 10 LTSC, other CPU families, and other Windows builds
 have not been evaluated in the current matrix.
 
 \paragraph{Application observation.}
@@ -117,8 +130,8 @@ descendant. Its page lease separates admission, publication, observed revocation
 CPU invalidation, and reclamation, and its experiments connect those events to
 multicore readback and an HTTP policy effect. The evaluated pages can be
 substituted and restored with tracked resources reclaimed. Significant exit and
-RTT costs remain, live insertion beneath existing descendant VMMs is open, and
-the inner Hyper-V root partition refuses admission in the tested configuration.
+RTT costs remain, every measured insertion begins with descendant VMMs absent,
+and the inner Hyper-V root partition refuses admission in the tested configuration.
 These limits define the next work: existing-state handoff, better attribution of
 boundary costs, stronger page-identity/concurrency validation, and independent
 hardware and application evaluation.
@@ -127,14 +140,14 @@ hardware and application evaluation.
 The implementation and versioned evidence are in the public \ks{} repository;
 Appendix~\ref{app:artifact} identifies exact revisions and reproduction commands.
 Tables in this preprint are generated from archived summaries with recorded
-input SHA256 values. This version is an initial preprint draft for author review;
-it has not been peer reviewed or submitted to arXiv as part of its preparation.
-It does not assert conference acceptance or a publication DOI.
+input SHA256 values. The author has reviewed this version and verified its data.
+It has not been peer reviewed or submitted to arXiv as part of its preparation,
+and it does not assert conference acceptance or a publication DOI.
 
 \section*{Use of AI assistance}
 OpenAI Codex assisted with prototype implementation and debugging, experiment
 and analysis scripts, authorized laboratory execution, evidence archiving, and
 drafting the manuscript and diagrams. Reported measurements are tied to retained
-logs; unmeasured behavior is identified separately. Author review of the source,
-experimental procedures, raw data, statistical interpretation, citations, and
-claims is pending for this draft. The AI system is not an author.
+logs; unmeasured behavior is identified separately. The author has reviewed the
+source, experimental procedures, raw data, statistical interpretation, citations,
+and claims for this draft. The AI system is not an author.
