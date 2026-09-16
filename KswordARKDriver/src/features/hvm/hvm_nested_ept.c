@@ -45,17 +45,39 @@ Environment:
 /* Name the two leaf bits the processor maintains: accessed (8), dirty (9). */
 #define KSW_HVM_NEPT_AD_BITS ((1ULL << 8) | (1ULL << 9))
 
+/* Find the override that owns this guest-physical address, or NULL. */
+static KSW_HVM_NESTED_PAGE* KswordARKHvmNestedPageForAddress(
+    KSW_HVM_RUNTIME* Runtime, KSW_HVM_SHADOW_EPT_STATE* Shadow,
+    ULONGLONG GuestPhysical)
+{
+    KSW_HVM_NESTED_PAGE* page = (KSW_HVM_NESTED_PAGE*)InterlockedCompareExchangePointer(
+        (PVOID volatile*)&Runtime->NestedPage, NULL, NULL);
+    /* A revoked lease composes nothing, whatever it still owns. */
+    if (page == NULL || ReadAcquire(&Runtime->NestedPageRevocationReason) != 0L ||
+        page->Ept12Pointer != Shadow->L1EptPointer) {
+        return NULL;
+    }
+    /*
+     * Ask the plan, not the base address.
+     *
+     * A 4-KiB plan answers exactly what the previous equality test answered, so
+     * the single-page path is unchanged; a larger plan owns every page of its
+     * region. Comparing against GuestPhysicalPage here instead would silently
+     * restrict a published 2-MiB region to its first page, leaving 511 pages
+     * composed from the source while every counter reported a live override.
+     */
+    return KswordHvmLeafPlanContains(&page->Plan, GuestPhysical) ? page : NULL;
+}
+
 static ULONGLONG KswordARKHvmNestedPageLeaf(
     KSW_HVM_RUNTIME* Runtime, KSW_HVM_SHADOW_EPT_STATE* Shadow,
     ULONGLONG GuestPhysical, ULONGLONG OriginalLeaf, BOOLEAN Count)
 {
-    KSW_HVM_NESTED_PAGE* page = (KSW_HVM_NESTED_PAGE*)InterlockedCompareExchangePointer(
-        (PVOID volatile*)&Runtime->NestedPage, NULL, NULL);
-    if (page == NULL || ReadAcquire(&Runtime->NestedPageRevocationReason) != 0L ||
-        page->Ept12Pointer != Shadow->L1EptPointer ||
-        page->GuestPhysicalPage != (GuestPhysical & KSW_HVM_NEPT_FRAME_MASK)) {
-        return OriginalLeaf;
-    }
+    KSW_HVM_NESTED_PAGE* page =
+        KswordARKHvmNestedPageForAddress(Runtime, Shadow, GuestPhysical);
+    ULONGLONG index;
+
+    if (page == NULL) { return OriginalLeaf; }
     /* The replacement is ordinary RAM. Preserve both levels' permissions. */
     if ((OriginalLeaf & 0x38ULL) != KSW_HVM_NEPT_MEMORY_TYPE_WB) { return OriginalLeaf; }
     if (Count) {
@@ -63,7 +85,51 @@ static ULONGLONG KswordARKHvmNestedPageLeaf(
             (LONG64)(OriginalLeaf & KSW_HVM_NEPT_FRAME_MASK), 0LL);
         (void)InterlockedIncrement64(&page->ComposedCount);
     }
-    return (OriginalLeaf & ~KSW_HVM_NEPT_FRAME_MASK) | page->ShadowPhysicalPage;
+    /* Backing is contiguous, so the page's offset in the region is its offset
+       in the backing. For a 4-KiB plan the index is always zero. */
+    index = (GuestPhysical - page->Plan.GuestBase) >> KSW_PLAN_SHIFT_4K;
+    return (OriginalLeaf & ~KSW_HVM_NEPT_FRAME_MASK) |
+        KswordHvmLeafPlanPageFrame(&page->Plan, index);
+}
+
+/*
+ * Answer whether this address should be published as a leaf above the PT level,
+ * and with which frame.
+ *
+ * Returning the granularity rather than a boolean keeps one decision in one
+ * place: the fill path stops its descent at whatever level this names, and a
+ * plan that names 4 KiB produces the ordinary path with no special case.
+ */
+static ULONG KswordARKHvmNestedPageLargeLeaf(
+    KSW_HVM_RUNTIME* Runtime, KSW_HVM_SHADOW_EPT_STATE* Shadow,
+    ULONGLONG GuestPhysical, ULONGLONG ComposedLeaf, ULONGLONG* LargeLeaf)
+{
+    KSW_HVM_NESTED_PAGE* page =
+        KswordARKHvmNestedPageForAddress(Runtime, Shadow, GuestPhysical);
+
+    *LargeLeaf = 0ULL;
+    /* No override, or one published at ordinary granularity. */
+    if (page == NULL || page->Plan.LeafShift <= KSW_PLAN_SHIFT_4K) {
+        return KSW_PLAN_SHIFT_4K;
+    }
+    /* Only write-back RAM is replaced, exactly as at 4 KiB. */
+    if ((ComposedLeaf & 0x38ULL) != KSW_HVM_NEPT_MEMORY_TYPE_WB) {
+        return KSW_PLAN_SHIFT_4K;
+    }
+    /*
+     * Carry the region base and set the leaf bit.
+     *
+     * The frame is the region base and not the faulting page's frame: hardware
+     * supplies the offset from the address it is translating, so a leaf naming
+     * an offset frame would serve the whole region shifted by that offset.
+     * Permissions and memory type come from the composed 4-KiB leaf, which is
+     * sound only because the plan already refused any region whose source leaf
+     * is finer than the leaf being installed - so these bits describe every
+     * page beneath it, not merely the one that faulted.
+     */
+    *LargeLeaf = (ComposedLeaf & ~KSW_HVM_NEPT_FRAME_MASK) |
+        KswordHvmLeafPlanLeafFrame(&page->Plan) | KSW_HVM_NEPT_LARGE;
+    return page->Plan.LeafShift;
 }
 
 /*
@@ -786,6 +852,9 @@ KswordARKHvmNestedEptFill(
     ULONG composition = 0UL;
     BOOLEAN switched = FALSE;
     ULONG level = 0UL;
+    /* Level whose entry holds the leaf: 3 for an ordinary page, higher for a
+       large one. Set once the override's granularity is known. */
+    ULONG leafTerminationLevel = 3UL;
 
     /* Refuse composition without an armed hierarchy or a usable window. */
     if (Runtime == NULL || Shadow == NULL || Window == NULL ||
@@ -870,9 +939,30 @@ retryTranslation:
     }
     composedLeaf = KswordARKHvmNestedPageLeaf(
         Runtime, Shadow, GuestPhysicalAddress, composedLeaf, TRUE);
-    /* Build the shadow path down to the four-KiB leaf. */
+    /*
+     * Decide the granularity before descending, because it decides how far.
+     *
+     * A 2-MiB leaf lives in the PD and a 1-GiB leaf in the PDPT, so the walk
+     * that builds interior tables has to stop one or two levels earlier. The
+     * shifts array is indexed by level, so the level that terminates the walk is
+     * the index whose shift equals the plan's granularity.
+     */
+    {
+        ULONGLONG largeLeaf = 0ULL;
+        const ULONG leafShift = KswordARKHvmNestedPageLargeLeaf(
+            Runtime, Shadow, GuestPhysicalAddress, composedLeaf, &largeLeaf);
+
+        if (leafShift > KSW_PLAN_SHIFT_4K) {
+            /* PDPT for 1 GiB, PD for 2 MiB; both are inside the interior walk. */
+            const ULONG leafLevel = (leafShift == KSW_PLAN_SHIFT_1G) ? 1UL : 2UL;
+
+            composedLeaf = largeLeaf;
+            leafTerminationLevel = leafLevel;
+        }
+    }
+    /* Build the shadow path down to the leaf's own level. */
     table = (volatile ULONGLONG*)Shadow->RootVirtual;
-    for (level = 0UL; level < 3UL; ++level) {
+    for (level = 0UL; level < leafTerminationLevel; ++level) {
         const ULONGLONG index =
             (GuestPhysicalAddress >> shifts[level]) & 0x1FFULL;
         ULONGLONG entry = table[index];
@@ -918,9 +1008,18 @@ retryTranslation:
     }
     {
         const ULONGLONG leaf = composedLeaf;
+        /* Index at the level the walk stopped on, not always the PT. */
         const ULONGLONG leafIndex =
-            (GuestPhysicalAddress >> shifts[3]) & 0x1FFULL;
+            (GuestPhysicalAddress >> shifts[leafTerminationLevel]) & 0x1FFULL;
 
+        /*
+         * Writing a leaf here may replace an interior entry that still names a
+         * table page filled by earlier 4-KiB faults in the same region. Those
+         * pages are not returned to the block: the block is reclaimed whole on
+         * release, and returning one would require proving no processor still
+         * holds a cached translation through it. Leaking a table page until
+         * release is bounded; freeing one early is not.
+         */
         table[leafIndex] = leaf;
         /*
          * Read the assignment back.  One load, and it separates "we composed
@@ -956,6 +1055,8 @@ retryTranslation:
             volatile ULONGLONG* verifyTable =
                 (volatile ULONGLONG*)Shadow->RootVirtual;
             ULONG verifyLevel = 0UL;
+            /* Set when the walk ends on a large leaf above the PT level. */
+            BOOLEAN verifyLarge = FALSE;
 
             Shadow->VerifySampleCount += 1UL;
             for (verifyLevel = 0UL; verifyLevel < 3UL; ++verifyLevel) {
@@ -964,6 +1065,19 @@ retryTranslation:
 
                 if ((entry & KSW_HVM_NEPT_PERMISSIONS) == 0ULL) {
                     verifyTable = NULL;
+                    break;
+                }
+                /*
+                 * A large leaf terminates this walk; it is not an interior
+                 * entry and its frame is replacement backing, not a table page
+                 * we handed out. Resolving it as a table returns NULL and would
+                 * be charged as "the hierarchy could not be navigated" - a
+                 * correct mapping counted as an unexplained failure, on every
+                 * sample, for as long as the region stays published.
+                 */
+                if (verifyLevel >= 1UL &&
+                    (entry & KSW_HVM_NEPT_LARGE) != 0ULL) {
+                    verifyLarge = TRUE;
                     break;
                 }
                 verifyTable =
@@ -976,8 +1090,9 @@ retryTranslation:
             } else {
                 ULONGLONG freshPhysical = 0ULL;
                 ULONGLONG freshPermissions = 0ULL;
-                const ULONGLONG shadowLeaf =
-                    verifyTable[(pending >> shifts[3]) & 0x1FFULL];
+                /* The leaf lives at whichever level terminated the walk. */
+                const ULONGLONG shadowLeaf = verifyTable[
+                    (pending >> shifts[verifyLarge ? verifyLevel : 3UL]) & 0x1FFULL];
 
                 if (!KswordARKHvmNestedEptWalkL1(
                         Shadow,
@@ -990,26 +1105,43 @@ retryTranslation:
                 } else if (!KswordARKHvmNestedEptReadOuter(
                                Runtime, Shadow, freshPhysical, &hostLeaf, &hostShift)) {
                     Shadow->VerifyUnresolvedCount += 1UL;
-                } else if ((shadowLeaf & KSW_HVM_NEPT_FRAME_MASK) !=
-                           (KswordARKHvmNestedPageLeaf(Runtime, Shadow, pending,
-                                hostLeaf | (freshPhysical & ((1ULL << hostShift) - 1ULL) &
-                                            KSW_HVM_NEPT_FRAME_MASK), FALSE) &
-                            KSW_HVM_NEPT_FRAME_MASK)) {
-                    /*
-                     * Recorded only on a mismatch.  Recording every sample
-                     * overwrites the one case worth looking at with the
-                     * ordinary one that follows it - measured: the counter
-                     * said three mismatches while the retained scene showed a
-                     * matching pair.
-                     */
-                    Shadow->VerifyLastGuestPhysical = pending;
-                    Shadow->VerifyLastShadowFrame =
-                        shadowLeaf & KSW_HVM_NEPT_FRAME_MASK;
-                    Shadow->VerifyLastL1Frame =
-                        (hostLeaf & KSW_HVM_NEPT_FRAME_MASK) |
+                } else {
+                    const ULONGLONG composed = hostLeaf |
                         (freshPhysical & ((1ULL << hostShift) - 1ULL) &
                          KSW_HVM_NEPT_FRAME_MASK);
-                    Shadow->VerifyMismatchCount += 1UL;
+                    ULONGLONG expectedLarge = 0ULL;
+                    /*
+                     * Expect what the fill path would install today, at the same
+                     * granularity. A large leaf carries the region base while the
+                     * per-page frame carries an offset, so comparing a published
+                     * 2-MiB leaf against the 4-KiB answer would report a mismatch
+                     * on every sample of a region that is in fact correct.
+                     */
+                    const ULONG expectedShift = KswordARKHvmNestedPageLargeLeaf(
+                        Runtime, Shadow, pending, composed, &expectedLarge);
+                    const ULONGLONG expectedFrame =
+                        (expectedShift > KSW_PLAN_SHIFT_4K)
+                            ? (expectedLarge & KSW_HVM_NEPT_FRAME_MASK)
+                            : (KswordARKHvmNestedPageLeaf(Runtime, Shadow, pending,
+                                   composed, FALSE) & KSW_HVM_NEPT_FRAME_MASK);
+
+                    if ((shadowLeaf & KSW_HVM_NEPT_FRAME_MASK) != expectedFrame) {
+                        /*
+                         * Recorded only on a mismatch.  Recording every sample
+                         * overwrites the one case worth looking at with the
+                         * ordinary one that follows it - measured: the counter
+                         * said three mismatches while the retained scene showed a
+                         * matching pair.
+                         */
+                        Shadow->VerifyLastGuestPhysical = pending;
+                        Shadow->VerifyLastShadowFrame =
+                            shadowLeaf & KSW_HVM_NEPT_FRAME_MASK;
+                        Shadow->VerifyLastL1Frame =
+                            (hostLeaf & KSW_HVM_NEPT_FRAME_MASK) |
+                            (freshPhysical & ((1ULL << hostShift) - 1ULL) &
+                             KSW_HVM_NEPT_FRAME_MASK);
+                        Shadow->VerifyMismatchCount += 1UL;
+                    }
                 }
             }
         }

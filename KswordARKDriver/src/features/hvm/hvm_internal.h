@@ -22,6 +22,7 @@ Environment:
 #include "hvm_vmcs.h"
 /* Immutable translation identity shared by page admission and root readers. */
 #include "hvm_nested_lease_walk.h"
+#include "hvm_nested_leaf_plan.h"
 
 /* Define the architectural page size used by VMX and EPT structures. */
 #define KSW_HVM_PAGE_BYTES 0x1000ULL
@@ -266,6 +267,9 @@ typedef struct _KSW_HVM_CPU_RESOURCE
      */
     /* Long nested runs can exceed 32-bit counts; match the protocol width. */
     ULONGLONG ExitReasonCount[KSWORD_ARK_HVM_EXIT_REASON_SLOTS];
+    /* Populated on this CPU by the native VMCS self-test, never guessed. */
+    ULONG NativeVmcsFields[64];
+    ULONG NativeVmcsFieldCount;
 } KSW_HVM_CPU_RESOURCE;
 
 /* Track one contiguous page allocated for an EPT hierarchy. */
@@ -588,6 +592,23 @@ typedef struct _KSW_HVM_NESTED_PAGE {
     ULONGLONG OwnerCreationTime;
     /* Publication never automatically rebinds this path to a recycled GPA. */
     KSW_HVM_PAGE_TRANSLATION Translation;
+    /*
+     * Region this override owns, appended rather than inserted.
+     *
+     * Appended deliberately: this structure is read from VMX root by the
+     * composition path, and inserting a field mid-structure produces two
+     * different layouts across an incremental build, which shows up as a
+     * bugcheck rather than a compile error.
+     *
+     * Plan.LeafShift is 12 for the original single-page behaviour, so every
+     * field below is meaningful for a 4-KiB override too and the composition
+     * path needs no special case for it.
+     */
+    KSW_HVM_LEAF_PLAN Plan;
+    /* Bytes actually allocated for the replacement; freed as one block. */
+    ULONGLONG BackingBytes;
+    /* Count of staged page writes applied since publication, for evidence. */
+    volatile LONG64 StagedPageCount;
 } KSW_HVM_NESTED_PAGE;
 
 typedef struct _KSW_HVM_RUNTIME

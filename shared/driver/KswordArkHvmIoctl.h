@@ -2317,7 +2317,17 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE
 #define KSWORD_ARK_IOCTL_FUNCTION_HVM_NESTED_PAGE 0x915UL
 #define IOCTL_KSWORD_ARK_HVM_NESTED_PAGE \
     CTL_CODE(KSWORD_ARK_IOCTL_DEVICE_TYPE, KSWORD_ARK_IOCTL_FUNCTION_HVM_NESTED_PAGE, METHOD_BUFFERED, FILE_WRITE_ACCESS)
-#define KSWORD_ARK_HVM_NESTED_PAGE_VERSION 3UL
+/* Version 4 adds leafShift/stagePageIndex and the STAGE operation. */
+#define KSWORD_ARK_HVM_NESTED_PAGE_VERSION 4UL
+/* Leaf granularities an override may be published at: 4 KiB, 2 MiB, 1 GiB.
+   A leaf larger than 4 KiB applies one permission set to every page beneath it,
+   so it is admitted only where EPT12's own leaf already covers the whole region.
+   A request that cannot be honoured at the granularity asked for is refused; it
+   is never narrowed to a smaller leaf, because a caller that asked to own a
+   region must not silently receive one page of it. */
+#define KSWORD_ARK_HVM_NESTED_PAGE_SHIFT_4K 12UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_SHIFT_2M 21UL
+#define KSWORD_ARK_HVM_NESTED_PAGE_SHIFT_1G 30UL
 /* Revocation withdraws the policy; backing still requires an acknowledged drain. */
 #define KSWORD_ARK_HVM_PAGE_LEASE_VALID 0UL
 #define KSWORD_ARK_HVM_PAGE_LEASE_OWNER_EXITED 1UL
@@ -2326,7 +2336,33 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE
 #define KSWORD_ARK_HVM_NESTED_PAGE_QUERY 0UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_MAP 1UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_REMOVE 2UL
+/* Overwrite one 4-KiB page of the published region's replacement backing.
+   MAP initializes the whole region from the original bytes, so a freshly mapped
+   region is indistinguishable from the source until a stage changes part of it.
+   This exists because the request carries one page inline and a 2-MiB region is
+   512 of them; sending them all through one buffer would make the structure
+   larger than the thing it configures. */
+#define KSWORD_ARK_HVM_NESTED_PAGE_STAGE 3UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED 1UL
+/*
+ * Admit a large leaf by reading every source entry under the region instead of
+ * by requiring the source's own leaf to be at least as coarse.
+ *
+ * Off by default, and deliberately not implied by asking for a large leaf,
+ * because what it buys is paid for with a weaker lease. The coarse-source rule
+ * leaves one source entry to watch, and the existing per-fill validation watches
+ * it. A region admitted by scanning has up to 512, and re-reading 512 physical
+ * entries inside the exit path is not affordable: the measured composition rate
+ * on the evaluated machine is roughly 8.2e4 fills per second per the evaluation,
+ * so immediate detection would cost tens of millions of reads per second.
+ *
+ * So a scanned region's lease still detects drift on the first page's path
+ * immediately, and does not immediately detect a change to the other entries.
+ * That is a real reduction in what the lease proves, which is why it is a flag
+ * the caller has to set rather than a silent fallback, and why the response
+ * reports which rule admitted the region.
+ */
+#define KSWORD_ARK_HVM_NESTED_PAGE_SCAN_SOURCE 2UL
 /* Explicit lab faults are local to this one request and never remain armed. */
 #define KSWORD_ARK_HVM_NESTED_PAGE_FAULT_SHIFT 8UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_FAULT_MASK 0x700UL
@@ -2355,6 +2391,11 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PAGE_REQUEST {
     unsigned char shadow[4096];
     /* Exact Windows process creation time; prevents PID reuse at map admission. */
     unsigned long long ownerCreationTime;
+    /* Granularity to publish the override at. Zero is read as 4 KiB so that a
+       caller written against version 3 keeps its exact previous meaning. */
+    unsigned long leafShift;
+    /* MAP: unused. STAGE: which 4-KiB page of the region `shadow` replaces. */
+    unsigned long stagePageIndex;
 } KSWORD_ARK_HVM_NESTED_PAGE_REQUEST;
 typedef struct _KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE {
     unsigned long version, size, status, lastStatus;
@@ -2371,4 +2412,17 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE {
     /* Source backing and normalized path captured before publication. */
     unsigned long long sourcePhysicalPage;
     unsigned long long sourceEntryAddress[4], sourceEntryValue[4];
+    /* Granularity actually published, the region it owns, and the granularity
+       EPT12's own leaf terminated on. The last is what limits the first, so a
+       refusal can be read without walking the source tables again. */
+    unsigned long leafShift, sourceLeafShift;
+    unsigned long long regionBytes, regionPageCount;
+    /* Count of STAGE operations applied to the live region since publication. */
+    unsigned long long stagedPageCount;
+    /* Which rule admitted the region: 0 the source's own leaf was coarse enough,
+       1 every source entry was read and found to agree. A caller that did not
+       ask for the scan can never see 1 here. */
+    unsigned long admittedByScan;
+    /* Source leaves examined by that scan, and the access bits they shared. */
+    unsigned long long scannedLeafCount, scannedSharedBits;
 } KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE;

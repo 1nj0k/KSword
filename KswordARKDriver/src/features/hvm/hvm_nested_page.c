@@ -303,6 +303,8 @@ NTSTATUS KswordARKHvmNestedPageControl(const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST*
     KSW_HVM_PAGE_TRACE trace = { 0 };
     NTSTATUS status = STATUS_SUCCESS;
     ULONG index, fault;
+    /* Set only when the caller asked for the scan and it proved uniformity. */
+    int sourceUniform = 0;
     /* Validate fixed input/output pointers before any state access. */
     if (Request == NULL || Response == NULL || runtime == NULL) { return STATUS_INVALID_PARAMETER; }
     /* Clear every response field, including inactive-page identities. */
@@ -322,8 +324,21 @@ NTSTATUS KswordARKHvmNestedPageControl(const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST*
     /* Reject unknown versions, reserved bits and unsupported fault combinations. */
     if (Request->version != KSWORD_ARK_HVM_NESTED_PAGE_VERSION ||
         Request->size != sizeof(*Request) ||
-        Request->operation > KSWORD_ARK_HVM_NESTED_PAGE_REMOVE ||
-        (Request->flags & ~(KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED | KSWORD_ARK_HVM_NESTED_PAGE_FAULT_MASK)) != 0UL ||
+        Request->operation > KSWORD_ARK_HVM_NESTED_PAGE_STAGE ||
+        /* Granularity is meaningful only when creating the region. */
+        (Request->operation != KSWORD_ARK_HVM_NESTED_PAGE_MAP &&
+         Request->leafShift != 0UL) ||
+        /* A page index is meaningful only when staging one page of it. */
+        (Request->operation != KSWORD_ARK_HVM_NESTED_PAGE_STAGE &&
+         Request->stagePageIndex != 0UL) ||
+        /* Staging edits published backing; it takes no lab fault injection. */
+        (Request->operation == KSWORD_ARK_HVM_NESTED_PAGE_STAGE && fault != 0UL) ||
+        (Request->flags & ~(KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED |
+                            KSWORD_ARK_HVM_NESTED_PAGE_SCAN_SOURCE |
+                            KSWORD_ARK_HVM_NESTED_PAGE_FAULT_MASK)) != 0UL ||
+        /* Scanning the source only means anything while creating a region. */
+        ((Request->flags & KSWORD_ARK_HVM_NESTED_PAGE_SCAN_SOURCE) != 0UL &&
+         Request->operation != KSWORD_ARK_HVM_NESTED_PAGE_MAP) ||
         fault > KSWORD_ARK_HVM_NESTED_PAGE_FAULT_REMOVE_FLUSH ||
         (fault != 0UL && ((Request->operation == KSWORD_ARK_HVM_NESTED_PAGE_QUERY) ||
          (Request->operation == KSWORD_ARK_HVM_NESTED_PAGE_MAP && fault == KSWORD_ARK_HVM_NESTED_PAGE_FAULT_REMOVE_FLUSH) ||
@@ -373,6 +388,41 @@ NTSTATUS KswordARKHvmNestedPageControl(const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST*
         /* Return active/retired occupancy as observed after the attempt. */
         goto complete;
     }
+    /*
+     * Overwrite one 4-KiB page of the live region's replacement backing.
+     *
+     * This edits memory the descendant may be reading right now. It is not an
+     * atomic page update and is not presented as one: a reader concurrent with
+     * the copy can observe a mix of old and new bytes, exactly as the manuscript
+     * states for the override path generally. What it does guarantee is that no
+     * write lands outside the published region, because the index is resolved
+     * through the same plan the composition path uses.
+     */
+    if (Request->operation == KSWORD_ARK_HVM_NESTED_PAGE_STAGE) {
+        KSW_HVM_NESTED_PAGE* const live = runtime->NestedPage;
+
+        /* Staging has nothing to edit before a region is published. */
+        if (live == NULL) { status = STATUS_NOT_FOUND; goto complete; }
+        /* A revoked lease must not accept further edits to retained backing. */
+        if (ReadAcquire(&runtime->NestedPageRevocationReason) != 0L) {
+            status = STATUS_INVALID_DEVICE_STATE;
+            goto complete;
+        }
+        /* Refuse an index the plan does not own rather than clamping it. */
+        if (KswordHvmLeafPlanPageFrame(&live->Plan,
+                (KSW_PLAN_U64)Request->stagePageIndex) == 0ULL) {
+            status = STATUS_INVALID_PARAMETER;
+            goto complete;
+        }
+        /* Backing is one contiguous block, so the index is a direct offset. */
+        RtlCopyMemory((PUCHAR)live->ShadowVirtual +
+                ((SIZE_T)Request->stagePageIndex * (SIZE_T)PAGE_SIZE),
+            Request->shadow, PAGE_SIZE);
+        /* Count applied edits for evidence; the region itself is unchanged. */
+        (void)InterlockedIncrement64(&live->StagedPageCount);
+        /* No mapping, generation or CPU state changed, so no drain is owed. */
+        goto complete;
+    }
     /* A map needs a running nested monitor and exclusive ownership of the slot. */
     if (runtime->ResidentProcessorCount == 0L || runtime->NestedPage != NULL || runtime->NestedPageRetired != NULL) {
         /* Never overwrite an allocation that may remain visible in a CPU cache. */
@@ -410,13 +460,86 @@ NTSTATUS KswordARKHvmNestedPageControl(const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST*
         /* Return without changing the published page policy. */
         goto complete;
     }
+    /*
+     * Decide the region before allocating it, using the planner's own rules.
+     *
+     * The probe passes a synthetic backing address chosen to satisfy every
+     * backing test, so this call answers exactly one question: is the requested
+     * granularity admissible for this guest address and this source path?
+     * Duplicating those rules here to avoid the synthetic argument would give
+     * two places that must agree about what a legal region is.
+     */
+    {
+        const ULONG requestedShift = (Request->leafShift != 0UL)
+            ? Request->leafShift : KSWORD_ARK_HVM_NESTED_PAGE_SHIFT_4K;
+        KSW_HVM_LEAF_PLAN probe;
+
+        /*
+         * Read the source only when the caller asked for that rule.
+         *
+         * The scan is what lets a region be published over a source that maps it
+         * one page at a time, and it costs a weaker lease; see the flag's
+         * definition. Running it unasked would hand that trade to callers who
+         * never chose it, so an unset flag leaves sourceUniform zero and the
+         * coarse-source rule decides alone.
+         */
+        if ((Request->flags & KSWORD_ARK_HVM_NESTED_PAGE_SCAN_SOURCE) != 0UL) {
+            KSW_HVM_LEAF_SOURCE_SCAN scan;
+
+            if (KswordHvmLeafPlanScanSource(Request->ept12Pointer,
+                    Request->guestPhysicalPage, requestedShift,
+                    KswordARKHvmPageReadSource, NULL, &scan)) {
+                sourceUniform = (scan.Uniform != 0 && scan.Complete != 0) ? 1 : 0;
+                Response->scannedLeafCount = scan.LeafCount;
+                Response->scannedSharedBits = scan.SharedBits;
+            }
+        }
+        if (!KswordHvmLeafPlanCreate(requestedShift, Request->guestPhysicalPage,
+                page->Translation.EntryCount, sourceUniform,
+                (KSW_PLAN_U64)1ULL << requestedShift,
+                (KSW_PLAN_U64)1ULL << requestedShift, &probe)) {
+            /* Reclaim the never-published rule. */
+            KswordARKHvmNestedPageFree(page);
+            /*
+             * Name the refusal rather than reporting one generic error.
+             *
+             * A caller that asked for 2 MiB over 512 separately mapped source
+             * pages and one that mis-aligned its address have to be told apart:
+             * the first is a property of the descendant's own tables and will
+             * not change by retrying, the second is the caller's bug.
+             */
+            status = (probe.Refusal == KSW_PLAN_REFUSE_SOURCE_GRANULARITY ||
+                      probe.Refusal == KSW_PLAN_REFUSE_SOURCE_UNKNOWN)
+                ? STATUS_NOT_SUPPORTED : STATUS_INVALID_PARAMETER;
+            /* Publish the refused geometry so the caller can read why. */
+            Response->leafShift = requestedShift;
+            Response->sourceLeafShift =
+                KswordHvmLeafSourceShift(page->Translation.EntryCount);
+            goto complete;
+        }
+        page->BackingBytes = probe.RegionBytes;
+    }
     /* Allocation injection deliberately exercises cleanup of the allocated object. */
     if (fault != KSWORD_ARK_HVM_NESTED_PAGE_FAULT_ALLOCATE) {
         PHYSICAL_ADDRESS low = { 0 }, high, boundary = { 0 };
         /* Accept any allocatable backing PA supported by the current system. */
         high.QuadPart = MAXLONGLONG;
-        /* Allocate one ordinary WB RAM page for the replacement. */
-        page->ShadowVirtual = MmAllocateContiguousMemorySpecifyCache(PAGE_SIZE, low, high, boundary, MmCached);
+        /*
+         * Force the block onto its own granularity by forbidding it to cross one.
+         *
+         * A leaf carries a single frame and hardware ignores the address bits
+         * below its granularity, so an unaligned 2-MiB block would be read as
+         * its own aligned base and serve the wrong bytes with no error anywhere.
+         * A request of exactly N bytes that may not cross an N-aligned boundary
+         * can only start on one. Left at zero for an ordinary page, which is
+         * inherently aligned, so the single-page path is unchanged.
+         */
+        if (page->BackingBytes > PAGE_SIZE) {
+            boundary.QuadPart = (LONGLONG)page->BackingBytes;
+        }
+        /* Allocate ordinary WB RAM for the whole replacement region. */
+        page->ShadowVirtual = MmAllocateContiguousMemorySpecifyCache(
+            (SIZE_T)page->BackingBytes, low, high, boundary, MmCached);
     }
     /* An absent backing takes the same cleanup branch as a real allocation failure. */
     if (page->ShadowVirtual == NULL) {
@@ -431,14 +554,74 @@ NTSTATUS KswordARKHvmNestedPageControl(const KSWORD_ARK_HVM_NESTED_PAGE_REQUEST*
     }
     /* Account for backing as soon as allocation succeeds. */
     KswordARKHvmMetricsAllocation(TRUE, FALSE);
-    /* Initialize all content before root readers can discover it. */
-    RtlCopyMemory(page->ShadowVirtual, Request->shadow, PAGE_SIZE);
+    /*
+     * Initialize all content before root readers can discover it.
+     *
+     * The two granularities mean different things and are initialized
+     * differently. A 4-KiB override replaces one page outright, so it takes the
+     * caller's inline page and that path is byte-for-byte what it was. A region
+     * is a clone: every page including the first is copied from the source, so
+     * publishing it changes nothing the descendant can observe, and STAGE then
+     * changes the parts that should differ. The inline page is ignored there,
+     * because a region that started as one repeated page, or as zeroes, would
+     * be an immediate whole-region corruption - the opposite of a control
+     * primitive you can arm first and fire later.
+     */
+    {
+        /* The capture folds the guest offset in, and the request is aligned to
+           the region, so this is already the region's source base. */
+        const ULONGLONG sourceBase = page->Translation.SourcePage;
+        const ULONGLONG firstCopied =
+            (page->BackingBytes > PAGE_SIZE) ? 0ULL : PAGE_SIZE;
+        ULONGLONG offset;
+
+        if (firstCopied != 0ULL) {
+            RtlCopyMemory(page->ShadowVirtual, Request->shadow, PAGE_SIZE);
+        }
+        for (offset = firstCopied; offset < page->BackingBytes; offset += PAGE_SIZE) {
+            MM_COPY_ADDRESS source;
+            SIZE_T copied = 0U;
+
+            source.PhysicalAddress.QuadPart = (LONGLONG)(sourceBase + offset);
+            /* Copy one page at a time so an unreadable page names itself. */
+            if (!NT_SUCCESS(MmCopyMemory((PUCHAR)page->ShadowVirtual + offset,
+                    source, PAGE_SIZE, MM_COPY_MEMORY_PHYSICAL, &copied)) ||
+                copied != PAGE_SIZE) {
+                /* Never publish a region holding uninitialized bytes. */
+                KswordARKHvmNestedPageFree(page);
+                status = STATUS_INVALID_ADDRESS;
+                KswordARKHvmPageTrace(&trace, KSW_HVM_PAGE_ALLOCATE_END, status);
+                goto complete;
+            }
+        }
+    }
     /* Bind lifetime before publication; cleanup also releases failed admission. */
     status = KswordARKHvmPageBindOwner(runtime, page, Request);
     /* A dead or reused owner must not leave any allocated replacement behind. */
     if (!NT_SUCCESS(status)) { KswordARKHvmNestedPageFree(page); goto complete; }
     /* Resolve the actual backing PA for EPT and evidence. */
     page->ShadowPhysicalPage = (ULONGLONG)MmGetPhysicalAddress(page->ShadowVirtual).QuadPart;
+    /*
+     * Build the published plan from the address actually allocated.
+     *
+     * The probe above proved the geometry was admissible; this proves the
+     * allocator honoured it. The boundary argument is a request, not a
+     * guarantee, and an unaligned block would otherwise be published as a leaf
+     * that serves the wrong bytes without failing anywhere. A refusal here is a
+     * clean rejection, not a downgrade to a smaller leaf.
+     */
+    if (!KswordHvmLeafPlanCreate(
+            (Request->leafShift != 0UL) ? Request->leafShift
+                                        : KSWORD_ARK_HVM_NESTED_PAGE_SHIFT_4K,
+            Request->guestPhysicalPage, page->Translation.EntryCount,
+            sourceUniform, page->ShadowPhysicalPage, page->BackingBytes,
+            &page->Plan)) {
+        /* Reclaim backing whose address the plan cannot accept. */
+        KswordARKHvmNestedPageFree(page);
+        status = STATUS_INSUFFICIENT_RESOURCES;
+        KswordARKHvmPageTrace(&trace, KSW_HVM_PAGE_ALLOCATE_END, status);
+        goto complete;
+    }
     /* Store the root identity used by the composition path. */
     page->Ept12Pointer = Request->ept12Pointer;
     /* Store the target page used by the composition path. */
@@ -527,6 +710,21 @@ complete:
         Response->originalPhysicalPage = (ULONGLONG)InterlockedCompareExchange64(&page->OriginalPhysicalPage, 0LL, 0LL);
         /* Sample actual composition hits independently. */
         Response->composedCount = (ULONGLONG)InterlockedCompareExchange64(&page->ComposedCount, 0LL, 0LL);
+        /* Report the granularity actually published and the region it owns. */
+        Response->leafShift = page->Plan.LeafShift;
+        Response->regionBytes = page->Plan.RegionBytes;
+        Response->regionPageCount = page->Plan.PageCount;
+        /* Report what limited that granularity, so a refusal reads without a walk. */
+        Response->sourceLeafShift =
+            KswordHvmLeafSourceShift(page->Translation.EntryCount);
+        /* A published region whose source is finer was admitted by scanning. */
+        Response->admittedByScan =
+            (page->Plan.LeafShift > KSW_PLAN_SHIFT_4K &&
+             KswordHvmLeafSourceShift(page->Translation.EntryCount) <
+                 page->Plan.LeafShift) ? 1UL : 0UL;
+        /* Report applied staged edits; publication alone leaves this zero. */
+        Response->stagedPageCount =
+            (ULONGLONG)InterlockedCompareExchange64(&page->StagedPageCount, 0LL, 0LL);
     }
     /* Finish the correlated trace before releasing the control lock. */
     KswordARKHvmPageTrace(&trace, KSW_HVM_PAGE_END, status);
