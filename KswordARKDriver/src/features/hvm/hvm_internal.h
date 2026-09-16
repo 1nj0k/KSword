@@ -609,6 +609,21 @@ typedef struct _KSW_HVM_NESTED_PAGE {
     ULONGLONG BackingBytes;
     /* Count of staged page writes applied since publication, for evidence. */
     volatile LONG64 StagedPageCount;
+    /*
+     * What the admitting scan proved, kept so it can be rechecked.
+     *
+     * Admission by scanning reads every source leaf under the region once. That
+     * is a statement about one instant, and the intermediate VMM keeps changing
+     * its per-page permissions while the guest runs - measured: a region that
+     * scanned uniform disagreed on a later run, and one that disagreed scanned
+     * uniform. Without these the region would keep serving on a condition
+     * nobody ever looked at again.
+     */
+    ULONGLONG ScanSharedBits;
+    /* Next page of the region for the sampler to recheck; wraps. */
+    volatile LONG ScanCursor;
+    /* Set only for regions the scanning rule admitted. */
+    BOOLEAN ScanAdmitted;
 } KSW_HVM_NESTED_PAGE;
 
 typedef struct _KSW_HVM_RUNTIME

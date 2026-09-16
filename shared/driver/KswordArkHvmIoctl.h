@@ -2333,6 +2333,11 @@ typedef struct _KSWORD_ARK_HVM_NESTED_PROBE_RESPONSE
 #define KSWORD_ARK_HVM_PAGE_LEASE_OWNER_EXITED 1UL
 #define KSWORD_ARK_HVM_PAGE_LEASE_TRANSLATION_CHANGED 2UL
 #define KSWORD_ARK_HVM_PAGE_LEASE_SOURCE_UNREADABLE 3UL
+/* A region admitted by scanning stopped meeting the condition it was admitted
+   on: one of its source leaves now grants different access or a different memory
+   type than the rest. Detected by sampling rather than at every composition, so
+   the region may have been serving for a short while after the change. */
+#define KSWORD_ARK_HVM_PAGE_LEASE_REGION_DRIFTED 4UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_QUERY 0UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_MAP 1UL
 #define KSWORD_ARK_HVM_NESTED_PAGE_REMOVE 2UL

@@ -1040,6 +1040,16 @@ retryTranslation:
      * L1's tables.  See the field comment for why this is the one failure that
      * leaves no exit behind.
      */
+    /*
+     * Ride the same sampling tick for the region recheck.
+     *
+     * One EPT12 walk per 4096 fills, against a lease that is otherwise rechecked
+     * only where it was captured. Sharing the tick keeps the exit path's cost
+     * unchanged in shape: it was already doing a walk here every 4096 fills.
+     */
+    if ((Shadow->FillCount & 0xFFFUL) == 0UL) {
+        KswordARKHvmNestedPageSampleRegion(Runtime, Window);
+    }
     if ((Shadow->FillCount & 0xFFFUL) == 0UL) {
         const ULONGLONG pending = Shadow->VerifyPendingGuestPhysical;
 

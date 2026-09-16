@@ -346,6 +346,10 @@ VOID KswordARKHvmNestedPageResetLocked(KSW_HVM_RUNTIME* Runtime);
 NTSTATUS KswordARKHvmNestedPageGuardInitialize(VOID);
 VOID KswordARKHvmNestedPageGuardShutdown(VOID);
 /* Revalidate a published translation without OS memory-manager calls in VMX root. */
+/* Recheck one page of a scan-admitted region; cheap enough for the exit path. */
+VOID KswordARKHvmNestedPageSampleRegion(KSW_HVM_RUNTIME* Runtime,
+    KSW_HVM_PHYS_WINDOW* Window);
+
 BOOLEAN KswordARKHvmNestedPageValidateTranslation(KSW_HVM_RUNTIME* Runtime,
     KSW_HVM_PHYS_WINDOW* Window, ULONGLONG EptPointer);
 
