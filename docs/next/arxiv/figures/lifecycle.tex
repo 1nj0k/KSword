@@ -1,0 +1,17 @@
+\begin{tikzpicture}[font=\small,
+  box/.style={draw=blue!45!black,fill=blue!3,rounded corners=2pt,
+              align=center,text width=3.7cm,minimum height=19mm,inner sep=5pt},
+  arrow/.style={-{Latex[length=2mm]},thick,draw=blue!50!black}]
+\node[box] (capture) {Capture twice\par Bind owner + allocate};
+\node[box,right=9mm of capture] (publish) {Publish lease\par Commit invalidation};
+\node[box,right=9mm of publish] (active) {Active lease\par Sample source path};
+\node[box,below=11mm of active] (retire) {Unpublish / revoke\par Retain backing};
+\node[box,left=9mm of retire] (drain) {All-CPU drain\par Failure: keep backing\par and retry};
+\node[box,left=9mm of drain,fill=green!4,draw=green!40!black] (free) {Drain succeeds\par Reclaim rule + backing};
+\draw[arrow] (capture) -- (publish);
+\draw[arrow] (publish) -- (active);
+\draw[arrow] (active) -- node[right,font=\footnotesize,align=left] {remove /\\observed fault} (retire);
+\draw[arrow] (publish.south) -- ++(0,-0.45) -| node[near start,above,font=\footnotesize] {commit failure} (retire.north);
+\draw[arrow] (retire) -- (drain);
+\draw[arrow] (drain) -- (free);
+\end{tikzpicture}

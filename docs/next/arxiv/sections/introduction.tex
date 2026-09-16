@@ -1,0 +1,115 @@
+\section{Introduction}
+An engineer testing a nested virtual machine may control its containing Windows
+environment while using a binary-only intermediate virtual machine monitor
+(VMM). A useful experiment is to substitute a page seen by the nested guest,
+observe the application effect, and restore the original page without editing
+the VMM. This requires more than obtaining a physical address: the page belongs
+to several translation domains, cached translations can outlive a policy
+change, and a reused address need not identify the same workload object.
+
+This paper presents \ks{}, an experimental Intel VMX monitor loaded from an
+authorized Windows kernel inside an existing Hyper-V guest. It interposes below
+that running Windows instance and subsequently hosts VMware and a TinyCore Linux
+descendant. Its page-control interface redirects one selected 4\,KiB descendant
+guest-physical page to private backing and exposes publication, invalidation,
+rollback, and reclamation as separate events. Guest-side helpers select, pin,
+and observe the experimental page; the page intervention itself is controlled
+from the containing Windows instance.
+
+The distinction between insertion and later page control is essential.
+\emph{The evaluated insertion starts while descendant VMMs are absent.}
+Windows continues within the same boot and with the same observed processes.
+VMware and TinyCore start afterward. Their identities are then preserved during
+page substitution and recovery. Inserting beneath a VMware/TinyCore stack that
+is already running would additionally require transferring existing VMX
+ownership and execution state. That operation is not implemented here.
+Figure~\ref{fig:topology} makes the two intervals explicit.
+
+\begin{figure}[tbp]
+\centering
+\input{figures/topology}
+\caption{Evaluated topology and temporal order. First, \ks{} is inserted beneath
+running Windows~1 while intermediate VMMs are absent. VMware and TinyCore are
+then started normally. The subsequent page-control interval preserves the
+observed Windows, VMware, and TinyCore identities. Windows~0 and outer Hyper-V
+remain outside the inserted monitor. This figure does not depict insertion
+beneath an already-running descendant stack.}
+\label{fig:topology}
+\end{figure}
+
+Neither late OS virtualization nor translation composition originates with this
+work. SubVirt placed a VMM beneath existing operating systems, and Blue Pill
+described on-the-fly interposition~\cite{subvirt,bluepill}. Turtles established
+nested VMX and multi-dimensional paging for unmodified
+VMMs~\cite{turtles}. We build on these concepts and investigate a particular
+deployment and lifecycle problem: a monitor started inside a Hyper-V Windows
+guest that controls a later descendant without an intermediate-VMM extension.
+The intended use is controlled systems experimentation, not covert persistence
+or a new protection boundary against the surrounding virtualization stack.
+
+The paper makes three bounded contributions:
+\begin{enumerate}
+\item A Windows implementation combining live Windows-only interposition,
+      nested VMX execution, and a descendant page lease. The lease binds a
+      referenced VMM process identity to a sampled source translation path and
+      retains replacement backing until an all-CPU retirement drain succeeds.
+\item An evaluation that connects control events to full-page observations on
+      two descendant vCPUs, identity continuity, fault outcomes, and allocation
+      ledgers. A BusyBox HTTP service and a fixed-schema policy consumer show
+      an application-visible data fault and recovery, with a guest direct-write
+      comparator that makes the differing control requirements explicit.
+\item A version-separated evidence set reporting useful behavior together with
+      substantial costs and negative results: millisecond-scale insertion
+      bodies, paced application observations, residual CPUID/RTT overhead, and
+      refused admission in an inner Hyper-V root partition.
+\end{enumerate}
+
+All measurements come from one physical machine. In the current cohort, five
+measured insertions have a median driver-body time of 2.5953\,ms. Twenty-four
+paced TCP runs, including warmups, produce 74,145 valid responses. Three current
+two-vCPU page cycles and fifteen injected-control trials complete, while one of
+four HTTP EPT attempts is incomplete because its bounded observer expires.
+The current nested mode incurs 8.76 times the off-mode CPUID latency and
+30.7\% higher Windows loopback RTT. These results establish a working, limited
+control mechanism; they do not establish low overhead across applications,
+arbitrary page-update atomicity, or general hot insertion beneath existing VMMs.
+
+\section{Background and operating assumptions}
+\label{sec:background}
+\paragraph{Topology names.}
+We call the outer Hyper-V root operating system \emph{Windows~0} and its guest
+\emph{Windows~1}. The \emph{intermediate VMM} is VMware running within Windows~1;
+the \emph{descendant} is its TinyCore guest. After insertion, \ks{} monitors both
+Windows~1 and the nested VMX execution it presents to VMware. These names avoid
+assigning a single global meaning to L0/L1/L2 across two nested-virtualization
+implementations. Outer Hyper-V continues to control actual machine execution.
+
+\paragraph{VMX and address translation.}
+VMX separates host and guest execution state using virtual-machine control
+structures (VMCSs). Extended page tables (EPT) translate guest-physical addresses
+and carry access permissions and memory types. Cached EPT-derived translations
+require the appropriate invalidation when mappings change; changing a software
+pointer alone does not retire those translations~\cite{intel}. In \ks{}'s local
+naming, EPT12 is VMware's source translation, and the composed or shadow EPT
+is the translation that \ks{} supplies for descendant execution. A physical
+address reported by this monitor is a Windows~1 physical address, not a claim
+to know the outer machine's system-physical address.
+
+\paragraph{Authority and trust.}
+The operator authorizes the driver and has the Windows~1 kernel privileges
+needed to install it. Outer Hyper-V, Windows~0, and the active outer HVCI
+configuration are trusted. The intermediate VMM is assumed to obey architectural
+invalidation rules. The prototype does not defend against a malicious VMM that
+races translation changes, an untrusted outer hypervisor, or an adversarial
+guest deliberately reusing the selected object. Firmware settings and nested
+capability exposure are prerequisites, not privileges acquired by the monitor.
+
+\paragraph{Control-path independence.}
+Page intervention uses the \ks{} driver interface without a VMware/Hyper-V
+management API, VMM code hook, or component injected into the VMM. This is a
+statement about the intervention path. Experiment setup uses VM management,
+PowerShell Direct, an ISO image, and console/serial access. Normal hypercalls,
+nested VMX instructions, and EPT accessed/dirty (A/D) maintenance still occur;
+some A/D maintenance writes translation metadata owned by the intermediate VMM.
+Thus, the claim is neither that the VMMs are never invoked nor that all their
+memory remains byte-for-byte unchanged.

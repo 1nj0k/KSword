@@ -1,0 +1,41 @@
+{
+  "inputs": {
+    "20260916-followup/analysis-followup.json": "efd10e85aaf10aa795755c2e7c29bcd78e68fc5a43f5e7cc2bdf8d225b765461",
+    "20260916-followup/latency-runs.csv": "d103e8188dadc2abb4eb90796fe706edce9c1c0ebe423cc50128813f811afd73",
+    "20260916-followup/lifecycle/derived/smp-summary.json": "86254878bd34a0646c7844e7c85319df0ed112b1052e55e9c4fd98235aebe0e1",
+    "20260915-4x2/derived/nested-improvements.csv": "8852237127ac09ac715516a85d057ab8692ef918833a08e97310e9c186752c34",
+    "20260915-4x2/after/derived/windows-overhead.csv": "8ec9fab6a285f78c2a5dd1e08368808c614288f2fed7e9c1d9e0a41aa5826f57",
+    "20260916-followup/application/derived/http-page-summary.json": "1d57458bc8d39f957a6aea59e681fc9923eecdae76b92ddc3cc0d50ccb67f5e9",
+    "20260916-followup/application/derived/policy-comparison.json": "e0f14139eb77243aa45eec4947530b42455690358b5f7633c2fa3fde07465c05"
+  },
+  "derivedClaims": {
+    "cpuidRatio": 8.759411283925095,
+    "tcpRttOverheadPercent": 30.691399019102693,
+    "completeEptApplicationTrials": 3,
+    "pacedTcpResponses": 74145,
+    "transitionTimesUs": {
+      "insert": {
+        "driverCommandUs": {
+          "median": 2595.3,
+          "max": 3053.9
+        },
+        "rendezvousUs": {
+          "median": 111.6,
+          "max": 148.2
+        }
+      },
+      "remove": {
+        "driverCommandUs": {
+          "median": 1107.4,
+          "max": 1275.2
+        },
+        "rendezvousUs": {
+          "median": 55.8,
+          "max": 393.8
+        }
+      }
+    },
+    "metadataAbstractCharacters": 1610
+  },
+  "note": "Inputs are derived evidence summaries, whose raw inputs are indexed in their datasets. Cohorts are not pooled."
+}

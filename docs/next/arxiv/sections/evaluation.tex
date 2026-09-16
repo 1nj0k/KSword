@@ -1,0 +1,292 @@
+\section{Evaluation}
+\label{sec:evaluation}
+\subsection{Windows continuity and application-visible disruption}
+All 24 current paced TCP runs, including warmups, complete with 74,145 correctly
+sequenced responses, unchanged Windows boot identity, and unchanged monitored
+process identities. Table~\ref{tab:latency} summarizes the twenty measured runs.
+The p99 column is the median of five per-run p99 values, not a percentile over
+a pooled distribution. Each gap column concerns the largest completion gap
+overlapping that run's control call.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Current paced TCP experiment, five measured runs per condition. Gap
+columns summarize command-overlapping completion gaps. The call column is the
+median application-level control-call duration.}
+\label{tab:latency}
+\input{tables/latency}
+\end{table}
+
+Insertion's driver-body median is 2595.3\,\us{} (maximum 3053.9\,\us{}), with a
+rendezvous median of 111.6\,\us{} (maximum 148.2\,\us{}). Removal's corresponding
+medians are 1107.4 and 55.8\,\us{}, with maxima of 1275.2 and 393.8\,\us{}.
+Process creation and command work expand the application-level control window
+to roughly 20\,ms. These boundaries answer different questions and cannot be
+substituted for one another.
+
+The largest measured command-overlap gap is 6.2300\,ms during insertion. Sham
+conditions also contain multi-millisecond gaps; the on-mode sham has a
+16.1823\,ms RTT outlier outside its command window. We therefore do not call
+6.23\,ms the exact transition pause or subtract a sham maximum to produce a
+causal pause estimate. The closed-loop client limits offered load, and scheduler,
+socket, pacing, and observation work all contribute to the recorded intervals.
+
+The historical cohort supplies more detailed phase instrumentation across ten
+Windows-only insert/remove pairs. Its insertion-body median is 2.8005\,ms,
+resource preparation 2.65375\,ms, and rendezvous envelope 149.5\,\us{}. Across
+forty CPU-entry records, median state-capture/control-selection time is
+13.85\,\us{}, VMCS programming 5.0\,\us{}, and entry continuation 24.1\,\us{}.
+Entry-return skew has a 4.6\,\us{} median and 28.3\,\us{} maximum. A single cold
+EPT-build observation is 6.0918\,ms in preparation. Parallel intervals overlap
+and must not be added to estimate total pause. These older measurements
+demonstrate bounded observed skew, not simultaneous entry or a current-build
+replication of every phase statistic.
+
+\subsection{Multicore effects, faults, and reclamation}
+\label{sec:lifecycle-results}
+The current version completes three of three two-vCPU remap/restore cycles for
+reserved GPA \code{0x07000000}. Its original Windows~1 backing is
+\code{0xCDB03000}, with four captured source entries. Both CPU observers verify
+the full page in each stage. All fifteen request-local fault trials satisfy
+their expected reject, rollback, or retain-and-retry outcome; all three invalid
+requests are cleanly rejected. Table~\ref{tab:faults} states the tested failure
+semantics rather than reducing them to an unexplained PASS.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Current lifecycle fault and rejection matrix. Every trial has its own
+raw record. Drain faults omit one drain call at a software boundary; they are
+not actual hardware INVEPT failures.}
+\label{tab:faults}
+\begin{tabularx}{\linewidth}{@{}lrlX@{}}
+\toprule
+Condition & Trials & Expected result & Observed boundary \\
+\midrule
+Replacement allocation failure & 3 & Clean reject & No published replacement \\
+Cancel before commit & 3 & Clean cancel & Pre-publication allocations reclaimed \\
+Rollback after commit & 3 & Rollback & Override retired and backing reclaimed \\
+Omit commit drain & 3 & Rollback & Recovery drain required before free \\
+Omit retirement drain & 3 & Retain, then retry & Backing retained until successful retry \\
+GPA above 52 bits & 1 & Clean reject & No new mapping \\
+Unaligned GPA & 1 & Clean reject & No new mapping \\
+Unknown EPT root & 1 & Clean reject & No new mapping \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Table~\ref{tab:lifecycle-times} reports current driver-body and drain durations.
+The active and retired slots are empty after successful recovery, and the
+tracked rule/replacement allocations balance. These ledgers cover page-control
+objects and backing, not the entire driver's pool. The sampled readbacks and
+traces do not establish that an arbitrary reader never sees a mixed update.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Current page-control timing for three complete two-vCPU cycles.
+Drain times are contained within their corresponding control bodies.}
+\label{tab:lifecycle-times}
+\input{tables/lifecycle}
+\end{table}
+
+The historical version has twenty complete cycles: ten idle and ten with both
+guest CPUs under load, with observed CPU utilization 99.96\% and 98.77\%.
+A write-isolation trial observes an A5-filled original page, a D1-filled private
+page, a write of B2 into the private page's first four bytes, and restoration of
+the complete original A5 page on both CPUs. Its owner-exit trial observes
+\code{active=0, retired=1, ownerExited=1}; explicit removal then empties both
+slots and balances allocation counts without the previously seen Hyper-V
+18560 reset. These are historical results, not fresh runtime coverage of every
+version~3 path.
+
+Portable adversarial tests compile the same lease walker used by the driver and
+exercise bit changes at each level, A/D modes, leaf sizes, unreadable paths,
+root/path reuse, and malformed requests. They validate comparator behavior but
+do not replace hardware source-EPT mutation, adversarial multicore, or actual
+hardware-failure tests. Those remain unmeasured.
+
+\subsection{Remaining steady-state cost and attribution}
+\label{sec:performance}
+All 72 current attribution runs complete. Table~\ref{tab:attribution} reports
+the five measured repetitions per mode/workload. Descendant VMMs are absent;
+these are Windows-only synthetic measurements with residency toggled.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Current same-binary attribution. Values are median and observed
+minimum--maximum over five measured runs. CPUID is leaf~0; RTT is loopback.}
+\label{tab:attribution}
+\input{tables/attribution}
+\end{table}
+
+Sparse CPUID snapshots reduce the median from 2944.212 to 2915.062\,ns relative
+to the matching nested full-snapshot reference, an observed 0.99\% change with
+overlapping ranges. RTT does not improve. The sparse nested mode still costs
+8.7594 times the off-mode CPUID time and 30.6914\% more loopback RTT. A small
+telemetry optimization therefore does not resolve the major remaining cost.
+
+Adding 512 VMREADs to ordinary residency increases median CPUID latency from
+2905.918 to 6875.552\,ns. Dividing that difference by 512 estimates 7.753\,ns
+per added read, including loop overhead. The 256-read result is consistent with
+a similar marginal scale. Removing two reads cannot account for a
+microsecond-scale end-to-end gap.
+
+A separate million-exit CPU~0 profile measures an average 382 TSC cycles for
+the C dispatcher, including 97 cycles for initial VMCS reads; an empty
+timestamp pair costs 25 cycles. An invariant-TSC calibration near 2.112\,GHz
+converts 382 cycles to approximately 181\,ns. This profile averages a mixture
+of exit types and excludes entry/exit assembly and outer-hypervisor work. It
+cannot be directly subtracted from a CPUID-only measurement to isolate Hyper-V
+cost. It identifies unmeasured paths for the next attribution step. RTT windows
+are dominated by HLT, MSR, and hypercall exits, so reducing CPUID work alone is
+not a demonstrated networking optimization.
+
+\paragraph{Historical optimization evidence.}
+Table~\ref{tab:nested-history} shows all six historical nested workloads,
+including the unfavorable RTT result. The optimized memory-copy median is
+94.53\% lower and CPUID is 29.05\% lower than the earlier implementation.
+The pointer-chase process changes from three timeouts to three completions;
+its 20-second timeout includes initialization, so a 20/1.61 speedup ratio would
+be invalid. This is a comparison between implementations and boots, not a
+no-monitor overhead baseline or an ablation of individual changes.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Historical TinyCore implementation comparison, three measured runs
+per workload after warmup, same workload binary and guest CPU affinity.
+Negative elapsed change means a shorter duration. Driver and guest boot differ.}
+\label{tab:nested-history}
+\input{tables/historical-nested}
+\end{table}
+
+The historical Windows suite in Appendix~\ref{app:historical} covers CPU, memory,
+direct virtual-disk I/O, and loopback traffic. Broad intervals span zero for
+most workloads, while CPUID and RTT costs remain substantial. A 17.23\%
+off/post versus off/pre drift in bulk TCP highlights the limits of block order
+and a single boot. A matched no-monitor descendant baseline using the same
+VMware backend, a current active-lease performance suite, descendant persistent
+disk I/O, and external-network performance are not available.
+
+\paragraph{Exit and memory accounting.}
+A historical nested benchmark window records 19,489,348 resident dispatches,
+approximately 167,733 per second. VMREAD, HLT, VMWRITE, EPT violation, and CPUID
+account for approximately 6.36, 5.64, 2.65, 2.55, and 0.82 million events.
+The INVEPT-wrapper counter records 101,233 calls, about 874.4 per second, with
+zero failures. Counter queries have different interval boundaries; their
+denominators must not be mixed. These windows include startup and controller
+work and are not isolated steady-state rates or global outer-Hyper-V counts.
+An intercepted INVVPID instruction category is available, but an actual
+hardware INVVPID total is not. Actual newly ORed A/D bits are zero in this
+window, so it does not establish all A/D writeback semantics at runtime.
+
+The historical optimized structures reserve a computed 3.25\,MiB of relevant
+shadow tables, snapshots, and A/D ledger capacity per active CPU, or 13\,MiB
+for four CPUs. This is a structure-capacity calculation, not a measured total
+driver footprint. The increase trades memory and preparation cost for fewer
+shadow-cache capacity failures.
+
+\subsection{Reversible HTTP policy corruption}
+\label{sec:application}
+The application fixture uses an unmodified BusyBox HTTP server to serve a
+4096-byte file-cache page containing a price policy. A separate fixed-schema
+consumer validates the complete body and emits \code{quote-1250} for the valid
+policy or \code{reject-corrupt-policy} for the zeroed replacement. HTTP status
+200 alone is insufficient. A privileged guest helper uses mlock/pagemap to pin
+and identify the page; this is explicit instrumentation.
+
+The EPT intervention targets GPA \code{0x02479000}, with original Windows~1
+backing \code{0xCCF89000} and replacement \code{0x204FD4000}. In three complete
+trials, the observed decision sequence is valid quote, rejection, valid quote.
+The strict HTTP/PFN join validates ninety responses, ten per stage per trial.
+A second analysis tolerating unrelated serial-line interleaving validates
+ninety-one policy observations; the extra observation is not counted by the
+strict contiguous join. Table~\ref{tab:application-runs} retains the fourth,
+incomplete attempt, whose bounded observer expires after five mapped samples.
+Its successful removal and cleanup are retained. Extending the observation
+window precedes the final complete trial.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Current EPT application attempts on 2026-09-16 UTC. The run suffix is
+\texttt{HHMMSSmmm}. PFN age measures freshness of the associated pagemap sample.}
+\label{tab:application-runs}
+\input{tables/application-runs}
+\end{table}
+
+The direct-write comparator uses a different pinned file with identical initial
+bytes and the same HTTP server, after the original pin has expired. It saves
+the original contents, writes zeroes from within the guest, and restores the
+saved bytes. Its GPA is \code{0x170d1000}. Three trials complete with the same
+decision sequence and 78 analyzed responses. Six observations in settling
+windows are excluded and retained in raw serial. The 0.5-second rule is relative
+to the first observation after each marker, not a precise physical-write
+timestamp. Consequently this is a comparison of effects and required authority,
+not a timing, atomicity, or throughput comparison.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Control requirements in the measured HTTP fixture. Both interventions
+achieve corruption and recovery; the experiment establishes no speed advantage.}
+\label{tab:application-comparison}
+\begin{tabularx}{\linewidth}{@{}lXX@{}}
+\toprule
+Property & EPT substitution & Guest direct write \\
+\midrule
+Complete trials & 3 of 4 attempts & 3 of 3 trials \\
+Authority after setup & Authorized containing-Windows driver control & Guest file-write permission \\
+Original backing & Retained while private backing is served & File contents overwritten \\
+Recovery & Remove override and drain translations & Write saved original contents \\
+Guest preparation & Privileged page selection/pinning & Page pinning and byte backup \\
+VMM intervention & No management call, hook, or injected component in intervention path & Ordinary guest file I/O; no VMM operation \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Windows boot, VMware PID/creation time, TinyCore boot ID, and server
+PID/creation ticks remain unchanged within the respective intervals. Each
+trial has advancing, fresh PFN samples. Post-run source review, however, found
+that the measured policy collector printed its holder-alive field as a constant
+one. The analysis explicitly reports \code{independentHolderLiveness=false};
+that field is not evidence of liveness at each response. Fresh PFN observations
+and server identities remain usable, with this limitation. The collector was
+subsequently changed to perform \code{kill -0}, but that change was not rerun.
+A read-only pre-comparator collection stall and an old-holder create-new
+rejection are retained as setup failures, not application successes.
+
+The useful capability is reversible data-fault injection from containing
+Windows without extending VMware and without overwriting the source data page.
+Direct writing also works and may be the simpler choice when guest write
+authority and restoration bytes are available. The fixture does not establish
+production fault tolerance, a general JSON oracle, or agent-free page discovery.
+
+\subsection{Intermediate Hyper-V: a negative compatibility result}
+\label{sec:hyperv}
+After upgrading Windows~1 to Pro, installing its Hyper-V role, and rebooting
+outside measured intervals, a Generation~1 two-vCPU TinyCore fixture boots
+through normal \code{/init}. The first two rebuilt ISO images fail in ISOLINUX;
+the third succeeds. These setup failures are retained, with no claim that one
+specific image field has been isolated as their cause.
+
+In this configuration, Windows~1 is an \emph{inner Hyper-V root partition}.
+Its CPUID.1 ECX is \code{0xFEFA3203}, with VMX bit~5 clear. The \ks{} capability
+query returns \code{STATUS\_NOT\_SUPPORTED} (\code{0xC00000BB}), and both prepare
+and resident-start requests are refused before a control IOCTL is submitted.
+No resident processors or prepared resources are reported. A first CLI version
+returned empty output with exit code~2; the corrected shared engine reports
+the query stage and \code{controlSubmitted=false}. Neither is successful insertion.
+
+Windows boot identity and child VM GUID remain stable around the first
+admission attempt. The worker remains PID~2824 with the same creation time,
+and child uptime advances from 203.659 to 203.784 seconds. The guest has its own
+recorded boot ID and repeated normal-init heartbeats. This is positive evidence
+for the Hyper-V/TinyCore fixture and negative evidence for \ks{} admission at
+that insertion point.
+
+Microsoft describes Hyper-V as a hypervisor below its root partition, whose
+management stack creates child partitions~\cite{hyperv-architecture}. Exposing
+nested extensions to a managed child~\cite{hyperv-nested} does not establish
+VMX execution authority for another monitor in the inner root partition.
+Installing the role therefore changes the topology; it does not simply replace
+VMware with another process inside an otherwise unchanged Windows kernel.
+We make no impossibility claim about all alternative architectures or future
+builds. Descendant EPT control and live Hyper-V interposition remain unsupported
+by these measurements.

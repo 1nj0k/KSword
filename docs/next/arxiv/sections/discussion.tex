@@ -1,0 +1,140 @@
+\section{Related work and comparative scope}
+\label{sec:related}
+\paragraph{Interposing beneath an operating system.}
+SubVirt demonstrates placing a VMM below existing Windows and Linux systems
+in a security-threat setting~\cite{subvirt}. Blue Pill describes using AMD SVM
+to move a running OS beneath a thin monitor without rebooting~\cite{bluepill}.
+These precedents rule out claiming reboot-free OS interposition itself as our
+invention. Our authorized laboratory use also makes no claim of undetectability.
+The engineering question here is the interaction between such interposition,
+an already-present outer Hyper-V, a later unmodified intermediate VMM, and
+explicit page-resource retirement.
+
+\paragraph{Nested execution and lower-layer control.}
+Turtles virtualizes VMX and composes translation layers to execute unmodified
+guest hypervisors~\cite{turtles}. \ks{} uses this established model for virtual
+VMCS state, exit reflection, and composed EPT. CloudVisor places a small monitor
+below a commodity VMM and separates VM protection from resource
+management~\cite{cloudvisor}. Our page control shares the broad placement of
+authority below the intermediate VMM, but not CloudVisor's protection goal.
+\ks{} trusts the outer platform and architectural cooperation from the
+intermediate VMM, requires privileged guest page preparation in the experiment,
+and supplies no confidentiality/integrity guarantee against a compromised VMM.
+
+\paragraph{Replacing a running hypervisor.}
+HyperFresh uses a pre-existing hyperplexor and memory remapping to transfer
+running VMs to a replacement hypervisor on the same machine~\cite{hyperfresh}.
+HyperTP combines migration-based replacement and in-place microreboot using a
+unified representation of VM state, with Xen/KVM implementations~\cite{hypertp}.
+These systems transfer already-running VM state. Our measured operation instead
+inserts a monitor with descendant VMMs absent and starts VMware later. We do not
+equate those operations or compare their published downtime numbers with our
+Windows-only driver-body times.
+
+\paragraph{Nested performance.}
+HyperTurtle moves selected nested critical paths into eBPF programs executed by
+the bare-metal hypervisor to reduce world switches~\cite{hyperturtle}. Our
+prototype does not install such an outer-hypervisor extension. Its cost profile
+motivates examining boundary transitions beyond the C dispatcher, but our
+experiments do not isolate all of those costs and do not measure a performance
+advantage over HyperTurtle. No prior system is treated as a benchmark baseline
+without a comparable local run.
+
+\paragraph{Application value.}
+The HTTP comparison establishes a concrete distinction in authority and recovery
+state: after cooperative page setup, a containing-Windows operator can serve
+private backing while preserving the original page, whereas the demonstrated
+direct-write alternative requires guest write permission and saved contents.
+This can support controlled fault campaigns in nested test environments that
+use an unmodified VMM. Whether the additional monitor is worthwhile depends on
+those control requirements and its measured overhead. Broader application value
+requires workloads with meaningful recovery behavior and comparisons against
+other available fault-injection interfaces.
+
+\section{Limitations and threats to validity}
+\label{sec:limitations}
+\paragraph{Insertion scope.}
+Already-running VMware/TinyCore stacks cannot currently be moved beneath a
+newly inserted monitor. A CPUID policy change or removing an ownership gate
+would not implement the missing VMX/VMCS state handoff. The inner Hyper-V
+experiment demonstrates refused admission in one topology and build, not a
+general solution or a universal impossibility result. Attribution of the
+remaining hot-insertion problem solely to a vendor defect is not established.
+
+\paragraph{Page semantics.}
+Process ownership and sampled source-path identity improve lifetime accounting
+but cannot detect identical-bit ABA, all guest reboots, snapshot restoration,
+or application-object reuse at the same GPA. The caller must manage those
+boundaries. A whole-page readback on two CPUs is not proof of atomic replacement
+for arbitrary concurrent readers/writers, DMA, MMIO, or executable-page
+workloads. Successful synchronous retirement and sampled readback are different
+forms of evidence; neither should be enlarged into universal stale-mapping
+freedom without the stated assumptions.
+
+\paragraph{Coverage and reliability.}
+Current page-cycle counts are small, and software-injected allocation/drain
+failures do not emulate all hardware failures. Source-path comparison has
+portable adversarial coverage but lacks deliberate hardware EPT mutation tests.
+High-load, write-isolation, and owner-exit results belong to the historical
+build. A historical two-by-two configuration has a 599.43-second observation
+with 21 samples; there is no new ten-minute or overnight soak for the current
+four-by-two build. That older duration cannot establish current crash freedom,
+bounded long-term memory growth, or whole-driver leak freedom.
+
+\paragraph{Performance generality.}
+One heterogeneous physical CPU, one outer Hyper-V build, and one current
+Windows~1 build provide no cross-machine estimate. Guest CPU affinity does not
+eliminate physical scheduling or host activity. The current performance suite
+has five measured repetitions and no descendant VMMs; the broader historical
+suite has block-order drift. The optimized nested comparison crosses driver
+versions and boots. Persistent descendant disk performance, external networking,
+a matched no-monitor VMware backend, and active-lease steady-state overhead
+remain missing. Windows 10 LTSC, other CPU families, and other Windows builds
+have not been evaluated in the current matrix.
+
+\paragraph{Application observation.}
+The HTTP oracle validates a controlled fixed schema, not production business
+logic. Its current dataset lacks an independent holder-liveness probe at every
+response because the measured collector emitted a constant field. The raw data
+and this defect remain visible; fresh PFN observations support only the narrower
+claim stated in Section~\ref{sec:application}. A bounded observer expiration is
+an incomplete trial. Settling exclusions in the direct-write comparator prevent
+an atomicity or matched-latency interpretation. Paced closed-loop Windows TCP
+observations likewise do not measure saturated throughput or an exact pause.
+
+\paragraph{Artifact scope.}
+Per-run logs, source/binary identities, analysis scripts, and generated tables
+make claims inspectable. They do not independently reproduce the original
+hardware runs. The separately prepared redacted archive contains evidence and
+analysis, not a complete anonymous buildable system image. Removing direct
+identity strings also does not prevent linking a public project to its hardware,
+dates, or distinctive measurements.
+
+\section{Conclusion}
+\ks{} demonstrates a bounded way to introduce a VMX monitor beneath a running
+Hyper-V Windows guest and subsequently control selected memory in a VMware
+descendant. Its page lease separates admission, publication, observed revocation,
+CPU invalidation, and reclamation, and its experiments connect those events to
+multicore readback and an HTTP policy effect. The evaluated pages can be
+substituted and restored with tracked resources reclaimed. Significant exit and
+RTT costs remain, live insertion beneath existing descendant VMMs is open, and
+the inner Hyper-V root partition refuses admission in the tested configuration.
+These limits define the next work: existing-state handoff, better attribution of
+boundary costs, stronger page-identity/concurrency validation, and independent
+hardware and application evaluation.
+
+\section*{Data, code, and review status}
+The implementation and versioned evidence are in the public \ks{} repository;
+Appendix~\ref{app:artifact} identifies exact revisions and reproduction commands.
+Tables in this preprint are generated from archived summaries with recorded
+input SHA256 values. This version is an initial preprint draft for author review;
+it has not been peer reviewed or submitted to arXiv as part of its preparation.
+It does not assert conference acceptance or a publication DOI.
+
+\section*{Use of AI assistance}
+OpenAI Codex assisted with prototype implementation and debugging, experiment
+and analysis scripts, authorized laboratory execution, evidence archiving, and
+drafting the manuscript and diagrams. Reported measurements are tied to retained
+logs; unmeasured behavior is identified separately. Author review of the source,
+experimental procedures, raw data, statistical interpretation, citations, and
+claims is pending for this draft. The AI system is not an author.

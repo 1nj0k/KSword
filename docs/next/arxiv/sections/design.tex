@@ -1,0 +1,159 @@
+\section{Design and implementation}
+\label{sec:design}
+\subsection{Insertion and removal boundaries}
+The resident monitor is prepared in Windows~1 before VMX entry. Admission checks
+the exposed Intel VMX/EPT capabilities and lifecycle state. In particular,
+existing VMX ownership cannot be resolved by changing a visibility bit: the
+CR4.VMXE ownership gate remains in place. A guest with a previously active VMM
+is outside the insertion contract.
+
+Preparation allocates per-CPU resources and EPT structures and runs VMX
+self-tests. The EPTP-switch backend has a separate armed state; generic resource
+readiness is insufficient evidence that the intended page-view backend can
+operate. The measurement harness checks that specific state before proceeding.
+Cold preparation and the resident-start control body have separate timing
+boundaries.
+
+A cross-CPU rendezvous captures processor state, programs the VMCS, and returns
+through an assembly continuation that resumes the running Windows context as a
+guest of \ks{}. The response reports the resident processor count and per-CPU
+state. The implementation also coordinates power transitions, topology changes,
+and driver unloading with the resident lifecycle. These guards are prerequisites
+for keeping the monitor's code and stacks valid; they are not evidence that
+every sleep, hot-add, or failure path has been exercised in this evaluation.
+
+Removal of a Windows-only resident instance coordinates VMX exit on all active
+processors before releasing resident resources. With descendants present, the
+tested cleanup order keeps the monitor running while closing VMware, retires
+and drains page overrides, and then stops residency. It does not stop the
+monitor underneath live descendant VMX state. An earlier opposite-order cleanup
+that timed out is retained as a failed trial.
+
+\subsection{Nested execution and page composition}
+The nested VMX layer maintains the intermediate VMM's virtual VMCS state,
+constructs the execution VMCS for the descendant, and reflects exits that
+belong to the intermediate VMM. Translation composition follows established
+nested-virtualization architecture~\cite{turtles}. The page override is applied
+when a descendant translation is installed in \ks{}'s composed EPT.
+
+Let $g$ be a descendant guest-physical address, $T(g)$ its source translation
+into Windows~1 physical memory, and $E$ the containing monitor's translation.
+For a selected aligned page $p$, replacement frame $r$, and currently admitted
+lease $\ell$, the intended address component of the composed translation is
+\begin{equation}
+  C_{\ell}(g)=
+  \begin{cases}
+    E(r + (g \bmod 4096)), & \lfloor g/4096\rfloor=p/4096
+      \text{ and } \ell \text{ authorizes the override},\\
+    E(T(g)), & \text{otherwise}.
+  \end{cases}
+  \label{eq:compose}
+\end{equation}
+This notation omits permissions and memory-type checks for readability and
+does not describe a new hardware translation level. Outer Hyper-V still
+virtualizes execution and the physical memory visible to Windows~1. The
+override changes the descendant's selected mapping; it does not overwrite
+the source data page. Reverting to the source therefore does not require
+copying saved data back from the replacement.
+
+The current control interface admits one active lease and retains at most one
+retired lease pending reclamation. A new map is refused while either slot is
+occupied. This bounded design makes the observed allocation ledger simple; it
+is not a many-page transactional memory facility.
+
+\subsection{A lease over process and translation identity}
+\label{sec:lease}
+A GPA alone is insufficient identity. The caller supplies a current EPT12 root
+and GPA and keeps the ordinary write-back RAM page reserved or pinned. Admission
+captures the source walk twice, checks agreement, allocates private backing,
+and binds the lease to a referenced VMM process object and its creation time.
+Holding the object reference prevents a new process with a recycled numeric
+PID from reviving the lease.
+
+The version~3 response exposes the original Windows~1 backing and the captured
+source path. The walker records the EPTP configuration, addresses and normalized
+values of up to four entries, effective permissions, and the resolved frame.
+It handles 4\,KiB, 2\,MiB, and 1\,GiB source leaves. When EPT A/D is enabled,
+normalization ignores accessed bits and leaf dirty bits maintained by hardware;
+it does not ignore a changed frame, permission, page size, memory type, or parent
+path. With A/D disabled, those bits are not silently treated as updates.
+
+Matching leases are checked before nested entry and before a shadow-EPT fill,
+using per-CPU physical windows. The first observed semantic drift, unreadable
+source path, or owner exit makes revocation sticky and advances the policy
+generation. A subsequent observation cannot automatically revive the old lease.
+The caller must complete retirement and issue a new map.
+
+These checks are sampled. An ABA change that returns every captured bit to its
+original value before observation is invisible. A guest reboot or snapshot
+restore with the identical translation can also be invisible, as can reuse of
+an application object at the same GPA. Callers must remove leases before these
+operations. The walker is not a complete architectural validator for every
+reserved-bit combination, and the lease is not a security boundary against a
+malicious intermediate VMM.
+
+\subsection{Publication, invalidation, and reclamation}
+\label{sec:retire}
+Figure~\ref{fig:lease} summarizes the control lifecycle. Mutations are serialized.
+A fully initialized immutable rule is published through an ordered pointer
+exchange, followed by a policy-generation change and an all-CPU invalidation
+operation. A successful map response requires the commit path to complete.
+Failure after publication takes the rollback/retirement path rather than
+freeing storage that a CPU might still reference.
+
+\begin{figure}[tbp]
+\centering
+\input{figures/lifecycle}
+\caption{Page-control lifecycle. Publication, invalidation completion, and
+backing reclamation are distinct. A failed drain retains the rule and backing
+for retry. Asynchronous owner/path revocation alone is not a completed global
+retirement boundary.}
+\label{fig:lease}
+\end{figure}
+
+Remove first unpublishes the override or handles its revoked state. Per-CPU
+composed translations must then be invalidated before the rule, replacement
+page, and process reference can be reclaimed. If a drain fails, the retired
+slot and backing remain present. Retrying removal repeats the required drain.
+Thus, \code{active=0} alone does not prove safe reclamation; \code{retired=0}
+and a successful synchronous drain are also required.
+
+The design supports three auditable obligations under the assumptions of
+Section~\ref{sec:background}: (1) new shadow fills use only an admitted,
+non-revoked lease; (2) a published replacement remains allocated until every
+relevant processor completes retirement, or until the stopped lifecycle is
+established; and (3) failure is represented as retained or rolled-back state,
+not hidden by a successful response. The experiment checks traces and ledger
+consequences of these obligations. It is not a formal proof over every possible
+interleaving or hardware failure.
+
+Different vCPUs need not observe a policy change simultaneously. A CPU may
+retain an old cached translation until its invalidation point, even after
+another CPU detects drift. Readers spanning the transition are not guaranteed
+an atomic 4\,KiB application update. The backing-retention rule protects the
+lifetime of potentially cached mappings; it does not by itself serialize all
+application accesses.
+
+\subsection{Implementation and instrumentation}
+The monitor is part of a Windows x64 driver built with MSVC/WDK. The nested
+implementation, resident lifecycle, EPT composition, page controller, and
+portable lease walker are separate modules. The page/metrics response ABI is
+versioned; the current lease response is version~3. The main program's embedded
+HVM page and command-line tools use a shared command catalog and execution
+engine. GUI runtime behavior is not part of the present evaluation.
+
+Measurements expose QueryPerformanceCounter (QPC) boundaries, per-CPU resident
+identity, nested exit classes, EPT violations, actual INVEPT-wrapper calls,
+shadow-cache events, and rule/replacement allocation counts. Detailed page
+events identify capture, publication, drain, rollback, and reclamation. These
+counts belong to \ks{}; they are not the total exits of outer Hyper-V or a
+complete accounting of every driver pool allocation.
+
+The historical optimization cohort replaces repeated EPT A/D lookups with a
+shadow-leaf-indexed ledger, accepts only legal A/D $0\to1$ changes in table
+snapshots, enlarges the tracked parent-table capacity from 32 to 160 pages per
+CPU, uses CPU-local single-writer counters, avoids duplicate VMREADs, and caches
+CPUID leaf~0 per CPU. The current cohort additionally omits two unused telemetry
+VMREADs on ordinary CPUID exits. Entry failures and other exits retain the full
+snapshot. We evaluate that small change against a same-binary reference flag;
+we do not treat the historical bundle as a set of separately isolated causes.
