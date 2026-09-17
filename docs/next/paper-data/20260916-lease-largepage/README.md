@@ -15,17 +15,23 @@ the driver compiles, against synthetic inputs:
   source translation and detecting drift, including 2 MiB and 1 GiB source leaves.
 * `tools/hvm_paper/test_ept_leaf_plan.c` over `hvm_nested_leaf_plan.h` — which
   override regions may be published as a leaf larger than 4 KiB, and which are
-  refused. The rule that matters is that a large leaf applies one permission set
-  to every page beneath it, so it is admitted only where EPT12's own leaf already
-  covers the whole region.
+  refused, and what re-reading one page of a published region concludes. The
+  rule that matters is that a large leaf applies one permission set to every
+  page beneath it, so it is admitted only where EPT12's own leaf already covers
+  the whole region, or where every source entry under the region was read and
+  agreed — and in that second case the agreement is rechecked a page at a time
+  for as long as the region is published.
 
-`ept-lease-mutation.txt` measures what those suites can detect. Twenty defects
-are injected one at a time into a copy of the relevant header, and each is
-required to make its suite fail. The repository copies are never modified. Every
-mutation is also run against the suite as committed at `HEAD`, so added coverage
-is a count rather than a claim: fourteen of the twenty are not killed by the
-committed suites — three because the large-page walker cases are new, eleven
-because the planner itself is new.
+`ept-lease-mutation.txt` measures what those suites can detect. Thirty-six
+defects are injected one at a time into a copy of the relevant header, and each
+is required to make its suite fail. The repository copies are never modified.
+Every mutation is also run against the suite as committed at `HEAD`, so added
+coverage is a count rather than a claim: eight of the thirty-six are not killed
+by the committed suites, and all eight are the recheck cases, because the
+recheck is what this revision added. Both directions are covered, because both
+are defects: a recheck that never revokes leaves the hole the scan exists to
+close, and one that revokes on a transient read failure tears down a live region
+for no proven change.
 
 The harness exits non-zero if any mutation survives.
 
@@ -42,7 +48,7 @@ detection power. It is not a hardware result:
   no 1 GiB leaf has been published on hardware, and on that stack none can be.
 * Real source-EPT mutation by a running VMM, adversarial multicore, and actual
   hardware failures are not simulated here.
-* A mutation score is a property of this fixed set of twenty-eight defects. It
+* A mutation score is a property of this fixed set of thirty-six defects. It
   is not an upper bound on the defects these headers could contain.
 
 The lease contract and its ABA, guest-reboot and same-GPA-reuse limits are in

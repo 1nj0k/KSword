@@ -353,3 +353,75 @@ static __inline KSW_PLAN_U64 KswordHvmLeafPlanLeafFrame(
     /* Report nothing for a plan that was never published. */
     return (Plan == 0 || Plan->Refusal != KSW_PLAN_OK) ? 0ULL : Plan->BackingBase;
 }
+
+/* What re-reading one page of a scan-admitted region concluded. */
+#define KSW_PLAN_RECHECK_AGREES 0U
+#define KSW_PLAN_RECHECK_DRIFTED 1U
+/* Nothing was proven: the read failed, or the table itself is malformed. The
+   caller must leave the lease alone, because a failed read is not a change. */
+#define KSW_PLAN_RECHECK_UNKNOWN 2U
+
+/*
+ * Re-read one page of a region the scanning rule admitted.
+ *
+ * Admission by scanning proves that every source leaf under the region agreed,
+ * at one instant. The intermediate VMM keeps editing its own tables, so that
+ * proof has to be revisited or the region serves on a condition nobody looks at
+ * again. This answers the revisit for a single page, so the caller can spread
+ * the cost of a region over many samples instead of re-reading every entry.
+ *
+ * It lives here, beside the scan whose conclusion it is rechecking, for two
+ * reasons. The bits compared must be exactly the bits the scan compared --
+ * access, memory type and ignore-PAT, never accessed or dirty -- and splitting
+ * that across two files is how the two drift apart. And a decision that revokes
+ * a published lease has to be testable without a machine.
+ *
+ * PageIndex wraps, so a caller can hold one ever-increasing cursor and let this
+ * fold it into the region.
+ */
+static __inline unsigned int KswordHvmLeafPlanRecheckPage(
+    KSW_PLAN_U64 EptPointer, const KSW_HVM_LEAF_PLAN* Plan,
+    KSW_PLAN_U64 PageIndex, KSW_PLAN_U64 SharedBits,
+    KSW_LEASE_READ Read, void* Context)
+{
+    /* Hardware walk order, including the two large-leaf levels. */
+    static const unsigned int shifts[4] = {39U, 30U, 21U, 12U};
+    KSW_PLAN_U64 guest;
+    KSW_PLAN_U64 table;
+    unsigned int level;
+
+    /* An unpublished plan, an empty region or a missing reader proves nothing. */
+    if (Read == 0 || Plan == 0 || Plan->Refusal != KSW_PLAN_OK ||
+        Plan->PageCount == 0ULL) {
+        return KSW_PLAN_RECHECK_UNKNOWN;
+    }
+    guest = Plan->GuestBase + ((PageIndex % Plan->PageCount) << KSW_PLAN_SHIFT_4K);
+    table = EptPointer & KSW_PLAN_FRAME;
+    if (table == 0ULL) { return KSW_PLAN_RECHECK_UNKNOWN; }
+    for (level = 0U; level < 4U; ++level) {
+        const KSW_PLAN_U64 address =
+            table + (((guest >> shifts[level]) & 0x1FFULL) << 3);
+        KSW_PLAN_U64 entry = 0ULL;
+
+        /* A read that failed is not evidence of a change. */
+        if (!Read(Context, address, &entry)) { return KSW_PLAN_RECHECK_UNKNOWN; }
+        /* The region is no longer mapped here, which is a change. */
+        if ((entry & 7ULL) == 0ULL) { return KSW_PLAN_RECHECK_DRIFTED; }
+        if (level == 3U || ((level == 1U || level == 2U) &&
+                            (entry & 0x80ULL) != 0ULL)) {
+            /* Exactly the bits the admitting scan compared. */
+            return (entry & 0x7FULL) == SharedBits
+                ? KSW_PLAN_RECHECK_AGREES : KSW_PLAN_RECHECK_DRIFTED;
+        }
+        table = entry & KSW_PLAN_FRAME;
+        /* A present entry naming frame zero is malformed, not a proven change. */
+        if (table == 0ULL) { return KSW_PLAN_RECHECK_UNKNOWN; }
+    }
+    /*
+     * Unreachable for the same reason the scan's equivalent is: the level-3 arm
+     * above returns unconditionally, so the loop cannot run out. Returning
+     * UNKNOWN rather than AGREES keeps the unreachable case on the side that
+     * changes nothing.
+     */
+    return KSW_PLAN_RECHECK_UNKNOWN;
+}

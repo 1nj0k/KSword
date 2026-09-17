@@ -98,12 +98,7 @@ VOID KswordARKHvmNestedPageSampleRegion(KSW_HVM_RUNTIME* Runtime,
     KSW_HVM_PHYS_WINDOW* Window)
 {
     KSW_HVM_NESTED_PAGE* page;
-    KSW_PLAN_U64 guest;
-    KSW_PLAN_U64 table;
     LONG cursor;
-    ULONG level;
-    /* Hardware walk order, including the two large-leaf levels. */
-    static const ULONG shifts[4] = { 39UL, 30UL, 21UL, 12UL };
 
     page = (KSW_HVM_NESTED_PAGE*)ReadPointerAcquire(
         (PVOID volatile*)&Runtime->NestedPage);
@@ -112,39 +107,21 @@ VOID KswordARKHvmNestedPageSampleRegion(KSW_HVM_RUNTIME* Runtime,
         ReadAcquire(&Runtime->NestedPageRevocationReason) != 0L) {
         return;
     }
+    /* One page per sample, from a cursor the planner folds into the region. */
     cursor = InterlockedIncrement(&page->ScanCursor) - 1L;
-    guest = page->Plan.GuestBase +
-        (((KSW_PLAN_U64)(ULONG)cursor % page->Plan.PageCount) <<
-            KSW_PLAN_SHIFT_4K);
-    table = page->Ept12Pointer & KSW_PLAN_FRAME;
-    if (table == 0ULL) { return; }
-    for (level = 0UL; level < 4UL; ++level) {
-        const KSW_PLAN_U64 address =
-            table + (((guest >> shifts[level]) & 0x1FFULL) << 3);
-        KSW_PLAN_U64 entry = 0ULL;
-
-        /* An unreadable entry is not a proven change; leave the lease alone and
-           let the ordinary path report an unreadable source if it sees one. */
-        if (!NT_SUCCESS(KswordARKHvmPhysWindowReadQword(Window, address, &entry))) {
-            return;
-        }
-        if ((entry & 7ULL) == 0ULL) {
-            /* The region is no longer mapped here, which is a change. */
-            KswordARKHvmPageRevoke(Runtime,
-                KSWORD_ARK_HVM_PAGE_LEASE_REGION_DRIFTED);
-            return;
-        }
-        if (level == 3UL || ((level == 1UL || level == 2UL) &&
-                             (entry & 0x80ULL) != 0ULL)) {
-            /* Compare the same bits the admitting scan compared. */
-            if ((entry & 0x7FULL) != page->ScanSharedBits) {
-                KswordARKHvmPageRevoke(Runtime,
-                    KSWORD_ARK_HVM_PAGE_LEASE_REGION_DRIFTED);
-            }
-            return;
-        }
-        table = entry & KSW_PLAN_FRAME;
-        if (table == 0ULL) { return; }
+    /*
+     * The decision lives in the planner, beside the scan whose conclusion it
+     * rechecks, so the two cannot disagree about which bits matter and so it
+     * can be tested without a machine. An unreadable entry is not a proven
+     * change: UNKNOWN leaves the lease alone and lets the ordinary path report
+     * an unreadable source if it sees one.
+     */
+    if (KswordHvmLeafPlanRecheckPage(page->Ept12Pointer, &page->Plan,
+            (KSW_PLAN_U64)(ULONG)cursor, page->ScanSharedBits,
+            KswordARKHvmPageReadSourceRoot, Window) ==
+        KSW_PLAN_RECHECK_DRIFTED) {
+        KswordARKHvmPageRevoke(Runtime,
+            KSWORD_ARK_HVM_PAGE_LEASE_REGION_DRIFTED);
     }
 }
 

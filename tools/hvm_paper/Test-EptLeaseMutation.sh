@@ -146,6 +146,28 @@ mutate() {
         's/if ((regionBytes >> Scan->Shift) >/if (0 \&\& (regionBytes >> Scan->Shift) >/'
     mutate $P "region shift read from the request not the source" \
         's|(regionBytes >> Scan->Shift)|(regionBytes >> LeafShift)|'
+    # The recheck is the only thing standing between a region admitted by
+    # scanning and a region serving on a condition that stopped holding, and it
+    # is the only part of this header that revokes a published lease. Both
+    # directions are defects: never revoking leaves the hole the scan exists to
+    # close, and revoking on anything short of a proven change tears down live
+    # regions for a transient read failure.
+    mutate $P "recheck always agrees" \
+        's/(entry \& 0x7FULL) == SharedBits$/1/'
+    mutate $P "recheck always drifts" \
+        's/(entry \& 0x7FULL) == SharedBits$/0/'
+    mutate $P "recheck counts accessed and dirty as drift" \
+        's/(entry \& 0x7FULL) == SharedBits$/(entry \& 0x3FFULL) == SharedBits/'
+    mutate $P "recheck ignores a source page that went away" \
+        's/if ((entry \& 7ULL) == 0ULL) { return KSW_PLAN_RECHECK_DRIFTED; }/if (0) { return KSW_PLAN_RECHECK_DRIFTED; }/'
+    mutate $P "recheck reads a failed read as agreement" \
+        's/&entry)) { return KSW_PLAN_RECHECK_UNKNOWN; }/\&entry)) { return KSW_PLAN_RECHECK_AGREES; }/'
+    mutate $P "recheck revokes on a failed read" \
+        's/&entry)) { return KSW_PLAN_RECHECK_UNKNOWN; }/\&entry)) { return KSW_PLAN_RECHECK_DRIFTED; }/'
+    mutate $P "recheck revokes on a malformed table" \
+        's/if (table == 0ULL) { return KSW_PLAN_RECHECK_UNKNOWN; }/if (table == 0ULL) { return KSW_PLAN_RECHECK_DRIFTED; }/'
+    mutate $P "recheck cursor is not folded into the region" \
+        's/PageIndex % Plan->PageCount/PageIndex/'
     cp "$work/$P.orig" "$work/$P"
 
     echo

@@ -33,9 +33,17 @@ unreadable source reported uniform               killed        killed
 absent interior table reported uniform           killed        killed       
 oversized region scan bound removed              killed        killed       
 region shift read from the request not the source killed        killed       
+recheck always agrees                            survived      killed       
+recheck always drifts                            survived      killed       
+recheck counts accessed and dirty as drift       survived      killed       
+recheck ignores a source page that went away     survived      killed       
+recheck reads a failed read as agreement         survived      killed       
+recheck revokes on a failed read                 survived      killed       
+recheck revokes on a malformed table             survived      killed       
+recheck cursor is not folded into the region     survived      killed       
 
-mutations: 28, all killed by the current suites,
-of which the committed suites do not kill: 0
+mutations: 36, all killed by the current suites,
+of which the committed suites do not kill: 8
 
 Scope: the headers are compiled exactly as the driver compiles them,
 against synthetic tables and synthetic geometry. This measures the

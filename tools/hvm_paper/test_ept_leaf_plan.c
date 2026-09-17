@@ -242,13 +242,83 @@ static void scan(void) {
     assert(!KswordHvmLeafPlanScanSource(eptp,0,11U,rd,&f,&s));
 }
 
+/* Rechecking what the scan proved, one page at a time. */
+static void recheck(void) {
+    fixture f; KSW_HVM_LEAF_PLAN p, refused;
+    const KSW_PLAN_U64 eptp=0x105E;
+    /* The region the scan above admits: 512 ordinary pages sharing 0x37. */
+    assert(KswordHvmLeafPlanCreate(KSW_PLAN_SHIFT_2M,0,SRC_4K,1,BACK_2M,0x200000,&p));
+
+    /* Nothing has changed, so every page still agrees. */
+    fine(&f,0x37);
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,0,0x37,rd,&f)==KSW_PLAN_RECHECK_AGREES);
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,300,0x37,rd,&f)==KSW_PLAN_RECHECK_AGREES);
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,511,0x37,rd,&f)==KSW_PLAN_RECHECK_AGREES);
+
+    /* The cursor wraps, so a caller may hold one counter that only grows. */
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,512,0x37,rd,&f)==KSW_PLAN_RECHECK_AGREES);
+    f.tables[3][301]=(0xA00ULL+301)<<12 | 0x35;
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,301,0x37,rd,&f)==KSW_PLAN_RECHECK_DRIFTED);
+    /* 813 folds to 301: the same page, reached by wrapping. */
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,813,0x37,rd,&f)==KSW_PLAN_RECHECK_DRIFTED);
+    /* A neighbour of the changed page is unaffected; this is per page. */
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,302,0x37,rd,&f)==KSW_PLAN_RECHECK_AGREES);
+
+    /* A different memory type is drift for the same reason a permission is. */
+    fine(&f,0x37); f.tables[3][9]=(0xA00ULL+9)<<12 | 0x07;
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,9,0x37,rd,&f)==KSW_PLAN_RECHECK_DRIFTED);
+
+    /* A page that went away is drift, not an unreadable source. */
+    fine(&f,0x37); f.tables[3][42]=0;
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,42,0x37,rd,&f)==KSW_PLAN_RECHECK_DRIFTED);
+    /* So is an interior table that went away, for every page under it. */
+    fine(&f,0x37); f.tables[2][0]=0;
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,7,0x37,rd,&f)==KSW_PLAN_RECHECK_DRIFTED);
+
+    /* Hardware sets accessed and dirty per page. Counting them as drift would
+       revoke every region as soon as its guest ran, which is the whole reason
+       the admitting scan masks them; the recheck must mask the same ones. */
+    fine(&f,0x37); f.tables[3][11]|=0x100; f.tables[3][12]|=0x300;
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,11,0x37,rd,&f)==KSW_PLAN_RECHECK_AGREES);
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,12,0x37,rd,&f)==KSW_PLAN_RECHECK_AGREES);
+
+    /* A read that failed proves nothing and must not revoke a live lease. */
+    fine(&f,0x37); f.fail=0x4000+5*8;
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,5,0x37,rd,&f)==KSW_PLAN_RECHECK_UNKNOWN);
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,6,0x37,rd,&f)==KSW_PLAN_RECHECK_AGREES);
+    /* Neither does a malformed present entry naming frame zero. */
+    fine(&f,0x37); f.tables[1][0]=0x0007;
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,0,0x37,rd,&f)==KSW_PLAN_RECHECK_UNKNOWN);
+
+    /* A coarse source leaf under the region is compared at the level it ends
+       on, so a region backed by one 2-MiB leaf is rechecked against that leaf.
+       The page-size bit is masked out on both sides, exactly as the admitting
+       scan masks it, so the entry 0xA000B7 is rechecked against 0x37 and not
+       against 0xB7 -- comparing the raw entry would revoke every coarse-source
+       region on its first sample. */
+    memset(&f,0,sizeof(f));
+    f.tables[0][0]=0x2007;f.tables[1][0]=0x3007;f.tables[2][0]=0xA000B7;
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,0,0x37,rd,&f)==KSW_PLAN_RECHECK_AGREES);
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,400,0x37,rd,&f)==KSW_PLAN_RECHECK_AGREES);
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,0,0xB7,rd,&f)==KSW_PLAN_RECHECK_DRIFTED);
+
+    /* Nothing to recheck is not the same as nothing has changed. */
+    fine(&f,0x37);
+    assert(KswordHvmLeafPlanRecheckPage(eptp,0,0,0x37,rd,&f)==KSW_PLAN_RECHECK_UNKNOWN);
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&p,0,0x37,0,&f)==KSW_PLAN_RECHECK_UNKNOWN);
+    assert(KswordHvmLeafPlanRecheckPage(0,&p,0,0x37,rd,&f)==KSW_PLAN_RECHECK_UNKNOWN);
+    assert(!KswordHvmLeafPlanCreate(KSW_PLAN_SHIFT_2M,0,SRC_4K,0,BACK_2M,0x200000,&refused));
+    assert(KswordHvmLeafPlanRecheckPage(eptp,&refused,0,0x37,rd,&f)==KSW_PLAN_RECHECK_UNKNOWN);
+}
+
 int main(void) {
     granularity();
     geometry();
     backing();
     ownership();
     scan();
+    recheck();
     puts("EPT_LEAF_PLAN=PASS: source granularity, geometry, backing, ownership, "
-         "source uniformity scan");
+         "source uniformity scan, published-region recheck");
     return 0;
 }
