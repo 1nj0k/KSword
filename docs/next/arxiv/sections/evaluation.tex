@@ -117,7 +117,7 @@ bits inside its alignment, a non-writeback memory type, write without read, and 
 permission intersection emptied by an ancestor.
 
 Passing does not establish that a suite can detect anything, so we measure it.
-Twenty-eight defects are injected one at a time into a copy of the relevant
+Thirty-six defects are injected one at a time into a copy of the relevant
 header and each is required to make its suite fail: unchecked reserved address
 bits under a large leaf, an unfolded guest offset, dirty treated as metadata only
 at the last level, a large-page bit accepted at the PTE level, validation that
@@ -127,8 +127,14 @@ that always reports four entries, and, for the admission rules, an ignored or
 inverted granularity test, alignment checked only to a page, a short or
 misaligned backing accepted, region ownership and staging indices off by one, and
 a scan that accepts a disagreeing entry or reports an unreadable source as
-uniform. All twenty-eight are killed. Run against the suites as committed before
-these cases existed, fourteen survive.
+uniform. Eight cover the recheck that keeps a scan-admitted region honest, in
+both directions, because both are defects: a recheck that always agrees, that
+ignores a source page which went away, or whose cursor never folds back into the
+region leaves exactly the hole the scan exists to close, while one that always
+drifts, that counts accessed and dirty as disagreement, or that revokes on a
+failed read or a malformed table tears down a live region for no proven change.
+All thirty-six are killed. Run against the suites as committed before the
+recheck existed, those eight survive.
 
 The harness rebuilds both suite versions from the repository, so the count can be
 recomputed rather than taken on assertion, and it fails if a mutation stops
@@ -183,12 +189,13 @@ entry under the region grant the same access and the same memory type, and that
 can be established by reading them. \ks{} implements this as a second, explicitly
 requested rule: it walks all 512 source entries of a 2\,MiB region and admits the
 leaf only if they agree, treating accessed and dirty as per-page metadata rather
-than disagreement. The rule is opt-in because it is paid for with a weaker lease
--- drift on the region's first page path is still detected at every composition,
-while a change to one of the other entries is not, since re-reading 512 physical
-entries inside a path that runs on the order of $10^{5}$ times per second is not
-affordable. A caller that does not ask for it keeps the stronger lease and the
-stricter rule.
+than disagreement. The rule is opt-in because it is paid for with a weaker lease. Drift on the
+region's first page path is still detected at every composition; a change to one
+of the other entries is detected by sampling instead, because re-reading 512
+physical entries inside a path that runs on the order of $10^{5}$ times per
+second is not affordable. The difference is an interval, not a blind spot, and
+it is described below. A caller that does not ask for the rule keeps the
+stronger lease and the stricter rule.
 
 Table~\ref{tab:large-leaf-scan} is that comparison on the live stack. The same
 guest-physical address, the same driver and the same 4\,KiB source granularity
@@ -209,6 +216,42 @@ descendant and its VMM ran throughout.
 Nor does the scanning rule make the lease equivalent: its weaker drift detection
 is a property of the published region, not an implementation detail, which is why
 the response reports which rule admitted it.
+
+\paragraph{Rechecking what the scan proved.}
+Admission by scanning is a statement about one instant, and we measured that the
+instant matters: the same guest-physical region scanned 512 entries uniform on
+one run and stopped disagreeing partway through on another, with nothing in
+\ks{} changed between them. A region admitted on such a reading and never
+revisited would serve on a condition nobody looked at again, so one page of the
+region is re-walked per 4096 shadow fills, from a cursor that advances across
+the whole region, and an entry that has stopped agreeing --- or gone absent ---
+revokes the lease under a reason of its own.
+
+On hardware the lease does revoke when its source really changes: a snapshot of
+the descendant taken while a 2\,MiB region was published removes the
+intermediate VMM's entries for that region --- the same base answers
+address-not-associated for as long as the snapshot exists --- and the lease was
+revoked inside the first five-second sample and then removed with both slots
+empty. It reported translation-changed, not region-drifted, and the two are not
+interchangeable. The always-on check covers the path the lease was captured on
+and runs at every shadow fill, so it sees any change that touches the whole
+table first; the recheck exists for the case it structurally cannot see, one
+page of the region losing permission while the captured path stays identical.
+A whole-VM operation is never that case, which is why the reason we can trigger
+is not the reason the recheck reports.
+
+The decision is made by the same header that made the admitting scan, for two
+reasons that are worth separating from convenience. The bits compared must be
+exactly the bits the scan compared, and a comparison split across two files is
+how the two drift apart. And a decision that revokes a published lease is worth
+testing without a machine: eight of the injected defects in the mutation matrix
+target it, in both directions. A recheck that always agrees, that ignores a
+source page which went away, or whose cursor never folds back into the region
+leaves exactly the hole the scan exists to close; one that always drifts, that
+counts accessed and dirty as disagreement, or that revokes on a failed read
+tears down a live region for no proven change. Refusing to revoke on an
+unreadable entry is therefore a deliberate asymmetry rather than an omission: a
+read that failed is not evidence of a change.
 
 \paragraph{What a published region does, and what it leaves alone.}
 Checking the contents of a 2\,MiB region needs a readback, and a general
@@ -250,13 +293,24 @@ does.
 \paragraph{Reachability follows the workload, not the configuration.}
 Every result above is about a base the intermediate VMM had already mapped, and
 which bases those are is decided by the descendant rather than by its
-configuration. VMware populates EPT12 on demand, so a descendant configured with
-4\,GiB has entries only where its guest has actually been: freshly booted and
-idle at 4096\,MiB, every base we probed from 256\,MiB to 3.75\,GiB refused with
-an address-not-associated status and zero leaves read. Raising the configured
-memory creates no mappings at all. This matters for reading the previous two
-tables, because a refusal at an unmapped base is not the admission rule
-answering; it is the question never reaching it.
+configuration. VMware populates EPT12 on demand, so a descendant configured with 4\,GiB has
+entries only where its guest has actually been: freshly booted and idle at
+4096\,MiB, every base we probed from 256\,MiB to 3.75\,GiB refused with an
+address-not-associated status and zero leaves read. This matters for reading the
+previous two tables, because a refusal at an unmapped base is not the admission
+rule answering; it is the question never reaching it.
+
+A later sweep sharpened that, and the correction is worth stating because it is
+the same trap one level down. Probing the same descendant above the 4\,GiB line
+finds four consecutive 2\,MiB bases, \texttt{0x108000000} through
+\texttt{0x120000000}, each admitted over 512 agreeing entries: at 4096\,MiB this
+descendant's bulk memory sits above \texttt{0x100000000}, so the idle sweep was
+also reporting which bases its guest uses at all. The claim that survives both
+readings is the narrower one --- a base carries an override only where the guest
+has been, and a base chosen by guessing produces a refusal that says nothing
+about the planner --- and the controlled demonstration of it is
+Table~\ref{tab:guest-workload}, where the bases are fixed and the workload is
+the only thing that changes.
 
 The lever is a workload inside the descendant, driven through its VNC
 framebuffer into the shell on its first virtual terminal. Table~\ref{tab:guest-workload}

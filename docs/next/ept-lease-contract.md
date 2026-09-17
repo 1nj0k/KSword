@@ -1,14 +1,22 @@
 # Descendant page lease: ownership and reclamation contract
 
-The version 3 page-control response records the captured source EPT path,
-the Windows 1 physical backing, and the first revocation reason. These are
-implementation guarantees with explicit preconditions, not a general guarantee
-that a guest-physical address identifies the same application object forever.
+The version 4 page-control response records the captured source EPT path,
+the Windows 1 physical backing, the first revocation reason, and — for an
+override published as a region rather than a page — its extent, which admission
+rule accepted it, and what the admitting scan read. These are implementation
+guarantees with explicit preconditions, not a general guarantee that a
+guest-physical address identifies the same application object forever.
 
 ## Preconditions
 
 - The authorized caller reserves/pins one ordinary 4 KiB WB RAM page in the
-  descendant and supplies its current GPA and observed EPT12 root.
+  descendant and supplies its current GPA and observed EPT12 root. For a region,
+  the caller supplies a base aligned to the requested granularity; every page of
+  the region is cloned from the original at publication.
+- A base that the intermediate VMM does not currently map cannot carry an
+  override at all, and it will not be mapped merely because the descendant was
+  configured with enough memory to contain it. The request is refused with
+  `STATUS_ADDRESS_NOT_ASSOCIATED`, which is not the admission rule declining.
 - The owner is bound to a referenced process object and its creation time.
   The caller removes the lease before resetting the VM, repurposing the GPA,
   changing the workload page's ownership, or migrating the workload.
@@ -31,7 +39,8 @@ capture source path + validate again
                active                           |
                  |                              |
        remove / owner exit /                    |
-       observed source drift                    |
+       observed source drift /                  |
+       sampled region drift                     |
                  |                              |
      unpublish or mark revoked <----------------+
                  |
@@ -57,6 +66,18 @@ path changes revoke the lease. With EPT A/D enabled, only architecturally
 maintained accessed bits and leaf dirty bits are ignored. Unreadable paths
 revoke separately. Revocation is sticky until explicit drain and a new map.
 
+A region admitted by reading all its source entries carries a weaker check and a
+revocation reason of its own. The check above covers the path the lease was
+captured on; the other entries of the region are revisited by sampling, one page
+per 4096 shadow fills, from a cursor that advances across the whole region. An
+entry that stops granting the same access and memory type, or that goes absent,
+revokes with `LEASE_REGION_DRIFTED`. A failed read does not: it is not a proven
+change, and revoking on it would tear down a live region for a transient. The
+consequence is an interval, bounded by the sampling rate and the region's page
+count, during which a region can serve after its source has changed. A caller
+that cannot accept that interval must use the coarse-source rule, where a single
+source leaf covers the region and cannot disagree with itself.
+
 This is a bounded sampled check. It cannot detect an ABA change that restores
 all captured bits before observation, a VM reboot that preserves the identical
 translation, or reuse of an application object at the same GPA. It does not
@@ -70,8 +91,15 @@ is the boundary at which successful all-CPU retirement may be claimed.
 
 `test_ept_lease.c` directly compiles the same walker used by the driver. It
 changes every bit at every level, exercises A/D modes, 4 KiB/2 MiB/1 GiB leaves,
-address/root-path reuse, unreadable sources and malformed requests. This checks
-the comparator and admission algorithm; it is not a hardware concurrency test.
-Runtime remap/restore and fault results must additionally name the exact version
-3 binary. Earlier version 2 results remain historical and cannot establish that
-the new guard passed runtime validation.
+address/root-path reuse, unreadable sources and malformed requests.
+`test_ept_leaf_plan.c` compiles the admission planner the same way, covering
+which regions may be published and what re-reading one page of a published
+region concludes. `tools/hvm_paper/Test-EptLeaseMutation.sh` injects thirty-six
+defects into copies of those two headers and requires each to make its suite
+fail, so the suites' detection power is a measured number rather than a claim.
+This checks the comparator, the admission algorithm and the recheck; it is not a
+hardware concurrency test.
+
+Runtime remap/restore and fault results must additionally name the exact
+binary they ran on. Earlier version 2 results remain historical and cannot
+establish that the new guard passed runtime validation.

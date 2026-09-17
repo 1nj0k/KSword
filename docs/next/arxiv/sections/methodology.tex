@@ -27,16 +27,22 @@ Windows 1 & Windows 11 Pro 22621.4317; 4 vCPUs, fixed 8 GiB;
 Generation 2 outer VM, nested extensions exposed \\
 VMware & Workstation 17.6.4, build 24832109; virtual hardware version 21 \\
 Descendant & TinyCore 17.1; Linux 6.18.35-tinycore64; normal \code{/init};
-2 online vCPUs, 768 MiB \\
+2 online vCPUs, 768 MiB; reconfigured to 4096 MiB for the reachability and
+region sweeps, which state which \\
 Inner Hyper-V fixture & Generation 1, 2 vCPUs, fixed 768 MiB;
 diskless TinyCore evidence ISO \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-We separate three evidence scopes. The \emph{current Pro cohort} uses the
+We separate four evidence scopes. The \emph{current Pro cohort} uses the
 implementation subsequently committed as \code{bd703d84}, the version~3 lease,
-and the driver hash beginning \code{3b44132f}. The \emph{historical 4-by-2 cohort}
+and the driver hash beginning \code{3b44132f}; it supplies every performance,
+latency and lifecycle number. The \emph{region cohort} is a later build of the
+same driver carrying the version~4 lease, and supplies only the large-leaf,
+reachability, staging, digest and drift results; no performance number is
+carried across from it, and none of the current cohort's numbers were re-measured
+on it. The \emph{historical 4-by-2 cohort}
 uses Windows~1 Home before the Pro upgrade, implementation \code{b9bdda83}, and
 driver hash beginning \code{8850e28f}. It contains a broader benchmark suite,
 high-load page tests, and owner-exit tests. The inner Hyper-V admission experiment
@@ -57,7 +63,12 @@ The driver was built with the standard MSVC/WDK toolchain and separately signed
 with the existing ordinary laboratory test certificate. Variant signing was
 disabled. Driver loading on the target succeeded; an untrusted certificate root
 reported by host Authenticode verification is not represented as production
-trust certification. No driver was rebuilt for preparation of this manuscript.
+trust certification. The current Pro cohort's driver was not rebuilt for
+preparation of this manuscript. The region cohort's was: its results come from
+binaries built and deployed during this work, and Appendix~\ref{app:artifact}
+names each by the hash of the file the service actually loaded --- because one
+of them turned out not to behave like a clean rebuild of the same sources, which
+is reported in Section~\ref{sec:limitations} rather than smoothed over here.
 
 \subsection{Continuity, clocks, and observation}
 The harness records Windows boot time, process PIDs and creation times, and

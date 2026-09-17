@@ -38,19 +38,26 @@ when a descendant translation is installed in \ks{}'s composed EPT.
 
 Let $g$ be a descendant guest-physical address, $T(g)$ its source translation
 into Windows~1 physical memory, and $E$ the containing monitor's translation.
-For a selected aligned page $p$, replacement frame $r$, and currently admitted
-lease $\ell$, the intended address component of the composed translation is
+A published override owns a region $[b,\,b+s)$ whose base $b$ is aligned to its
+size $s \in \{2^{12}, 2^{21}, 2^{30}\}$ and which is backed by contiguous
+replacement memory at $r$. For a currently admitted lease $\ell$, the intended
+address component of the composed translation is
 \begin{equation}
   C_{\ell}(g)=
   \begin{cases}
-    E(r + (g \bmod 4096)), & \lfloor g/4096\rfloor=p/4096
+    E(r + (g - b)), & b \le g < b+s
       \text{ and } \ell \text{ authorizes the override},\\
     E(T(g)), & \text{otherwise}.
   \end{cases}
   \label{eq:compose}
 \end{equation}
-This notation omits permissions and memory-type checks for readability and
-does not describe a new hardware translation level. Outer Hyper-V still
+A single page is the case $s = 2^{12}$, where $g-b$ is the page offset. Backing
+is contiguous precisely so that the region offset and the backing offset are the
+same quantity, which is also why the installed leaf carries $r$ itself rather
+than a frame chosen per page: hardware supplies the offset from the address it
+is translating, so a leaf naming an offset frame would serve the region shifted
+by that offset. This notation omits permissions and memory-type checks for
+readability and does not describe a new hardware translation level. Outer Hyper-V still
 virtualizes execution and the physical memory visible to Windows~1. The
 override changes the descendant's selected mapping; it does not overwrite
 the source data page. Reverting to the source therefore does not require
@@ -70,8 +77,8 @@ and binds the lease to a referenced VMM process object and its creation time.
 Holding the object reference prevents a new process with a recycled numeric
 PID from reviving the lease.
 
-The version~3 response exposes the original Windows~1 backing and the captured
-source path. The walker records the EPTP configuration, addresses and normalized
+The response exposes the original Windows~1 backing and the captured source
+path. The walker records the EPTP configuration, addresses and normalized
 values of up to four entries, effective permissions, and the resolved frame.
 It handles 4\,KiB, 2\,MiB, and 1\,GiB source leaves. When EPT A/D is enabled,
 normalization ignores accessed bits and leaf dirty bits maintained by hardware;
@@ -91,6 +98,48 @@ an application object at the same GPA. Callers must remove leases before these
 operations. The walker is not a complete architectural validator for every
 reserved-bit combination, and the lease is not a security boundary against a
 malicious intermediate VMM.
+
+\subsection{Regions larger than one page}
+\label{sec:region}
+A leaf above the PT level is not simply a bigger page. It applies one permission
+set and one memory type to every page beneath it, so composing a 2\,MiB leaf
+over 512 separately mapped source pages would grant the descendant whatever the
+sampled page allowed, including access the intermediate VMM had revoked on one
+of the other 511. \ks{} therefore refuses a request it cannot honour at the
+granularity asked for, rather than narrowing it to a page.
+
+Two rules can admit one. The \emph{coarse-source} rule requires EPT12's own leaf
+to already cover the region: a single source leaf cannot disagree with itself,
+so nothing further need be read or rechecked. That is sufficient but not
+necessary, and it refuses every region whose VMM happens to map at 4\,KiB,
+which on the evaluated stack is all of them. The \emph{scanning} rule
+establishes the property the mechanism actually needs by reading it: all source
+leaves under the region are walked and the leaf is admitted only if every one
+grants the same access bits and memory type, with accessed and dirty treated as
+per-page metadata rather than disagreement. It is opt-in because it is paid for
+with a weaker lease, and because the cost is a recurring one --- the same
+entries must be re-read on every recheck, not only once at admission. The bound
+on that scan is consequently a bound on the recheck: 512 entries, which is one
+table page and makes a 2\,MiB region over ordinary pages affordable and a 1\,GiB
+region (262,144 entries) a refusal rather than a truncation.
+
+Publication clones the region. Backing is physically contiguous and aligned to
+the granularity of the leaf, and every page is copied from the original before
+the leaf is installed, so a descendant sees no change at the moment of
+publication; \code{stage} then rewrites a chosen 4\,KiB page of the region, and
+an index past its end is refused rather than wrapped. Reading a published region
+back would otherwise need a general ``read this physical address'' request, a
+far larger interface than the question deserves, so the driver reports a digest
+of the region and of the source it was cloned from instead of returning bytes.
+
+A region admitted by scanning carries a recheck the coarse rule does not need.
+One page of the region is re-walked per 4096 shadow fills, from a cursor that
+advances across the whole region, and a leaf that has stopped agreeing --- or
+has gone absent --- revokes the lease with a reason distinct from the ordinary
+path's. The recheck is a sample, so a region can serve for a short interval
+after its source changes; that interval is a property of the published region
+rather than an implementation detail, which is why the response reports which
+rule admitted it.
 
 \subsection{Publication, invalidation, and reclamation}
 \label{sec:retire}
@@ -138,7 +187,10 @@ application accesses.
 The monitor is part of a Windows x64 driver built with MSVC/WDK. The nested
 implementation, resident lifecycle, EPT composition, page controller, and
 portable lease walker are separate modules. The page/metrics response ABI is
-versioned; the current lease response is version~3. The main program's embedded
+versioned; the current lease response is version~4, which adds the requested and
+source leaf shifts, the region's extent and staged-page count, which rule
+admitted it, what the admitting scan read, and the region digests. Version~3
+measurements are reported as such where they appear. The main program's embedded
 HVM page and command-line tools use a shared command catalog and execution
 engine. GUI runtime behavior is not part of the present evaluation.
 

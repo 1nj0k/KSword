@@ -103,7 +103,7 @@
       "highRegionBase": "0x60000000",
       "highRegionLeavesRead": 512
     },
-    "metadataAbstractCharacters": 1549
+    "metadataAbstractCharacters": 1913
   },
   "note": "Inputs are derived evidence summaries, whose raw inputs are indexed in their datasets. Cohorts are not pooled."
 }

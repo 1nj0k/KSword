@@ -70,16 +70,65 @@ attribute it to a vendor defect.
 Process ownership and sampled source-path identity improve lifetime accounting
 but cannot detect identical-bit ABA, all guest reboots, snapshot restoration,
 or application-object reuse at the same GPA. The caller must manage those
-boundaries. A whole-page readback on two CPUs is not proof of atomic replacement
+boundaries. A region admitted by scanning is weaker still, and deliberately so:
+its recheck visits one page per 4096 shadow fills, so a source entry that stops
+agreeing is detected within a bounded number of samples rather than at the
+composition that follows it. Callers who cannot tolerate that interval should
+use the coarse-source rule, which needs no recheck because a single source leaf
+cannot disagree with itself.
+
+A whole-page readback on two CPUs is not proof of atomic replacement
 for arbitrary concurrent readers/writers, DMA, MMIO, or executable-page
 workloads. Successful synchronous retirement and sampled readback are different
 forms of evidence; neither should be enlarged into universal stale-mapping
 freedom without the stated assumptions.
 
+\paragraph{A build artifact that presented as a descendant hang.}
+Exercising regions produced a failure worth reporting for how it looked rather
+than for what it was. A descendant under a memory workload stopped executing:
+its VMM process kept serving its framebuffer and answering the host, consumed no
+CPU, ignored console input, and could not be stopped by its own command-line
+tool. From outside that is indistinguishable from a hang. It was not one. The
+VMM's log names it exactly --- \code{MONITOR PANIC: VM-entry failed; VMCS valid
+(error code 7)}, an entry rejected for invalid control fields --- and the
+unrecoverable-error dialog that would have said so is invisible for a VM started
+from session~0.
+
+The cause is not in the sources. Two driver binaries built from identical
+sources differ only in how they were built: \code{msbuild /t:Build} produced one
+that failed this way in three runs of three, and \code{/t:Rebuild} produced one
+that ran an 800\,MiB allocation, a snapshot cycle and a further allocation with
+none. We do not explain why an incremental build differs. We record that it did,
+that the two binaries have different hashes, and that a reading taken with a
+driver that was not cleanly rebuilt establishes nothing.
+
+Two observations from the same session remain unexplained and are not folded
+into that one. The containing Windows VM itself once lost its heartbeat and
+ignored an injected non-maskable interrupt, producing no bugcheck and therefore
+no dump --- consistent with this build installing a private host
+interrupt-descriptor table, so the usual convert-a-hang-into-a-dump step is
+unavailable here. And after a control process was killed while a removal was in
+flight, three retried removals returned \code{STATUS\_HV\_OPERATION\_FAILED}
+with \code{retired=1}, so the backing stayed retained: the designed fail-closed
+path behaving as specified, but never subsequently succeeding. The kill is a
+plausible cause we cannot exclude, and a later removal after an ordinary
+revocation drained cleanly on the first attempt.
+
 \paragraph{Coverage and reliability.}
 Current page-cycle counts are small, and software-injected allocation/drain
 failures do not emulate all hardware failures. Source-path comparison has
 portable adversarial coverage but lacks deliberate hardware EPT mutation tests.
+The region lease has been revoked by a real source change on hardware: a
+snapshot of the descendant taken while a 2\,MiB region was published drops the
+intermediate VMM's entries for that region entirely, and the lease was revoked
+within five seconds and removed cleanly. It reported translation-changed rather
+than region-drifted, and that separation is structural rather than incidental:
+the always-on check covers the path the lease was captured on and runs at every
+shadow fill, so it sees any whole-table event first, while the region recheck
+exists for the case it cannot see --- one page of the region losing permission
+while the captured path stays identical. Nothing this VMM can be asked to do
+produces that case, so the region-drifted path itself remains covered only by
+the portable suite and its eight injected defects.
 High-load, write-isolation, and owner-exit results belong to the historical
 build. A historical two-by-two configuration has a 599.43-second observation
 with 21 samples; there is no new ten-minute or overnight soak for the current
@@ -129,25 +178,42 @@ Hyper-V Windows guest and subsequently control selected memory in a VMware
 descendant. Its page lease separates admission, publication, observed revocation,
 CPU invalidation, and reclamation, and its experiments connect those events to
 multicore readback and an HTTP policy effect. The evaluated pages can be
-substituted and restored with tracked resources reclaimed. Significant exit and
-RTT costs remain, every measured insertion begins with descendant VMMs absent,
-and the inner Hyper-V root partition refuses admission in the tested configuration.
-These limits define the next work: existing-state handoff, better attribution of
-boundary costs, stronger page-identity/concurrency validation, and independent
-hardware and application evaluation.
+substituted and restored with tracked resources reclaimed, and so can a 2\,MiB
+region of them, admitted on a property that makes one leaf safe for all of it
+rather than on a proxy for that property.
+
+The limits are as concrete as the capability. Significant exit and RTT costs
+remain; every measured insertion begins with descendant VMMs absent; the inner
+Hyper-V root partition refuses admission in the tested configuration; a 1\,GiB
+leaf is refused on this stack, because the intermediate VMM maps at 4\,KiB and a
+region that size exceeds a bound this design keeps deliberately; which bases can
+be replaced at all follows what the descendant has touched rather than what it
+was configured with; the region recheck's own revocation reason has never fired
+on hardware, because the always-on check sees every source change this VMM can
+be made to produce; and two failures found while exercising regions remain
+unexplained, after a third turned out to be a driver built incrementally rather
+than cleanly. These define the next work: existing-state handoff, better
+attribution of boundary costs, stronger page-identity and concurrency
+validation, a source change confined to one page of a region, an explanation for
+those two failures, and independent hardware and application evaluation.
 
 \section*{Data, code, and review status}
 The implementation and versioned evidence are in the public \ks{} repository;
 Appendix~\ref{app:artifact} identifies exact revisions and reproduction commands.
 Tables in this preprint are generated from archived summaries with recorded
-input SHA256 values. The author has reviewed this version and verified its data.
-It has not been peer reviewed or submitted to arXiv as part of its preparation,
-and it does not assert conference acceptance or a publication DOI.
+input SHA256 values. \path{docs/next/arxiv/build-validation.json} records, for
+the exact build it names, which checks were performed and which were not; the
+author's review of this revision is recorded there as pending, and earlier
+revisions were reviewed and their data verified. This preprint has not been peer
+reviewed or submitted to arXiv as part of its preparation, and it does not
+assert conference acceptance or a publication DOI.
 
 \section*{Use of AI assistance}
-OpenAI Codex assisted with prototype implementation and debugging, experiment
-and analysis scripts, authorized laboratory execution, evidence archiving, and
-drafting the manuscript and diagrams. Reported measurements are tied to retained
+AI coding assistants -- OpenAI Codex, and Anthropic Claude for the region
+mechanism, its portable tests and the corresponding manuscript sections --
+assisted with prototype implementation and debugging, experiment and analysis
+scripts, authorized laboratory execution, evidence archiving, and drafting the
+manuscript and diagrams. Reported measurements are tied to retained
 logs; unmeasured behavior is identified separately. The author has reviewed the
 source, experimental procedures, raw data, statistical interpretation, citations,
 and claims for this draft. The AI system is not an author.

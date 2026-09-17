@@ -11,10 +11,12 @@ This paper presents \ks{}, an experimental Intel VMX monitor loaded from an
 authorized Windows kernel inside an existing Hyper-V guest. It interposes below
 that running Windows instance and subsequently hosts VMware and a TinyCore Linux
 descendant. Its page-control interface redirects one selected 4\,KiB descendant
-guest-physical page to private backing and exposes publication, invalidation,
-rollback, and reclamation as separate events. Guest-side helpers select, pin,
-and observe the experimental page; the page intervention itself is controlled
-from the containing Windows instance.
+guest-physical page --- or a 2\,MiB region of them, cloned from the original so
+that publication changes nothing the descendant can observe --- to private
+backing, and exposes publication, invalidation, rollback, and reclamation as
+separate events. Guest-side helpers select, pin, and observe the experimental
+page; the page intervention itself is controlled from the containing Windows
+instance.
 
 The distinction between insertion and later page control is essential.
 \emph{The evaluated insertion starts while descendant VMMs are absent.}
@@ -54,6 +56,11 @@ The paper makes three bounded contributions:
       nested VMX execution, and a descendant page lease. The lease binds a
       referenced VMM process identity to a sampled source translation path and
       retains replacement backing until an all-CPU retirement drain succeeds.
+      A region larger than a page is admitted only on a property that makes one
+      leaf safe for all of it --- either the source's own leaf is already that
+      coarse, or every source entry under the region is read and found to agree
+      --- and the second, weaker basis is rechecked by sampling and revoked
+      under its own reason when it stops holding.
 \item An evaluation that connects control events to full-page observations on
       two descendant vCPUs, identity continuity, fault outcomes, and allocation
       ledgers. A BusyBox HTTP service and a fixed-schema policy consumer show
@@ -61,8 +68,11 @@ The paper makes three bounded contributions:
       comparator that makes the differing control requirements explicit.
 \item A version-separated evidence set reporting useful behavior together with
       substantial costs and negative results: millisecond-scale insertion
-      bodies, paced application observations, residual CPUID/RTT overhead, and
-      refused admission in an inner Hyper-V root partition.
+      bodies, paced application observations, residual CPUID/RTT overhead,
+      refused admission in an inner Hyper-V root partition, a 1\,GiB leaf
+      requested on hardware and refused under both rules, and the finding that
+      which guest-physical bases can be replaced at all is decided by what the
+      descendant has touched rather than by how much memory it was given.
 \end{enumerate}
 
 All measurements come from one physical machine. In the current cohort, five
