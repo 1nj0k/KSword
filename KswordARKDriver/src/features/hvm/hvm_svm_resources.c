@@ -1,0 +1,344 @@
+/* AMD capability discovery and PASSIVE_LEVEL resource ownership. */
+#include "hvm_svm.h"
+#include "../../platform/pool_compat.h"
+#include <intrin.h>
+
+/* Read each MSR independently; absent evidence must not look like zero. */
+static VOID KswSvmReadEvidence(KSW_SVM_CAPS* Caps, ULONG Msr, ULONG Bit, ULONGLONG* Value)
+{
+    /* A VMM may advertise SVM while filtering individual MSRs. */
+    __try { *Value = __readmsr(Msr); Caps->Valid |= Bit; }
+    /* Preserve a missing field and its precise exception. */
+    __except (EXCEPTION_EXECUTE_HANDLER) { Caps->Exception = GetExceptionCode(); }
+}
+
+/* Must execute on the processor whose evidence it returns. */
+NTSTATUS KswordSvmProbeCpu(KSW_SVM_CAPS* Caps)
+{
+    /* CPUID outputs are signed intrinsics, decoded explicitly below. */
+    int r[4];
+    /* Start with no valid privileged evidence. */
+    RtlZeroMemory(Caps, sizeof(*Caps));
+    /* Never query an unavailable extended leaf. */
+    __cpuid(r, (int)0x80000000U);
+    /* Preserve the bound for diagnostics. */
+    Caps->MaxLeaf = (ULONG)r[0];
+    /* The backend needs both MAXPHYADDR and SVM enumeration. */
+    if (Caps->MaxLeaf < 0x8000000aU) { return STATUS_NOT_SUPPORTED; }
+    /* Discover SVM and one-GiB pages separately. */
+    __cpuid(r, (int)0x80000001U);
+    /* ECX.SVM is the instruction capability gate. */
+    Caps->Svm = ((ULONG)r[2] & 4U) != 0;
+    /* EDX.Page1GB controls large NPT leaf construction. */
+    Caps->Page1Gb = ((ULONG)r[3] & (1U << 26)) != 0;
+    /* SVM ASID count and optional features. */
+    __cpuid(r, (int)0x8000000aU);
+    /* ASID zero is reserved. */
+    Caps->AsidCount = (ULONG)r[1];
+    /* Do not infer optional features from the CPU model. */
+    Caps->Features = (ULONG)r[3];
+    /* Read the actual address width exposed by the outer VMM. */
+    __cpuid(r, (int)0x80000008U);
+    /* The four-level NPT implementation validates this width. */
+    Caps->PhysicalBits = (ULONG)r[0] & 0xffU;
+    /* Stop before touching SVM-only MSRs if SVM is filtered. */
+    if (!Caps->Svm || !(Caps->Features & 1U) || !KswSvmAsidValid(Caps->AsidCount, 1)) { return STATUS_NOT_SUPPORTED; }
+    /* General user-mode intercepts need NRIP; no unsafe root instruction fetch fallback. */
+    if (!(Caps->Features & 8U)) { return STATUS_NOT_SUPPORTED; }
+    /* Capture all ownership/cache evidence independently. */
+    KswSvmReadEvidence(Caps, KSW_SVM_MSR_VM_CR, 1, &Caps->VmCr);
+    /* EFER.SVME belongs to an existing VMM when already set. */
+    KswSvmReadEvidence(Caps, KSW_SVM_MSR_EFER, 2, &Caps->Efer);
+    /* A nonzero save address is treated conservatively as ownership conflict. */
+    KswSvmReadEvidence(Caps, KSW_SVM_MSR_HSAVE, 4, &Caps->Hsave);
+    /* Read the existing PAT rather than writing a preferred layout. */
+    KswSvmReadEvidence(Caps, 0x277U, 8, &Caps->Pat);
+    /* A filtered MSR makes hardware readiness unproven. */
+    if (Caps->Valid != 15) { return NT_SUCCESS(Caps->Exception) ? STATUS_NOT_SUPPORTED : Caps->Exception; }
+    /* Respect firmware SVMDIS and existing virtualization ownership. */
+    if ((Caps->VmCr & 0x10ULL) || (Caps->Efer & KSW_SVM_EFER_SVME) || Caps->Hsave) { return STATUS_DEVICE_BUSY; }
+    /* CET, LA57, PKS and user-interrupt state transfers are outside v1. */
+    if (__readcr4() & ((1ULL << 12) | (1ULL << 23) | (1ULL << 24) | (1ULL << 25))) { return STATUS_NOT_SUPPORTED; }
+    /* Require an OS-enabled XSAVE path for complete user XSTATE preservation. */
+    __cpuid(r, 1);
+    /* Both XSAVE and OSXSAVE must be present. */
+    if (((ULONG)r[2] & (3U << 26)) != (3U << 26)) { return STATUS_NOT_SUPPORTED; }
+    /* The first backend handles XCR0 state; active supervisor XSTATE is refused. */
+    __cpuidex(r, 0xd, 1);
+    /* Read XSS only when the processor enumerates XSAVES. */
+    if (((ULONG)r[0] & 8U) != 0) {
+        /* Preserve a VMM-filtered XSS read as unavailability. */
+        __try { if (__readmsr(0xda0U) != 0) { return STATUS_NOT_SUPPORTED; } }
+        /* Never skip unknown supervisor state. */
+        __except (EXCEPTION_EXECUTE_HANDLER) { return GetExceptionCode(); }
+    }
+    /* Capability success does not itself prove that VMRUN works. */
+    return KswNptAddressMask(Caps->PhysicalBits) ? STATUS_SUCCESS : STATUS_NOT_SUPPORTED;
+}
+
+/* Publish hardware evidence separately from runtime implementation state. */
+NTSTATUS KswordSvmProbe(KSW_HVM_RUNTIME* Runtime)
+{
+    /* Probe the current processor; prepare repeats on every target processor. */
+    KSW_SVM_CAPS caps;
+    /* Preserve precise failure while still publishing capability evidence. */
+    NTSTATUS status = KswordSvmProbeCpu(&caps);
+    /* Preserve each independent source and validity flag for pre-prepare diagnosis. */
+    Runtime->SvmCapabilities.maxLeaf = caps.MaxLeaf; Runtime->SvmCapabilities.features = caps.Features;
+    /* CPUID enumeration is separate from privileged MSR validity. */
+    Runtime->SvmCapabilities.asidCount = caps.AsidCount; Runtime->SvmCapabilities.physicalBits = caps.PhysicalBits;
+    /* A failed MSR read must remain distinguishable from a returned zero. */
+    Runtime->SvmCapabilities.msrValidMask = caps.Valid; Runtime->SvmCapabilities.exceptionStatus = (ULONG)caps.Exception;
+    /* Preserve raw ownership and PAT observations without interpreting invalid fields. */
+    Runtime->SvmCapabilities.vmCr = caps.VmCr; Runtime->SvmCapabilities.efer = caps.Efer;
+    /* Preserve the remaining independently sampled registers. */
+    Runtime->SvmCapabilities.hsave = caps.Hsave; Runtime->SvmCapabilities.pat = caps.Pat;
+    /* Select SVM independently from generic x64 compiler architecture. */
+    Runtime->BackendId = KSWORD_ARK_HVM_BACKEND_SVM;
+    /* Mark the CPU vendor without claiming implementation readiness. */
+    Runtime->FeatureFlags |= KSWORD_ARK_HVM_FEATURE_AMD;
+    /* Publish enumerated instruction and paging capabilities. */
+    if (caps.Svm) { Runtime->FeatureFlags |= KSWORD_ARK_HVM_FEATURE_SVM; }
+    /* NPT is not EPT. */
+    if (caps.Features & 1U) { Runtime->FeatureFlags |= KSWORD_ARK_HVM_FEATURE_NPT; }
+    /* Record optional next-RIP capability. */
+    if (caps.Features & 8U) { Runtime->FeatureFlags |= KSWORD_ARK_HVM_FEATURE_SVM_NRIP; }
+    /* Record optional invalidation optimization capability. */
+    if (caps.Features & 64U) { Runtime->FeatureFlags |= KSWORD_ARK_HVM_FEATURE_SVM_FLUSH_BY_ASID; }
+    /* Record optional decode assists without relying on them. */
+    if (caps.Features & 128U) { Runtime->FeatureFlags |= KSWORD_ARK_HVM_FEATURE_SVM_DECODE_ASSISTS; }
+    /* Only a valid VM_CR read can establish firmware-disabled status. */
+    if ((caps.Valid & 1U) && (caps.VmCr & 0x10ULL)) { Runtime->FeatureFlags |= KSWORD_ARK_HVM_FEATURE_SVM_FIRMWARE_DISABLED; }
+    /* Distinguish a usable backend from a missing firmware capability. */
+    Runtime->QueryStatus = NT_SUCCESS(status) ? KSWORD_ARK_HVM_QUERY_STATUS_OK : KSWORD_ARK_HVM_QUERY_STATUS_UNSUPPORTED_CPU;
+    /* Refine the firmware diagnosis only when directly observed. */
+    if (caps.VmCr & 0x10ULL) { Runtime->QueryStatus = KSWORD_ARK_HVM_QUERY_STATUS_FIRMWARE_DISABLED; }
+    /* Retain precise ownership/filtering failures. */
+    Runtime->LastStatus = status;
+    /* Return capability readiness only. */
+    return status;
+}
+
+/* Reject every optional Intel feature before allocating AMD resources. */
+NTSTATUS KswordSvmValidateFlags(KSW_HVM_RUNTIME* Runtime, ULONG Flags)
+{
+    /* Only baseline lifecycle flags have AMD implementations. */
+    const ULONG allowed = KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED | KSWORD_ARK_HVM_CONTROL_FLAG_FORCE | KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED;
+    /* Unknown/Intel-specific features must not silently degrade to baseline. */
+    if (Flags & ~allowed) { return STATUS_NOT_SUPPORTED; }
+    /* Running under a VMM requires opt-in and a specifically supported outer host. */
+    if (Runtime->FeatureFlags & KSWORD_ARK_HVM_FEATURE_HYPERVISOR_PRESENT) {
+        /* Do not spoof CPUID or accept an unknown host to make entry pass. */
+        if (!(Flags & KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED) ||
+            RtlCompareMemory(Runtime->HypervisorVendor, "VMwareVMware", 12) != 12) { return STATUS_NOT_SUPPORTED; }
+    }
+    /* All required SVM state is validated separately. */
+    return STATUS_SUCCESS;
+}
+
+/* Allocate a zeroed hardware buffer under the guest physical-address ceiling. */
+static PVOID KswSvmAllocateHardware(SIZE_T Bytes, ULONG Bits)
+{
+    /* NPT width is checked before this helper is reached. */
+    PHYSICAL_ADDRESS highest;
+    /* Capture the owned allocation. */
+    PVOID result;
+    /* Avoid allocating an unrepresentable hardware operand. */
+    highest.QuadPart = (LONGLONG)((1ULL << Bits) - 1);
+    /* VMCB, HSAVE and permission maps require physical contiguity. */
+    result = MmAllocateContiguousMemory(Bytes, highest);
+    /* Reserved fields begin as architectural zero. */
+    if (result != NULL) { RtlZeroMemory(result, Bytes); }
+    /* Caller records the returned pointer immediately. */
+    return result;
+}
+
+/* All resources are retained if any CPU could still use them. */
+VOID KswordSvmRelease(KSW_HVM_RUNTIME* Runtime)
+{
+    /* A failed prepare may own only a prefix of this allocation set. */
+    KSW_SVM_STATE* state = Runtime->BackendContext;
+    /* Reverse-order release does not dereference a missing state. */
+    ULONG index;
+    /* Never free even apparently inactive per-CPU pages before a complete stop. */
+    if (state == NULL || Runtime->ResidentProcessorCount != 0) { return; }
+    /* Check individual owners as well as the summary count. */
+    for (index = 0; state->Cpus != NULL && index < state->Count; ++index) {
+        /* A stale summary cannot authorize freeing an active CPU's stack. */
+        if (state->Cpus[index].Active) { return; }
+    }
+    /* Release per-CPU allocations in exact reverse ownership order. */
+    for (index = state->Count; state->Cpus != NULL && index != 0;) {
+        /* Select the next owned context. */
+        KSW_SVM_CPU* cpu = &state->Cpus[--index];
+        /* NX XSTATE and host-stack allocations use the same pool tag. */
+        if (cpu->XstateAllocation) { ExFreePoolWithTag(cpu->XstateAllocation, 'cSvK'); }
+        /* The host stack remains alive until native return acknowledgement. */
+        if (cpu->Stack) { ExFreePoolWithTag(cpu->Stack, 'cSvK'); }
+        /* Permission maps and hardware pages are physically contiguous. */
+        if (cpu->Iopm) { MmFreeContiguousMemory(cpu->Iopm); }
+        /* Release the MSR bitmap after all exits stopped. */
+        if (cpu->Msrpm) { MmFreeContiguousMemory(cpu->Msrpm); }
+        /* Release hardware's opaque host-save area. */
+        if (cpu->Hsave) { MmFreeContiguousMemory(cpu->Hsave); }
+        /* Release our explicit host state image. */
+        if (cpu->Host) { MmFreeContiguousMemory(cpu->Host); }
+        /* Release the guest control/save image last. */
+        if (cpu->Guest) { MmFreeContiguousMemory(cpu->Guest); }
+        /* Remove the runtime's dangling private-context link. */
+        Runtime->Processors[index].BackendContext = NULL;
+    }
+    /* Shared NPT is freed only after all per-CPU owners are gone. */
+    KswordNptRelease(&state->Npt);
+    /* Free the context array when prepare reached its allocation. */
+    if (state->Cpus) { ExFreePoolWithTag(state->Cpus, 'cSvK'); }
+    /* Drop runtime state and public preparation evidence together. */
+    ExFreePoolWithTag(state, 'sSvK');
+    /* Prevent reuse of the released lifetime. */
+    Runtime->BackendContext = NULL;
+    /* Clear every stale processor row and count. */
+    RtlZeroMemory(Runtime->Processors, sizeof(Runtime->Processors));
+    /* No prepared CPU survives teardown. */
+    Runtime->ProcessorCount = Runtime->PreparedProcessorCount = Runtime->SelfTestPassedProcessorCount = 0;
+    /* NPT never sets an EPT-ready bit. */
+    KswordARKHvmStateClear(Runtime, KSWORD_ARK_HVM_STATE_RESOURCES_READY | KSWORD_ARK_HVM_STATE_SELF_TEST_PASSED);
+}
+
+/* Allocate and validate each processor before any CPU executes VMRUN. */
+NTSTATUS KswordSvmPrepare(KSW_HVM_RUNTIME* Runtime, ULONG Flags)
+{
+    /* Keep precise failure for the command response. */
+    NTSTATUS status = KswordSvmValidateFlags(Runtime, Flags);
+    /* Snapshot all processor groups, never just group zero. */
+    ULONG count = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+    /* Loop index is a Windows global processor index, not APIC ID. */
+    ULONG index;
+    /* The prepare allocation is owned by Runtime immediately. */
+    KSW_SVM_STATE* state;
+    /* Reject unsupported options before changing ownership. */
+    if (!NT_SUCCESS(status)) { return status; }
+    /* Repeated preparation must not replace a live or partially owned context. */
+    if (Runtime->BackendContext) { return STATUS_ALREADY_REGISTERED; }
+    /* Enforce protocol capacity without silently dropping processors. */
+    if (count == 0 || count > KSWORD_ARK_HVM_MAX_PROCESSORS) { return STATUS_NOT_SUPPORTED; }
+    /* Allocate runtime state from nonpaged NX pool. */
+    state = KswordARKAllocateNonPagedPool(sizeof(*state), 'sSvK');
+    /* Allocation failure leaves all public readiness clear. */
+    if (state == NULL) { return STATUS_INSUFFICIENT_RESOURCES; }
+    /* Initialize every ownership pointer before publishing the context. */
+    RtlZeroMemory(state, sizeof(*state));
+    /* Publish cleanup ownership, not readiness. */
+    Runtime->BackendContext = state;
+    /* Freeze the target count for subsequent allocations. */
+    state->Count = count;
+    /* Bind capability/allocation evidence to the current power epoch. */
+    state->PreparedPowerGeneration = Runtime->PowerTransitionGeneration;
+    /* Allocate all contexts before pinning individual processors. */
+    state->Cpus = KswordARKAllocateNonPagedPool(sizeof(KSW_SVM_CPU) * count, 'cSvK');
+    /* Release the owned state if the array allocation fails. */
+    if (state->Cpus == NULL) { KswordSvmRelease(Runtime); return STATUS_INSUFFICIENT_RESOURCES; }
+    /* Every individual pointer must start null for partial cleanup. */
+    RtlZeroMemory(state->Cpus, sizeof(KSW_SVM_CPU) * count);
+    /* Record target size before preparing rows. */
+    Runtime->ProcessorCount = count;
+    /* Validate capabilities on every actual target processor. */
+    for (index = 0; index < count; ++index) {
+        /* Private context associated with this Windows processor identity. */
+        KSW_SVM_CPU* cpu = &state->Cpus[index];
+        /* Group-aware target and saved calling affinity. */
+        PROCESSOR_NUMBER number;
+        /* Group affinity is restored on every path after binding. */
+        GROUP_AFFINITY affinity = {0}, previous;
+        /* Enumerated XSAVE capacity. */
+        int r[4];
+        /* Resolve the frozen global index to its actual group and number. */
+        status = KeGetProcessorNumberFromIndex(index, &number);
+        /* Topology failures cannot be ignored. */
+        if (!NT_SUCCESS(status)) { break; }
+        /* Set a single-bit mask within the target group. */
+        affinity.Group = number.Group; affinity.Mask = (KAFFINITY)1 << number.Number;
+        /* Bind only while reading CPU-specific evidence. */
+        KeSetSystemGroupAffinityThread(&affinity, &previous);
+        /* Require valid SVM ownership evidence on this CPU. */
+        status = KswordSvmProbeCpu(&cpu->Caps);
+        /* Record the currently enabled user XSTATE mask and storage requirement. */
+        if (NT_SUCCESS(status)) {
+            /* XSAVE standard-format size for the current XCR0. */
+            __cpuidex(r, 0xd, 0); cpu->XstateBytes = (ULONG)r[1];
+            /* Save exactly the currently enabled state components. */
+            cpu->XstateMask = _xgetbv(0);
+        }
+        /* Never leave the control thread pinned after probing. */
+        KeRevertToUserGroupAffinityThread(&previous);
+        /* Refuse failed evidence before allocating processor-owned pages. */
+        if (!NT_SUCCESS(status)) { break; }
+        /* Cross-CPU paging/cache contracts must match exactly. */
+        if (index && (cpu->Caps.PhysicalBits != state->Cpus[0].Caps.PhysicalBits ||
+            cpu->Caps.Page1Gb != state->Cpus[0].Caps.Page1Gb || cpu->Caps.Pat != state->Cpus[0].Caps.Pat)) {
+            /* Preserve a heterogeneous-machine refusal rather than guessing. */
+            status = STATUS_NOT_SUPPORTED; break;
+        }
+        /* Bound the saved state size before allocation arithmetic. */
+        if (cpu->XstateBytes < 512 || cpu->XstateBytes > 65536) { status = STATUS_NOT_SUPPORTED; break; }
+        /* Associate common and private state without reusing VMX fields. */
+        cpu->Runtime = Runtime; cpu->Resource = &Runtime->Processors[index];
+        /* Retain the System CR3 captured by the common prepare path. */
+        cpu->HostCr3 = Runtime->HostCr3;
+        /* Preserve processor identity in the common row. */
+        cpu->Resource->Row.processorGroup = number.Group; cpu->Resource->Row.processorNumber = number.Number;
+        /* Select the correct protocol decoder. */
+        cpu->Resource->Row.backend = KSWORD_ARK_HVM_BACKEND_SVM;
+        /* No VMX instruction result exists on this backend. */
+        cpu->Resource->Row.vmxInstructionResult = 0xffU;
+        /* Publish ownership for diagnosis and teardown. */
+        cpu->Resource->BackendContext = cpu;
+        /* Allocate all hardware operands before publishing readiness. */
+        cpu->Guest = KswSvmAllocateHardware(4096, cpu->Caps.PhysicalBits);
+        /* Host VMLOAD/VMSAVE image is not the opaque HSAVE page. */
+        cpu->Host = KswSvmAllocateHardware(4096, cpu->Caps.PhysicalBits);
+        /* Hardware-owned host save page. */
+        cpu->Hsave = KswSvmAllocateHardware(4096, cpu->Caps.PhysicalBits);
+        /* Two-page MSR bitmap. */
+        cpu->Msrpm = KswSvmAllocateHardware(8192, cpu->Caps.PhysicalBits);
+        /* Three-page I/O bitmap, even though baseline I/O interception is off. */
+        cpu->Iopm = KswSvmAllocateHardware(12288, cpu->Caps.PhysicalBits);
+        /* Stack and XSAVE storage are NX and need not be physically contiguous. */
+        cpu->Stack = KswordARKAllocateNonPagedPool(KSW_SVM_STACK_BYTES, 'cSvK');
+        /* Include slack for 64-byte alignment. */
+        cpu->XstateAllocation = KswordARKAllocateNonPagedPool(cpu->XstateBytes + 63, 'cSvK');
+        /* A partial per-CPU allocation set is not ready. */
+        if (!cpu->Guest || !cpu->Host || !cpu->Hsave || !cpu->Msrpm || !cpu->Iopm || !cpu->Stack || !cpu->XstateAllocation) {
+            /* Release all allocations through the shared ledger below. */
+            status = STATUS_INSUFFICIENT_RESOURCES; break;
+        }
+        /* Clear XSAVE's reserved header bytes before its first use. */
+        RtlZeroMemory(cpu->XstateAllocation, cpu->XstateBytes + 63);
+        /* XSAVE/XRSTOR require 64-byte alignment. */
+        cpu->Xstate = (PVOID)(((ULONG_PTR)cpu->XstateAllocation + 63) & ~(ULONG_PTR)63);
+        /* Keep the Windows x64 shadow space and the context anchor within the stack. */
+        cpu->StackTop = ((ULONGLONG)(ULONG_PTR)cpu->Stack + KSW_SVM_STACK_BYTES - 64) & ~15ULL;
+        /* Cache hardware addresses outside VMEXIT. */
+        cpu->GuestPa = (ULONGLONG)MmGetPhysicalAddress(cpu->Guest).QuadPart;
+        /* Explicit host VMLOAD image. */
+        cpu->HostPa = (ULONGLONG)MmGetPhysicalAddress(cpu->Host).QuadPart;
+        /* Record prepared state only after all allocations succeeded. */
+        cpu->Stage = KSWORD_ARK_HVM_STAGE_PREPARED;
+        /* Publish generic resource evidence, never VMXON success. */
+        cpu->Resource->Row.stateFlags = KSWORD_ARK_HVM_CPU_STATE_RESOURCE_READY;
+        /* Count only complete per-CPU resource sets. */
+        Runtime->PreparedProcessorCount++;
+        /* Exercise reverse cleanup after a complete owned CPU allocation set. */
+        if (KswordSvmFault(1, index)) { status = STATUS_CANCELLED; break; }
+    }
+    /* NPT uses the common cache/address-width contract established above. */
+    if (NT_SUCCESS(status)) { status = KswordNptBuild(&state->Npt, &state->Cpus[0].Caps); }
+    /* No preparation evidence may span a sleep/resume or topology change. */
+    if (NT_SUCCESS(status) && (Runtime->PowerTransitionPending || Runtime->PowerTransitionGeneration != state->PreparedPowerGeneration ||
+        KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS) != count)) { status = STATUS_POWER_STATE_INVALID; }
+    /* Nothing may remain marked ready after partial prepare. */
+    if (!NT_SUCCESS(status)) { KswordSvmRelease(Runtime); return status; }
+    /* Publish resources only; actual SVM execution is a separate self-test. */
+    KswordARKHvmStateSet(Runtime, KSWORD_ARK_HVM_STATE_RESOURCES_READY);
+    /* No CPU has yet entered SVM. */
+    return STATUS_SUCCESS;
+}

@@ -2,6 +2,9 @@
 #include "hvm_metrics.h"
 #include "hvm_internal.h"
 #include "hvm_ept.h"
+#if defined(_M_AMD64)
+#include "hvm_svm.h"
+#endif
 
 /* Static storage outlives resident contexts and permits queries after stop. */
 static KSWORD_ARK_HVM_METRICS_RESPONSE g_HvmTiming;
@@ -132,7 +135,14 @@ NTSTATUS KswordARKHvmMetricsQuery(KSWORD_ARK_HVM_METRICS_RESPONSE* Response)
     /* Prevent resource destruction while copying static per-CPU cache counters. */
     KswordARKAcquirePushLockShared(&KswordARKHvmGetRuntime()->Lock);
     /* CPU writers still run, so this does not claim a simultaneous snapshot. */
-    KswordARKHvmResidentMetrics(Response);
+    Response->backend = KswordARKHvmGetRuntime()->BackendId;
+#if defined(_M_AMD64)
+    /* AMD exit IDs are sparse 64-bit values and require their own snapshot. */
+    if (Response->backend == KSWORD_ARK_HVM_BACKEND_SVM) { KswordSvmMetrics(KswordARKHvmGetRuntime(), Response); }
+    /* Existing VMX telemetry retains its original decoder. */
+    else
+#endif
+    { KswordARKHvmResidentMetrics(Response); }
     /* Release before returning to user mode. */
     KswordARKReleasePushLockShared(&KswordARKHvmGetRuntime()->Lock);
     /* Preserve the first timestamp and close the snapshot's observation interval. */

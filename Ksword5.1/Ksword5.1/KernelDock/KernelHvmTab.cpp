@@ -1,4 +1,4 @@
-#include "KernelHvmTab.h"
+﻿#include "KernelHvmTab.h"
 #include "../MainWindow.h"
 
 #include "KernelDock.h"
@@ -123,7 +123,7 @@ void KernelHvmTab::initializeUi()
     // 危险口径不占版面：跟着真正触发硬件操作的按钮走，点击后的确认框里还有完整版。
     const QString hazardTip = kernelText(
         "kernel.hvm.hazard.tooltip",
-        QStringLiteral("VMX/EPT 操作可能因异常 VM-exit、错误 MTRR 类型、EPT misconfiguration 或与其它 VMM 冲突导致系统不稳定甚至蓝屏。"));
+        QStringLiteral("虚拟化进入、页表缓存类型或退出恢复错误可能导致系统不稳定或蓝屏。"));
 
     // 换行布局而不是 QHBoxLayout：这排有八个按钮，标签又都是「启动一次性来宾」
     // 这种四到六字的完整句子。1024 宽下 QHBoxLayout 会把每个按钮压到 sizeHint
@@ -134,7 +134,7 @@ void KernelHvmTab::initializeUi()
         kernelText("kernel.hvm.refresh", QStringLiteral("刷新能力")),
         this);
     m_prepareButton = new QPushButton(
-        kernelText("kernel.hvm.prepare", QStringLiteral("准备 VMX/EPT")),
+        kernelText("kernel.hvm.prepare", QStringLiteral("准备虚拟化后端")),
         this);
     m_selfTestButton = new QPushButton(
         kernelText("kernel.hvm.self_test", QStringLiteral("逐 CPU 自检")),
@@ -185,7 +185,7 @@ void KernelHvmTab::initializeUi()
         + QLatin1Char('\n')
         + kernelText(
             "kernel.hvm.resident.start.gate_tooltip",
-            QStringLiteral("仅支持 Intel VT-x/EPT；AMD、现有 Hypervisor、未通过全 CPU 自检或生命周期保护不完整时，驱动会拒绝启动。")));
+            QStringLiteral("Intel 使用 VMX/EPT，AMD 使用实验性 SVM/NPT。必须通过全 CPU 自检与生命周期保护；AMD 仅接受明确允许的 VMware 外层。")));
     m_stopResidentButton->setToolTip(
         kernelText(
             "kernel.hvm.resident.stop.tooltip",
@@ -340,10 +340,10 @@ void KernelHvmTab::initializeUi()
     m_cpuTable->setColumnCount(CpuColumnCount);
     m_cpuTable->setHorizontalHeaderLabels({
         kernelText("kernel.hvm.cpu.processor", QStringLiteral("处理器")),
-        kernelText("kernel.hvm.cpu.resource", QStringLiteral("VMX 区域")),
+        kernelText("kernel.hvm.cpu.resource", QStringLiteral("控制结构")),
         kernelText("kernel.hvm.cpu.self_test", QStringLiteral("自检")),
         kernelText("kernel.hvm.cpu.guest_exit", QStringLiteral("来宾 / VM-exit")),
-        kernelText("kernel.hvm.cpu.vmx_result", QStringLiteral("VMX 指令结果")),
+        kernelText("kernel.hvm.cpu.vmx_result", QStringLiteral("执行状态")),
         kernelText("kernel.hvm.cpu.ntstatus", QStringLiteral("NTSTATUS"))
     });
     m_cpuTable->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -557,6 +557,10 @@ void KernelHvmTab::applyStatus(ksword::ark::HvmStatusResult result)
             .arg(nestedStateText(m_snapshot.nestedState))
             .arg(m_snapshot.nestedL2LaunchRefusedCount));
 
+    // AMD uses a separate summary so Intel EPT/nested counters are not presented as AMD evidence.
+    if (m_snapshot.backend == KSWORD_ARK_HVM_BACKEND_SVM)
+        m_summaryLabel->setText(buildDetail(m_snapshot));
+
     const int rowCount = static_cast<int>(std::min<unsigned long>(
         m_snapshot.processorCount,
         KSWORD_ARK_HVM_MAX_PROCESSORS));
@@ -569,6 +573,7 @@ void KernelHvmTab::applyStatus(ksword::ark::HvmStatusResult result)
         const bool tested =
             (cpu.stateFlags & KSWORD_ARK_HVM_CPU_STATE_SELF_TESTED) != 0U;
         const bool passed =
+            (cpu.backend == KSWORD_ARK_HVM_BACKEND_SVM) ? tested :
             (cpu.stateFlags & KSWORD_ARK_HVM_CPU_STATE_VMXON_SUCCEEDED) != 0U;
         const bool vmcsLoaded =
             (cpu.stateFlags & KSWORD_ARK_HVM_CPU_STATE_VMCS_LOADED) != 0U;
@@ -622,11 +627,13 @@ void KernelHvmTab::applyStatus(ksword::ark::HvmStatusResult result)
         m_cpuTable->setItem(
             rowIndex,
             CpuColumnGuestExit,
-            readOnlyItem(guestExitText));
+            readOnlyItem(cpu.backend == KSWORD_ARK_HVM_BACKEND_SVM
+                ? QStringLiteral("0x%1").arg(cpu.svmExitCode, 16, 16, QLatin1Char('0')) : guestExitText));
         m_cpuTable->setItem(
             rowIndex,
             CpuColumnVmxResult,
             readOnlyItem(
+                cpu.backend == KSWORD_ARK_HVM_BACKEND_SVM ? QString::number(cpu.executionStage) :
                 cpu.vmxInstructionResult == 0xFFU
                     ? QStringLiteral("-")
                     : QString::number(cpu.vmxInstructionResult)));
@@ -888,14 +895,8 @@ void KernelHvmTab::prepareBackend()
     const QString warning = kernelText(
         "kernel.hvm.prepare.warning",
         QStringLiteral(
-            "准备操作会为每个活动 CPU 分配物理连续的 VMXON/VMCS 页面，"
-            "并按 CPUID.80000008 的 MAXPHYADDR 构造从物理地址 0 开始、"
-            "最多 8 TiB 的连续 EPT 恒等映射，以覆盖高位 PCI/ReBAR MMIO。"
-            "完整 RAM 叶按 MTRR 定型，固件、PCI 和其它物理空洞使用 UC；"
-            "MAXPHYADDR 超过 8 TiB 时会明确标记截断并禁止驻留启动。"
-            "它不会执行 VMLAUNCH，但会增加不可分页内存占用；"
-            "驱动卸载或“释放后端”会回收这些资源。"));
-    if (confirmTyped(warning, kernelText("kernel.hvm.prepare", QStringLiteral("准备 VMX/EPT"))))
+            "按当前后端为每个 CPU 分配控制结构、保存区及页表。AMD 使用 VMCB/HSAVE 和完整 NPT 身份映射，Intel 使用 VMXON/VMCS/EPT。准备会占用不可分页内存，但不会进入常驻；只有全部 CPU 停止后才能释放。"));
+    if (confirmTyped(warning, kernelText("kernel.hvm.prepare", QStringLiteral("准备虚拟化后端"))))
     {
         runControlAsync(KSWORD_ARK_HVM_CONTROL_PREPARE, false);
     }
@@ -906,9 +907,7 @@ void KernelHvmTab::selfTestBackend()
     const QString warning = kernelText(
         "kernel.hvm.self_test.warning",
         QStringLiteral(
-            "这是高风险硬件自检：驱动会将系统线程依次绑定到每个 CPU，短暂调整 CR4.VMXE，执行 VMXON 后立即 VMXOFF，再恢复原始 CR4。"
-            "已运行的 Hyper-V/VBS/其它 VMM、固件限制或异常 VMX 实现可能导致操作被拒绝、系统不稳定，极端情况下可能蓝屏。"
-            "请先保存工作并确保你接受重启风险。"));
+            "驱动将绑定每个 CPU 执行硬件自检。AMD 必须完成一次带已知退出标记的 VMRUN 往返并恢复原生状态；Intel 执行 VMX 自检。请在调试虚拟机中保存工作并连接调试器，硬件或恢复错误可能导致蓝屏。"));
     if (confirmTyped(warning, kernelText("kernel.hvm.self_test", QStringLiteral("逐 CPU 自检"))))
     {
         runControlAsync(KSWORD_ARK_HVM_CONTROL_SELF_TEST, true);
@@ -943,9 +942,7 @@ void KernelHvmTab::teardownBackend()
                 kernelText(
                     "kernel.hvm.teardown.warning",
                     QStringLiteral(
-                        "释放所有 VMXON、VMCS 和 EPT 页表资源，并清除本次自检、"
-                        "一次性来宾启动与 VM-exit 摘要。独立事件环会保留，"
-                        "只能在驻留 CPU 全部停止后从“EPT 规则与事件”中清空。继续吗？")),
+                        "全部 CPU 停止后释放当前后端资源，并清除准备和自检证据。请先导出诊断记录。继续吗？")),
                 QMessageBox::Yes | QMessageBox::No,
                 QMessageBox::No) == QMessageBox::Yes)
     {
@@ -988,6 +985,7 @@ bool KernelHvmTab::confirmTyped(
 
 void KernelHvmTab::updateButtons()
 {
+    const bool amd = m_snapshot.backend == KSWORD_ARK_HVM_BACKEND_SVM;
     const bool resourcesReady =
         (m_snapshot.stateFlags &
             KSWORD_ARK_HVM_STATE_RESOURCES_READY) != 0U;
@@ -1023,13 +1021,13 @@ void KernelHvmTab::updateButtons()
     // 逐条对应，改其中一边必须同时改另一边。
     const QString busyReason = kernelText(
         "kernel.hvm.gate.busy",
-        QStringLiteral("灰掉的原因：另一项 VMX 操作正在执行。"));
+        QStringLiteral("灰掉的原因：另一项虚拟化操作正在执行。"));
     const QString unsupportedReason = kernelText(
         "kernel.hvm.gate.unsupported",
         QStringLiteral("灰掉的原因：当前 CPU 或驱动不提供硬件虚拟化后端。"));
     const QString needResourcesReason = kernelText(
         "kernel.hvm.gate.needs_resources",
-        QStringLiteral("灰掉的原因：需要先点“准备 VMX/EPT”。"));
+        QStringLiteral("灰掉的原因：需要先准备虚拟化后端。"));
     const QString residentActiveReason = kernelText(
         "kernel.hvm.gate.resident_active",
         QStringLiteral("灰掉的原因：驻留 VMM 正在运行；先点“停止驻留 VMM”。"));
@@ -1239,4 +1237,19 @@ void KernelHvmTab::updateButtons()
         }
         return QString();
     }());
+    if (amd)
+    {
+        m_prepareButton->setText(QStringLiteral("SVM / VMCB / NPT"));
+        m_launchButton->setEnabled(false);
+        m_featureActionButton->setEnabled(false);
+        // Intel-specific menu preferences are not silently applied to AMD.
+        if (ksword::kvm::isLocalEptEnabled() || ksword::kvm::isEptpSwitchEnabled() ||
+            ksword::kvm::isNestedDispatchEnabled() || ksword::kvm::isVeEnabled() ||
+            ksword::kvm::isVmFuncEnabled() || ksword::kvm::isHypervisorHidden())
+        {
+            m_prepareButton->setEnabled(false);
+            m_startResidentButton->setEnabled(false);
+        }
+    }
+
 }

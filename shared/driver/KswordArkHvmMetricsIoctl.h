@@ -3,7 +3,28 @@
 #include "KswordArkHvmIoctl.h"
 
 /* Independent versioning keeps existing HVM query clients ABI-compatible. */
-#define KSWORD_ARK_HVM_METRICS_VERSION 2UL
+#define KSWORD_ARK_HVM_METRICS_VERSION 3UL
+
+/* AMD diagnostics have their own full-width exit namespace and validity flag. */
+typedef struct _KSWORD_ARK_HVM_SVM_METRICS {
+    /* Stable processor identity, independent of APIC numbering. */
+    unsigned short group;
+    unsigned char number, reserved;
+    /* A concurrently overwritten record has valid=0, never fabricated zeros. */
+    unsigned long valid, sequence, stage, asid, generation;
+    /* Raw architecture evidence; represent as strings in JSON. */
+    unsigned long long exitCode, exitInfo1, exitInfo2, rip, rsp, cr3, nrip, event, tsc;
+    /* Hardware resource identities and observed completed VMRUN/flush count. */
+    unsigned long long vmcbPa, hsavePa, nptRootPa, tlbRequests;
+    /* Ring wrapping is independent from coherent snapshot validity. */
+    unsigned long ringPosition, ringOverwritten;
+    /* Independently valid MSR evidence captured while preparing this CPU. */
+    unsigned long msrValidMask, svmFeatures, asidCount, physicalBits;
+    /* Originating per-CPU failure survives a successful rollback. */
+    unsigned long failureStatus, failureStage;
+    /* Values must not be interpreted when the corresponding valid bit is clear. */
+    unsigned long long observedVmCr, observedEfer, observedHsave;
+} KSWORD_ARK_HVM_SVM_METRICS;
 #define KSWORD_ARK_IOCTL_FUNCTION_HVM_METRICS 0x916UL
 #define IOCTL_KSWORD_ARK_HVM_METRICS \
     CTL_CODE(KSWORD_ARK_IOCTL_DEVICE_TYPE, KSWORD_ARK_IOCTL_FUNCTION_HVM_METRICS, METHOD_BUFFERED, FILE_READ_ACCESS)
@@ -63,4 +84,8 @@ typedef struct _KSWORD_ARK_HVM_METRICS_RESPONSE {
     /* Version 2 samples current shadow caches separately from transition stamps. */
     unsigned long shadowProcessorCount, reserved;
     KSWORD_ARK_HVM_SHADOW_METRICS shadowProcessors[KSWORD_ARK_HVM_MAX_PROCESSORS];
+    /* V3 leaves every Intel metric in its original namespace. */
+    unsigned long backend, svmProcessorCount;
+    /* Latest coherent raw exit from each CPU; full history remains in its ring. */
+    KSWORD_ARK_HVM_SVM_METRICS svmProcessors[KSWORD_ARK_HVM_MAX_PROCESSORS];
 } KSWORD_ARK_HVM_METRICS_RESPONSE;

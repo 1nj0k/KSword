@@ -187,13 +187,19 @@ namespace ksword::kvm
             {
                 return KvmAvailability::NestedNotAllowed;
             }
-            // 没有 MSR bitmap 就没有可存活的常驻，按不支持处理而不是"可用"。
+            // 分别检查 VMX 与 SVM 的能力门；EPT/MSR bitmap 不是 AMD 能力位。
             const unsigned long long requiredFeatures =
+                result.response.backend == KSWORD_ARK_HVM_BACKEND_SVM ?
+                (KSWORD_ARK_HVM_FEATURE_AMD |
+                 KSWORD_ARK_HVM_FEATURE_SVM |
+                 KSWORD_ARK_HVM_FEATURE_NPT |
+                 KSWORD_ARK_HVM_FEATURE_RESIDENT_LIFECYCLE_GUARDED) :
+                (
                 KSWORD_ARK_HVM_FEATURE_INTEL |
                 KSWORD_ARK_HVM_FEATURE_VMX |
                 KSWORD_ARK_HVM_FEATURE_EPT |
                 KSWORD_ARK_HVM_FEATURE_MSR_BITMAP |
-                KSWORD_ARK_HVM_FEATURE_RESIDENT_LIFECYCLE_GUARDED;
+                KSWORD_ARK_HVM_FEATURE_RESIDENT_LIFECYCLE_GUARDED);
             if ((result.response.featureFlags & requiredFeatures) !=
                 requiredFeatures)
             {
@@ -461,6 +467,16 @@ namespace ksword::kvm
             return failure;
         }
 
+        // 不忽略已选择的 Intel 扩展：AMD 首版没有对应实现。
+        if (status.response.backend == KSWORD_ARK_HVM_BACKEND_SVM &&
+            (isLocalEptEnabled() || isEptpSwitchEnabled() ||
+             isNestedDispatchEnabled() || isVeEnabled() ||
+             isVmFuncEnabled() || isHypervisorHidden()))
+        {
+            KvmCommandResult failure;
+            failure.message = ks::i18n::sourceText(QStringLiteral("AMD 常驻不支持所选的 Intel 扩展。请关闭 EPT、嵌套派发、VE、VMFUNC 和身份隐藏选项后重试。"));
+            return failure;
+        }
         unsigned long generation = status.response.generation;
         // 资源已经就绪时不重复分配：PREPARE 对已就绪状态会返回 ALREADY_PREPARED。
         if ((status.response.stateFlags &
@@ -516,7 +532,7 @@ namespace ksword::kvm
             failure.message = ks::i18n::sourceText(QStringLiteral("请求的 EPT 后端未实际武装。请停止常驻、释放资源后重新准备，并检查硬件能力。"));
             return failure;
         }
-        // 自检证明每个逻辑处理器都能进出 VMX root，是常驻启动的前置条件。
+        // 自检证明每个逻辑处理器完成后端硬件往返，是常驻启动的前置条件。
         if ((status.response.stateFlags &
                 KSWORD_ARK_HVM_STATE_SELF_TEST_PASSED) == 0UL)
         {
@@ -589,7 +605,7 @@ namespace ksword::kvm
             true,
             isNestedAllowed(),
             true,
-            true,
+            refreshed.response.backend != KSWORD_ARK_HVM_BACKEND_SVM,
             /*
              * enableNestedVmx 原先硬写成 false，于是**这条路径永远拿不到嵌套
              * 派发**。整个嵌套功能只有 KernelDock 的那一页能打开，而那一页又

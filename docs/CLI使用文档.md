@@ -1,4 +1,4 @@
-# KswordCLI 使用文档
+﻿# KswordCLI 使用文档
 
 本文档覆盖 `KswordCLI.exe` 当前内置 help 元数据中的全部命令、别名和参数语法。多数命令需要管理员权限，并要求 KswordARK 驱动设备已经加载且可打开。
 
@@ -402,8 +402,8 @@ WSL silo and Linux PID/TID diagnostics.
 | `r0 directory-irp` | `KswordCLI.exe r0 directory-irp --path PATH [--layer N] [--max-entries N] [--limit N]` | 在选定文件系统栈层枚举目录。 | 必填：--path。可选：--layer、--max-entries、--limit。 | 输出实际接收层及驱动名。 |
 | `r0 image-signature` | `KswordCLI.exe r0 image-signature --path PATH [--module-base VA] [--flags 0xN]` | 读取 Authenticode 证书表和 CI 证据。 | 必填：--path。可选：--module-base、--flags。 | `IOCTL_KSWORD_ARK_QUERY_IMAGE_SIGNATURE`。 |
 | `r0 debug-output` | `KswordCLI.exe r0 debug-output [--after-sequence N] [--max-records N] [--limit N]` | 读取内核调试输出环。 | 可选：--after-sequence、--max-records、--limit。 | `IOCTL_KSWORD_ARK_DEBUG_OUTPUT_DRAIN`，不改变捕获状态。 |
-| `r0 hvm-status` | `KswordCLI.exe r0 hvm-status` | 查询 HVM/VT-x 生命周期与能力状态。 | 无。 | `IOCTL_KSWORD_ARK_QUERY_HVM`。 |
-| `r0 hvm-metrics` | `KswordCLI.exe r0 hvm-metrics` | 查询转换计时有效性及 INVEPT、替换页资源计数。 | 无。 | `IOCTL_KSWORD_ARK_HVM_METRICS` v2；完整逐核 JSON：`hvm_ctl --json metrics`，包括影子 EPT 缓存、A/D 维护计数。主程序“完整操作”使用同一引擎。 |
+| `r0 hvm-status` | `KswordCLI.exe r0 hvm-status` | 查询 HVM v5 的 VMX/EPT 或实验性 SVM/NPT 生命周期与能力状态。 | 无。 | `IOCTL_KSWORD_ARK_QUERY_HVM`。 |
+| `r0 hvm-metrics` | `KswordCLI.exe r0 hvm-metrics` | 查询转换计时有效性及 INVEPT、替换页资源计数。 | 无。 | `IOCTL_KSWORD_ARK_HVM_METRICS` v3；完整逐核 JSON：`hvm_ctl --json metrics`，包括影子 EPT 缓存、A/D 维护计数。主程序“完整操作”使用同一引擎。 |
 | `r0 hvm-events` | `KswordCLI.exe r0 hvm-events [--after-sequence N] [--max-rows N]` | 读取 HVM 事件环，不清空事件。 | 可选：--after-sequence、--max-rows。 | `IOCTL_KSWORD_ARK_HVM_EVENTS`。 |
 | `r0 ioctl-registry` | `KswordCLI.exe r0 ioctl-registry [--flags 0xN] [--max-entries N]` | 查询驱动已注册的 IOCTL 分发表。 | 可选：--flags、--max-entries。 | `IOCTL_KSWORD_ARK_QUERY_IOCTL_REGISTRY`。 |
 | `r0 timer-dpc` | `KswordCLI.exe r0 timer-dpc [--max-entries N] [--max-per-bucket N]` | 枚举内核定时器与 DPC 证据。 | 可选：--max-entries、--max-per-bucket。 | `IOCTL_KSWORD_ARK_ENUM_TIMER_DPC`。 |
@@ -442,3 +442,19 @@ WSL silo and Linux PID/TID diagnostics.
 `KswordCLI.exe` 和 `hvm_ctl.exe`。普通 HVM 状态查询 ABI 不变。
 进程租约不能检测同一 VMM 进程内的来宾重启、快照恢复或 GPA 重用；
 调用者须在这些操作前移除映射，并在控制期间保留目标页。
+
+
+### AMD SVM/NPT 实验后端（HVM v5 / metrics v3）
+
+`status` 增加 backend（0 无、1 VMX、2 SVM）、slatType、slatReady、backendStatus、powerGeneration 及带独立 MSR 有效位的 svmProbe。
+逐核 executionStage 和 svmExitCode 独立于 Intel VMX 指令结果；AMD 不设置 VMXON_SUCCEEDED。
+`metrics` 的 svmProcessors 记录原始 64 位 EXITCODE/EXITINFO1/2、RIP/RSP/CR3/NRIP、事件、ASID、页表/HSAVE/VMCB 身份、full-flush 请求及保留的失败阶段。
+64 位原始值采用 JSON 字符串；valid=0 的退出快照不得解释为已观测到零退出码。
+
+执行顺序为 `hvm_ctl --json prepare` → `self-test` → `resident` → `stop` → `teardown`。
+现有命令目录为前三条显式附加 ALLOW_NESTED；AMD 仅接受 VMware 外层，仍需全 CPU 实际 VMRUN 自检。
+AMD 的 self-test 包含已知 CPUID 退出和完整原生返回；`selfcheck` 只读，不替代它。
+`stop`、`teardown` 不要求重新提供进入许可。生命周期 generation 每次控制递增，powerGeneration 才是跨电源检查使用的代次。
+AMD 不支持 nested、EPTP switch、local EPT、VMREAD benchmark、一次性 Intel guest 或驱动内置 Intel soak；由实验采集脚本执行多核循环和压力。
+完整操作与 hvm_ctl 共用命令目录、help 和引擎；旧 HVM/metrics 协议版本明确拒绝。
+环境脚本、克隆与调试步骤见 [AMD 实验工具](../tools/hvm_lab/README.md)。硬件验收仍以该目录记录为准。

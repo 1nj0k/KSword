@@ -266,6 +266,8 @@ typedef struct _KSW_HVM_CPU_RESOURCE
      */
     /* Long nested runs can exceed 32-bit counts; match the protocol width. */
     ULONGLONG ExitReasonCount[KSWORD_ARK_HVM_EXIT_REASON_SLOTS];
+    /* Vendor-private resources; never interpreted as a VMX allocation. */
+    PVOID BackendContext;
 } KSW_HVM_CPU_RESOURCE;
 
 /* Track one contiguous page allocated for an EPT hierarchy. */
@@ -1023,6 +1025,12 @@ typedef struct _KSW_HVM_RUNTIME
     BOOLEAN HypervisorInterfaceIsHv1;
     /* Keep the tail deterministic for crash-dump inspection. */
     UCHAR Reserved2[5];
+    /* Selected architecture, using the shared protocol backend namespace. */
+    ULONG BackendId;
+    /* Preserve AMD probe validity even when prepare is unavailable. */
+    KSWORD_ARK_HVM_SVM_CAPABILITIES SvmCapabilities;
+    /* Vendor-private lifetime-owned resources. */
+    PVOID BackendContext;
 } KSW_HVM_RUNTIME;
 
 /*

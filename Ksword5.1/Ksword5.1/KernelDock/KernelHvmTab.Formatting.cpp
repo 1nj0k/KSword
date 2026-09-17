@@ -1,4 +1,4 @@
-#include "KernelHvmTab.h"
+﻿#include "KernelHvmTab.h"
 
 #include "KernelDock.h"
 
@@ -11,6 +11,13 @@ using ksword::kernel_dock_internal::kernelText;
 QString KernelHvmTab::buildDetail(
     const KSWORD_ARK_QUERY_HVM_RESPONSE& response) const
 {
+    if (response.backend == KSWORD_ARK_HVM_BACKEND_SVM)
+    {
+        return kernelText("kernel.hvm.amd.detail", QStringLiteral("实验性 AMD SVM / VMCB / NPT\n协议：%1　代次：%2\nCPU 准备 / 自检 / 常驻：%3 / %4 / %5\nNPT 就绪：%6\n状态：%7\n最近 NTSTATUS：%8\n原始退出信息请导出 metrics；内层 SVM 与 EPT 扩展未实现。"))
+            .arg(response.version).arg(response.generation).arg(response.preparedProcessorCount)
+            .arg(response.selfTestPassedProcessorCount).arg(response.residentProcessorCount)
+            .arg(response.slatReady).arg(stateText(response.stateFlags)).arg(ntStatusText(response.backendStatus));
+    }
     QString detail = kernelText(
         "kernel.hvm.detail",
         QStringLiteral(

@@ -1,5 +1,7 @@
 # HVM 常驻生命周期保护
 
+2026-09-17 续记：下文是 Intel 生命周期基线。新增 AMD 实验实现和未完成的硬件验收见 [AMD 实验续接](ksword-hvm-amd-lab.md)；不能把 Intel 历史运行证据用于 AMD。
+
 ## 能力发布原则
 
 `START_RESIDENT` 不是 UI 布尔开关。只有 `KswordARKHvmEnableResidentLifecycle` 在 `WdfDriverCreate` 之后成功捕获 KMDF 最终 `DriverUnload`，并完成电源与 processor-change 回调注册，才能同时发布：

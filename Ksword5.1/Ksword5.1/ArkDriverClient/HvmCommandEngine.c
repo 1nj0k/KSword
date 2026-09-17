@@ -1,4 +1,4 @@
-/*
+﻿/*
  * hvm_ctl —— KSword HVM 控制与状态的最小命令行工具（无 Qt 依赖）。
  *
  * 存在的理由：KswordCLI 只提供只读的 hvm-status / hvm-events，启动 HVM 要走
@@ -40,7 +40,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include <winioctl.h>
 #include <tlhelp32.h>
@@ -444,12 +446,12 @@ static void PrintCpuRows(const KSWORD_ARK_QUERY_HVM_RESPONSE* rsp, int asJson)
             const KSWORD_ARK_HVM_CPU_ROW* row = &rsp->processors[i];
             int first = 1;
             printf("%s{\"index\":%lu,\"group\":%u,\"number\":%u,"
-                   "\"vmxInstructionResult\":%u,\"stateFlags\":%lu,"
+                   "\"backend\":%lu,\"executionStage\":%lu,\"svmExitCode\":\"0x%016llX\",\"vmxInstructionResult\":%u,\"stateFlags\":%lu,"
                    "\"stateHex\":\"0x%08lX\",\"lastStatus\":\"0x%08lX\","
                    "\"lastExitReason\":%lu,\"vmExitCount\":%llu,\"stateNames\":[",
                    (i == 0UL) ? "" : ",", i,
                    (unsigned)row->processorGroup, (unsigned)row->processorNumber,
-                   (unsigned)row->vmxInstructionResult, row->stateFlags,
+                   row->backend, row->executionStage, row->svmExitCode, (unsigned)row->vmxInstructionResult, row->stateFlags,
                    row->stateFlags, (unsigned long)row->lastStatus,
                    row->lastExitReason, row->vmExitCount);
             for (b = 0U; b < sizeof(g_CpuStateBits) / sizeof(g_CpuStateBits[0]); ++b) {
@@ -955,6 +957,12 @@ static int DoQuery(HANDLE h, int asJson)
                "\"stateFlagsHex\":\"0x%08lX\",\"stateNames\":",
                rsp.queryStatus, rsp.stateFlags, rsp.stateFlags);
         PrintStateBitsJson(rsp.stateFlags);
+        printf(",\"backend\":%lu,\"slatType\":%lu,\"slatReady\":%lu,\"backendStatus\":\"0x%08lX\",\"powerGeneration\":%lu",
+               rsp.backend, rsp.slatType, rsp.slatReady, rsp.backendStatus, rsp.powerGeneration);
+        printf(",\"svmProbe\":{\"maxLeaf\":%lu,\"features\":%lu,\"asidCount\":%lu,\"physicalBits\":%lu,\"msrValidMask\":%lu,\"exceptionStatus\":\"0x%08lX\",\"vmCr\":\"0x%016llX\",\"efer\":\"0x%016llX\",\"hsave\":\"0x%016llX\",\"pat\":\"0x%016llX\"}",
+               rsp.svmCapabilities.maxLeaf, rsp.svmCapabilities.features, rsp.svmCapabilities.asidCount, rsp.svmCapabilities.physicalBits,
+               rsp.svmCapabilities.msrValidMask, rsp.svmCapabilities.exceptionStatus, rsp.svmCapabilities.vmCr,
+               rsp.svmCapabilities.efer, rsp.svmCapabilities.hsave, rsp.svmCapabilities.pat);
         printf(",\"featureNames\":");
         PrintFeatureBitsJson(rsp.featureFlags);
         printf(",\"generation\":%lu,\"processorCount\":%lu,"
@@ -3733,6 +3741,19 @@ static int DoSelfCheck(HANDLE h, int asJson)
                 GetLastError());
         return 1;
     }
+    if (qrsp.backend == KSWORD_ARK_HVM_BACKEND_SVM) {
+        int ready = qrsp.queryStatus == KSWORD_ARK_HVM_QUERY_STATUS_OK &&
+            (qrsp.featureFlags & KSWORD_ARK_HVM_FEATURE_RESIDENT_LIFECYCLE_GUARDED) != 0;
+        if (asJson) {
+            printf("{\"kind\":\"selfcheck\",\"backend\":\"SVM\",\"capabilityReady\":%s,\"prepared\":%lu,\"tested\":%lu,\"resident\":%lu,\"lastStatus\":\"0x%08lX\"}\n",
+                   ready ? "true" : "false", qrsp.preparedProcessorCount, qrsp.selfTestPassedProcessorCount,
+                   qrsp.residentProcessorCount, qrsp.backendStatus);
+        } else {
+            printf("Experimental SVM/NPT: capability=%d prepared=%lu tested=%lu resident=%lu status=0x%08lX\n",
+                   ready, qrsp.preparedProcessorCount, qrsp.selfTestPassedProcessorCount, qrsp.residentProcessorCount, qrsp.backendStatus);
+        }
+        return ready ? 0 : 2;
+    }
     memset(&preq, 0, sizeof(preq));
     memset(&prsp, 0, sizeof(prsp));
     /*
@@ -5604,6 +5625,25 @@ static int DoMetrics(HANDLE h, int asJson)
                    "adPending=%lu adOverflow=%lu mismatch=%lu\n", row->index, row->fills,
                    row->kept, row->dropped, row->pagesUsed, row->trackedPages, row->trackedOverflow,
                    row->adPending, row->adOverflow, row->verifyMismatch);
+        }
+    }
+    if (asJson) { printf("],\"backend\":%lu,\"svmProcessors\":[", response->backend); }
+    for (i = 0; i < response->svmProcessorCount && i < KSWORD_ARK_HVM_MAX_PROCESSORS; ++i) {
+        const KSWORD_ARK_HVM_SVM_METRICS* row = &response->svmProcessors[i];
+        if (asJson) {
+            printf("%s{\"group\":%u,\"number\":%u,\"valid\":%lu,\"sequence\":%lu,\"stage\":%lu,\"asid\":%lu,\"generation\":%lu,"
+                   "\"exitCode\":\"0x%016llX\",\"exitInfo1\":\"0x%016llX\",\"exitInfo2\":\"0x%016llX\","
+                   "\"rip\":\"0x%016llX\",\"rsp\":\"0x%016llX\",\"cr3\":\"0x%016llX\",\"nrip\":\"0x%016llX\","
+                   "\"event\":\"0x%016llX\",\"tsc\":\"%llu\",\"vmcbPa\":\"0x%016llX\",\"hsavePa\":\"0x%016llX\","
+                   "\"nptRootPa\":\"0x%016llX\",\"tlbRequests\":\"%llu\",\"ringPosition\":%lu,\"ringOverwritten\":%lu,\"msrValidMask\":%lu,\"svmFeatures\":%lu,\"asidCount\":%lu,\"physicalBits\":%lu,\"observedVmCr\":\"0x%016llX\",\"observedEfer\":\"0x%016llX\",\"observedHsave\":\"0x%016llX\",\"failureStatus\":\"0x%08lX\",\"failureStage\":%lu}",
+                   i ? "," : "", (unsigned)row->group, (unsigned)row->number, row->valid, row->sequence,
+                   row->stage, row->asid, row->generation, row->exitCode, row->exitInfo1, row->exitInfo2,
+                   row->rip, row->rsp, row->cr3, row->nrip, row->event, row->tsc, row->vmcbPa, row->hsavePa,
+                   row->nptRootPa, row->tlbRequests, row->ringPosition, row->ringOverwritten, row->msrValidMask, row->svmFeatures, row->asidCount, row->physicalBits, row->observedVmCr, row->observedEfer, row->observedHsave, row->failureStatus, row->failureStage);
+        } else {
+            printf("SVM cpu=%u:%u stage=%lu valid=%lu exit=0x%016llX info1=0x%016llX info2=0x%016llX flush=%llu\n",
+                   (unsigned)row->group, (unsigned)row->number, row->stage, row->valid,
+                   row->exitCode, row->exitInfo1, row->exitInfo2, row->tlbRequests);
         }
     }
     if (asJson) { printf("]}\n"); }

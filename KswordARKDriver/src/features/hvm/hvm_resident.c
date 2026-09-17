@@ -16,6 +16,7 @@ Environment:
 --*/
 
 #include "hvm_resident.h"
+#include "hvm_backend.h"
 #include "hvm_metrics.h"
 
 /* Tag the per-processor private-hierarchy descriptor array. */
@@ -1934,6 +1935,10 @@ KswordARKHvmResidentStart(
     ULONG processorIndex = 0UL;
     ULONG ruleIndex = 0UL;
     LONG powerGeneration = 0L;
+    /* Dispatch AMD before any Intel EPT/MSR-bitmap readiness checks. */
+    if (Runtime != NULL && KswordHvmBackend(Runtime->BackendId) != NULL) {
+        return KswordHvmBackend(Runtime->BackendId)->Start(Runtime, Flags);
+    }
     /*
      * Whether this residency actually gets per-processor hierarchies.  Both
      * halves matter: the caller has to ask, and the runtime has to have armed
@@ -2575,6 +2580,10 @@ KswordARKHvmResidentStop(
     if (Runtime == NULL) {
         /* Return the exact caller-contract failure. */
         return STATUS_INVALID_PARAMETER;
+    }
+    /* Power/unload callbacks use the same vendor-selected stop operation. */
+    if (KswordHvmBackend(Runtime->BackendId) != NULL) {
+        return KswordHvmBackend(Runtime->BackendId)->Stop(Runtime);
     }
     /* Serialize devirtualization through the wait-aware transition phase. */
     status = KswordARKHvmAcquireResidentTransition(Runtime);

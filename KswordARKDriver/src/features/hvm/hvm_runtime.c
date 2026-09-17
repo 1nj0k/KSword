@@ -18,6 +18,7 @@ Environment:
 --*/
 
 #include "hvm_internal.h"
+#include "hvm_backend.h"
 #include "hvm_metrics.h"
 #include "hvm_nested_ept.h"
 // KswordARKAllocateNonPagedPool：L1 位图副本不进硬件，用普通池即可。
@@ -378,82 +379,6 @@ KswordARKHvmVerifyUniformCapabilities(
     return STATUS_SUCCESS;
 }
 
-/* Name the AMD VM_CR register that carries the firmware SVM lock. */
-#define KSW_MSR_AMD_VM_CR 0xC0010114UL
-/* Identify the VM_CR bit that disables SVM until the next reset. */
-#define KSW_AMD_VM_CR_SVMDIS (1ULL << 4)
-
-/*
- * Read AMD SVM capability evidence.  Nothing here enables anything: the SVM
- * backend does not exist in this build, so the result is published purely so
- * the UI can tell the user their hardware is capable and the software is not.
- */
-static VOID
-KswordARKHvmReadAmdCapabilities(
-    _Inout_ KSW_HVM_RUNTIME* Runtime
-    )
-{
-    int registers[4] = { 0 };
-    ULONGLONG vmCr = 0ULL;
-    ULONG svmFeatures = 0UL;
-
-    /* Publish the vendor identity before any capability decoding. */
-    Runtime->FeatureFlags |= KSWORD_ARK_HVM_FEATURE_AMD;
-    /* Extended leaf one reports whether SVM exists at all. */
-    __cpuid(registers, (int)0x80000001UL);
-    if (((ULONG)registers[2] & (1UL << 2)) != 0UL) {
-        /* Publish the architectural SVM capability. */
-        Runtime->FeatureFlags |= KSWORD_ARK_HVM_FEATURE_SVM;
-    }
-    /* Leaf 0x8000000A enumerates the SVM feature set. */
-    __cpuid(registers, (int)0x8000000AUL);
-    svmFeatures = (ULONG)registers[3];
-    if ((svmFeatures & (1UL << 0)) != 0UL) {
-        /* Publish nested paging, the AMD equivalent of EPT. */
-        Runtime->FeatureFlags |= KSWORD_ARK_HVM_FEATURE_NPT;
-    }
-    if ((svmFeatures & (1UL << 3)) != 0UL) {
-        /* Publish next-RIP save, which removes most instruction decoding. */
-        Runtime->FeatureFlags |= KSWORD_ARK_HVM_FEATURE_SVM_NRIP;
-    }
-    if ((svmFeatures & (1UL << 6)) != 0UL) {
-        /* Publish flush-by-ASID, needed for cheap TLB maintenance. */
-        Runtime->FeatureFlags |=
-            KSWORD_ARK_HVM_FEATURE_SVM_FLUSH_BY_ASID;
-    }
-    if ((svmFeatures & (1UL << 7)) != 0UL) {
-        /* Publish decode assists, which simplify intercept handling. */
-        Runtime->FeatureFlags |=
-            KSWORD_ARK_HVM_FEATURE_SVM_DECODE_ASSISTS;
-    }
-    /* Read the firmware lock without changing it. */
-    __try {
-        /* VM_CR carries the firmware SVM disable bit. */
-        vmCr = __readmsr(KSW_MSR_AMD_VM_CR);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER) {
-        /* Leave the lock evidence absent when the register is unreadable. */
-        vmCr = 0ULL;
-    }
-    if ((vmCr & KSW_AMD_VM_CR_SVMDIS) != 0ULL) {
-        /* Publish the firmware lock so the UI can say what to change. */
-        Runtime->FeatureFlags |=
-            KSWORD_ARK_HVM_FEATURE_SVM_FIRMWARE_DISABLED;
-    }
-    /*
-     * Distinguish the two reasons an AMD machine cannot run: firmware turned
-     * SVM off, or the software has no backend.  They need different fixes.
-     */
-    Runtime->QueryStatus =
-        (Runtime->FeatureFlags & KSWORD_ARK_HVM_FEATURE_SVM) == 0ULL ||
-        (Runtime->FeatureFlags &
-            KSWORD_ARK_HVM_FEATURE_SVM_FIRMWARE_DISABLED) != 0ULL
-            ? KSWORD_ARK_HVM_QUERY_STATUS_FIRMWARE_DISABLED
-            : KSWORD_ARK_HVM_QUERY_STATUS_BACKEND_NOT_IMPLEMENTED;
-    /* Preserve the authoritative unavailability status. */
-    Runtime->LastStatus = STATUS_NOT_IMPLEMENTED;
-}
-
 static BOOLEAN
 KswordARKHvmReadCapabilities(
     _Inout_ KSW_HVM_RUNTIME* Runtime
@@ -476,17 +401,21 @@ KswordARKHvmReadCapabilities(
         RTL_NUMBER_OF(Runtime->CpuVendor),
         vendor,
         12UL);
-    /*
-     * An AMD part supports hardware virtualization perfectly well; what is
-     * missing is a backend in this build.  Reporting it as an unsupported CPU
-     * would be a lie, so the capability is read out honestly and the status
-     * says the software is what is absent.
-     */
+    /* Sample outer identity before vendor dispatch, including AMD. */
+    __cpuid(registers, 1);
+    if (((ULONG)registers[2] & (1UL << 31)) != 0UL) {
+        /* Preserve actual outer VMM evidence instead of hiding it. */
+        Runtime->FeatureFlags |= KSWORD_ARK_HVM_FEATURE_HYPERVISOR_PRESENT;
+        /* Hypervisor vendor order is EBX, ECX, EDX. */
+        __cpuid(registers, (int)0x40000000UL);
+        RtlCopyMemory(Runtime->HypervisorVendor, &registers[1], 4);
+        RtlCopyMemory(Runtime->HypervisorVendor + 4, &registers[2], 4);
+        RtlCopyMemory(Runtime->HypervisorVendor + 8, &registers[3], 4);
+    }
+    /* AMD has an independent SVM/NPT implementation and capability gate. */
     if (RtlCompareMemory(vendor, "AuthenticAMD", 12UL) == 12UL) {
-        /* Publish the AMD capability evidence without claiming readiness. */
-        KswordARKHvmReadAmdCapabilities(Runtime);
-        /* Report that no backend can drive this processor yet. */
-        return FALSE;
+        /* Hardware probe does not publish Active or self-test evidence. */
+        return NT_SUCCESS(KswordHvmBackend(KSWORD_ARK_HVM_BACKEND_SVM)->ProbeCapabilities(Runtime));
     }
     if (RtlCompareMemory(vendor, "GenuineIntel", 12UL) != 12UL) {
         Runtime->QueryStatus =
@@ -494,6 +423,8 @@ KswordARKHvmReadCapabilities(
         Runtime->LastStatus = STATUS_NOT_SUPPORTED;
         return FALSE;
     }
+    /* Select the existing VMX implementation explicitly. */
+    Runtime->BackendId = KSWORD_ARK_HVM_BACKEND_VMX;
     Runtime->FeatureFlags |= KSWORD_ARK_HVM_FEATURE_INTEL;
 
     /* Leaf one exposes both VMX and an already-active hypervisor. */
@@ -1123,6 +1054,12 @@ KswordARKHvmFreeResourcesLocked(
         /* Return without releasing live VMX resources. */
         return;
     }
+    /* AMD owns separate resources and must not enter Intel cleanup helpers. */
+    if (KswordHvmBackend(Runtime->BackendId) != NULL) {
+        /* Stop above already proved that hardware ownership was returned. */
+        KswordHvmBackend(Runtime->BackendId)->ReleaseResources(Runtime);
+        return;
+    }
     /* Drop the control-register policy along with the VMCS it fed. */
     KswordARKHvmCrPolicyResetLocked(Runtime);
     /* Close every MSR bitmap hole before the bitmap page is released. */
@@ -1649,6 +1586,17 @@ KswordARKHvmPrepareLocked(
         return STATUS_ALREADY_REGISTERED;
     }
 
+    /* Capture a durable host address space before allocating any SVM resources. */
+    if (KswordHvmBackend(Runtime->BackendId) != NULL) {
+        /* Preparation is visible to the existing power-transition guard. */
+        InterlockedExchange(&Runtime->ResidentContextPreparing, 1);
+        status = KswordARKHvmCaptureSystemDirectoryBase(&Runtime->HostCr3);
+        /* Vendor preparation validates every CPU and its complete NPT coverage. */
+        if (NT_SUCCESS(status)) { status = KswordHvmBackend(Runtime->BackendId)->PrepareResources(Runtime, Request->flags); }
+        /* No SVM instruction executes in this allocation phase. */
+        InterlockedExchange(&Runtime->ResidentContextPreparing, 0);
+        return status;
+    }
     /* Nested preparation is accepted only when VMX is explicitly exposed. */
     if ((Runtime->FeatureFlags &
             KSWORD_ARK_HVM_FEATURE_HYPERVISOR_PRESENT) != 0ULL &&
@@ -1967,6 +1915,10 @@ KswordARKHvmSelfTestLocked(
     NTSTATUS transitionStatus = STATUS_SUCCESS;
     LONG powerGeneration = 0L;
 
+    /* AMD self-test executes a real one-shot VMRUN on each target CPU. */
+    if (KswordHvmBackend(Runtime->BackendId) != NULL) {
+        return KswordHvmBackend(Runtime->BackendId)->SelfTest(Runtime, Request->flags);
+    }
     /* The test operates only on a complete prepared resource set. */
     if ((Runtime->StateFlags &
             KSWORD_ARK_HVM_STATE_RESOURCES_READY) == 0UL) {
@@ -2349,6 +2301,8 @@ KswordARKHvmInitialize(
          */
         g_KswordHvm.ResidentImplementation =
             KSWORD_ARK_HVM_IMPLEMENTATION_UNSUPPORTED;
+        /* AMD has no Intel nested/eVMCS subsystem to initialize. */
+        if (g_KswordHvm.BackendId == KSWORD_ARK_HVM_BACKEND_SVM) { return STATUS_SUCCESS; }
         /* Publish EPT capability without claiming a prepared hierarchy. */
         g_KswordHvm.EptImplementation =
             KSWORD_ARK_HVM_IMPLEMENTATION_CAPABILITY_ONLY;
@@ -2398,8 +2352,8 @@ KswordARKHvmEnableResidentLifecycle(
     if (g_KswordHvm.QueryStatus != KSWORD_ARK_HVM_QUERY_STATUS_OK) {
         return g_KswordHvm.LastStatus;
     }
-    if ((g_KswordHvm.FeatureFlags & requiredFeatures) !=
-        requiredFeatures) {
+    if (g_KswordHvm.BackendId != KSWORD_ARK_HVM_BACKEND_SVM &&
+        (g_KswordHvm.FeatureFlags & requiredFeatures) != requiredFeatures) {
         g_KswordHvm.LastStatus = STATUS_NOT_SUPPORTED;
         return STATUS_NOT_SUPPORTED;
     }
@@ -2464,18 +2418,20 @@ KswordARKHvmEnableResidentLifecycle(
     }
 
     /* Page overrides also require an exact VMM-process lifetime guard. */
-    status = KswordARKHvmNestedPageGuardInitialize();
+    status = g_KswordHvm.BackendId == KSWORD_ARK_HVM_BACKEND_VMX
+        ? KswordARKHvmNestedPageGuardInitialize() : STATUS_SUCCESS;
     /* Roll back the earlier callback registrations if this guard is unavailable. */
     if (!NT_SUCCESS(status)) { goto Failure; }
     /* Publish resident/EPT controls only after every fail-closed guard exists. */
     g_KswordHvm.FeatureFlags |=
         KSWORD_ARK_HVM_FEATURE_RESIDENT_VMM |
         KSWORD_ARK_HVM_FEATURE_MULTICORE_RENDEZVOUS |
-        KSWORD_ARK_HVM_FEATURE_EPT_RULES |
         KSWORD_ARK_HVM_FEATURE_POWER_STATE_GUARD |
         KSWORD_ARK_HVM_FEATURE_PROCESSOR_TOPOLOGY_GUARD |
         KSWORD_ARK_HVM_FEATURE_DRIVER_UNLOAD_GUARD |
         KSWORD_ARK_HVM_FEATURE_RESIDENT_LIFECYCLE_GUARDED;
+    /* Only the Intel backend implements EPT rule controls. */
+    if (g_KswordHvm.BackendId == KSWORD_ARK_HVM_BACKEND_VMX) { g_KswordHvm.FeatureFlags |= KSWORD_ARK_HVM_FEATURE_EPT_RULES; }
     g_KswordHvm.ResidentStartAllowed = TRUE;
     g_KswordHvm.ResidentImplementation =
         KSWORD_ARK_HVM_IMPLEMENTATION_CAPABILITY_ONLY;
@@ -2802,6 +2758,8 @@ KswordARKHvmQuery(
 
         Response->processors[index] =
             g_KswordHvm.Processors[index].Row;
+        /* Legacy Intel rows keep their architecture decoder explicit. */
+        Response->processors[index].backend = g_KswordHvm.BackendId;
         /*
          * Sum the per-processor exit histogram into the reported aggregate.
          *
@@ -2818,6 +2776,7 @@ KswordARKHvmQuery(
                     g_KswordHvm.Processors[index].ExitReasonCount[slot];
         }
     }
+    KswordHvmBackendQuery(&g_KswordHvm, Response);
     KswordARKReleasePushLockShared(&g_KswordHvm.Lock);
     KeLeaveCriticalRegion();
     return STATUS_SUCCESS;
@@ -2938,6 +2897,8 @@ KswordARKHvmControl(
     RtlZeroMemory(Response, sizeof(*Response));
     Response->version = KSWORD_ARK_HVM_PROTOCOL_VERSION;
     Response->size = sizeof(*Response);
+    /* Reject old wire layouts before interpreting command-specific fields. */
+    if (Request->version != KSWORD_ARK_HVM_PROTOCOL_VERSION) { return STATUS_REVISION_MISMATCH; }
     /* Select the exact flag vocabulary accepted by this command. */
     switch (Request->command) {
     case KSWORD_ARK_HVM_CONTROL_PREPARE:
@@ -3232,6 +3193,23 @@ KswordARKHvmControl(
         goto Complete;
     }
 
+    /* AMD rejects unimplemented Intel/research commands before any mutation. */
+    if (KswordHvmBackend(g_KswordHvm.BackendId) != NULL) {
+        /* Cleanup must remain available without a fresh outer-VMM entry opt-in. */
+        status = STATUS_SUCCESS;
+        /* Only commands acquiring hardware ownership need start policy. */
+        if (Request->command == KSWORD_ARK_HVM_CONTROL_PREPARE ||
+            Request->command == KSWORD_ARK_HVM_CONTROL_SELF_TEST || Request->command == KSWORD_ARK_HVM_CONTROL_START_RESIDENT) {
+            /* Reject unsupported environment/options before allocation or entry. */
+            status = KswordHvmBackend(g_KswordHvm.BackendId)->ValidateStartFlags(&g_KswordHvm, Request->flags);
+        }
+        if (NT_SUCCESS(status) && Request->command != KSWORD_ARK_HVM_CONTROL_PREPARE &&
+            Request->command != KSWORD_ARK_HVM_CONTROL_SELF_TEST && Request->command != KSWORD_ARK_HVM_CONTROL_START_RESIDENT &&
+            Request->command != KSWORD_ARK_HVM_CONTROL_STOP_RESIDENT && Request->command != KSWORD_ARK_HVM_CONTROL_TEARDOWN &&
+            Request->command != KSWORD_ARK_HVM_CONTROL_RESET_FAULT) { status = STATUS_NOT_SUPPORTED; }
+        /* FORCE is never a substitute for an implemented backend capability. */
+        if (!NT_SUCCESS(status)) { Response->status = KSWORD_ARK_HVM_CONTROL_STATUS_INVALID_REQUEST; goto Complete; }
+    }
     /* Publish busy state while the selected lifecycle command executes. */
     g_KswordHvm.Busy = TRUE;
     KswordARKHvmStateSet(&g_KswordHvm, KSWORD_ARK_HVM_STATE_BUSY);

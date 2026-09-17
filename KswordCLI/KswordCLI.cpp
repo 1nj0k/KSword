@@ -1,4 +1,4 @@
-#ifndef NOMINMAX
+﻿#ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <WinSock2.h>
@@ -1239,8 +1239,8 @@ namespace
         { L"r0", L"directory-irp", L"KswordCLI.exe r0 directory-irp --path PATH [--layer N] [--max-entries N] [--limit N]", L"Enumerate a directory through a selected R0 file-system stack layer.", L"Required: --path. Optional: --layer, --max-entries, --limit.", L"Reports the resolved receiving layer and driver." },
         { L"r0", L"image-signature", L"KswordCLI.exe r0 image-signature --path PATH [--module-base VA] [--flags 0xN]", L"Read Authenticode certificate-table and CI evidence through R0.", L"Required: --path. Optional: --module-base, --flags.", L"Backed by IOCTL_KSWORD_ARK_QUERY_IMAGE_SIGNATURE." },
         { L"r0", L"debug-output", L"KswordCLI.exe r0 debug-output [--after-sequence N] [--max-records N] [--limit N]", L"Drain captured kernel debug-output records.", L"Optional: --after-sequence, --max-records, --limit.", L"Backed by IOCTL_KSWORD_ARK_DEBUG_OUTPUT_DRAIN; capture state remains driver-managed." },
-        { L"r0", L"hvm-status", L"KswordCLI.exe r0 hvm-status", L"Query HVM/VT-x lifecycle and capability state.", L"No options.", L"Backed by IOCTL_KSWORD_ARK_QUERY_HVM." },
-        { L"r0", L"hvm-metrics", L"KswordCLI.exe r0 hvm-metrics", L"Read HVM transition timing and invalidation/resource counters.", L"No options.", L"Backed by IOCTL_KSWORD_ARK_HVM_METRICS. Full per-CPU JSON: hvm_ctl --json metrics." },
+        { L"r0", L"hvm-status", L"KswordCLI.exe r0 hvm-status", L"Query HVM v5 VMX/EPT or experimental SVM/NPT lifecycle and capability state.", L"No options.", L"Backed by IOCTL_KSWORD_ARK_QUERY_HVM." },
+        { L"r0", L"hvm-metrics", L"KswordCLI.exe r0 hvm-metrics", L"Read HVM metrics v3 timing, resource counters and AMD raw exit evidence.", L"No options.", L"Backed by IOCTL_KSWORD_ARK_HVM_METRICS. Full per-CPU JSON: hvm_ctl --json metrics." },
         { L"r0", L"hvm-events", L"KswordCLI.exe r0 hvm-events [--after-sequence N] [--max-rows N]", L"Read HVM event-ring evidence without clearing it.", L"Optional: --after-sequence, --max-rows.", L"Backed by IOCTL_KSWORD_ARK_HVM_EVENTS." },
         { L"r0", L"hvm-platform", L"KswordCLI.exe r0 hvm-platform", L"Read CR4/CPUID/CET-MSR platform calibration without entering VMX.", L"No options.", L"Backed by IOCTL_KSWORD_ARK_HVM_PLATFORM." },
         { L"r0", L"ioctl-registry", L"KswordCLI.exe r0 ioctl-registry [--flags 0xN] [--max-entries N]", L"Query the driver's registered IOCTL dispatch inventory.", L"Optional: --flags, --max-entries.", L"Backed by IOCTL_KSWORD_ARK_QUERY_IOCTL_REGISTRY." },

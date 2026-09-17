@@ -1,15 +1,17 @@
-#include "HvmCommandCatalog.h"
+﻿#include "HvmCommandCatalog.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <limits.h>
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include "../../../shared/driver/KswordArkHvmIoctl.h"
 
 static const HVM_COMMAND_SPEC g_commands[] = {
-    { "metrics", "虚拟化测量", "查询与观测", "读取逐核转换时间、INVEPT 和替换页资源计数。", HvmMetrics, 1, 0UL, 0UL, 0,
+    { "metrics", "虚拟化测量", "查询与观测", "读取逐核转换时间与资源计数；AMD 另含 SVM 原始退出与 NPT 诊断。", HvmMetrics, 1, 0UL, 0UL, 0,
       { { NULL, HvmDecimal32, NULL } } },
     { "status", "运行状态", "查询与观测", "读取完整能力、处理器状态与退出计数。", HvmStatus, 1, 0UL, 0UL, 0,
       { { NULL, HvmDecimal32, NULL } } },
@@ -25,7 +27,7 @@ static const HVM_COMMAND_SPEC g_commands[] = {
       { { "起始事件序号（十进制）", HvmDecimal64, "0" }, { "最多事件数（十进制）", HvmDecimal32, "64" } } },
     { "ept-leaf", "EPT 叶项", "查询与观测", "读取指定物理地址的基础 EPT 翻译链与权限。", HvmEptLeaf, 1, 0UL, 0UL, 1,
       { { "物理地址（十六进制）", HvmHex64, "0" } } },
-    { "prepare", "准备资源", "生命周期", "分配资源，不进入 VMX；仅在资源尚未准备时执行。", HvmControl, 0, KSWORD_ARK_HVM_CONTROL_PREPARE, KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
+    { "prepare", "准备资源", "生命周期", "按 VMX/EPT 或 SVM/NPT 后端分配资源，不进入常驻；允许受支持的外层虚拟化环境。", HvmControl, 0, KSWORD_ARK_HVM_CONTROL_PREPARE, KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
       KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED, 0,
       { { NULL, HvmDecimal32, NULL } } },
     { "prepare-eptpsw", "准备 EPTP 切换后端", "生命周期", "准备资源并请求 EPTP 切换；之后检查 EPTP_SWITCH_ARMED。", HvmControl, 0, KSWORD_ARK_HVM_CONTROL_PREPARE, KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
@@ -36,7 +38,7 @@ static const HVM_COMMAND_SPEC g_commands[] = {
       KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED |
       KSWORD_ARK_HVM_CONTROL_FLAG_ENABLE_LOCAL_EPT, 0,
       { { NULL, HvmDecimal32, NULL } } },
-    { "self-test", "处理器 VMX 自检", "生命周期", "资源准备后逐处理器执行 VMXON/VMXOFF。", HvmControl, 0, KSWORD_ARK_HVM_CONTROL_SELF_TEST, KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
+    { "self-test", "处理器虚拟化自检", "生命周期", "逐处理器执行后端自检；AMD 必须完成带已知退出标记的 VMRUN 往返。", HvmControl, 0, KSWORD_ARK_HVM_CONTROL_SELF_TEST, KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
       KSWORD_ARK_HVM_CONTROL_FLAG_FORCE |
       KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED, 0,
       { { NULL, HvmDecimal32, NULL } } },

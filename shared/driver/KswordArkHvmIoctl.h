@@ -8,7 +8,25 @@
  * hypervisor.  ACTIVE is published only after every selected processor has
  * entered VMX non-root operation and the rollback rendezvous is available.
  */
-#define KSWORD_ARK_HVM_PROTOCOL_VERSION 4UL
+#define KSWORD_ARK_HVM_PROTOCOL_VERSION 5UL
+
+/* V5 describes architecture independently from capability flags. */
+#define KSWORD_ARK_HVM_BACKEND_NONE 0UL
+#define KSWORD_ARK_HVM_BACKEND_VMX 1UL
+#define KSWORD_ARK_HVM_BACKEND_SVM 2UL
+/* Translation type must not mislabel AMD NPT as EPT. */
+#define KSWORD_ARK_HVM_SLAT_NONE 0UL
+#define KSWORD_ARK_HVM_SLAT_EPT 1UL
+#define KSWORD_ARK_HVM_SLAT_NPT 2UL
+/* Generic execution stage, independent of VMX instruction result codes. */
+#define KSWORD_ARK_HVM_STAGE_NONE 0UL
+#define KSWORD_ARK_HVM_STAGE_PREPARED 1UL
+#define KSWORD_ARK_HVM_STAGE_TESTED 2UL
+#define KSWORD_ARK_HVM_STAGE_ENTERING 3UL
+#define KSWORD_ARK_HVM_STAGE_ENTERED 4UL
+#define KSWORD_ARK_HVM_STAGE_EXIT 5UL
+#define KSWORD_ARK_HVM_STAGE_STOPPED 6UL
+#define KSWORD_ARK_HVM_STAGE_FAILED 7UL
 
 /*
  * VMCS 配置失败的判别码，承载在既有的 lastVmInstructionError 字段里。
@@ -168,10 +186,8 @@
 #define KSWORD_ARK_HVM_FEATURE_RESIDENT_SUSTAINED         0x0000004000000000ULL
 /*
  * AMD capability evidence.  These bits report what the processor can do, not
- * what this build can drive: the SVM backend is not implemented, so an AMD
- * machine reports BACKEND_NOT_IMPLEMENTED rather than pretending to be ready.
- * Reporting the hardware honestly is the point - "unsupported CPU" would be a
- * lie on a part that supports SVM perfectly well.
+ * whether the software can start or has actually passed a hardware round trip.
+ * Backend status and per-CPU execution evidence carry those separate results.
  */
 #define KSWORD_ARK_HVM_FEATURE_AMD                        0x0000008000000000ULL
 #define KSWORD_ARK_HVM_FEATURE_SVM                        0x0000010000000000ULL
@@ -649,6 +665,12 @@ typedef struct _KSWORD_ARK_HVM_CPU_ROW
     unsigned long nestedState;
     unsigned short evmcsVersion;
     unsigned short reserved;
+    /* Architecture-specific instruction evidence is never overloaded. */
+    unsigned long backend;
+    /* Common stage used by the AMD execution path. */
+    unsigned long executionStage;
+    /* Raw SVM EXITCODE is 64-bit and sparse; zero if not valid. */
+    unsigned long long svmExitCode;
 } KSWORD_ARK_HVM_CPU_ROW;
 
 typedef struct _KSWORD_ARK_QUERY_HVM_REQUEST
@@ -659,10 +681,30 @@ typedef struct _KSWORD_ARK_QUERY_HVM_REQUEST
     unsigned long reserved;
 } KSWORD_ARK_QUERY_HVM_REQUEST;
 
+/* AMD probe evidence remains available even when resource preparation is refused. */
+typedef struct _KSWORD_ARK_HVM_SVM_CAPABILITIES {
+    /* MSR validity: VM_CR=1, EFER=2, VM_HSAVE_PA=4, PAT=8. */
+    unsigned long maxLeaf, features, asidCount, physicalBits, msrValidMask, exceptionStatus;
+    /* Raw observations are meaningful only with the matching valid bit. */
+    unsigned long long vmCr, efer, hsave, pat;
+} KSWORD_ARK_HVM_SVM_CAPABILITIES;
+
 typedef struct _KSWORD_ARK_QUERY_HVM_RESPONSE
 {
     unsigned long version;
     unsigned long size;
+    /* V5 backend identity, independent of the CPU vendor string. */
+    unsigned long backend;
+    /* NONE/EPT/NPT; NPT is not represented by an EPT-ready feature bit. */
+    unsigned long slatType;
+    /* Common translation readiness independent of EPT implementation. */
+    unsigned long slatReady;
+    /* Actual AMD control/save backend status; zero on VMX. */
+    unsigned long backendStatus;
+    /* Power epoch is separate from the command-by-command generation counter. */
+    unsigned long powerGeneration;
+    /* Captured probe evidence, independent of allocation and execution. */
+    KSWORD_ARK_HVM_SVM_CAPABILITIES svmCapabilities;
     unsigned long queryStatus;
     unsigned long stateFlags;
     unsigned long generation;

@@ -1,4 +1,4 @@
-#include "KernelHvmTab.h"
+﻿#include "KernelHvmTab.h"
 
 #include "KernelDock.h"
 #include "../ArkDriverClient/ArkDriverClient.h"
@@ -104,7 +104,7 @@ void KernelHvmTab::startResident()
     QString warning = kernelText(
         "kernel.hvm.resident.start.warning",
         QStringLiteral(
-            "常驻 VMM 会让所有已准备 CPU 进入 VMX non-root，并持续拦截受支持的退出。驱动仅在 GenuineIntel、VT-x/EPT/INVEPT 完整、全 CPU 自检通过且电源/处理器拓扑/驱动卸载保护均已就绪时允许启动；AMD 及其它非 Intel 设备会被驱动端拒绝。外层已有 Hypervisor（嵌套或开着 VBS）不再是阻碍，但请求必须带上嵌套允许位——虚拟化菜单里的那个开关就是它。驻留期间驱动不可卸载；S3/S4/Modern Standby 等离开 S0 的转换会先同步停止所有 VCPU。VMX/EPT 或回滚异常仍可能导致蓝屏或必须重启。"));
+            "全 CPU 自检和生命周期保护通过后，驱动尝试让全部 CPU 进入常驻；任一核失败会回滚已进入的核。AMD SVM/NPT 目前仅供实验，不提供内层 SVM 或 EPT 扩展。常驻期间驱动不可卸载；无法证明退出完整时保留资源和卸载保护。硬件异常仍可能需要重启。"));
     if (nestedDispatch)
     {
         /*
@@ -137,7 +137,7 @@ void KernelHvmTab::startResident()
         runControlAsync(
             KSWORD_ARK_HVM_CONTROL_START_RESIDENT,
             true,
-            true,
+            m_snapshot.backend != KSWORD_ARK_HVM_BACKEND_SVM,
             nestedDispatch,
             false);
     }
@@ -148,9 +148,7 @@ void KernelHvmTab::stopResident()
     const QString warning = kernelText(
         "kernel.hvm.resident.stop.warning",
         QStringLiteral(
-            "停止操作会在每个仍驻留的 CPU 上发出私有 VMCALL，执行 VMCLEAR、"
-            "VMXOFF 并恢复启动前 CR4。若任何 CPU 无法完成，驱动会保留"
-            "rollback-required 状态和宿主栈，不能假装已经安全停止。"));
+            "在每个仍常驻的 CPU 上发出当前后端的停止请求，恢复 Windows 当前执行状态。任一核无法完成时保留 rollback-required、控制结构、宿主栈和卸载保护。"));
     if (confirmTyped(warning, kernelText("kernel.hvm.resident.stop", QStringLiteral("停止驻留 VMM"))))
     {
         runControlAsync(
