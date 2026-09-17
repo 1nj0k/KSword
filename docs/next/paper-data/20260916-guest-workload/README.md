@@ -17,8 +17,19 @@ the source table, not the planner.
 
 `extent-4g-idle-21.json` and `extent-4g-idle-30.json` are that descendant at
 4096 MiB, freshly booted and idle. Every base from 256 MiB to 3.75 GiB refuses
-with `STATUS_ADDRESS_NOT_ASSOCIATED` and `scannedLeafCount` zero: nothing is
-mapped up there at all.
+with `STATUS_ADDRESS_NOT_ASSOCIATED` and `scannedLeafCount` zero.
+
+Read that carefully, because a later run corrected what it means.
+`extent-4gplus.json` probes above the 4 GiB line on the same descendant and
+finds four consecutive 2 MiB bases — `0x108000000` through `0x120000000` —
+admitted with 512 agreeing entries each. **At 4096 MiB this descendant's bulk
+memory is above `0x100000000`, not below it**, so the idle sweep was reporting
+which bases the guest uses at all, not only which it had touched yet. The claim
+that survives is the narrower and more useful one: a base carries an override
+only where the guest has actually been, and guessing the base is how you get a
+refusal that says nothing about the planner. The controlled demonstration of
+that is the 768 MiB pair below, where the bases are held fixed and the workload
+is the only variable.
 
 The lever that changes this is a workload in the descendant, driven over its
 VNC framebuffer into the shell on `tty1` (`docs/next/logs/Get-VmwareVnc.ps1`).
@@ -107,6 +118,55 @@ the region. A 4 KiB policy needs one composition per page to cover the same
 ground. That is the saving, measured — though note the denominator is what the
 region contains, not what this particular workload touched, and no attempt was
 made here to steer the workload at a chosen guest-physical address.
+
+## 4. A published region revoked by a real source change
+
+`region-revocation.json` (`../../logs/Measure-RegionRevocation.ps1`) publishes a
+2 MiB region at `0x110000000`, then snapshots the descendant while polling the
+lease. The snapshot drops the intermediate VMM's entries for that region
+entirely — visible here as the same base answering
+`STATUS_ADDRESS_NOT_ASSOCIATED` while the snapshot exists — and the lease is
+revoked within the first five-second sample, with the region then removed
+cleanly (`status=0`, `retired=0`).
+
+The reason it reports is `2`, translation-changed, not `4`, region-drifted, and
+that is a result rather than a disappointment. The lease's ordinary check runs
+at every shadow fill and covers the path the lease was captured on; the region
+recheck samples one *other* page per 4096 fills. A whole-VM event changes the
+captured path too, so the ordinary check always sees it first. Reason `4` can
+only win when a page of the region other than the captured one changes while the
+captured path stays identical — a per-page revocation such as page sharing
+collapsing one page, or a balloon reclaiming one — and nothing we can ask this
+VMM to do produces that. The reason-4 decision itself is covered by eight
+injected defects in `../20260916-lease-largepage/`, in both directions.
+
+## 5. An incremental driver build that broke the descendant's VM entry
+
+`vmware-monitor-panics.txt` is the descendant VMM's own log history, summarised.
+It contains a clean A/B that was not planned:
+
+| log | driver | `MONITOR PANIC` |
+|---|---|---|
+| vmware-4, vmware-3 | `9b7771ca…` | 0 |
+| vmware-2, vmware-1, vmware-0 | `088c44a0…` | 1 each, 3 of 3 runs |
+| vmware | `ea6965f0…` | 0 |
+
+`088c44a0` and `ea6965f0` are the **same sources**. The first was produced by
+`msbuild /t:Build`, the second by `/t:Rebuild`. Under the incremental build,
+every run ended in
+
+```
+MONITOR PANIC: vcpu-N:VM-entry failed; VMCS valid (error code 7)
+```
+
+which is the intermediate VMM's VM entry being rejected for invalid control
+fields — the descendant stops, its VMM posts an unrecoverable error that is
+invisible when it was started from session 0, and the process stays alive
+serving its framebuffer, so from outside it looks like a hang. The clean rebuild
+ran a 800 MiB allocation, a snapshot cycle and a further 400 MiB allocation with
+none. Nothing here explains *why* an incremental build differs; it records that
+it did, and that a driver binary must come from a clean rebuild before any
+reading taken with it means anything.
 
 ## Scope
 
