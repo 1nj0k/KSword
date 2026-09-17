@@ -89,8 +89,11 @@ private:
     enum class Column
     {
         ThreadId = 0,
+        EThread,
         Category,
         QueueType,
+        NodePriority,
+        WorkQueueAddress,
         State,
         WaitReason,
         StartRoutine,

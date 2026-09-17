@@ -138,7 +138,7 @@ void KernelThreadAuditTab::initializeUi()
     rootLayout->setContentsMargins(6, 6, 6, 6);
     rootLayout->setSpacing(6);
 
-    // 工具栏按钮使用图标和 tooltip；A/B 按钮按列组规范紧贴放置。
+    // 工具栏按钮使用图标和 tooltip；工作队列线程页直接展示完整证据列。
     auto* toolLayout = new QHBoxLayout();
     toolLayout->setContentsMargins(0, 0, 0, 0);
     toolLayout->setSpacing(4);
@@ -160,6 +160,8 @@ void KernelThreadAuditTab::initializeUi()
     m_evidenceButton = new QPushButton(QStringLiteral("B"), this);
     m_overviewButton->setFixedSize(28, 28);
     m_evidenceButton->setFixedSize(28, 28);
+    m_overviewButton->setVisible(m_mode != Mode::WorkQueueThreads);
+    m_evidenceButton->setVisible(m_mode != Mode::WorkQueueThreads);
 
     m_filterEdit = new QLineEdit(this);
     m_filterEdit->setClearButtonEnabled(true);
@@ -200,7 +202,7 @@ void KernelThreadAuditTab::initializeUi()
 
     ks::ui::DetailLayoutRegistry::registerHost(m_table, m_detailEditor, this);
 
-    // 连接：刷新、筛选、选择、A/B 列组、表头菜单和行操作菜单。
+    // 连接：刷新、筛选、选择、视图预设、表头菜单和行操作菜单。
     connect(m_refreshButton, &QPushButton::clicked, this, [this]() { requestRefresh(); });
     connect(m_filterEdit, &QLineEdit::textChanged, this, [this]() { rebuildTable(); });
     connect(m_table, &QTableWidget::itemSelectionChanged, this, [this]() { updateDetail(); });
@@ -224,7 +226,9 @@ void KernelThreadAuditTab::initializeUi()
         runControlAction(KSWORD_ARK_DRIVER_THREAD_ACTION_TERMINATE);
     });
 
-    applyColumnPreset(ViewPreset::Overview);
+    applyColumnPreset(m_mode == Mode::WorkQueueThreads
+        ? ViewPreset::Evidence
+        : ViewPreset::Overview);
 }
 
 void KernelThreadAuditTab::applyTranslatedText()
@@ -239,11 +243,14 @@ void KernelThreadAuditTab::applyTranslatedText()
     m_filterEdit->setPlaceholderText(threadAuditText("thread_audit.filter.placeholder", QStringLiteral("按 TID、状态、队列或模块筛选")));
     m_filterEdit->setToolTip(threadAuditText("thread_audit.filter.tooltip", QStringLiteral("输入关键字后实时过滤当前线程快照")));
 
-    // 表头按固定 Column 顺序翻译；A/B 预设只控制可见性，不改变数据列。
+    // 表头按固定 Column 顺序翻译；预设只控制可见性，不改变数据列。
     m_table->setHorizontalHeaderLabels(QStringList{
         threadAuditText("thread_audit.header.tid", QStringLiteral("线程ID")),
+        threadAuditText("thread_audit.header.ethread", QStringLiteral("EThread")),
         threadAuditText("thread_audit.header.category", QStringLiteral("类别")),
         threadAuditText("thread_audit.header.queue_type", QStringLiteral("队列类型")),
+        threadAuditText("thread_audit.header.node_priority", QStringLiteral("Node/Priority")),
+        threadAuditText("thread_audit.header.work_queue", QStringLiteral("EX_WORK_QUEUE")),
         threadAuditText("thread_audit.header.state", QStringLiteral("线程状态")),
         threadAuditText("thread_audit.header.wait_reason", QStringLiteral("等待原因")),
         threadAuditText("thread_audit.header.routine", QStringLiteral("例程入口")),
@@ -383,11 +390,17 @@ void KernelThreadAuditTab::rebuildTable()
         const QString r0Value = m_mode == Mode::WorkQueueThreads
             ? workQueueEntryStatusText(row.workQueueStatus)
             : r0StatusText(row.r0Status);
+        const QString nodePriorityText = QStringLiteral("%1/%2")
+            .arg(row.nodeIndex)
+            .arg(row.queuePriorityIndex);
 
         const QStringList cellTexts{
             QString::number(row.threadId),
+            addressText(row.threadObject),
             categoryText,
             queueText,
+            nodePriorityText,
+            addressText(row.queueAddress),
             stateValue,
             waitValue,
             addressText(row.startAddress),
@@ -517,8 +530,24 @@ void KernelThreadAuditTab::applyColumnPreset(const ViewPreset preset)
     m_viewPreset = preset;
 
     // A：调度/队列概览；B：地址/模块/R0 证据。两组均保持精简。
-    const std::vector<Column> visibleColumns = preset == ViewPreset::Evidence
-        ? std::vector<Column>{
+    std::vector<Column> visibleColumns;
+    if (m_mode == Mode::WorkQueueThreads)
+    {
+        visibleColumns = {
+            Column::ThreadId,
+            Column::EThread,
+            Column::StartRoutine,
+            Column::Parameter,
+            Column::NodePriority,
+            Column::WorkQueueAddress,
+            Column::Module,
+            Column::ModuleBase,
+            Column::ModulePath,
+            Column::R0Status };
+    }
+    else if (preset == ViewPreset::Evidence)
+    {
+        visibleColumns = {
             Column::ThreadId,
             Column::StartRoutine,
             Column::Parameter,
@@ -526,8 +555,11 @@ void KernelThreadAuditTab::applyColumnPreset(const ViewPreset preset)
             Column::ModuleBase,
             Column::ModulePath,
             Column::R0Status,
-            Column::Protection }
-        : std::vector<Column>{
+            Column::Protection };
+    }
+    else
+    {
+        visibleColumns = {
             Column::ThreadId,
             Column::Category,
             Column::QueueType,
@@ -535,6 +567,7 @@ void KernelThreadAuditTab::applyColumnPreset(const ViewPreset preset)
             Column::WaitReason,
             Column::Module,
             Column::Protection };
+    }
 
     for (int columnIndex = 0; columnIndex < static_cast<int>(Column::Count); ++columnIndex)
     {
@@ -568,9 +601,20 @@ void KernelThreadAuditTab::showHeaderMenu(const QPoint& localPosition)
     QMenu columnMenu(this);
     columnMenu.setStyleSheet(menuStyle());
 
-    // 表头菜单允许逐列勾选；手工改变后 A/B 都取消着色，表示 Custom。
+    // 表头菜单允许逐列勾选；手工改变后预设按钮取消着色，表示 Custom。
     for (int columnIndex = 0; columnIndex < static_cast<int>(Column::Count); ++columnIndex)
     {
+        const Column column = static_cast<Column>(columnIndex);
+        const bool workQueueOnlyColumn =
+            column == Column::EThread ||
+            column == Column::NodePriority ||
+            column == Column::WorkQueueAddress;
+        if ((m_mode == Mode::WorkQueueThreads && column == Column::Protection) ||
+            (m_mode != Mode::WorkQueueThreads && workQueueOnlyColumn))
+        {
+            continue;
+        }
+
         const QString headerText = m_table->horizontalHeaderItem(columnIndex) != nullptr
             ? m_table->horizontalHeaderItem(columnIndex)->text()
             : QString::number(columnIndex);

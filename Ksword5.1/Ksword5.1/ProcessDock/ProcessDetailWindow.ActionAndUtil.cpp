@@ -104,17 +104,6 @@ namespace
 
 void ProcessDetailWindow::executeTerminateProcessAction()
 {
-    if (!ks::ui::confirmDestructiveAction(
-            this,
-            QStringLiteral("process-termination-r3"),
-            ks::i18n::sourceText(QStringLiteral("结束进程")),
-            ks::i18n::sourceText(QStringLiteral("PID %1（%2）"))
-                .arg(m_baseRecord.pid)
-                .arg(QString::fromStdString(m_baseRecord.processName))))
-    {
-        return;
-    }
-
     // TerminateProcess 操作日志：同一动作只使用一个 kLogEvent，保证调用链可追踪。
     kLogEvent actionEvent;
     warn << actionEvent
@@ -143,17 +132,6 @@ void ProcessDetailWindow::executeTerminateProcessAction()
 
 void ProcessDetailWindow::executeTerminateThreadsAction()
 {
-    if (!ks::ui::confirmDestructiveAction(
-            this,
-            QStringLiteral("process-termination-r3"),
-            ks::i18n::sourceText(QStringLiteral("结束进程的全部线程")),
-            ks::i18n::sourceText(QStringLiteral("PID %1（%2）"))
-                .arg(m_baseRecord.pid)
-                .arg(QString::fromStdString(m_baseRecord.processName))))
-    {
-        return;
-    }
-
     // 全线程结束日志：同一动作只使用一个 kLogEvent，保证调用链可追踪。
     kLogEvent actionEvent;
     warn << actionEvent
@@ -366,20 +344,12 @@ void ProcessDetailWindow::executeDriverThreadAction(
     }
     else if (action == KSWORD_ARK_DRIVER_THREAD_ACTION_TERMINATE)
     {
-        QString rawApiText;
         switch (terminateMethod)
         {
         case KSWORD_ARK_DRIVER_THREAD_TERMINATE_METHOD_PSP_BY_POINTER:
-            rawApiText = QStringLiteral("PspTerminateThreadByPointer");
-            break;
         case KSWORD_ARK_DRIVER_THREAD_TERMINATE_METHOD_ZW_OR_NT:
-            rawApiText = QStringLiteral("ZwTerminateThread / NtTerminateThread");
-            break;
         case KSWORD_ARK_DRIVER_THREAD_TERMINATE_METHOD_NORMAL_APC:
-            rawApiText = QStringLiteral("KeInsertQueueApc → Normal Kernel APC → PsTerminateSystemThread");
-            break;
         case KSWORD_ARK_DRIVER_THREAD_TERMINATE_METHOD_SPECIAL_TO_NORMAL_APC:
-            rawApiText = QStringLiteral("KeInsertQueueApc → Special Kernel APC → Normal Kernel APC → PsTerminateSystemThread");
             break;
         default:
             return;
@@ -387,22 +357,6 @@ void ProcessDetailWindow::executeDriverThreadAction(
         resultTitle = ks::i18n::contextText(
             QStringLiteral("process.thread.driver_terminate.result.title"),
             QStringLiteral("强制结束驱动线程"));
-        const QMessageBox::StandardButton confirmation = QMessageBox::critical(
-            this,
-            ks::i18n::contextText(
-                QStringLiteral("process.thread.driver_terminate.confirm.title"),
-                QStringLiteral("强制结束驱动线程")),
-            ks::i18n::contextText(
-                QStringLiteral("process.thread.driver_terminate.confirm.body"),
-                QStringLiteral("即将使用实验性原始 API“%2”结束 System(PID 4) 的驱动线程 %1。此操作不可撤销，可能立即造成数据损坏、系统死锁或蓝屏。APC 方法只表示成功排队，不保证送达或终止。仅在隔离测试环境并准备强制重启时继续。"))
-                .arg(selectedThread.threadId)
-                .arg(rawApiText),
-            QMessageBox::Yes | QMessageBox::No,
-            QMessageBox::No);
-        if (confirmation != QMessageBox::Yes)
-        {
-            return;
-        }
     }
     else
     {
@@ -506,23 +460,6 @@ void ProcessDetailWindow::executeR0TerminateSelectedThreadAction()
         ? selectedThread.processId
         : m_baseRecord.pid;
     if (processId <= 4U || selectedThread.threadId == 0U)
-    {
-        return;
-    }
-
-    const QMessageBox::StandardButton confirmation = QMessageBox::warning(
-        this,
-        ks::i18n::contextText(
-            QStringLiteral("process.thread.r0_terminate.confirm.title"),
-            QStringLiteral("R0结束线程")),
-        ks::i18n::contextText(
-            QStringLiteral("process.thread.r0_terminate.confirm.body"),
-            QStringLiteral("将通过 R0 结束 PID %2 的线程 %1。该操作不可撤销，是否继续？"))
-            .arg(selectedThread.threadId)
-            .arg(processId),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-    if (confirmation != QMessageBox::Yes)
     {
         return;
     }
