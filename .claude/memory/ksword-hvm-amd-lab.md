@@ -1,5 +1,9 @@
 # AMD 实验后端与重启续接
 
+宿主装载里程碑（2026-09-18）：用户对Release/KswordARK.sys执行仅装载→status→卸载。用户原始CLI证明IOCTL响应，SCM独立查询STOPPED/exit0且ImagePath指Release；此范围PASS，需按要求提交。HVM本身未启动：queryStatus1/backendStatus=0x80000011 STATUS_DEVICE_BUSY，prepared/resident/vmExit=0。svmProbe有效位15，VM_CR8（SVMDIS=0）、EFER4D01（SVME=0）、HSAVE=0x803656000非零，ASID32768/PA48；触发hvm_svm_resources.c的非零HSAVE保守拒绝条件。不能据非零HSAVE断言仍有活动VMware所有者（残留/来源未确认），也不能当作物理机SVM执行失败或通过。报告docs/next/evidence/amd-host-load-query-unload.json明确查询来自用户stdout、未核对已加载映像调试身份。不得自动清零HSAVE或跳过能力门；后续若推进物理机常驻，需要独立所有权诊断。
+
+最新测试偏好（2026-09-18）：用户要求提速，后续新候选单核通过后直接跳8核，取消常规2/4核中间验收；仅8核失败且定位需要时才缩小拓扑。每个真实通过点仍独立核验并commit，不推送。当前八核探针通过点已提交47d404b4，克隆正常关机并保存AMD-NestedProbe-8CPU-100Cycles-PASS-20260918冷态快照；用户无需重复旧探针或在实体宿主加载候选。下一步是通用嵌套SVM代码实现，不能把既有固定探针当作VMware内层OS兼容测试入口。
+
 最新硬件里程碑（2026-09-18 22:40）：8vCPU/100轮受控嵌套探针PASS。回传nested-probe-20260918-224000-3121a1707dfe4fb7998257c004a2397c共624文件，verify_nested_probe.py独立核验全部哈希/大小、控制顺序、逐核状态/代次及最终释放。CPU0:0..7各100轮，共800次往返，完成序列均200，每轮每核NPF5、entries/reflections1、exit72/marker4B534E31、failure0，资源归零。报告docs/next/evidence/amd-nested-probe-8cpu.json。由此固定探针1核1次、2核20次、4/8核100次均已通过；不重复同类轮数来冒充通用内层VMM兼容。下一实现重点：任意VMCB快照/合法性检查、MSRPM/IOPM合并、IRQ/NMI/GIF、CLGI/INVLPGA与异常反射、一般L1 continuation和非身份NPT硬件覆盖，再测试内层OS。物理机常驻及并发内层多核均未验证；原2h压力仍是用户中止，不补记通过。
 
 八核探针准备（2026-09-18 22:39）：四核100轮已提交b4c5dc05，未推送；正常关机保存AMD-NestedProbe-4CPU-100Cycles-PASS-20260918冷态快照。克隆改单插槽8vCPU冷启动，VMware日志CPL0/NumVCPUs8，KD78911重连，同一nested-probe age9候选。下一步来宾共享Start-GuestNestedProbe.ps1 -Vcpu 8 -Cycles 100；尚无八核探针通过证据。

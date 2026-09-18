@@ -1,0 +1,30 @@
+{
+  "scope": "physical-host-driver-load-query-unload-only",
+  "result": "PASS",
+  "queryEvidenceSource": "user-supplied CLI stdout",
+  "unloadIndependentlyChecked": true,
+  "serviceState": "STOPPED",
+  "serviceWin32ExitCode": 0,
+  "serviceExitCode": 0,
+  "queryStatus": 1,
+  "backend": 2,
+  "stateFlags": 1,
+  "backendStatus": "0x80000011",
+  "backendStatusName": "STATUS_DEVICE_BUSY",
+  "svmProbe": {
+    "msrValidMask": 15,
+    "exceptionStatus": "0x00000000",
+    "vmCr": "0x0000000000000008",
+    "efer": "0x0000000000004D01",
+    "hsave": "0x0000000803656000",
+    "asidCount": 32768,
+    "physicalBits": 48
+  },
+  "refusalCondition": "nonzero VM_HSAVE_PA; EFER.SVME and VM_CR.SVMDIS are clear",
+  "hsaveOwner": "not established",
+  "preparedProcessorCount": 0,
+  "residentProcessorCount": 0,
+  "vmExitCount": 0,
+  "physicalHostSvmExecutionTested": false,
+  "loadedImageDebugIdentityVerified": false
+}
