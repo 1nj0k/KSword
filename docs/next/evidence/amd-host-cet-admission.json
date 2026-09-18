@@ -1,0 +1,101 @@
+{
+  "scope": "physical-host-admission-diagnosis-only",
+  "diagnosisResult": "CONFIRMED",
+  "loadQueryUnloadResult": "PASS",
+  "virtualizationResult": "BLOCKED",
+  "sourceCommit": "8f3e24202146de2e654eb71c933a6642ce6c9c04",
+  "evidenceDirectory": "tools/hvm_lab/artifacts/host-admission-20260918-231419-9619057ecd8e436eab48672c8a32dfcd",
+  "bootId": "2026-09-18T15:01:19.5Z",
+  "windowsBuild": "19045",
+  "logicalProcessors": 32,
+  "hypervisorPresent": false,
+  "driverSha256": "177BE694B708B3F35D1A31460D29F9FF556911F39FDDF04861AC4FFBB9FFEE6C",
+  "controlSha256": "FF694B21E8B9E0E229B02C0BF1C8EDD6019FA9C1182B64366BCA034E05592C44",
+  "candidateHashesIndependentlyMatched": true,
+  "loadedImageDebugIdentityVerified": false,
+  "backendStatus": "0xC00000BB",
+  "svmProbe": {
+    "maxLeaf": 2147483688,
+    "features": 515882239,
+    "asidCount": 32768,
+    "physicalBits": 48,
+    "msrValidMask": 15,
+    "exceptionStatus": "0x00000000",
+    "vmCr": "0x0000000000000008",
+    "efer": "0x0000000000004D01",
+    "hsave": "0x0000000000000000",
+    "pat": "0x0007010600070106",
+    "rejectReason": 8,
+    "rejectReasonName": "CR4_UNSUPPORTED_STATE",
+    "stateValidMask": 31,
+    "cpuid1Ecx": "0x7EF8320B",
+    "xsaveFeatures": "0x0000000F",
+    "cr4": "0x0000000000B50EF8",
+    "xcr0": "0x00000000000000E7",
+    "xss": "0x0000000000000800"
+  },
+  "rejectedCr4Bits": [
+    23
+  ],
+  "rejectedCr4Features": [
+    "CET"
+  ],
+  "enabledXssComponents": [
+    11
+  ],
+  "enabledXssNames": [
+    "CET_U"
+  ],
+  "supervisorCetActivationKnown": false,
+  "ownershipRegisters": {
+    "eferSvme": false,
+    "vmCrSvmdis": false,
+    "hsaveZero": true
+  },
+  "preparedProcessorCount": 0,
+  "selfTestPassedProcessorCount": 0,
+  "residentProcessorCount": 0,
+  "vmExitCount": 0,
+  "physicalHostSvmExecutionTested": false,
+  "finalServiceState": "STOPPED",
+  "finalServiceWin32ExitCode": 0,
+  "serviceStopIndependentlyChecked": true,
+  "implementationGap": "Current AMD admission rejects CR4.CET and any enabled XSS. CET_U uses XSS bit 11; current standard XSAVE/XRSTOR path handles XCR0 only. S_CET/SSP/ISST_ADDR and native return also require an explicit contract. Do not bypass either gate.",
+  "rawEvidence": [
+    {
+      "name": "config.txt",
+      "bytes": 70,
+      "sha256": "185FD1A24A95295E0E5CA03A36EF5C35761D52592CC46FA7EF9DE907ED4EF44F"
+    },
+    {
+      "name": "identity.json",
+      "bytes": 625,
+      "sha256": "62D27BB7F9A51B9B2643D4BCEBBA7BF0E2DBCBC395D8B2AF591EC10FCFEAC500"
+    },
+    {
+      "name": "query-after-stop.txt",
+      "bytes": 532,
+      "sha256": "56F254D271DBC2BE435D5FBD4B7CDD0BC5E09926693BB24CC22568FF50DF2A96"
+    },
+    {
+      "name": "start.txt",
+      "bytes": 812,
+      "sha256": "56E5D6C44C35007F49A44A7ADAFECFBFE98B809B2F53EC145FC0BAD346B1DE2A"
+    },
+    {
+      "name": "status.json",
+      "bytes": 1897,
+      "sha256": "B2271BEF7717639C1EC689C1AEA08E4FDF31A11E1CC1893E6BD3B06E1E9E922F"
+    },
+    {
+      "name": "status.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "stop.txt",
+      "bytes": 532,
+      "sha256": "56F254D271DBC2BE435D5FBD4B7CDD0BC5E09926693BB24CC22568FF50DF2A96"
+    }
+  ]
+}

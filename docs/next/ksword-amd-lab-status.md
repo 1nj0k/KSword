@@ -2,6 +2,17 @@
 
 ## 当前进度（以下本节优先于后面的历史记录）
 
+**23:14 宿主拒绝原因已确定：CET 状态支持尚未实现。** HVM v6 诊断实测装载/查询/卸载成功，SYS/CLI 哈希与原始证据一致，SCM 独立确认 STOPPED/exit0。`CR4=B50EF8` 命中现有拒绝掩码的唯一位是 bit23/CET；`XSS=800` 启用 bit11/CET_U。全部状态读数有效，HSAVE 已归零，无 SVME 或 SVMDIS。此次没有 prepare、self-test 或 VMRUN，不是物理机常驻通过。[准入诊断证据](evidence/amd-host-cet-admission.json)。
+
+这一结果把下一步限定为状态兼容实现，无需重复加载同一候选：
+
+1. 在 `hvm_svm_resources.c` 逐核读取并验证 CET 枚举、S_CET、ISST_ADDR 等状态，区分用户 CET 与 supervisor shadow stack。XSS.CET_U 只证明该状态组件启用，不能推出内核影子栈已启用。
+2. 在资源准备与 `hvm_svm_entry.asm` 配套实现所支持的 XSS 保存/恢复；若采用 XSAVES/XRSTORS，须按 CPUID 的 compacted 格式大小分配，配对保存掩码与格式，不能仅把 XSS 位并入普通 XSAVE 掩码。进入时重新验证 XCR0/XSS 与准备时一致。
+3. 在 `hvm_svm_vmcb.c`、汇编及退出恢复路径处理 S_CET/SSP/ISST_ADDR。明确 supervisor CET 的支持边界；支持内核影子栈时必须处理私有 host 栈及 synthetic RET 对应的影子栈连续性。嵌套探针的状态复制/退出反射也须遵循同一边界。
+4. 完成布局/状态转换回归、WDK 构建，再进行硬件验证。未补齐前保留当前拒绝；不以关闭系统 CET、清零 XSS 或跳过门槛代替修复。旧 VMware 来宾结果保持其原有范围，不能外推到这组宿主状态。
+
+架构依据：[AMD APM Volume 2](https://www.amd.com/content/dam/amd/en/documents/processor-tech-docs/programmer-references/24593.pdf)，§18.13 与 Appendix B；本地留存 Rev.3.38 原文确认 CET_U 为 U_CET/PL3_SSP，普通 VMCB 的 S_CET/SSP/ISST_ADDR 偏移为 5E0/5E8/5F0。
+
 **宿主重启后的新阻塞：HSAVE 已归零，探测仍返回 STATUS_NOT_SUPPORTED。** 驱动装载/查询/卸载仍成功，尚未执行 SVM。已构建 HVM v6 诊断版，输出明确拒绝原因及带有效位的 CR4/XCR0/XSS；原准入条件保留。驱动 WDK/API 校验零警告，CLI/主程序构建和现有逻辑测试通过；主程序有4条既有警告，仓库签名工具的最终信任校验仍未通过。实际宿主诊断等待管理员执行 `tools/hvm_lab/Test-HostSvmAdmission.ps1`，不要把此诊断构建记为物理机常驻通过。旧 v5 来宾基线候选保留。
 
 **宿主仅装载测试 PASS：驱动已装载、响应 status 并卸载。** CLI 输出由用户提供，宿主 SCM 独立确认 STOPPED/exit0。HVM 探测返回 STATUS_DEVICE_BUSY（0x80000011）：VM_HSAVE_PA=0x803656000 非零触发保守拒绝，EFER.SVME=0、VM_CR.SVMDIS=0；现有证据不能确认该 HSAVE 的来源或是否存在活动所有者。没有执行 prepare/self-test/resident，不能宣称物理机常驻通过。记录见 [宿主装载证据](evidence/amd-host-load-query-unload.json)。
