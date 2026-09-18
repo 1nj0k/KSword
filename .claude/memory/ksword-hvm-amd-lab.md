@@ -1,5 +1,7 @@
 # AMD 实验后端与重启续接
 
+下一步入口已准备：tools/hvm_lab/Test-HostSvmSelfTest.ps1，管理员一条命令装载→prepare→全部32LP串行self-test→核验逐核集合/状态/代次/EXITCODE72/TLB1→teardown→SCM STOPPED。锁定已通过准入的SYS/CLI哈希，不重编译，不resident，不修改虚拟机CPU配置。所有命令前落盘日志，失败/不完整证据保留driver/resources，不盲目卸载。PS5解析与21项生产证据验证器模拟测试通过，非管理员前置拒绝已实测；真实prepare/VMRUN尚待用户执行。准入里程碑commit d4c873e3，未推送。
+
 宿主准入已实际PASS（2026-09-18 23:38）：用户Test-HostSvmAdmission输出backendStatus0/rejectReason0/NONE，CR4仍B50EF8、XSS仍800、HSAVE0，未关闭CET。独立核对原始status、SYS/CLI哈希与7004a13c的age13候选匹配，SCM STOPPED。证据docs/next/evidence/amd-host-admission-pass.json，原始artifacts/host-admission-20260918-233852-d2206581cff943a19cf380b31dc01fe3。此范围仅初始查询CPU准入及驱动装载/查询/卸载；prepared/selftest/resident/vmExit均0，不是实体机VMRUN通过。下一步prepare→逐CPU串行self-test→metrics→teardown，不直接resident；物理宿主32LP，自检是每CPU短往返，不能说并发32核常驻通过。
 
 CET_U 候选归档：tools/hvm_lab/artifacts/amd-host-cet-user-v6，SYS/PDB匹配f0725672-1a1e-4104-890a-1b5744c5c7a9 age13；docs/next/evidence/amd-host-cet-user-build.json保存哈希与测试/签名边界。Release SYS仓库签名者00797B09...，签名最终信任检查仍失败（不受信任根）；此候选装载、准入及SVM硬件执行均NOT_RUN。现有管理员Test-HostSvmAdmission脚本默认路径已指新Release SYS与新hvm_ctl，用户无需重新编译。
