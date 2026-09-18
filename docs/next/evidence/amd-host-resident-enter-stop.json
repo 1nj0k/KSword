@@ -1,0 +1,959 @@
+{
+  "scope": "physical-host-concurrent-32-CPU-enter-and-stop-only",
+  "result": "PASS",
+  "requestedFiveSecondTest": "NOT_COMPLETED",
+  "driverSourceCommit": "7004a13c",
+  "runnerSourceCommit": "a53fecc2",
+  "diagnosis": "Runner expected ENTERING=3 instead of protocol ENTERED=4. Active validation threw before sleep. Finally stop succeeded on all 32 CPUs.",
+  "driverSha256": "0BB1B03F4B6A688C9725C8EB7EB75A4ABD3FB0611B9F8787D4F935940DE94A2A",
+  "controlSha256": "64927AF8ED7600AD3336A19DA2F2BBBC2630DBF117C7DF14A6453032B39856C6",
+  "bootId": "2026-09-18T15:01:19.5Z",
+  "enteredProcessors": 32,
+  "stoppedProcessors": 32,
+  "serviceState": "RUNNING",
+  "resourcesReleased": false,
+  "driverUnloaded": false,
+  "innerOperatingSystemTested": false,
+  "evidenceDirectory": "tools/hvm_lab/artifacts/host-self-test-20260919-000035-98200c2a6da54944a0f6a4180ea2ae44",
+  "regression": {
+    "baseline": {
+      "queryStatus": 0,
+      "backend": 2,
+      "stateFlags": 19,
+      "processorCount": 32,
+      "preparedProcessorCount": 32,
+      "selfTestPassedProcessorCount": 32,
+      "residentProcessorCount": 0,
+      "powerGeneration": 0,
+      "generation": 3,
+      "processors": [
+        {
+          "group": 0,
+          "number": 0,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 1,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 2,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 3,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 4,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 5,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 6,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 7,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 8,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 9,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 10,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 11,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 12,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 13,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 14,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 15,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 16,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 17,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 18,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 19,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 20,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 21,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 22,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 23,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 24,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 25,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 26,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 27,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 28,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 29,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 30,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 31,
+          "backend": 2,
+          "executionStage": 2,
+          "stateFlags": 3,
+          "lastStatus": "0x00000000"
+        }
+      ]
+    },
+    "active": {
+      "queryStatus": 0,
+      "backend": 2,
+      "stateFlags": 4210707,
+      "processorCount": 32,
+      "preparedProcessorCount": 32,
+      "selfTestPassedProcessorCount": 32,
+      "residentProcessorCount": 32,
+      "powerGeneration": 0,
+      "generation": 4,
+      "processors": [
+        {
+          "group": 0,
+          "number": 0,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 1,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 2,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 3,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 4,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 5,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 6,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 7,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 8,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 9,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 10,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 11,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 12,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 13,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 14,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 15,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 16,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 17,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 18,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 19,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 20,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 21,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 22,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 23,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 24,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 25,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 26,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 27,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 28,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 29,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 30,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 31,
+          "backend": 2,
+          "executionStage": 4,
+          "stateFlags": 259,
+          "lastStatus": "0x00000000"
+        }
+      ]
+    },
+    "stopped": {
+      "queryStatus": 0,
+      "backend": 2,
+      "stateFlags": 19,
+      "processorCount": 32,
+      "preparedProcessorCount": 32,
+      "selfTestPassedProcessorCount": 32,
+      "residentProcessorCount": 0,
+      "powerGeneration": 0,
+      "generation": 5,
+      "processors": [
+        {
+          "group": 0,
+          "number": 0,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 1,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 2,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 3,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 4,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 5,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 6,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 7,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 8,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 9,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 10,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 11,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 12,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 13,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 14,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 15,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 16,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 17,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 18,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 19,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 20,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 21,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 22,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 23,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 24,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 25,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 26,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 27,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 28,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 29,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 30,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        },
+        {
+          "group": 0,
+          "number": 31,
+          "backend": 2,
+          "executionStage": 6,
+          "stateFlags": 1027,
+          "lastStatus": "0x00000000"
+        }
+      ]
+    }
+  },
+  "rawEvidence": [
+    {
+      "name": "active.json",
+      "bytes": 11479,
+      "sha256": "F25F71879F5C61C698CECDF0491B8918DE02560999393F43EA2A78721C836CFA"
+    },
+    {
+      "name": "active.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "after-self-test.json",
+      "bytes": 10804,
+      "sha256": "6E59D701D5E338E0BB5874138C6035BF103EA69E550C8BEE3D388B5D3CF9D601"
+    },
+    {
+      "name": "after-self-test.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "commands.log",
+      "bytes": 758,
+      "sha256": "E7ADC27A1F99C2F16F7013C1BC7AE05C610FF709A6CD878CE5C511CB724513A1"
+    },
+    {
+      "name": "config.txt",
+      "bytes": 70,
+      "sha256": "185FD1A24A95295E0E5CA03A36EF5C35761D52592CC46FA7EF9DE907ED4EF44F"
+    },
+    {
+      "name": "identity.json",
+      "bytes": 395,
+      "sha256": "3A9CB9A26F753624CFB5ACE1AF88627DE2DDB749EDAFF7E00870D3C59E9039AB"
+    },
+    {
+      "name": "initial.json",
+      "bytes": 2015,
+      "sha256": "60EE70E5A499C9AC61852973FB2DA50BAC425DE064456709B201FF62301B52DF"
+    },
+    {
+      "name": "initial.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "metrics.json",
+      "bytes": 28767,
+      "sha256": "C3A4994B2BE7B2E1D267B0D7425FD3943E18B8E11E99D3E11A1D2A9FAA33AD23"
+    },
+    {
+      "name": "metrics.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "native-after-stop.json",
+      "bytes": 11412,
+      "sha256": "BCD3D9D2950F8DF344A7BBC93D9CDDCFEDC551A9D35F852D4EC4584440FD1CD1"
+    },
+    {
+      "name": "native-after-stop.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "prepare.json",
+      "bytes": 900,
+      "sha256": "EF6331CBD414612A046A961B6CC3E3F25A5D953623A57253B1CAAA662EFB2DD3"
+    },
+    {
+      "name": "prepare.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "prepared.json",
+      "bytes": 10334,
+      "sha256": "1CF12B16346A4EB658C534C1184BD47AAA3C251EF7D29A8CDEBCA13787158A03"
+    },
+    {
+      "name": "prepared.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "resident-stop.json",
+      "bytes": 924,
+      "sha256": "317CBFC31AF9BB21AD9EC1015312B7C793066BD5AB4B3FE55764D282A337CFE1"
+    },
+    {
+      "name": "resident-stop.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "resident.json",
+      "bytes": 958,
+      "sha256": "A861B225A79E8C77F5B71A169FE10F1EF0E06CBD7420EB252A1D6BC697BC3E3C"
+    },
+    {
+      "name": "resident.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "self-test.json",
+      "bytes": 923,
+      "sha256": "1ED4F6072C9F6099EAC19C29D2BE98F453000F916C680FC85D75F45E5F5BCE75"
+    },
+    {
+      "name": "self-test.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "start.txt",
+      "bytes": 812,
+      "sha256": "56E5D6C44C35007F49A44A7ADAFECFBFE98B809B2F53EC145FC0BAD346B1DE2A"
+    },
+    {
+      "name": "stopped-metrics.json",
+      "bytes": 34037,
+      "sha256": "09ED95C5D9BCCC2CA12A67124204D9A93D12315A4EFE601E9D9B3E9D5BDC09D8"
+    },
+    {
+      "name": "stopped-metrics.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    }
+  ]
+}

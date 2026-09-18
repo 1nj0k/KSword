@@ -64,7 +64,11 @@ foreach ($change in $failures) {
 $t=New-TestEvidence
 $snapshot=($t.After|ConvertTo-Json -Depth 6|ConvertFrom-Json)
 $snapshot.generation=4; $snapshot.stateFlags=0x404013; $snapshot.residentProcessorCount=2
-foreach ($cpu in $snapshot.processors) { $cpu.executionStage=3; $cpu.stateFlags=0x103 }
+# Read the protocol authority, rather than copying a guessed stage from the validator.
+$protocol=Get-Content (Join-Path $PSScriptRoot '../../shared/driver/KswordArkHvmIoctl.h') -Raw
+if ($protocol -notmatch '#define\s+KSWORD_ARK_HVM_STAGE_ENTERED\s+(\d+)UL') { throw 'Missing ENTERED stage definition.' }
+$enteredStage=[int]$Matches[1]
+foreach ($cpu in $snapshot.processors) { $cpu.executionStage=$enteredStage; $cpu.stateFlags=0x103 }
 Assert-HostSvmResidentEvidence $t.After $snapshot $true 2
 ++ $checks
 foreach ($change in @(
@@ -72,6 +76,7 @@ foreach ($change in @(
     {param($s) $s.stateFlags=0x4013},
     {param($s) $s.processors[1].number=0},
     {param($s) $s.processors[1].stateFlags=3},
+    {param($s) $s.processors[1].executionStage=3},
     {param($s) $s.powerGeneration=1}
 )) {
     $bad=$snapshot|ConvertTo-Json -Depth 6|ConvertFrom-Json
@@ -90,4 +95,9 @@ $rejected=$false
 try { Assert-HostSvmResidentEvidence $t.After $snapshot $false 2 } catch { $rejected=$true }
 if (-not $rejected) { throw 'An active CPU survived a supposedly complete stop.' }
 ++ $checks
-Write-Output "HOST_SELF_TEST_EVIDENCE_CHECKS=$checks PASS (simulated evidence; no driver loaded)"
+# Replay the actual 32-CPU snapshots that exposed the ENTERING/ENTERED confusion.
+$fixture=Get-Content (Join-Path $PSScriptRoot '../../docs/next/evidence/amd-host-resident-enter-stop.json') -Raw|ConvertFrom-Json
+Assert-HostSvmResidentEvidence $fixture.regression.baseline $fixture.regression.active $true 32
+Assert-HostSvmResidentEvidence $fixture.regression.baseline $fixture.regression.stopped $false 32
+$checks+=2
+Write-Output "HOST_SELF_TEST_EVIDENCE_CHECKS=$checks PASS (synthetic and recorded evidence; no driver loaded)"

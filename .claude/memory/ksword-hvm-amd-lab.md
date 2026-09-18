@@ -1,5 +1,7 @@
 # AMD 实验后端与重启续接
 
+实体机首轮并发常驻（2026-09-19 00:00）：真实32核已全部进入(stage4/flags103/common404013/gen4)，finally stop也全部成功(stage6/flags403/common13/gen5/resident0、逐核VMMCALL exit81、failure0)。此次报错是脚本把ENTERED错写成3（实际3是ENTERING、4才ENTERED），模拟测试也复制了错误常量；已修正stage4，测试从共享协议取常量、增加ENTERING拒绝及本次真实32核快照回放。docs/next/evidence/amd-host-resident-enter-stop.json记录准确通过范围。5秒等待尚未执行，资源未teardown、驱动仍RUNNING；这不是退出失败，也不是完整5秒验收PASS。下一步管理员先核对status全核已stop，再teardown/sc stop，重跑同一-ResidentSeconds5脚本。驱动/SYS无需改动或重编译。新错误输出含group:number/期望实际stage/flags/status，避免再次只报笼统异常。
+
 实体机短常驻入口：Test-HostSvmSelfTest.ps1 新增显式 -ResidentSeconds 5（默认0仍只串行自检，最大30）。同一已通过32LP自检的7004a13c/age13候选，无驱动改动；自检后全32LP并发resident、5秒前后核对Active完整CPU集合/代次/卸载保护，finally请求stop核验逐核Stopped，然后teardown/卸载。执行/回滚证据不足时保留driver/resources，不从CLI结束推断停止。PS5证据验证器29项通过；本轮全核常驻尚未执行。32核串行自检里程碑已提交f1e4d60d，未推送。
 
 实体机32LP串行SVM自检已PASS（2026-09-18 23:45）：同一7004a13c/age13候选，a155d211脚本运行。原始host-self-test-20260918-234529-87219d5d131f46bd8a9649c57fdac932共23文件，独立检查SYS/CLI哈希、CPU0:0..31精确集合、每核CPUID EXITCODE72/VMEXIT1/TLB1/有效偶数序列、32个独立VMCB和HSAVE页。prepared/selfTest32，failed/resident0，generation2→3→4、power0，teardown后INITIALIZED/processor0/slat0，SCM STOPPED。报告docs/next/evidence/amd-host-self-test-32cpu.json。本机第一次真实VMRUN往返和原生状态返回验证已通过；不是全核同时常驻、内层OS或压力通过。下一阶段可做实体机全核短时resident→stop→release，不需再跑准入。

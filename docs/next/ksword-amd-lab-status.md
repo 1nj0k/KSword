@@ -2,6 +2,8 @@
 
 ## 当前进度（以下本节优先于后面的历史记录）
 
+**09-19 00:00 实体机32核同时进入与完整 stop 已通过，5秒测试被脚本误判中断。** 全32核实际 stage=4/ENTERED，脚本误期望3/ENTERING，导致尚未等待就进入finally；stop返回成功，逐核stage6、resident0、VMMCALL退出81、failure0。已修正脚本并增加共享协议常量及真实快照回归。[进入/停止证据](evidence/amd-host-resident-enter-stop.json)。此次资源与驱动有意保留，尚未teardown/卸载；不能记为完整5秒常驻验收通过。需要先释放已停止资源、卸载，再重跑修正脚本；不需修改驱动或重启。
+
 **23:45 实体机32逻辑处理器逐核 SVM 自检 PASS。** CPU0:0..31 各完成一次真实 VMRUN→CPUID退出→原生返回，合计32次；每核有效退出证据/TLB请求1，32个私有VMCB及HSAVE地址互异。候选哈希、逐核集合和代次已独立核验，prepare/selfTest32、failed0，释放后processor/slatReady为0、SCM STOPPED。[原始证据索引与通过报告](evidence/amd-host-self-test-32cpu.json)。这证明本机真实 SVM 短往返可行；尚未测试全核同时常驻、持续负载或再启动 VMware 虚拟机。
 
 **23:38 实体机准入 PASS。** `7004a13c` 候选实际装载/查询/卸载成功；原始输出、候选哈希与最终服务 STOPPED 已独立核验。backendStatus=0、rejectReason=NONE，CR4=B50EF8、XSS=800 保持不变，未关闭 CET。[准入通过证据](evidence/amd-host-admission-pass.json)。此次只探测初始查询 CPU，prepared/selfTest/resident/vmExit 均为0；逐核准备与实体机 VMRUN 尚未验证。下一项是32逻辑处理器逐核串行的短自检与完整释放，不是同时开启32核常驻。

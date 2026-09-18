@@ -44,7 +44,8 @@ function Assert-HostSvmSelfTestEvidence($Prepared,$After,$Metrics,$Control,[int]
 function Assert-HostSvmResidentEvidence($Baseline,$Snapshot,[bool]$Active,[int]$Count) {
     $expectedResident=0
     $expectedStage=6
-    if ($Active) { $expectedResident=$Count; $expectedStage=3 }
+    # Shared protocol: ENTERING=3, ENTERED=4. API return requires ENTERED.
+    if ($Active) { $expectedResident=$Count; $expectedStage=4 }
     if ($Snapshot.queryStatus -ne 0 -or $Snapshot.backend -ne 2 -or
         $Snapshot.processorCount -ne $Count -or $Snapshot.preparedProcessorCount -ne $Count -or
         $Snapshot.selfTestPassedProcessorCount -ne $Count -or $Snapshot.residentProcessorCount -ne $expectedResident -or
@@ -62,7 +63,8 @@ function Assert-HostSvmResidentEvidence($Baseline,$Snapshot,[bool]$Active,[int]$
     foreach ($cpu in $Snapshot.processors) {
         if ($cpu.backend -ne 2 -or $cpu.executionStage -ne $expectedStage -or
             $cpu.lastStatus -ne '0x00000000' -or (($cpu.stateFlags -band 0x100) -ne 0) -ne $Active) {
-            throw 'A processor has not acknowledged the expected resident/native state.'
+            throw ('CPU {0}:{1}: expected stage={2}, active={3}; observed stage={4}, flags=0x{5:X}, status={6}.' -f
+                $cpu.group,$cpu.number,$expectedStage,$Active,$cpu.executionStage,$cpu.stateFlags,$cpu.lastStatus)
         }
     }
 }
