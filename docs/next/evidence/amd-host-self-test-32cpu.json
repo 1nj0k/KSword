@@ -1,0 +1,180 @@
+{
+  "scope": "physical-host-serial-per-cpu-svm-round-trip",
+  "result": "PASS",
+  "driverSourceCommit": "7004a13c",
+  "runnerSourceCommit": "a155d211",
+  "driverSha256": "0BB1B03F4B6A688C9725C8EB7EB75A4ABD3FB0611B9F8787D4F935940DE94A2A",
+  "controlSha256": "64927AF8ED7600AD3336A19DA2F2BBBC2630DBF117C7DF14A6453032B39856C6",
+  "bootId": "2026-09-18T15:01:19.5Z",
+  "windowsBuild": "19045",
+  "logicalProcessors": 32,
+  "processorIdentities": [
+    "0:0",
+    "0:1",
+    "0:10",
+    "0:11",
+    "0:12",
+    "0:13",
+    "0:14",
+    "0:15",
+    "0:16",
+    "0:17",
+    "0:18",
+    "0:19",
+    "0:2",
+    "0:20",
+    "0:21",
+    "0:22",
+    "0:23",
+    "0:24",
+    "0:25",
+    "0:26",
+    "0:27",
+    "0:28",
+    "0:29",
+    "0:3",
+    "0:30",
+    "0:31",
+    "0:4",
+    "0:5",
+    "0:6",
+    "0:7",
+    "0:8",
+    "0:9"
+  ],
+  "vmExitCount": 32,
+  "perCpuExitCode": "0x72 CPUID",
+  "perCpuVmExitCount": 1,
+  "perCpuTlbRequests": 1,
+  "distinctVmcbPages": 32,
+  "distinctHsavePages": 32,
+  "preparedGeneration": 2,
+  "testedGeneration": 3,
+  "releasedGeneration": 4,
+  "powerGeneration": 0,
+  "finalStateFlags": 1,
+  "finalProcessorCount": 0,
+  "finalSlatReady": 0,
+  "serviceState": "Stopped",
+  "residentTested": false,
+  "innerOperatingSystemTested": false,
+  "loadedImageDebugIdentityVerified": false,
+  "evidenceDirectory": "tools/hvm_lab/artifacts/host-self-test-20260918-234529-87219d5d131f46bd8a9649c57fdac932",
+  "rawEvidence": [
+    {
+      "name": "after-self-test.json",
+      "bytes": 10804,
+      "sha256": "6E59D701D5E338E0BB5874138C6035BF103EA69E550C8BEE3D388B5D3CF9D601"
+    },
+    {
+      "name": "after-self-test.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "commands.log",
+      "bytes": 700,
+      "sha256": "EBEAB2E42891494F404DC829ABDF0C8F7D3F40015652C787680210C1EBDA6BBD"
+    },
+    {
+      "name": "config.txt",
+      "bytes": 70,
+      "sha256": "185FD1A24A95295E0E5CA03A36EF5C35761D52592CC46FA7EF9DE907ED4EF44F"
+    },
+    {
+      "name": "identity.json",
+      "bytes": 387,
+      "sha256": "D9E774A0958625482D626F6EA2EE49E58D35426020FECD4E7915B36FBED07C69"
+    },
+    {
+      "name": "initial.json",
+      "bytes": 2015,
+      "sha256": "60EE70E5A499C9AC61852973FB2DA50BAC425DE064456709B201FF62301B52DF"
+    },
+    {
+      "name": "initial.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "metrics.json",
+      "bytes": 28767,
+      "sha256": "5822CEC2F6FFCA3418DCD51D911256DEFD394312A041D36C0BF4B0E147B9AD08"
+    },
+    {
+      "name": "metrics.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "prepare.json",
+      "bytes": 900,
+      "sha256": "EF6331CBD414612A046A961B6CC3E3F25A5D953623A57253B1CAAA662EFB2DD3"
+    },
+    {
+      "name": "prepare.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "prepared.json",
+      "bytes": 10334,
+      "sha256": "1CF12B16346A4EB658C534C1184BD47AAA3C251EF7D29A8CDEBCA13787158A03"
+    },
+    {
+      "name": "prepared.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "query-after-stop.txt",
+      "bytes": 532,
+      "sha256": "56F254D271DBC2BE435D5FBD4B7CDD0BC5E09926693BB24CC22568FF50DF2A96"
+    },
+    {
+      "name": "released.json",
+      "bytes": 2015,
+      "sha256": "00FEF558314472A5AB124D1FCDF6068371B631BBD0F0F37BC10006EC799E011D"
+    },
+    {
+      "name": "released.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "result.json",
+      "bytes": 700,
+      "sha256": "1B5ADB4CD3F620252EFF4D579441CCFC95268937C8F549A95C2313A6F3F20085"
+    },
+    {
+      "name": "self-test.json",
+      "bytes": 923,
+      "sha256": "1ED4F6072C9F6099EAC19C29D2BE98F453000F916C680FC85D75F45E5F5BCE75"
+    },
+    {
+      "name": "self-test.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "start.txt",
+      "bytes": 812,
+      "sha256": "56E5D6C44C35007F49A44A7ADAFECFBFE98B809B2F53EC145FC0BAD346B1DE2A"
+    },
+    {
+      "name": "stop.txt",
+      "bytes": 532,
+      "sha256": "56F254D271DBC2BE435D5FBD4B7CDD0BC5E09926693BB24CC22568FF50DF2A96"
+    },
+    {
+      "name": "teardown.json",
+      "bytes": 882,
+      "sha256": "5BEA700B8BE83988FBB2E42374BFCD32AEB24F51CD8B5A4D493937F1DAF6C8F3"
+    },
+    {
+      "name": "teardown.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    }
+  ]
+}

@@ -2,6 +2,8 @@
 
 ## 当前进度（以下本节优先于后面的历史记录）
 
+**23:45 实体机32逻辑处理器逐核 SVM 自检 PASS。** CPU0:0..31 各完成一次真实 VMRUN→CPUID退出→原生返回，合计32次；每核有效退出证据/TLB请求1，32个私有VMCB及HSAVE地址互异。候选哈希、逐核集合和代次已独立核验，prepare/selfTest32、failed0，释放后processor/slatReady为0、SCM STOPPED。[原始证据索引与通过报告](evidence/amd-host-self-test-32cpu.json)。这证明本机真实 SVM 短往返可行；尚未测试全核同时常驻、持续负载或再启动 VMware 虚拟机。
+
 **23:38 实体机准入 PASS。** `7004a13c` 候选实际装载/查询/卸载成功；原始输出、候选哈希与最终服务 STOPPED 已独立核验。backendStatus=0、rejectReason=NONE，CR4=B50EF8、XSS=800 保持不变，未关闭 CET。[准入通过证据](evidence/amd-host-admission-pass.json)。此次只探测初始查询 CPU，prepared/selfTest/resident/vmExit 均为0；逐核准备与实体机 VMRUN 尚未验证。下一项是32逻辑处理器逐核串行的短自检与完整释放，不是同时开启32核常驻。
 
 **用户态 CET 兼容候选已实现，尚未硬件验证。** 支持 `XSS.CET_U=0x800` 与 `S_CET=0` 的组合；不关闭宿主 CET，也不修改 XSS。逐核探测读取 CET 枚举与 MSR，支持用户态 CET 时选择 XSAVES64/XRSTORS64，按 CPUID.D.1 EBX 分配 compacted 保存区，使用 XCR0|XSS 掩码；旧 XSS=0 路径保留 XSAVE64/XRSTOR64。当前明确拒绝非零 S_CET、其它 XSS 组件及 XCR0 管理的 CET，新增 v6 兼容拒绝原因 CET_STATE_UNSUPPORTED（13）。
