@@ -2,6 +2,8 @@
 
 ## 当前进度（以下本节优先于后面的历史记录）
 
+**22:33 最新硬件结果：双核受控嵌套探针 20 轮 PASS。** 144 个回传文件独立核验，CPU 0:0/0:1 各完成 20 次内层进入/反射/返回，完成序列均到 40，每次 NPF=5、failure=0；电源代次一致，最终资源归零。验证器 `tools/hvm_lab/verify_nested_probe.py`，提交内报告 [双核探针证据](evidence/amd-nested-probe-2cpu.json)。保持“逐核串行探针”范围，不视为并发多核内层操作系统通过。
+
 **22:24 最新硬件结果：单核受控嵌套 SVM 探针 1 轮 PASS。** 30 个回传文件哈希/大小独立核验，驱动签名有效、SYS/PDB/CLI 身份匹配、KD 命中新候选。CPU 0:0 完成内层进入 1 次、NPT 缺页 5 次、退出反射 1 次，EXITCODE=0x72、marker=0x4B534E31、completion sequence=2；18 次 full-flush 请求，释放后 prepared/resident/slatReady 全零。报告 `tools/hvm_lab/artifacts/guest-results/verified-nested-probe-one-cpu.json`。此证据更新下方“新候选未加载”的历史状态；尚未测试内层操作系统或并发多核内层 VM。
 
 **最新接线：受控嵌套 SVM 探针已连接实际汇编/退出分派。** 虚拟 MSR、VMLOAD/VMRUN/VMSAVE、真实 NPT02 缺页合成、CPUID 退出反射与原生返回均已写入候选。新增 prepare-svm-probe/self-test-svm-nested、metrics v4 逐核完成证据和一条命令的来宾加载/验收/回传脚本。标准驱动构建及 WDK 校验通过，441 项嵌套逻辑、124 项生产分派模拟和既有 AMD/Intel 检查通过；PS5、CLI、命令/i18n/IOCTL门禁通过。**新候选尚未加载执行，不宣称任意内层操作系统可运行。** 下方“未接入运行时”是前一次提交阶段的历史状态，已由本段更新。

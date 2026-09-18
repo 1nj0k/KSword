@@ -1,5 +1,9 @@
 # AMD 实验后端与重启续接
 
+最新硬件里程碑（2026-09-18 22:33）：2vCPU/20轮受控嵌套探针PASS。回传nested-probe-20260918-223305-8a32023c694c43178321d1b125402751共144文件SHA256/大小核验；生产CLI控制日志顺序完整，CPU0:0/0:1各20轮，completion sequence均到40，每轮每核entries/reflections=1、NPF=5、exit72/marker4B534E31、failure0，电源代次一致；teardown后资源归零。源候选仍age9，与单核同一SYS/PDB/CLI。新增verify_nested_probe.py独立验证器，处理PS5 Tee-Object UTF16与CLI UTF8；报告docs/next/evidence/amd-nested-probe-2cpu.json。自检是逐核串行，不宣称并发多核内层OS。按用户要求通过即本地commit，不推送；下一阶段4核。
+
+双核探针准备（2026-09-18 22:31）：单核通过点已提交d9413087，未推送。正常关机后保存冷态快照AMD-NestedProbe-1CPU-PASS-20260918，克隆改为单插槽2vCPU并冷启动；VMware日志CPL0/NumVCPUs2，KD78911已重连，映像/PDB仍为nested-probe候选age9。沿用已验证的候选，不替换SYS；下一步来宾管理员执行共享nested-probe/Start-GuestNestedProbe.ps1 -Vcpu 2 -Cycles 20，脚本加载独立候选并自动回传。尚无双核嵌套探针结果。
+
 用户工作方式（2026-09-18）：今后每个验证阶段实际通过并核验原始证据后，立即创建本地 commit，不推送。固定探针通过、逐核多CPU探针通过、并发内层OS通过和物理机常驻通过必须分别记账；不得把VMware来宾验证外推为物理宿主已可运行。当前单核探针通过点准备提交，克隆已正常关机，双核配置/启动尚未执行。
 
 最新硬件里程碑（2026-09-18 22:24）：受控嵌套SVM探针1vCPU/1轮真实PASS。回传nested-probe-20260918-222442-acf9b8d1cbe1476f9edeffb5604cf904，30文件SHA256/大小独立核验，SYS/PDB/CLI匹配nested-probe候选（PDB age9），来宾signature Valid、KD实际命中新驱动query并加载private PDB。CPU0:0 nestedProbe valid1/sequence2/status0/entries1/reflections1/faults5/exit72/marker4B534E31，18次TLB请求；teardown后INITIALIZED、prepared/resident/slatReady=0。独立报告artifacts/guest-results/verified-nested-probe-one-cpu.json。仅固定内层指令序列，不是内层OS启动。下一步正常关机保存单核探针通过快照，2vCPU/20轮逐核探针；这类self-test逐核串行，不得声称并发多核内层VM通过。
