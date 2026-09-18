@@ -1,9 +1,18 @@
 # Load the staged candidate only in the dedicated guest after bootstrap and KD are ready.
 [CmdletBinding()]
 param([string]$CandidateDirectory = 'C:\KSwordLab\candidate',
-      [string]$ControlSourceDirectory = $PSScriptRoot)
+      [string]$ControlSourceDirectory)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# Windows PowerShell 5.1 -File evaluates parameter defaults before PSScriptRoot
+# is populated. Resolve the implicit source in the body, not in param().
+if ([string]::IsNullOrWhiteSpace($ControlSourceDirectory)) {
+    $ControlSourceDirectory = $PSScriptRoot
+}
+if ([string]::IsNullOrWhiteSpace($ControlSourceDirectory)) {
+    throw 'Cannot determine the control source directory; pass -ControlSourceDirectory explicitly.'
+}
 
 $candidate = (Resolve-Path -LiteralPath $CandidateDirectory).Path
 $driver = Join-Path $candidate 'KswordARK.sys'
@@ -39,7 +48,9 @@ if ((Test-Path -LiteralPath $sourceManifest) -and
         throw 'Shared control tool does not match its identity manifest.'
     }
     Copy-Item -LiteralPath (Join-Path $candidate 'identity.json') -Destination (Join-Path $evidence 'previous-identity.json')
-    Copy-Item -LiteralPath $sourceControl -Destination $control -Force
+    if ((Get-FileHash -LiteralPath $control -Algorithm SHA256).Hash -ne $incoming.candidateSha256.'hvm_ctl.exe') {
+        Copy-Item -LiteralPath $sourceControl -Destination $control -Force
+    }
     Copy-Item -LiteralPath $sourceManifest -Destination (Join-Path $candidate 'identity.json') -Force
 }
 $identity = Get-Content -LiteralPath (Join-Path $candidate 'identity.json') -Raw -Encoding UTF8 | ConvertFrom-Json

@@ -1,5 +1,7 @@
 # AMD 实验后端与重启续接
 
+2026-09-18 加载入口补充：PS5.1 `powershell.exe -File` 下 param 默认表达式的 `$PSScriptRoot` 为空，正文中才有值；同一文件用 `-Command &` 则默认值正常，已用最小文件复现。Load-GuestCandidate 改为正文初始化来源目录；测试新增 3 项真实 PS5 进程入口（默认 -File、显式目录、调用运算符），另 7 项模拟 SCM 全通过。重试时 CLI 哈希相同不重复覆盖，避免刚退出的进程仍短暂持有文件时 Copy-Item 失败。当前仍等待来宾新版加载脚本实测，不能记作 VMRUN 通过。
+
 最新进度（2026-09-18，优先于下方逐次历史）：宿主 LabHostReady；克隆 Win10 Home 19042/1 vCPU，初始化并重启，KD 已连接（普通驱动断点/匹配符号加载/受控转储尚未验证）。用户的加载输出已证明签名信任、SCM RUNNING 和 AMD status IOCTL 成功：backend=2、SVM/NPT/NRIP、ASID=64、PA=45、msrValidMask=15。未 prepare 或 VMRUN。当前阻塞是 UTF-8 中文 `没有拒绝过` 经 PS 5.1 代码页 936 解码吞掉后面的引号，已复现；不是驱动或原始 printf 丢引号。共享 JSON 打印器现在输出 ASCII Unicode escape；真实 query 格式化 + PS5/936 回归通过。加载脚本现在可重试同路径运行中候选，更新 CLI/identity 前比较 SYS/PDB 哈希，拒绝其它活动路径；7 项模拟 SCM/更新测试通过。PS5 Get-Content 的字符串 provider 属性会被 ConvertTo-Json 深度遍历，证据字符串改用 File.ReadAllText。新 CLI/加载脚本待共享目录来宾实测；不需要重启/卸载现有候选。用户已授权切回 Astra 修改代码并继续；保留 Win10、不换电脑、不推送。不得重复执行昨晚已经完成的关机授权。
 
 2026-09-17 增加待硬件验收的 SVM/NPT 实验实现。**第一次真实 VMRUN 尚未运行，不能宣称 AMD 或多核已支持成功。**

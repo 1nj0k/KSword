@@ -13,6 +13,7 @@ foreach ($dir in @($local,$source)) {
     'driver fixture' | Set-Content (Join-Path $dir 'KswordARK.sys')
     'pdb fixture' | Set-Content (Join-Path $dir 'KswordARK.pdb')
     Copy-Item (Join-Path $repo 'tools/hvm_ctl/test_query_json.exe') (Join-Path $dir 'hvm_ctl.exe')
+    if ($dir -eq $local) { 'old control fixture' | Set-Content (Join-Path $dir 'hvm_ctl.exe') }
     $hashes = @{}
     foreach ($name in @('KswordARK.sys','KswordARK.pdb','hvm_ctl.exe')) {
         $hashes[$name] = (Get-FileHash (Join-Path $dir $name)).Hash
@@ -21,6 +22,19 @@ foreach ($dir in @($local,$source)) {
 }
 # Replace only the non-mockable identity constructor, leaving the guard itself in place.
 $text = Get-Content (Join-Path $PSScriptRoot 'Load-GuestCandidate.ps1') -Raw
+# Execute the actual production initialization via -File in a fresh PS 5.1
+# process: ScriptBlock tests with explicit parameters missed this entry path.
+$initEnd = $text.IndexOf('$candidate =')
+if ($initEnd -lt 0) { throw 'Cannot locate loader initialization boundary.' }
+$probe = Join-Path $source 'Test-LoaderEntry.ps1'
+($text.Substring(0, $initEnd) + "`nWrite-Output `$ControlSourceDirectory") |
+    Set-Content -LiteralPath $probe -Encoding UTF8
+$resolved = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $probe
+if ($LASTEXITCODE -ne 0 -or $resolved -ne $source) { throw '-File default source directory regression.' }
+$resolved = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $probe -ControlSourceDirectory $local
+if ($LASTEXITCODE -ne 0 -or $resolved -ne $local) { throw '-File explicit source directory regression.' }
+$resolved = & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& '$($probe.Replace("'", "''"))'"
+if ($LASTEXITCODE -ne 0 -or $resolved -ne $source) { throw 'Call-operator default source directory regression.' }
 $identityLine = '$principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()'
 if (-not $text.Contains($identityLine)) { throw 'Update test identity adapter for changed production preflight.' }
 $text = $text.Replace($identityLine, '$principal = New-Object PSObject; $principal | Add-Member ScriptMethod IsInRole { return $true }')
@@ -75,4 +89,4 @@ Copy-Item (Join-Path $repo 'tools/hvm_ctl/test_query_json.exe') (Join-Path $sour
 'different driver' | Set-Content (Join-Path $local 'KswordARK.sys')
 Run-Case '4 RUNNING' $driver $false 'same loaded driver and PDB'
 if ($commands.Count) { throw 'SCM was accessed after a driver identity mismatch.' }
-'GUEST_LOADER_TESTS=PASS (7 cases; simulated SCM only)'
+'GUEST_LOADER_TESTS=PASS (3 real PS5.1 entry cases; 7 simulated SCM cases)'
