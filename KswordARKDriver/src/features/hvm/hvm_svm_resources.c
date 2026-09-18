@@ -13,6 +13,15 @@ static VOID KswSvmReadEvidence(KSW_SVM_CAPS* Caps, ULONG Msr, ULONG Bit, ULONGLO
     __except (EXCEPTION_EXECUTE_HANDLER) { Caps->Exception = GetExceptionCode(); }
 }
 
+/* Preserve the exact admission check independently from its shared NTSTATUS. */
+static NTSTATUS KswSvmReject(KSW_SVM_CAPS* Caps, ULONG Reason, NTSTATUS Status)
+{
+    /* Every refusal publishes a stable protocol reason before returning. */
+    Caps->RejectReason = Reason;
+    /* Keep the existing status contract for control callers. */
+    return Status;
+}
+
 /* Must execute on the processor whose evidence it returns. */
 NTSTATUS KswordSvmProbeCpu(KSW_SVM_CAPS* Caps)
 {
@@ -25,7 +34,7 @@ NTSTATUS KswordSvmProbeCpu(KSW_SVM_CAPS* Caps)
     /* Preserve the bound for diagnostics. */
     Caps->MaxLeaf = (ULONG)r[0];
     /* The backend needs both MAXPHYADDR and SVM enumeration. */
-    if (Caps->MaxLeaf < 0x8000000aU) { return STATUS_NOT_SUPPORTED; }
+    if (Caps->MaxLeaf < 0x8000000aU) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_CPUID_RANGE, STATUS_NOT_SUPPORTED); }
     /* Discover SVM and one-GiB pages separately. */
     __cpuid(r, (int)0x80000001U);
     /* ECX.SVM is the instruction capability gate. */
@@ -43,9 +52,9 @@ NTSTATUS KswordSvmProbeCpu(KSW_SVM_CAPS* Caps)
     /* The four-level NPT implementation validates this width. */
     Caps->PhysicalBits = (ULONG)r[0] & 0xffU;
     /* Stop before touching SVM-only MSRs if SVM is filtered. */
-    if (!Caps->Svm || !(Caps->Features & 1U) || !KswSvmAsidValid(Caps->AsidCount, 1)) { return STATUS_NOT_SUPPORTED; }
+    if (!Caps->Svm || !(Caps->Features & 1U) || !KswSvmAsidValid(Caps->AsidCount, 1)) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_SVM_NPT_ASID, STATUS_NOT_SUPPORTED); }
     /* General user-mode intercepts need NRIP; no unsafe root instruction fetch fallback. */
-    if (!(Caps->Features & 8U)) { return STATUS_NOT_SUPPORTED; }
+    if (!(Caps->Features & 8U)) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_NRIP, STATUS_NOT_SUPPORTED); }
     /* Capture all ownership/cache evidence independently. */
     KswSvmReadEvidence(Caps, KSW_SVM_MSR_VM_CR, 1, &Caps->VmCr);
     /* EFER.SVME belongs to an existing VMM when already set. */
@@ -55,26 +64,56 @@ NTSTATUS KswordSvmProbeCpu(KSW_SVM_CAPS* Caps)
     /* Read the existing PAT rather than writing a preferred layout. */
     KswSvmReadEvidence(Caps, 0x277U, 8, &Caps->Pat);
     /* A filtered MSR makes hardware readiness unproven. */
-    if (Caps->Valid != 15) { return NT_SUCCESS(Caps->Exception) ? STATUS_NOT_SUPPORTED : Caps->Exception; }
+    if (Caps->Valid != 15) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_MSR_READ, NT_SUCCESS(Caps->Exception) ? STATUS_NOT_SUPPORTED : Caps->Exception); }
     /* Respect firmware SVMDIS and existing virtualization ownership. */
-    if ((Caps->VmCr & 0x10ULL) || (Caps->Efer & KSW_SVM_EFER_SVME) || Caps->Hsave) { return STATUS_DEVICE_BUSY; }
-    /* CET, LA57, PKS and user-interrupt state transfers are outside v1. */
-    if (__readcr4() & ((1ULL << 12) | (1ULL << 23) | (1ULL << 24) | (1ULL << 25))) { return STATUS_NOT_SUPPORTED; }
+    if (Caps->VmCr & 0x10ULL) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_FIRMWARE, STATUS_DEVICE_BUSY); }
+    /* An enabled SVM owner remains an unconditional refusal. */
+    if (Caps->Efer & KSW_SVM_EFER_SVME) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_SVME, STATUS_DEVICE_BUSY); }
+    /* Preserve the conservative nonzero-HSAVE gate while diagnosing other blockers. */
+    if (Caps->Hsave) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_HSAVE, STATUS_DEVICE_BUSY); }
+    /* Capture the CR4 observation before testing individual unsupported state bits. */
+    Caps->Cr4 = __readcr4();
+    /* Zero CR4 is only meaningful when this explicit observation bit is set. */
+    Caps->StateValid |= KSWORD_ARK_SVM_VALID_CR4;
     /* Require an OS-enabled XSAVE path for complete user XSTATE preservation. */
     __cpuid(r, 1);
-    /* Both XSAVE and OSXSAVE must be present. */
-    if (((ULONG)r[2] & (3U << 26)) != (3U << 26)) { return STATUS_NOT_SUPPORTED; }
+    /* Preserve the OSXSAVE gate as well as the hardware XSAVE support bit. */
+    Caps->Cpuid1Ecx = (ULONG)r[2];
+    /* Publish which leaf was actually executed. */
+    Caps->StateValid |= KSWORD_ARK_SVM_VALID_CPUID1;
+    /* Both XSAVE and OSXSAVE must be present before reading XCR0. */
+    if ((Caps->Cpuid1Ecx & (3U << 26)) != (3U << 26)) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_XSAVE, STATUS_NOT_SUPPORTED); }
     /* The first backend handles XCR0 state; active supervisor XSTATE is refused. */
     __cpuidex(r, 0xd, 1);
-    /* Read XSS only when the processor enumerates XSAVES. */
-    if (((ULONG)r[0] & 8U) != 0) {
-        /* Preserve a VMM-filtered XSS read as unavailability. */
-        __try { if (__readmsr(0xda0U) != 0) { return STATUS_NOT_SUPPORTED; } }
-        /* Never skip unknown supervisor state. */
-        __except (EXCEPTION_EXECUTE_HANDLER) { return GetExceptionCode(); }
+    /* Preserve the actual XSAVE instruction-family enumeration. */
+    Caps->XsaveFeatures = (ULONG)r[0];
+    /* Raw feature zero is distinguishable from a skipped CPUID leaf. */
+    Caps->StateValid |= KSWORD_ARK_SVM_VALID_CPUID_D1;
+    /* Read-only extended-state inspection never enables unsupported state. */
+    __try {
+        /* XGETBV is legal only after the verified OSXSAVE gate above. */
+        Caps->Xcr0 = _xgetbv(0);
+        /* Publish XCR0 independently from a possibly filtered XSS read. */
+        Caps->StateValid |= KSWORD_ARK_SVM_VALID_XCR0;
+        /* XSS is not assumed to exist on processors without XSAVES. */
+        if (Caps->XsaveFeatures & 8U) {
+            /* Retain the real supervisor-state mask even when a CR4 gate also fails. */
+            Caps->Xss = __readmsr(0xda0U);
+            /* An observed zero is now distinguishable from a skipped/failed read. */
+            Caps->StateValid |= KSWORD_ARK_SVM_VALID_XSS;
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        /* Preserve the exact exception instead of fabricating absent supervisor state. */
+        Caps->Exception = GetExceptionCode();
+        /* No virtualization ownership was acquired by these reads. */
+        return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_XSTATE_READ, Caps->Exception);
     }
+    /* CET, LA57, PKS and user-interrupt state transfers remain unsupported. */
+    if (Caps->Cr4 & ((1ULL << 12) | (1ULL << 23) | (1ULL << 24) | (1ULL << 25))) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_CR4, STATUS_NOT_SUPPORTED); }
+    /* The XSAVE/XRSTOR entry path still cannot preserve enabled supervisor state. */
+    if (Caps->Xss) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_XSS, STATUS_NOT_SUPPORTED); }
     /* Capability success does not itself prove that VMRUN works. */
-    return KswNptAddressMask(Caps->PhysicalBits) ? STATUS_SUCCESS : STATUS_NOT_SUPPORTED;
+    return KswNptAddressMask(Caps->PhysicalBits) ? STATUS_SUCCESS : KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_PHYSICAL_WIDTH, STATUS_NOT_SUPPORTED);
 }
 
 /* Publish hardware evidence separately from runtime implementation state. */
@@ -94,6 +133,12 @@ NTSTATUS KswordSvmProbe(KSW_HVM_RUNTIME* Runtime)
     Runtime->SvmCapabilities.vmCr = caps.VmCr; Runtime->SvmCapabilities.efer = caps.Efer;
     /* Preserve the remaining independently sampled registers. */
     Runtime->SvmCapabilities.hsave = caps.Hsave; Runtime->SvmCapabilities.pat = caps.Pat;
+    /* Admission failure must identify the precise check, not only STATUS_NOT_SUPPORTED. */
+    Runtime->SvmCapabilities.rejectReason = caps.RejectReason; Runtime->SvmCapabilities.stateValidMask = caps.StateValid;
+    /* Record both CPUID leaves used to decide which state reads were legal. */
+    Runtime->SvmCapabilities.cpuid1Ecx = caps.Cpuid1Ecx; Runtime->SvmCapabilities.xsaveFeatures = caps.XsaveFeatures;
+    /* Preserve raw extended-state evidence even when preparation is refused. */
+    Runtime->SvmCapabilities.cr4 = caps.Cr4; Runtime->SvmCapabilities.xcr0 = caps.Xcr0; Runtime->SvmCapabilities.xss = caps.Xss;
     /* Select SVM independently from generic x64 compiler architecture. */
     Runtime->BackendId = KSWORD_ARK_HVM_BACKEND_SVM;
     /* Mark the CPU vendor without claiming implementation readiness. */

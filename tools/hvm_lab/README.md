@@ -128,6 +128,10 @@ stage 3 不清除 Active，必须由真实全核 stop 收回已进入 CPU。
 
 ## 无硬件测试与实现边界
 
+宿主只读准入诊断：管理员执行 `Test-HostSvmAdmission.ps1`，默认使用仓库 Release SYS 和匹配的 hvm_ctl。
+该脚本仅装载→status→卸载，将启动 ID、文件哈希、SCM 输出和原始查询保存到 artifacts/host-admission-*；不执行 prepare/self-test/resident。
+HVM v6 输出明确拒绝原因及带有效位的 CR4/XCR0/XSS；即使驱动装载成功，准入失败也不得记为 SVM 执行通过。
+
 嵌套 SVM 第二阶段候选使用独立 `guest-bootstrap/nested-probe` 目录，保留上一阶段候选。
 来宾冷启动、旧驱动 STOPPED 后，管理员运行该目录的 `Start-GuestNestedProbe.ps1`（默认 1 vCPU/1 次）。
 脚本复制匹配 SYS/PDB/CLI 到独立目录，加载并执行 `prepare-svm-probe → self-test-svm-nested → metrics → teardown`，自动回传证据。

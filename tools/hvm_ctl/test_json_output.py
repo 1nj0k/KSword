@@ -11,6 +11,14 @@ assert raw.isascii(), 'Status JSON must survive ANSI/OEM pipe decoding'
 status = json.loads(raw)
 assert status['backend'] == 2 and status['svmProbe']['asidCount'] == 64
 assert status['nestedLastRefusalSiteText'] == '没有拒绝过'
+assert status['svmProbe']['rejectReason'] == 8
+assert status['svmProbe']['rejectReasonName'] == 'CR4_UNSUPPORTED_STATE'
+assert status['svmProbe']['stateValidMask'] == 31
+assert status['svmProbe']['cpuid1Ecx'] == '0x0C000000'
+assert status['svmProbe']['xsaveFeatures'] == '0x00000008'
+assert status['svmProbe']['cr4'] == '0x0000000000800000'
+assert status['svmProbe']['xcr0'] == '0x0000000000000007'
+assert status['svmProbe']['xss'] == '0x0000000000000800'
 strings = subprocess.check_output([str(fixture), 'strings']).splitlines()
 assert json.loads(strings[0]) == '没有拒绝过"\\\n\t😀'
 assert json.loads(strings[1]) == '\ufffd\ufffd'

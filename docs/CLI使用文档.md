@@ -402,7 +402,7 @@ WSL silo and Linux PID/TID diagnostics.
 | `r0 directory-irp` | `KswordCLI.exe r0 directory-irp --path PATH [--layer N] [--max-entries N] [--limit N]` | 在选定文件系统栈层枚举目录。 | 必填：--path。可选：--layer、--max-entries、--limit。 | 输出实际接收层及驱动名。 |
 | `r0 image-signature` | `KswordCLI.exe r0 image-signature --path PATH [--module-base VA] [--flags 0xN]` | 读取 Authenticode 证书表和 CI 证据。 | 必填：--path。可选：--module-base、--flags。 | `IOCTL_KSWORD_ARK_QUERY_IMAGE_SIGNATURE`。 |
 | `r0 debug-output` | `KswordCLI.exe r0 debug-output [--after-sequence N] [--max-records N] [--limit N]` | 读取内核调试输出环。 | 可选：--after-sequence、--max-records、--limit。 | `IOCTL_KSWORD_ARK_DEBUG_OUTPUT_DRAIN`，不改变捕获状态。 |
-| `r0 hvm-status` | `KswordCLI.exe r0 hvm-status` | 查询 HVM v5 的 VMX/EPT 或实验性 SVM/NPT 生命周期与能力状态。 | 无。 | `IOCTL_KSWORD_ARK_QUERY_HVM`。 |
+| `r0 hvm-status` | `KswordCLI.exe r0 hvm-status` | 查询 HVM v6 的 VMX/EPT 或实验性 SVM/NPT 生命周期与能力状态。 | 无。 | `IOCTL_KSWORD_ARK_QUERY_HVM`。 |
 | `r0 hvm-metrics` | `KswordCLI.exe r0 hvm-metrics` | 查询转换计时有效性及 INVEPT、替换页资源计数。 | 无。 | `IOCTL_KSWORD_ARK_HVM_METRICS` v4；完整逐核 JSON：`hvm_ctl --json metrics`，包括影子 EPT 缓存、A/D 维护计数。主程序“完整操作”使用同一引擎。 |
 | `r0 hvm-events` | `KswordCLI.exe r0 hvm-events [--after-sequence N] [--max-rows N]` | 读取 HVM 事件环，不清空事件。 | 可选：--after-sequence、--max-rows。 | `IOCTL_KSWORD_ARK_HVM_EVENTS`。 |
 | `r0 ioctl-registry` | `KswordCLI.exe r0 ioctl-registry [--flags 0xN] [--max-entries N]` | 查询驱动已注册的 IOCTL 分发表。 | 可选：--flags、--max-entries。 | `IOCTL_KSWORD_ARK_QUERY_IOCTL_REGISTRY`。 |
@@ -444,7 +444,9 @@ WSL silo and Linux PID/TID diagnostics.
 调用者须在这些操作前移除映射，并在控制期间保留目标页。
 
 
-### AMD SVM/NPT 实验后端（HVM v5 / metrics v4）
+### AMD SVM/NPT 实验后端（HVM v6 / metrics v4）
+
+HVM v6 在 `status.svmProbe` 增加 `rejectReason`/`rejectReasonName`、`stateValidMask`、`cpuid1Ecx`、`xsaveFeatures`、`cr4`、`xcr0`、`xss`。状态有效位 1/2/4/8/16 分别对应 CR4、CPUID.1、CPUID.D.1、XCR0、XSS；无有效位的零值不代表状态关闭。拒绝码 7 是非零 HSAVE、8 是 CR4 中未支持的状态、9 是 XSAVE/OSXSAVE 不可用、10 是扩展状态读取异常、11 是非零 XSS、12 是物理地址宽度不支持。该查询不修改寄存器、不进入 SVM；SYS、主程序与 CLI 必须同步更新，旧 v5 请求拒绝。
 
 `status` 增加 backend（0 无、1 VMX、2 SVM）、slatType、slatReady、backendStatus、powerGeneration 及带独立 MSR 有效位的 svmProbe。
 逐核 executionStage 和 svmExitCode 独立于 Intel VMX 指令结果；AMD 不设置 VMXON_SUCCEEDED。

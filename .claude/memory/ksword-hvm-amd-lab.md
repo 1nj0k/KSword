@@ -1,5 +1,7 @@
 # AMD 实验后端与重启续接
 
+宿主重启后诊断（2026-09-18 23:01启动）：用户遵循实验项重启、未开VMware，宿主仅装载查询卸载成功；HSAVE归零，拒绝从STATUS_DEVICE_BUSY变为STATUS_NOT_SUPPORTED(C00000BB)，EFER4D01/VM_CR8/PA48/MSR有效15。尚不能确定CR4或XSS等具体原因，不可据此放宽门。已增加HVM v6准入诊断：rejectReason/Name、stateValidMask、CPUID.1 ECX/CPUID.D.1 EAX、CR4/XCR0/XSS，原准入限制保留。驱动/主程序/KswordCLI/hvm_ctl同步构建；驱动WDK/x64ApiValidator/CAT零警告，主程序4条既有警告；AMD73907/嵌套441/分派124/Intel85、JSON/CP936、命令目录/i18n/IOCTL检查通过。Release SYS按仓库原签名链签名，签名者00797B09...与用户此前成功加载产物一致；工具链验证仍报不受信任根，不能称签名验证通过。诊断候选副本artifacts/amd-host-admission-v6；新增Test-HostSvmAdmission.ps1仅装载/status/卸载并保存文件哈希及日志，PS5解析通过，待用户管理员执行。未实际执行本机SVM。旧guest-bootstrap/nested-probe及age9/协议v5候选保持原样，勿与新v6 CLI混用；宿主重启已使旧KD会话失效，后续需重建。
+
 宿主装载里程碑（2026-09-18）：用户对Release/KswordARK.sys执行仅装载→status→卸载。用户原始CLI证明IOCTL响应，SCM独立查询STOPPED/exit0且ImagePath指Release；此范围PASS，需按要求提交。HVM本身未启动：queryStatus1/backendStatus=0x80000011 STATUS_DEVICE_BUSY，prepared/resident/vmExit=0。svmProbe有效位15，VM_CR8（SVMDIS=0）、EFER4D01（SVME=0）、HSAVE=0x803656000非零，ASID32768/PA48；触发hvm_svm_resources.c的非零HSAVE保守拒绝条件。不能据非零HSAVE断言仍有活动VMware所有者（残留/来源未确认），也不能当作物理机SVM执行失败或通过。报告docs/next/evidence/amd-host-load-query-unload.json明确查询来自用户stdout、未核对已加载映像调试身份。不得自动清零HSAVE或跳过能力门；后续若推进物理机常驻，需要独立所有权诊断。
 
 最新测试偏好（2026-09-18）：用户要求提速，后续新候选单核通过后直接跳8核，取消常规2/4核中间验收；仅8核失败且定位需要时才缩小拓扑。每个真实通过点仍独立核验并commit，不推送。当前八核探针通过点已提交47d404b4，克隆正常关机并保存AMD-NestedProbe-8CPU-100Cycles-PASS-20260918冷态快照；用户无需重复旧探针或在实体宿主加载候选。下一步是通用嵌套SVM代码实现，不能把既有固定探针当作VMware内层OS兼容测试入口。

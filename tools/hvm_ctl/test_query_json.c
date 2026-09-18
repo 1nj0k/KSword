@@ -36,6 +36,13 @@ static BOOL WINAPI FakeDeviceIoControl(HANDLE device, DWORD code, LPVOID input,
     response->backend = 2;
     response->slatType = 2;
     response->svmCapabilities.asidCount = 64;
+    response->svmCapabilities.rejectReason = KSWORD_ARK_SVM_REJECT_CR4;
+    response->svmCapabilities.stateValidMask = 31;
+    response->svmCapabilities.cpuid1Ecx = 0x0C000000;
+    response->svmCapabilities.xsaveFeatures = 8;
+    response->svmCapabilities.cr4 = 0x800000;
+    response->svmCapabilities.xcr0 = 7;
+    response->svmCapabilities.xss = 0x800;
     *returned = sizeof(*response);
     return TRUE;
 }

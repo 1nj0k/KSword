@@ -8,7 +8,28 @@
  * hypervisor.  ACTIVE is published only after every selected processor has
  * entered VMX non-root operation and the rollback rendezvous is available.
  */
-#define KSWORD_ARK_HVM_PROTOCOL_VERSION 5UL
+#define KSWORD_ARK_HVM_PROTOCOL_VERSION 6UL
+
+/* V6 reports why SVM discovery stopped without interpreting missing values as zero. */
+#define KSWORD_ARK_SVM_REJECT_NONE 0UL
+#define KSWORD_ARK_SVM_REJECT_CPUID_RANGE 1UL
+#define KSWORD_ARK_SVM_REJECT_SVM_NPT_ASID 2UL
+#define KSWORD_ARK_SVM_REJECT_NRIP 3UL
+#define KSWORD_ARK_SVM_REJECT_MSR_READ 4UL
+#define KSWORD_ARK_SVM_REJECT_FIRMWARE 5UL
+#define KSWORD_ARK_SVM_REJECT_SVME 6UL
+#define KSWORD_ARK_SVM_REJECT_HSAVE 7UL
+#define KSWORD_ARK_SVM_REJECT_CR4 8UL
+#define KSWORD_ARK_SVM_REJECT_XSAVE 9UL
+#define KSWORD_ARK_SVM_REJECT_XSTATE_READ 10UL
+#define KSWORD_ARK_SVM_REJECT_XSS 11UL
+#define KSWORD_ARK_SVM_REJECT_PHYSICAL_WIDTH 12UL
+/* Independent validity bits for the extended state observations. */
+#define KSWORD_ARK_SVM_VALID_CR4 1UL
+#define KSWORD_ARK_SVM_VALID_CPUID1 2UL
+#define KSWORD_ARK_SVM_VALID_CPUID_D1 4UL
+#define KSWORD_ARK_SVM_VALID_XCR0 8UL
+#define KSWORD_ARK_SVM_VALID_XSS 16UL
 
 /* V5 describes architecture independently from capability flags. */
 #define KSWORD_ARK_HVM_BACKEND_NONE 0UL
@@ -689,6 +710,10 @@ typedef struct _KSWORD_ARK_HVM_SVM_CAPABILITIES {
     unsigned long maxLeaf, features, asidCount, physicalBits, msrValidMask, exceptionStatus;
     /* Raw observations are meaningful only with the matching valid bit. */
     unsigned long long vmCr, efer, hsave, pat;
+    /* V6 admission diagnostics; raw XSS=0 is evidence only when its valid bit is set. */
+    unsigned long rejectReason, stateValidMask, cpuid1Ecx, xsaveFeatures;
+    /* Read-only observations; discovery never changes these registers. */
+    unsigned long long cr4, xcr0, xss;
 } KSWORD_ARK_HVM_SVM_CAPABILITIES;
 
 typedef struct _KSWORD_ARK_QUERY_HVM_RESPONSE

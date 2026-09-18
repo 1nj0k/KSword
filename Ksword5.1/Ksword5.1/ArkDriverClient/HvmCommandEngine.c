@@ -930,6 +930,26 @@ static int DoCpuidView(int asJson)
     return 0;
 }
 
+static const char* SvmProbeRejectName(unsigned long reason)
+{
+    switch (reason) {
+    case KSWORD_ARK_SVM_REJECT_NONE: return "NONE";
+    case KSWORD_ARK_SVM_REJECT_CPUID_RANGE: return "CPUID_RANGE";
+    case KSWORD_ARK_SVM_REJECT_SVM_NPT_ASID: return "SVM_NPT_ASID";
+    case KSWORD_ARK_SVM_REJECT_NRIP: return "NRIP_REQUIRED";
+    case KSWORD_ARK_SVM_REJECT_MSR_READ: return "MSR_READ_FAILED";
+    case KSWORD_ARK_SVM_REJECT_FIRMWARE: return "FIRMWARE_DISABLED";
+    case KSWORD_ARK_SVM_REJECT_SVME: return "SVME_ALREADY_ENABLED";
+    case KSWORD_ARK_SVM_REJECT_HSAVE: return "HSAVE_NONZERO";
+    case KSWORD_ARK_SVM_REJECT_CR4: return "CR4_UNSUPPORTED_STATE";
+    case KSWORD_ARK_SVM_REJECT_XSAVE: return "XSAVE_OSXSAVE_REQUIRED";
+    case KSWORD_ARK_SVM_REJECT_XSTATE_READ: return "XSTATE_READ_FAILED";
+    case KSWORD_ARK_SVM_REJECT_XSS: return "XSS_NONZERO";
+    case KSWORD_ARK_SVM_REJECT_PHYSICAL_WIDTH: return "PHYSICAL_WIDTH_UNSUPPORTED";
+    default: return "UNKNOWN";
+    }
+}
+
 static int DoQuery(HANDLE h, int asJson)
 {
     KSWORD_ARK_QUERY_HVM_REQUEST req;
@@ -959,10 +979,14 @@ static int DoQuery(HANDLE h, int asJson)
         PrintStateBitsJson(rsp.stateFlags);
         printf(",\"backend\":%lu,\"slatType\":%lu,\"slatReady\":%lu,\"backendStatus\":\"0x%08lX\",\"powerGeneration\":%lu",
                rsp.backend, rsp.slatType, rsp.slatReady, rsp.backendStatus, rsp.powerGeneration);
-        printf(",\"svmProbe\":{\"maxLeaf\":%lu,\"features\":%lu,\"asidCount\":%lu,\"physicalBits\":%lu,\"msrValidMask\":%lu,\"exceptionStatus\":\"0x%08lX\",\"vmCr\":\"0x%016llX\",\"efer\":\"0x%016llX\",\"hsave\":\"0x%016llX\",\"pat\":\"0x%016llX\"}",
+        printf(",\"svmProbe\":{\"maxLeaf\":%lu,\"features\":%lu,\"asidCount\":%lu,\"physicalBits\":%lu,\"msrValidMask\":%lu,\"exceptionStatus\":\"0x%08lX\",\"vmCr\":\"0x%016llX\",\"efer\":\"0x%016llX\",\"hsave\":\"0x%016llX\",\"pat\":\"0x%016llX\"",
                rsp.svmCapabilities.maxLeaf, rsp.svmCapabilities.features, rsp.svmCapabilities.asidCount, rsp.svmCapabilities.physicalBits,
                rsp.svmCapabilities.msrValidMask, rsp.svmCapabilities.exceptionStatus, rsp.svmCapabilities.vmCr,
                rsp.svmCapabilities.efer, rsp.svmCapabilities.hsave, rsp.svmCapabilities.pat);
+        printf(",\"rejectReason\":%lu,\"rejectReasonName\":\"%s\",\"stateValidMask\":%lu,\"cpuid1Ecx\":\"0x%08lX\",\"xsaveFeatures\":\"0x%08lX\",\"cr4\":\"0x%016llX\",\"xcr0\":\"0x%016llX\",\"xss\":\"0x%016llX\"}",
+               rsp.svmCapabilities.rejectReason, SvmProbeRejectName(rsp.svmCapabilities.rejectReason),
+               rsp.svmCapabilities.stateValidMask, rsp.svmCapabilities.cpuid1Ecx, rsp.svmCapabilities.xsaveFeatures,
+               rsp.svmCapabilities.cr4, rsp.svmCapabilities.xcr0, rsp.svmCapabilities.xss);
         printf(",\"featureNames\":");
         PrintFeatureBitsJson(rsp.featureFlags);
         printf(",\"generation\":%lu,\"processorCount\":%lu,"

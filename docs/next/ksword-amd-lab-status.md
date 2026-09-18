@@ -2,6 +2,8 @@
 
 ## 当前进度（以下本节优先于后面的历史记录）
 
+**宿主重启后的新阻塞：HSAVE 已归零，探测仍返回 STATUS_NOT_SUPPORTED。** 驱动装载/查询/卸载仍成功，尚未执行 SVM。已构建 HVM v6 诊断版，输出明确拒绝原因及带有效位的 CR4/XCR0/XSS；原准入条件保留。驱动 WDK/API 校验零警告，CLI/主程序构建和现有逻辑测试通过；主程序有4条既有警告，仓库签名工具的最终信任校验仍未通过。实际宿主诊断等待管理员执行 `tools/hvm_lab/Test-HostSvmAdmission.ps1`，不要把此诊断构建记为物理机常驻通过。旧 v5 来宾基线候选保留。
+
 **宿主仅装载测试 PASS：驱动已装载、响应 status 并卸载。** CLI 输出由用户提供，宿主 SCM 独立确认 STOPPED/exit0。HVM 探测返回 STATUS_DEVICE_BUSY（0x80000011）：VM_HSAVE_PA=0x803656000 非零触发保守拒绝，EFER.SVME=0、VM_CR.SVMDIS=0；现有证据不能确认该 HSAVE 的来源或是否存在活动所有者。没有执行 prepare/self-test/resident，不能宣称物理机常驻通过。记录见 [宿主装载证据](evidence/amd-host-load-query-unload.json)。
 
 **22:40 最新硬件结果：八核受控嵌套探针 100 轮 PASS。** 624 个回传文件独立核验；8 核各 100 次，共 800 次完整往返，完成序列均 200，每次 NPF=5、failure=0；控制顺序、逐核集合及电源代次一致，最终资源归零。[八核探针证据](evidence/amd-nested-probe-8cpu.json)。固定探针 1/2/4/8 核阶段已通过；不代表并发内层操作系统、物理宿主常驻或两小时压力通过。接下来推进通用内层 VMM 支持。

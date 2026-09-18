@@ -55,6 +55,10 @@ typedef struct _KSW_SVM_CAPS {
     ULONGLONG Hsave;
     /* Cache layout must remain identical on every participating CPU. */
     ULONGLONG Pat;
+    /* Admission refusal and independent extended-state observation validity. */
+    ULONG RejectReason, StateValid, Cpuid1Ecx, XsaveFeatures;
+    /* Read-only architectural state, never inferred from CPUID support alone. */
+    ULONGLONG Cr4, Xcr0, Xss;
     /* The VMM may filter one-GiB page support. */
     BOOLEAN Page1Gb;
     /* Explicit SVM instruction availability. */
