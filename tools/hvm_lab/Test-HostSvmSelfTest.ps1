@@ -4,6 +4,24 @@ param([ValidateRange(0,30)][int]$ResidentSeconds=0)
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 
+function Wait-HostStopCompletion($Controller,[timespan]$Timeout) {
+    $Controller.Refresh()
+    if ([string]$Controller.Status -eq 'StopPending') {
+        # A successful sc stop only acknowledges the request; wait for SCM completion.
+        $Controller.WaitForStatus('Stopped',$Timeout)
+        $Controller.Refresh()
+    }
+    if ([string]$Controller.Status -ne 'Stopped') {
+        throw "Existing KswordARK service must be STOPPED; actual=$($Controller.Status)."
+    }
+}
+function Wait-HostDriverStopped {
+    Add-Type -AssemblyName System.ServiceProcess
+    $controller=New-Object System.ServiceProcess.ServiceController('KswordARK')
+    try { Wait-HostStopCompletion $controller ([timespan]::FromSeconds(30)) }
+    finally { $controller.Dispose() }
+}
+
 function Assert-HostSvmSelfTestEvidence($Prepared,$After,$Metrics,$Control,[int]$Count) {
     if ($Count -lt 1 -or $Prepared.queryStatus -ne 0 -or $Prepared.backend -ne 2 -or
         $Prepared.stateFlags -ne 3 -or $Prepared.preparedProcessorCount -ne $Count -or
@@ -77,8 +95,9 @@ $ctl=Join-Path $repository 'tools\hvm_ctl\hvm_ctl.exe'
 $accepted=Get-Content -LiteralPath (Join-Path $repository 'docs\next\evidence\amd-host-admission-pass.json') -Raw | ConvertFrom-Json
 if ((Get-FileHash -LiteralPath $driver).Hash -ne $accepted.driverSha256 -or
     (Get-FileHash -LiteralPath $ctl).Hash -ne $accepted.controlSha256) { throw 'Candidate differs from the accepted host admission evidence.' }
-$service=Get-CimInstance Win32_SystemDriver -Filter "Name='KswordARK'"
-if (-not $service -or $service.State -ne 'Stopped') { throw 'Existing KswordARK service must be STOPPED.' }
+$gui=@(Get-Process -Name 'Ksword5.1' -ErrorAction SilentlyContinue)
+if ($gui.Count) { throw ('Exit Ksword5.1 completely, including its tray icon, before this load/unload test. PID: '+(($gui|ForEach-Object Id) -join ',')) }
+Wait-HostDriverStopped
 $machine=Get-CimInstance Win32_ComputerSystem
 if ($machine.HypervisorPresent) { throw 'Physical-host self-test requires the lab boot without an outer hypervisor.' }
 $count=[int]$machine.NumberOfLogicalProcessors
@@ -158,16 +177,16 @@ try {
 } finally {
     if ($started -and $safeToUnload) {
         Invoke-HostSelfTestService 'stop' @('stop','KswordARK')
+        Wait-HostDriverStopped
         Invoke-HostSelfTestService 'query-after-stop' @('query','KswordARK')
     } elseif ($started) {
         Write-Warning 'Test incomplete: driver/resources retained for diagnosis. Do not infer rollback from CLI termination.'
     }
     Write-Host "Host self-test evidence: $evidence"
 }
-$stopped=Get-CimInstance Win32_SystemDriver -Filter "Name='KswordARK'"
-if ($stopped.State -ne 'Stopped') { throw 'Service did not reach STOPPED.' }
+Wait-HostDriverStopped
 $result=[ordered]@{result='PASS';kind='physical-host-serial-svm-self-test';processors=$count;
     residentTested=($ResidentSeconds -gt 0);residentSeconds=$ResidentSeconds;
-    innerOperatingSystemTested=$false;serviceState=$stopped.State;evidence=$evidence}
+    innerOperatingSystemTested=$false;serviceState='Stopped';evidence=$evidence}
 if ($ResidentSeconds -gt 0) { $result.kind='physical-host-short-resident-cycle' }
 $result|ConvertTo-Json|Tee-Object -FilePath (Join-Path $evidence 'result.json')

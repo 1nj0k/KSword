@@ -100,4 +100,34 @@ $fixture=Get-Content (Join-Path $PSScriptRoot '../../docs/next/evidence/amd-host
 Assert-HostSvmResidentEvidence $fixture.regression.baseline $fixture.regression.active $true 32
 Assert-HostSvmResidentEvidence $fixture.regression.baseline $fixture.regression.stopped $false 32
 $checks+=2
+$waitFunction=$ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Wait-HostStopCompletion'},$true)
+Invoke-Expression $waitFunction.Extent.Text
+function New-FakeService([string]$State,[bool]$Timeout=$false) {
+    $fake=[pscustomobject]@{Status=$State;WaitCalls=0;SimulateTimeout=$Timeout}
+    $fake|Add-Member ScriptMethod Refresh {}
+    $fake|Add-Member ScriptMethod WaitForStatus {
+        param($Expected,$Duration)
+        ++$this.WaitCalls
+        if ([string]$Expected -ne 'Stopped' -or $Duration.TotalSeconds -ne 30) { throw 'Wrong bounded wait contract.' }
+        if ($this.SimulateTimeout) { throw [TimeoutException]::new('Simulated SCM timeout') }
+        $this.Status='Stopped'
+    }
+    return $fake
+}
+$fake=New-FakeService 'Stopped'
+Wait-HostStopCompletion $fake ([timespan]::FromSeconds(30))
+if ($fake.WaitCalls -ne 0) { throw 'An already stopped service should not wait.' }
+++ $checks
+$fake=New-FakeService 'StopPending'
+Wait-HostStopCompletion $fake ([timespan]::FromSeconds(30))
+if ($fake.WaitCalls -ne 1 -or $fake.Status -ne 'Stopped') { throw 'Pending stop was not awaited.' }
+++ $checks
+foreach ($state in @('Running','StartPending','StopPending')) {
+    $fake=New-FakeService $state $true
+    $rejected=$false
+    try { Wait-HostStopCompletion $fake ([timespan]::FromSeconds(30)) } catch { $rejected=$true }
+    if (-not $rejected -or $fake.Status -ne $state) { throw 'Unproven SCM stop was accepted.' }
+    if ($state -ne 'StopPending' -and $fake.WaitCalls -ne 0) { throw 'Waited for an unsolicited stop.' }
+    ++$checks
+}
 Write-Output "HOST_SELF_TEST_EVIDENCE_CHECKS=$checks PASS (synthetic and recorded evidence; no driver loaded)"

@@ -1,5 +1,7 @@
 # AMD 实验后端与重启续接
 
+STOP_PENDING续接（2026-09-19）：用户完成teardown/sc stop后立刻重跑，脚本因尚未STOPPED拒绝。独立观察STOP_PENDING持续超过额外30秒，发现宿主Ksword5.1 PID32092自00:01:40运行；用户完全退出主程序后SCM即确认STOPPED/exit0，未重启。符合主程序设备句柄延迟卸载，但未取得句柄级归因。Test-HostSvmSelfTest现用SCM ServiceController：仅StopPending等待最多30秒、Running仍拒绝；stop后等待完成再发布结果，超时不当成功；入口要求主程序退出。PS5显式加载System.ServiceProcess，37项回归及实际STOPPED查询通过。驱动不改，下一步直接重跑-ResidentSeconds5，无需再次teardown/sc stop。
+
 实体机首轮并发常驻（2026-09-19 00:00）：真实32核已全部进入(stage4/flags103/common404013/gen4)，finally stop也全部成功(stage6/flags403/common13/gen5/resident0、逐核VMMCALL exit81、failure0)。此次报错是脚本把ENTERED错写成3（实际3是ENTERING、4才ENTERED），模拟测试也复制了错误常量；已修正stage4，测试从共享协议取常量、增加ENTERING拒绝及本次真实32核快照回放。docs/next/evidence/amd-host-resident-enter-stop.json记录准确通过范围。5秒等待尚未执行，资源未teardown、驱动仍RUNNING；这不是退出失败，也不是完整5秒验收PASS。下一步管理员先核对status全核已stop，再teardown/sc stop，重跑同一-ResidentSeconds5脚本。驱动/SYS无需改动或重编译。新错误输出含group:number/期望实际stage/flags/status，避免再次只报笼统异常。
 
 实体机短常驻入口：Test-HostSvmSelfTest.ps1 新增显式 -ResidentSeconds 5（默认0仍只串行自检，最大30）。同一已通过32LP自检的7004a13c/age13候选，无驱动改动；自检后全32LP并发resident、5秒前后核对Active完整CPU集合/代次/卸载保护，finally请求stop核验逐核Stopped，然后teardown/卸载。执行/回滚证据不足时保留driver/resources，不从CLI结束推断停止。PS5证据验证器29项通过；本轮全核常驻尚未执行。32核串行自检里程碑已提交f1e4d60d，未推送。
