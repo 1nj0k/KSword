@@ -117,6 +117,7 @@ stage 3 不清除 Active，必须由真实全核 stop 收回已进入 CPU。
 ```
 
 每条控制调用前先落盘。超时保留 CLI 进程与 RollbackUnproven，停止继续下发命令。
+首轮常驻额外等待 `-IdleSeconds`（默认 10 秒），记录等待前后状态并重新核验全核集合，覆盖中断被屏蔽后空闲无法唤醒的问题；持续负载不能代替此项。该等待只证明计时器唤醒与常驻状态连续，不能证明每个 CPU 都实际执行了 HLT。
 压力工作线程逐核固定亲和性，每轮验证内存、定期文件读回及本机 UDP，要求每核持续前进。
 本机 UDP 不替代虚拟网卡到另一端的网络 I/O 测试；还需单独保存这项证据。
 接受外层 VMware 身份并不等于 KSword 支持内层 SVM。
@@ -136,6 +137,7 @@ cmd /c tools/hvm_ctl/build.cmd
 python tools/hvm_ctl/test_command_parity.py
 cmd /c tools/hvm_ctl/build-tests.cmd
 powershell.exe -NoProfile -File tools/hvm_lab/Test-GuestLoader.ps1
+powershell.exe -NoProfile -File tools/hvm_lab/Test-AcceptanceCapture.ps1
 ```
 
 `Load-GuestCandidate.ps1` 可在同一候选已经运行时重试，只查询该服务；活动的其它驱动路径仍拒绝修改。

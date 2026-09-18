@@ -4,6 +4,7 @@ param([Parameter(Mandatory)][string]$Ctl,
       [Parameter(Mandatory)][string]$EvidenceDirectory,
       [Parameter(Mandatory)][ValidateSet(1,2,4,8)][int]$Vcpu,
       [ValidateRange(1,1000)][int]$Cycles=20,
+      [ValidateRange(1,60)][int]$IdleSeconds=10,
       [ValidateRange(0,86400)][int]$SoakSeconds=0,
       [ValidateRange(10,600)][int]$CommandTimeoutSeconds=60)
 Set-StrictMode -Version Latest
@@ -26,18 +27,42 @@ function Hvm([string]$Verb) {
     $script:commandId++
     $stem=Join-Path $EvidenceDirectory ('{0:D5}-{1}' -f $script:commandId,$Verb)
     Record @{id=$script:commandId;phase='before';command=$Verb;utc=[DateTime]::UtcNow.ToString('o')}
-    $process=Start-Process -FilePath $Ctl -ArgumentList @('--json',$Verb) -WindowStyle Hidden -PassThru `
-        -RedirectStandardOutput "$stem.json" -RedirectStandardError "$stem.stderr.txt"
+    # Own both pipes and await EOF explicitly. Start-Process's file redirection
+    # callbacks can still be pending when its returned Process reports exit.
+    if ($Verb -notmatch '^[a-z-]+$') { throw 'Invalid internal control verb.' }
+    $startInfo=New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName=$Ctl
+    $startInfo.Arguments='--json '+$Verb
+    $startInfo.UseShellExecute=$false
+    $startInfo.CreateNoWindow=$true
+    $startInfo.RedirectStandardOutput=$true
+    $startInfo.RedirectStandardError=$true
+    $startInfo.StandardOutputEncoding=[Text.Encoding]::UTF8
+    $startInfo.StandardErrorEncoding=[Text.Encoding]::UTF8
+    $process=New-Object System.Diagnostics.Process
+    $process.StartInfo=$startInfo
+    if (-not $process.Start()) { throw 'Cannot start control process.' }
+    $stdout=$process.StandardOutput.ReadToEndAsync()
+    $stderr=$process.StandardError.ReadToEndAsync()
     if (-not $process.WaitForExit($CommandTimeoutSeconds*1000)) {
         $script:uncertain=$true
         Record @{id=$script:commandId;phase='timeout';pid=$process.Id;state='RollbackUnproven'}
         throw 'Control timed out. Process retained; use KD and preserve the VM/logs. No further controls will run.'
     }
-    $process.WaitForExit()
+    if (-not $stdout.Wait(5000) -or -not $stderr.Wait(5000)) {
+        $script:uncertain=$true
+        Record @{id=$script:commandId;phase='output-timeout';pid=$process.Id;state='RollbackUnproven'}
+        throw 'Control exited but output did not reach EOF. No further controls will run.'
+    }
     $exitCode=$process.ExitCode
+    $output=$stdout.Result
+    [IO.File]::WriteAllText("$stem.json",$output,[Text.Encoding]::UTF8)
+    [IO.File]::WriteAllText("$stem.stderr.txt",$stderr.Result,[Text.Encoding]::UTF8)
+    $process.Dispose()
     Record @{id=$script:commandId;phase='after';exitCode=$exitCode;utc=[DateTime]::UtcNow.ToString('o')}
     if ($exitCode -ne 0) { throw "Control $Verb failed ($exitCode); raw response retained." }
-    return Get-Content -LiteralPath "$stem.json" -Raw | ConvertFrom-Json
+    if ([string]::IsNullOrWhiteSpace($output)) { throw "Control $Verb returned no JSON; evidence retained." }
+    return $output | ConvertFrom-Json
 }
 function CheckSet($Query,[bool]$Active) {
     if ($Query.backend -ne 2 -or $Query.processorCount -ne $Vcpu -or @($Query.processors).Count -ne $Vcpu) { throw 'Wrong backend or incomplete processor set.' }
@@ -51,7 +76,7 @@ function CheckSet($Query,[bool]$Active) {
     if ($Query.stateNames -contains 'ROLLBACK_REQUIRED' -or $Query.stateNames -contains 'FAULTED') { throw 'Driver retained a fault or rollback requirement.' }
 }
 $metadata=@{os=$os.Caption;build=$os.BuildNumber;bootId=$os.LastBootUpTime.ToUniversalTime().ToString('o');
-    cpuCount=$Vcpu;cycles=$Cycles;soakSeconds=$SoakSeconds;ctlHash=(Get-FileHash $Ctl).Hash;hardwareResult='NotRun'}
+    cpuCount=$Vcpu;cycles=$Cycles;idleSeconds=$IdleSeconds;soakSeconds=$SoakSeconds;ctlHash=(Get-FileHash $Ctl).Hash;hardwareResult='NotRun'}
 $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'guest.json') -Encoding UTF8
 try {
     $initial=Hvm status
@@ -69,11 +94,24 @@ try {
         $active=Hvm status
         CheckSet $active $true
         if ($active.powerGeneration -ne $epoch) { throw 'Power/topology generation changed.' }
+        if ($cycle -eq 1) {
+            # A tight CPUID-heavy loop can miss masked timer interrupts. Allow idle,
+            # then require timer wakeup and a fresh complete resident CPU snapshot.
+            Record @{phase='idle-before';seconds=$IdleSeconds;utc=[DateTime]::UtcNow.ToString('o')}
+            Start-Sleep -Seconds $IdleSeconds
+            $awake=Hvm status
+            CheckSet $awake $true
+            if ($awake.powerGeneration -ne $epoch) { throw 'Idle wake crossed a power/topology generation.' }
+            Record @{phase='idle-after';utc=[DateTime]::UtcNow.ToString('o');result='PASS'}
+        }
         Hvm stop | Out-Null
         CheckSet (Hvm status) $false
         # Repeated stop is part of the public idempotency contract.
         Hvm stop | Out-Null
         Hvm metrics | Out-Null
+        if ($cycle -eq 1 -or $cycle % 25 -eq 0 -or $cycle -eq $Cycles) {
+            Write-Host ("Cycles passed: {0}/{1}, vCPU={2}" -f $cycle,$Cycles,$Vcpu)
+        }
     }
     if ($SoakSeconds -gt 0) {
         Hvm resident | Out-Null
@@ -81,6 +119,8 @@ try {
         [KswordLabWorkload]::Start($Vcpu,$EvidenceDirectory)
         $lastProgress=New-Object long[] $Vcpu
         $deadline=[DateTime]::UtcNow.AddSeconds($SoakSeconds)
+        $nextProgress=[DateTime]::UtcNow.AddMinutes(5)
+        Write-Host ("Soak started: {0} seconds, {1} pinned workers. Evidence: {2}" -f $SoakSeconds,$Vcpu,$EvidenceDirectory)
         try {
             while ([DateTime]::UtcNow -lt $deadline) {
                 Start-Sleep -Seconds ([Math]::Min(10,[Math]::Max(1,($deadline-[DateTime]::UtcNow).TotalSeconds)))
@@ -95,8 +135,14 @@ try {
                 $lastProgress=$progress
                 if ([KswordLabWorkload]::Errors().Length) { throw 'Workload integrity failure.' }
                 Hvm metrics | Out-Null
+                if ([DateTime]::UtcNow -ge $nextProgress) {
+                    Write-Host ("Soak healthy; remaining seconds: {0}; per-CPU progress: {1}" -f
+                        [Math]::Max(0,[int]($deadline-[DateTime]::UtcNow).TotalSeconds),($progress -join ','))
+                    $nextProgress=[DateTime]::UtcNow.AddMinutes(5)
+                }
             }
         } finally { [KswordLabWorkload]::Stop() }
+        if ([KswordLabWorkload]::Errors().Length) { throw 'Workload reported a failure while stopping.' }
         Hvm stop | Out-Null
         CheckSet (Hvm status) $false
     }
@@ -104,6 +150,11 @@ try {
     $released=Hvm status
     if ($released.preparedProcessorCount -ne 0 -or $released.residentProcessorCount -ne 0) { throw 'Resources still owned after teardown.' }
     Record @{phase='complete';result='PASS';cycles=$Cycles;soakSeconds=$SoakSeconds}
+    $metadata.hardwareResult='PASS'
+    $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'guest.json') -Encoding UTF8
+    [pscustomobject]@{result='PASS';vcpu=$Vcpu;cycles=$Cycles;idleSeconds=$IdleSeconds;soakSeconds=$SoakSeconds;
+        preparedProcessorCount=$released.preparedProcessorCount;residentProcessorCount=$released.residentProcessorCount;
+        evidence=$EvidenceDirectory} | ConvertTo-Json
 } catch {
     # No speculative teardown after timeout/fault: preserve diagnostics and hardware ownership.
     Record @{phase='failed';error=$_.Exception.Message;uncertain=$script:uncertain;result='FAIL'}

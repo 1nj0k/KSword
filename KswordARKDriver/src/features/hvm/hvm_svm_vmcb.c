@@ -86,8 +86,11 @@ NTSTATUS KswordSvmBuildVmcb(KSW_SVM_CPU* Cpu)
     KswSvmWrite32(v, KSW_VMCB_ASID, 1);
     /* TLB_CONTROL=1 requests the baseline architectural complete flush. */
     ((PUCHAR)v)[KSW_VMCB_TLB] = 1;
-    /* Virtual interrupt masking keeps guest IF/TPR behavior independent of host IF. */
-    KswSvmWrite32(v, KSW_VMCB_INTCTL, 1U << 24);
+    /* Pass physical IRQs/APIC through: guest IF and CR8 must control delivery.
+       APM 15.21.1-2: V_INTR_MASKING=1 uses host IF (zero in our CLI/CLGI
+       entry path), starving guest timer interrupts even after guest STI.
+       Keep V_IRQ and V_INTR_MASKING clear; we do not emulate an interrupt controller. */
+    KswSvmWrite32(v, KSW_VMCB_INTCTL, 0);
     /* Enable nested paging without exposing nested virtualization to Windows. */
     KswSvmWrite64(v, KSW_VMCB_NP, 1);
     /* Publish the fully constructed shared NPT. */

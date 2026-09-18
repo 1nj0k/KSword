@@ -1,6 +1,28 @@
-# AMD 实验实现状态（2026-09-18，单核自检前）
+# AMD 实验实现状态（2026-09-18，单核常驻故障修复待重测）
 
 ## 当前进度（以下本节优先于后面的历史记录）
+
+**21:03 最新：4 vCPU、100轮、10秒空闲唤醒 PASS。** 1/2/4核原始日志已回传宿主：1876文件哈希一致；独立解析验证CPU集合、全部20/20/100轮启停、电源代次、末次各核VMMCALL/stage6/failure0及最终资源归零。可复现结果 `tools/hvm_lab/artifacts/guest-results/verified-through-four-cpu.json`。下一步8核100轮及2小时持续压力；故障注入、生命周期和外部网络I/O仍待完成。负载工具在宿主原生2线程smoke通过不算SVM压力通过。
+
+**20:56 最新硬件结果：2 vCPU、20轮、10秒空闲唤醒 PASS。** 两核退出后prepared=0/resident=0；来宾原始目录 `C:\KSwordLab\two-cpu-20260918-205615`，摘要存于 `artifacts/host-20260918/two-20cycles-pass-user-output.txt`。下一步4核100轮，尚无4/8核或持续压力通过证据。
+
+**20:50 最新硬件结果：1 vCPU、20轮常驻启停、10秒空闲唤醒 PASS。** 结束preparedProcessorCount=0、residentProcessorCount=0，soakSeconds=0；来宾证据 `C:\KSwordLab\irqfix-retry-20260918-205003`，用户原始输出已归档 `tools/hvm_lab/artifacts/host-20260918/single-20cycles-pass-user-output.txt`。此前CPU禁用未在这20轮复现；仍不宣称2/4/8核、2小时压力、故障回滚或电源验收通过。下一步正常关机保存基线并改2 vCPU。
+
+**20:44 复测更新：新驱动实际加载通过，测试推进到第5轮stop，采集脚本报输出文件缺失。** 根据第34条控制的顺序，10秒空闲唤醒及前4轮完整启停检查已通过；第五轮停止状态需另查，20轮/多核仍未通过。KD记录新驱动timestamp6AAD2E04及匹配私有PDB。本轮没有CPU禁用报告。采集改成直接并发读取stdout/stderr、等待EOF再写文件；PS5下300次快速退出、双流128KiB、非零退出、空JSON拒绝及超时保留检查通过。旧文件缺失的精确原因未独立复现，此修改去掉异步文件回调依赖。只更新runner后复测，不换驱动。
+
+**20:29 最新：已修复确定存在的中断配置缺陷，硬件重测待执行。** 首次手动单核常驻/停止成功，但之后自动测试首轮 resident 在 generation=9 挂住；并非20轮通过。保留8 GiB来宾内存、原始VMware日志及旧候选，现场确认 VMCB.INTCTL=0x01000000、resident=1、自检以外无新的退出记录、BugCheck数据全零。VMware CLIHLT发生在12:14:02Z，12:16:45Z渲染进程崩溃是后续事件。没有保存成功的VM快照。
+
+`hvm_svm_vmcb.c` 将 V_INTR_MASKING 清零，让 guest IF/CR8 管理物理中断；原值1会使用入口CLI后的host IF=0，无法通过guest STI恢复物理IRQ。依据 [AMD APM Volume 2 §15.21.1–2](https://www.cs.wm.edu/~smherwig/readings/manuals/amd/sdm/amd64_arch_programmers_manual-vol2-system_programming.pdf)。这是与停机现象一致的缺陷，不能在复测前断言它是唯一根因。runner首轮增加默认10秒空闲等待，记录唤醒及全核状态，不把繁忙循环当作中断验证，也不宣称保证每核进入HLT。
+
+新候选位于 `tools/hvm_lab/artifacts/amd-candidate-irqfix` 并同步只读共享目录；SYS/PDB匹配，GUID f0725672-1a1e-4104-890a-1b5744c5c7a9/age5。Release x64编译链接和x64 WDK Universal校验通过；发行自动签名信任检查失败，隔离候选已改用原来宾实验签名，未新增宿主信任。AMD73907/Intel85逻辑检查通过；PS5 runner语法通过。克隆已冷启动且KD重连恢复运行；新候选加载、空闲唤醒及1核20轮尚未验证。此后才进入2/4/8核。
+
+## 以下为早期逐次记录
+
+**首次真实单核自检已通过（2026-09-18）**：self-test=OK，generation=3，selfTestPassed=1、failed=0；CPU 0:0 捕获一次 EXITCODE=0x72/CPUID，NRIP-RIP=2，TLB 请求=1，ring valid=1，failureStatus=0，原生返回后自检成功。尚未常驻启停或多核。下一步单核 resident/status/stop/status。通用 metrics 的 command/transition 未随 AMD 自检更新，必须使用 svmProcessors 的新代次和退出记录；该观测缺陷待修复。受控小型内核转储已生成并离线打开（有限寄存器/栈），来宾崩溃后完整转储落盘仍未验证。
+
+单核准备与调试续记：用户 prepare/status/metrics 实测成功，generation=2、prepared=1、slatReady=1、CPU 0:0、NPT 根非零、failureStatus=0。尚未 VMRUN。控制响应 failedProcessorCount=1 是旧的总核数减自检通过数算法；通用 metrics 的 processorCount 不包含 SVM 数组；HsavePa 在 BuildVmcb 才写入。宿主 KD 已实际加载候选私有 PDB，命中一次性 KswordARKHvmQuery 断点并记录从 query、IOCTL handler 到驱动分发的调用栈，随后自动继续；日志 `tools/hvm_lab/artifacts/host-20260918/kd-svm-preflight.log`。普通断点链已验证。
+
+2026-09-18 最新：用户已报告修复后的 Load-GuestCandidate 返回 PASS，中文 JSON 正常，signature=0/Valid，state=INITIALIZED、generation=1；资源、自检、常驻计数均为零。加载阻塞解除，下一步只执行单核 prepare 并回读 status/metrics；VMRUN 尚未执行。来宾证据位于 `C:\KSwordLab\candidate\driver-load-20260918-111425-db464b7394514425838c859184b49ac2`。
 
 - 宿主实验启动成功，HypervisorPresent=false、VBS=0；日常恢复方向尚未测试。
 - 独立 VMware 克隆为 Windows 10 家庭中文版 19042、1 vCPU/8 GiB、Secure Boot=false。CPL0、SVM/NPT 外层日志已保存；原 VM 未修改。
@@ -74,3 +96,11 @@ Windows 10 的 Hyper-V 外层不满足微软对 AMD 嵌套宿主的版本要求�
 
 本期路线是停用本次启动的宿主 Hyper-V/VBS，让 VMware 原生 AMD-V 向 Windows 10 克隆暴露 SVM，再测试 KSword；这条路线尚待本机证据确认。
 “KSword 常驻后再向内层 Hyper-V/VMware 提供 SVM”未实现，也不在本期验收范围内。
+
+## 双核阶段准备
+
+双核阶段准备已完成：克隆正常关机后建立冷态快照 AMD-1CPU-20Cycles-PASS-20260918（listSnapshots确认1项），只修改克隆numvcpus=2/cpuid.coresPerSocket=2，内存仍8192MiB。重新冷启动，VMware日志NumVCPUs=2/MonitorMode=CPL0，KD初始断点已g，Tools running；共享已enable并重新设置readonly。KD在系统引导早期显示1 procs不代表最终拓扑，来宾runner会核验2逻辑处理器。下一步来宾Load-GuestCandidate后Invoke-GuestAcceptance -Vcpu 2 -Cycles 20；当前双核尚未运行KSword自检/常驻。
+
+## 下一阶段范围变更
+
+2026-09-18 用户调整优先级：不再把两小时压测作为当前阻塞项，要求立即推进AMD功能向Intel对齐，先提交当前进度且不推送。下一阶段授权实现嵌套SVM（含内层VM运行所需的VMCB/退出反射/NPT合成），不再受首期“不实现嵌套SVM”的范围约束。Win10、不换电脑、不推送仍有效。已确认硬件验收仍只记1/2核20轮、4核100轮；8核及压力未获结果，不补记成功。正在询问压力是否已启动，以便单独收尾，代码工作继续。
