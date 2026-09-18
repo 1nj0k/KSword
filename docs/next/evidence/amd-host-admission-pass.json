@@ -1,0 +1,81 @@
+{
+  "scope": "physical-host-SVM-admission-and-driver-load-query-unload",
+  "result": "PASS",
+  "sourceCommit": "7004a13c",
+  "bootId": "2026-09-18T15:01:19.5Z",
+  "windowsBuild": "19045",
+  "logicalProcessors": 32,
+  "hypervisorPresent": false,
+  "driverSha256": "0BB1B03F4B6A688C9725C8EB7EB75A4ABD3FB0611B9F8787D4F935940DE94A2A",
+  "controlSha256": "64927AF8ED7600AD3336A19DA2F2BBBC2630DBF117C7DF14A6453032B39856C6",
+  "candidateHashesIndependentlyMatched": true,
+  "loadedImageDebugIdentityVerified": false,
+  "backendStatus": "0x00000000",
+  "svmProbe": {
+    "maxLeaf": 2147483688,
+    "features": 515882239,
+    "asidCount": 32768,
+    "physicalBits": 48,
+    "msrValidMask": 15,
+    "exceptionStatus": "0x00000000",
+    "vmCr": "0x0000000000000008",
+    "efer": "0x0000000000004D01",
+    "hsave": "0x0000000000000000",
+    "pat": "0x0007010600070106",
+    "rejectReason": 0,
+    "rejectReasonName": "NONE",
+    "stateValidMask": 31,
+    "cpuid1Ecx": "0x7EF8320B",
+    "xsaveFeatures": "0x0000000F",
+    "cr4": "0x0000000000B50EF8",
+    "xcr0": "0x00000000000000E7",
+    "xss": "0x0000000000000800"
+  },
+  "cetConfigurationUnchanged": true,
+  "cpuSampling": "initial query CPU only; per-CPU preparation not yet performed",
+  "preparedProcessorCount": 0,
+  "selfTestPassedProcessorCount": 0,
+  "residentProcessorCount": 0,
+  "vmExitCount": 0,
+  "physicalHostSvmExecutionTested": false,
+  "finalServiceState": "Stopped",
+  "serviceStopIndependentlyChecked": true,
+  "evidenceDirectory": "tools/hvm_lab/artifacts/host-admission-20260918-233852-d2206581cff943a19cf380b31dc01fe3",
+  "rawEvidence": [
+    {
+      "name": "config.txt",
+      "bytes": 70,
+      "sha256": "185FD1A24A95295E0E5CA03A36EF5C35761D52592CC46FA7EF9DE907ED4EF44F"
+    },
+    {
+      "name": "identity.json",
+      "bytes": 625,
+      "sha256": "C2CF6AD1B1B43672D1C23C860179A7154A3B27A86E8BAC30B5DE931A5496B482"
+    },
+    {
+      "name": "query-after-stop.txt",
+      "bytes": 532,
+      "sha256": "56F254D271DBC2BE435D5FBD4B7CDD0BC5E09926693BB24CC22568FF50DF2A96"
+    },
+    {
+      "name": "start.txt",
+      "bytes": 812,
+      "sha256": "56E5D6C44C35007F49A44A7ADAFECFBFE98B809B2F53EC145FC0BAD346B1DE2A"
+    },
+    {
+      "name": "status.json",
+      "bytes": 2020,
+      "sha256": "F862BAA7CA2FA6346B4696C92BEA956E0A01F211C9DE3A9E4E9A6F3A7B46F486"
+    },
+    {
+      "name": "status.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "stop.txt",
+      "bytes": 532,
+      "sha256": "56F254D271DBC2BE435D5FBD4B7CDD0BC5E09926693BB24CC22568FF50DF2A96"
+    }
+  ]
+}

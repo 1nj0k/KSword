@@ -1,5 +1,7 @@
 # AMD 实验后端与重启续接
 
+宿主准入已实际PASS（2026-09-18 23:38）：用户Test-HostSvmAdmission输出backendStatus0/rejectReason0/NONE，CR4仍B50EF8、XSS仍800、HSAVE0，未关闭CET。独立核对原始status、SYS/CLI哈希与7004a13c的age13候选匹配，SCM STOPPED。证据docs/next/evidence/amd-host-admission-pass.json，原始artifacts/host-admission-20260918-233852-d2206581cff943a19cf380b31dc01fe3。此范围仅初始查询CPU准入及驱动装载/查询/卸载；prepared/selftest/resident/vmExit均0，不是实体机VMRUN通过。下一步prepare→逐CPU串行self-test→metrics→teardown，不直接resident；物理宿主32LP，自检是每CPU短往返，不能说并发32核常驻通过。
+
 CET_U 候选归档：tools/hvm_lab/artifacts/amd-host-cet-user-v6，SYS/PDB匹配f0725672-1a1e-4104-890a-1b5744c5c7a9 age13；docs/next/evidence/amd-host-cet-user-build.json保存哈希与测试/签名边界。Release SYS仓库签名者00797B09...，签名最终信任检查仍失败（不受信任根）；此候选装载、准入及SVM硬件执行均NOT_RUN。现有管理员Test-HostSvmAdmission脚本默认路径已指新Release SYS与新hvm_ctl，用户无需重新编译。
 
 CET_U 修复候选（2026-09-18）：已实现 CR4.CET/XSS=800 且 S_CET=0 的窄范围支持，尚无新硬件结果。Caps逐核读CPUID7.CET_SS、S_CET/ISST/U_CET/PL3_SSP；其它XSS、非零S_CET、XCR0管理的CET仍拒绝，新增v6枚举reason13 CET_STATE_UNSUPPORTED，不改协议尺寸。CPU固定前缀追加110h XstateCompacted/114h CetPresent并C_ASSERT；XSS=800用D.1EBX大小、XCR0|XSS掩码、XSAVES64/XRSTORS64，原XSS0保持standard路径。VM入口重探测状态；MSRPM阻止改变XSS/启用S_CET；VMCB 5E0/5E8/5F0与nested CopyVmrun/Reflect一起处理，native恢复当前ISST/S_CET。自检返回检查原线程UCET/PL3及XCR0/XSS/SCET/当前ISST，stop仅核对当前状态，不回滚用户线程。驱动WDK/API/CAT零警告，主程序/KswordCLI/hvm_ctl通过（GUI4既有警告）；AMD74056/nested449/生产分派124/Intel85、JSON/命令/i18n/IOCTL通过。下一步管理员对新Release候选再跑现有Test-HostSvmAdmission.ps1；它不执行SVM。不要把编译测试记录成实体机准入或CET硬件通过，也不替换旧guest-bootstrap已验收候选。

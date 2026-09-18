@@ -2,6 +2,8 @@
 
 ## 当前进度（以下本节优先于后面的历史记录）
 
+**23:38 实体机准入 PASS。** `7004a13c` 候选实际装载/查询/卸载成功；原始输出、候选哈希与最终服务 STOPPED 已独立核验。backendStatus=0、rejectReason=NONE，CR4=B50EF8、XSS=800 保持不变，未关闭 CET。[准入通过证据](evidence/amd-host-admission-pass.json)。此次只探测初始查询 CPU，prepared/selfTest/resident/vmExit 均为0；逐核准备与实体机 VMRUN 尚未验证。下一项是32逻辑处理器逐核串行的短自检与完整释放，不是同时开启32核常驻。
+
 **用户态 CET 兼容候选已实现，尚未硬件验证。** 支持 `XSS.CET_U=0x800` 与 `S_CET=0` 的组合；不关闭宿主 CET，也不修改 XSS。逐核探测读取 CET 枚举与 MSR，支持用户态 CET 时选择 XSAVES64/XRSTORS64，按 CPUID.D.1 EBX 分配 compacted 保存区，使用 XCR0|XSS 掩码；旧 XSS=0 路径保留 XSAVE64/XRSTOR64。当前明确拒绝非零 S_CET、其它 XSS 组件及 XCR0 管理的 CET，新增 v6 兼容拒绝原因 CET_STATE_UNSUPPORTED（13）。
 
 候选归档 `tools/hvm_lab/artifacts/amd-host-cet-user-v6`，SYS/PDB GUID=f0725672-1a1e-4104-890a-1b5744c5c7a9/age13，匹配核验通过。[构建与回归证据](evidence/amd-host-cet-user-build.json) 绑定各文件及构建日志哈希。Release SYS 已按此前宿主成功装载的仓库流程签名（00797B09...）；最终内核信任检查仍报不受信任根，**本候选实际装载与准入尚未验证**。
