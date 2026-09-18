@@ -946,6 +946,7 @@ static const char* SvmProbeRejectName(unsigned long reason)
     case KSWORD_ARK_SVM_REJECT_XSTATE_READ: return "XSTATE_READ_FAILED";
     case KSWORD_ARK_SVM_REJECT_XSS: return "XSS_NONZERO";
     case KSWORD_ARK_SVM_REJECT_PHYSICAL_WIDTH: return "PHYSICAL_WIDTH_UNSUPPORTED";
+    case KSWORD_ARK_SVM_REJECT_CET_STATE: return "CET_STATE_UNSUPPORTED";
     default: return "UNKNOWN";
     }
 }

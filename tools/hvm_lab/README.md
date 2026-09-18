@@ -3,6 +3,8 @@
 当前是待硬件验收的实验实现。编译、模拟测试和克隆完成不等于 SVM 已跑通。
 逐项进度与缺失硬件证据见 [状态记录](../../docs/next/ksword-amd-lab-status.md)。
 宿主固定 Windows 10 / VMware Workstation 16.2.5，不升级系统或更换硬件。
+
+宿主 CET 候选支持用户态 `XSS.CET_U`，使用 XSAVES/XRSTORS 保存当前线程状态；非零 `S_CET`（内核 CET 控制）仍明确拒绝，未实现内核影子栈返回链。构建后先用 `Test-HostSvmAdmission.ps1` 仅装载/查询/卸载核验准入；`backendStatus=0` 仅表示准入成功，不是 VMRUN 或常驻通过。该候选保持 HVM v6，不能把新 CLI 与旧 v5 来宾驱动混用。
 进入实验前保存工作；两份宿主脚本均需要**管理员 Windows PowerShell 5.1**。
 
 ## 两个宿主入口

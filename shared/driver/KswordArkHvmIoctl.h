@@ -24,6 +24,8 @@
 #define KSWORD_ARK_SVM_REJECT_XSTATE_READ 10UL
 #define KSWORD_ARK_SVM_REJECT_XSS 11UL
 #define KSWORD_ARK_SVM_REJECT_PHYSICAL_WIDTH 12UL
+/* V6 additive reason: no structure size or existing field interpretation changes. */
+#define KSWORD_ARK_SVM_REJECT_CET_STATE 13UL
 /* Independent validity bits for the extended state observations. */
 #define KSWORD_ARK_SVM_VALID_CR4 1UL
 #define KSWORD_ARK_SVM_VALID_CPUID1 2UL

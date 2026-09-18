@@ -2,6 +2,14 @@
 
 ## 当前进度（以下本节优先于后面的历史记录）
 
+**用户态 CET 兼容候选已实现，尚未硬件验证。** 支持 `XSS.CET_U=0x800` 与 `S_CET=0` 的组合；不关闭宿主 CET，也不修改 XSS。逐核探测读取 CET 枚举与 MSR，支持用户态 CET 时选择 XSAVES64/XRSTORS64，按 CPUID.D.1 EBX 分配 compacted 保存区，使用 XCR0|XSS 掩码；旧 XSS=0 路径保留 XSAVE64/XRSTOR64。当前明确拒绝非零 S_CET、其它 XSS 组件及 XCR0 管理的 CET，新增 v6 兼容拒绝原因 CET_STATE_UNSUPPORTED（13）。
+
+候选归档 `tools/hvm_lab/artifacts/amd-host-cet-user-v6`，SYS/PDB GUID=f0725672-1a1e-4104-890a-1b5744c5c7a9/age13，匹配核验通过。[构建与回归证据](evidence/amd-host-cet-user-build.json) 绑定各文件及构建日志哈希。Release SYS 已按此前宿主成功装载的仓库流程签名（00797B09...）；最终内核信任检查仍报不受信任根，**本候选实际装载与准入尚未验证**。
+
+每次进入重新核对 XCR0/XSS/CET 合约，MSRPM 禁止改变 XSS 或启用 supervisor CET；允许幂等写。VMCB 保存 S_CET/SSP/ISST_ADDR，原生返回恢复当前 ISST_ADDR/S_CET；因 S_CET 必须为零，未引入内核影子栈或伪造其返回链。嵌套固定探针的 VMRUN 状态复制与反射也包含三个 CET 字段，VMLOAD 不复制它们。自检原生返回后核验 XCR0/XSS/S_CET/ISST_ADDR 及进入前 U_CET/PL3_SSP；常驻停止只核对当前状态，不能恢复启动时的用户线程快照。
+
+验证：驱动 Release x64 编译链接、WDK x64 API 与 CAT 校验通过，零警告；主程序、KswordCLI、hvm_ctl 同步构建通过，主程序保留4条既有警告。AMD 74056、嵌套449、生产分派模拟124、Intel85项逻辑检查通过，JSON/PS5 CP936、命令一致性、i18n 和 IOCTL 门禁通过。MASM 产物包含正确配对的 64 位 XSAVES/XRSTORS 指令。以上不代表 CET 硬件执行通过，也未完成启用 CET 的用户线程压力验证。下一步使用现有 Test-HostSvmAdmission.ps1 验证新候选的只读准入，再安排实际自检；旧 VMware 已验收候选保持原样。
+
 **23:14 宿主拒绝原因已确定：CET 状态支持尚未实现。** HVM v6 诊断实测装载/查询/卸载成功，SYS/CLI 哈希与原始证据一致，SCM 独立确认 STOPPED/exit0。`CR4=B50EF8` 命中现有拒绝掩码的唯一位是 bit23/CET；`XSS=800` 启用 bit11/CET_U。全部状态读数有效，HSAVE 已归零，无 SVME 或 SVMDIS。此次没有 prepare、self-test 或 VMRUN，不是物理机常驻通过。[准入诊断证据](evidence/amd-host-cet-admission.json)。
 
 这一结果把下一步限定为状态兼容实现，无需重复加载同一候选：

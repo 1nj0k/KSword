@@ -62,8 +62,17 @@ NTSTATUS KswordSvmBuildVmcb(KSW_SVM_CPU* Cpu)
     KSW_SVM_VMCB* v = Cpu->Guest;
     /* Decode the descriptors captured by assembly. */
     ULONG offset;
-    /* Reject a changed XSAVE contract before writing virtualization state. */
-    if ((__readcr4() & ((1ULL << 12) | (1ULL << 23) | (1ULL << 24) | (1ULL << 25))) || _xgetbv(0) != Cpu->XstateMask) { return STATUS_NOT_SUPPORTED; }
+    /* Recheck privileged state on the pinned target immediately before entry. */
+    KSW_SVM_CAPS current;
+    /* Preparation evidence does not authorize a changed CET/XSTATE or SVM owner. */
+    NTSTATUS status = KswordSvmProbeCpu(&current);
+    /* No hardware ownership has changed when the live probe fails. */
+    if (!NT_SUCCESS(status)) { return status; }
+    /* The allocation format and restore mask must match the live CPU contract. */
+    if (current.Xcr0 != Cpu->Caps.Xcr0 || current.Xss != Cpu->Caps.Xss ||
+        current.CetPresent != Cpu->Caps.CetPresent) { return STATUS_NOT_SUPPORTED; }
+    /* Only the bounded self-test compares to launch-time thread state, never resident stop. */
+    Cpu->Caps.Ucet = current.Ucet; Cpu->Caps.Pl3Ssp = current.Pl3Ssp;
     /* Reinitialize control and state areas on every fresh launch. */
     RtlZeroMemory(v, sizeof(*v));
     /* Capture selector and GDTR/IDTR values on the target CPU. */
@@ -104,6 +113,12 @@ NTSTATUS KswordSvmBuildVmcb(KSW_SVM_CPU* Cpu)
     KswSvmWrite64(v, KSW_VMCB_CR3, __readcr3());
     /* Preserve supported CR4 features. */
     KswSvmWrite64(v, KSW_VMCB_CR4, __readcr4());
+    /* Supervisor CET is verified disabled; user CET stays in the XSAVES area. */
+    KswSvmWrite64(v, KSW_VMCB_S_CET, current.Scet);
+    /* No active kernel shadow stack exists under the admitted S_CET=0 contract. */
+    KswSvmWrite64(v, KSW_VMCB_SSP, 0);
+    /* Preserve the current interrupt-table address even when supervisor CET is off. */
+    KswSvmWrite64(v, KSW_VMCB_ISST, current.Isst);
     /* Preserve pending page-fault address and debug register state. */
     KswSvmWrite64(v, KSW_VMCB_CR2, __readcr2());
     /* Debug control registers are not general-purpose registers. */
@@ -158,12 +173,40 @@ NTSTATUS KswordSvmBuildVmcb(KSW_SVM_CPU* Cpu)
     KswSvmInterceptMsr(Cpu, KSW_SVM_MSR_VM_CR, FALSE);
     /* PAT writes would invalidate every leaf's cache index interpretation. */
     KswSvmInterceptMsr(Cpu, 0x277U, TRUE);
-    /* Active supervisor XSTATE is outside the initial XSAVE contract. */
+    /* XSS must remain equal to the mask used to allocate the per-CPU save area. */
     KswSvmInterceptMsr(Cpu, 0xda0U, TRUE);
+    /* Enabling kernel shadow stacks would invalidate the private root/native RET path. */
+    if (Cpu->CetPresent) { KswSvmInterceptMsr(Cpu, KSW_SVM_MSR_S_CET, TRUE); }
     /* Build the explicit nested operand only for the opt-in bounded self-test. */
     if (Cpu->SelfTest == 2U) { return KswordSvmNestedBuildProbe(Cpu); }
     /* The assembly wrapper sets final RIP/RSP/RFLAGS immediately before VMRUN. */
     return STATUS_SUCCESS;
+}
+
+/* Verify the native state without treating initial user-thread state as a resident snapshot. */
+BOOLEAN KswordSvmVerifyNativeState(KSW_SVM_CPU* Cpu)
+{
+    /* All reads execute on the same pinned CPU, after SVM ownership restoration. */
+    __try {
+        /* XCR0 changes would invalidate either allocated XSTATE layout. */
+        if (_xgetbv(0) != Cpu->Caps.Xcr0) { return FALSE; }
+        /* Query XSS only on processors that enumerate its instruction family. */
+        if ((Cpu->Caps.XsaveFeatures & 8U) && __readmsr(0xda0U) != Cpu->Caps.Xss) { return FALSE; }
+        /* Non-CET virtual CPUs must not execute the optional MSR reads. */
+        if (Cpu->CetPresent) {
+            /* Current guest ISST, not the launch-time address, must be restored on stop. */
+            if (__readmsr(KSW_SVM_MSR_S_CET) != 0 ||
+                __readmsr(KSW_SVM_MSR_ISST) != KswSvmRead64(Cpu->Guest, KSW_VMCB_ISST)) { return FALSE; }
+            /* Fixed probe code never changes user CET; current-thread values must match exactly. */
+            if (Cpu->SelfTest && (__readmsr(0x6a0U) != Cpu->Caps.Ucet ||
+                __readmsr(0x6a7U) != Cpu->Caps.Pl3Ssp)) { return FALSE; }
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        /* A failed read is missing restoration evidence, never a fabricated match. */
+        return FALSE;
+    }
+    /* Only actual post-return observations establish this native-state invariant. */
+    return TRUE;
 }
 
 /* All entry callers are already pinned; no allocation occurs here. */
@@ -187,7 +230,8 @@ NTSTATUS KswordSvmEnterCurrent(KSW_SVM_CPU* Cpu)
     if (Cpu->Stage == KSWORD_ARK_HVM_STAGE_FAILED || Cpu->SelfTest) { status = Cpu->Result; }
     /* A self-test succeeds only after ownership registers are natively restored. */
     if (Cpu->SelfTest &&
-        (__readmsr(KSW_SVM_MSR_EFER) != Cpu->OriginalEfer || __readmsr(KSW_SVM_MSR_HSAVE) != Cpu->OriginalHsave)) {
+        (__readmsr(KSW_SVM_MSR_EFER) != Cpu->OriginalEfer || __readmsr(KSW_SVM_MSR_HSAVE) != Cpu->OriginalHsave ||
+            !KswordSvmVerifyNativeState(Cpu))) {
         /* Preserve retained ownership evidence instead of publishing a false passed test. */
         Cpu->Stage = KSWORD_ARK_HVM_STAGE_FAILED;
         /* Returning a recoverable status could release pages still referenced by hardware. */

@@ -1,0 +1,86 @@
+{
+  "scope": "user-CET implementation build and software regression only",
+  "result": "PASS",
+  "sourceBaseCommit": "419a64e74e3c3b0e30217ea484b718810867335b",
+  "hardwareAcceptance": "NOT_RUN",
+  "supportedState": "XSS=0 or CET_U only, S_CET=0; no XCR0-managed CET",
+  "protocolVersion": 6,
+  "metricsVersion": 4,
+  "rsds": {
+    "guid": "f0725672-1a1e-4104-890a-1b5744c5c7a9",
+    "age": 13,
+    "pdbMatched": true
+  },
+  "driverBuild": {
+    "compilerLinker": "PASS",
+    "apiValidator": "PASS",
+    "catalogGeneration": "PASS",
+    "warnings": 0
+  },
+  "guiBuild": {
+    "result": "PASS",
+    "existingWarnings": 4
+  },
+  "cliBuild": "PASS",
+  "signing": {
+    "applied": true,
+    "signer": "00797B095AFBABC9CF6E454EFAC995272881FF76",
+    "kernelTrustVerification": "FAIL_UNTRUSTED_ROOT",
+    "candidateLoad": "NOT_RUN"
+  },
+  "tests": {
+    "amd": 74056,
+    "nested": 449,
+    "productionDispatchSimulated": 124,
+    "intel": 85,
+    "jsonCp936": "PASS",
+    "commandParity": "PASS",
+    "i18n": "PASS",
+    "ioctl": "PASS",
+    "assemblySaveRestoreOpcodes": "PASS"
+  },
+  "candidateDirectory": "tools/hvm_lab/artifacts/amd-host-cet-user-v6",
+  "candidateFiles": [
+    {
+      "name": "hvm_ctl.exe",
+      "bytes": 273920,
+      "sha256": "64927AF8ED7600AD3336A19DA2F2BBBC2630DBF117C7DF14A6453032B39856C6"
+    },
+    {
+      "name": "KswordARK.pdb",
+      "bytes": 11112448,
+      "sha256": "938F5DB43C932FCBE84861020A5D44C4286FF67CCAF37551DA355614AEA02770"
+    },
+    {
+      "name": "KswordARK.sys",
+      "bytes": 2774128,
+      "sha256": "0BB1B03F4B6A688C9725C8EB7EB75A4ABD3FB0611B9F8787D4F935940DE94A2A"
+    }
+  ],
+  "logs": [
+    {
+      "path": "tools/hvm_lab/build-svm-cet-user.log",
+      "sha256": "4E93314520372B6E64B917D3F7BA34C8877498F0C72698993B7ABA40068B72FF"
+    },
+    {
+      "path": "tools/hvm_lab/build-svm-cet-user-gui.log",
+      "sha256": "BC3773D09EEE47E68B3E1072D375FF80E76FD2C4A72A2B883F98794C1FE3B3C2"
+    },
+    {
+      "path": "tools/hvm_lab/build-svm-cet-user-cli.log",
+      "sha256": "C30D656C81EAB50F8C42A4FB9AD2F0C826D3D82254C92F888F7376109DDAC05E"
+    },
+    {
+      "path": "tools/hvm_lab/artifacts/host-20260918/cet-user-tests.log",
+      "sha256": "2899955C0C010252FF7A26A929F960BD264116818F6820A90FF96F7F2B86303D"
+    },
+    {
+      "path": "tools/hvm_lab/artifacts/host-20260918/sign-cet-user.log",
+      "sha256": "281ECC288A24F2D685387BD6093FF7BBF08563F8D4DF2AB6725A77BFA6D0D3CB"
+    },
+    {
+      "path": "tools/hvm_lab/artifacts/host-20260918/cet-user-ioctl-audit.json",
+      "sha256": "F85094AF3BF05743927F9C0EF714F88071E0EFDAF9235C755818313215459427"
+    }
+  ]
+}

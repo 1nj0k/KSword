@@ -46,6 +46,8 @@ void KswSvmNestedCopyVmrun(KSW_SVM_VMCB* Destination, const KSW_SVM_VMCB* Source
     KswNsvmCopy(Destination, Source, KSW_VMCB_CR4, 56);
     /* RSP and RAX have dedicated VMCB fields; other GPRs are not switched by VMRUN. */
     KswNsvmCopy(Destination, Source, KSW_VMCB_RSP, 8);
+    /* CET core state is part of VMRUN, not the VMLOAD-managed user state. */
+    KswNsvmCopy(Destination, Source, KSW_VMCB_S_CET, 24);
     /* Preserve the architectural special handling of accumulator state. */
     KswNsvmCopy(Destination, Source, KSW_VMCB_RAX, 8);
     /* CR2 is automatic guest state, but is not automatically restored as host CR2. */
@@ -54,7 +56,7 @@ void KswSvmNestedCopyVmrun(KSW_SVM_VMCB* Destination, const KSW_SVM_VMCB* Source
     if (NestedPaging) { KswNsvmCopy(Destination, Source, KSW_VMCB_PAT, 8); }
 }
 
-/* Reflect only hardware-written baseline fields; LBR/CET/SEV remain unsupported. */
+/* Reflect hardware-written core fields; supervisor CET admission remains restricted. */
 void KswSvmNestedReflectExit(KSW_SVM_VMCB* Vmcb12, const KSW_SVM_VMCB* Vmcb02,
     unsigned int NestedPaging)
 {

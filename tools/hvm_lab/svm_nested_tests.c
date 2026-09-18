@@ -325,8 +325,14 @@ static int test_state(void)
     CHECK(KswSvmRead64(&destination, KSW_VMCB_RAX) == 0xaaaaaaaaaaaaaaaaULL);
     CHECK(KswSvmRead64(&destination, KSW_VMCB_GDTR) == 0xaaaaaaaaaaaaaaaaULL);
     CHECK(KswSvmRead64(&destination, KSW_VMCB_NCR3) == 0xaaaaaaaaaaaaaaaaULL);
+    /* VMLOAD must not copy the VMRUN-managed CET core state. */
+    CHECK(KswSvmRead64(&destination, KSW_VMCB_S_CET) == 0xaaaaaaaaaaaaaaaaULL);
+    CHECK(KswSvmRead64(&destination, KSW_VMCB_ISST) == 0xaaaaaaaaaaaaaaaaULL);
     memset(&destination, 0xaa, sizeof(destination));
     KswSvmNestedCopyVmrun(&destination, &source, 0);
+    CHECK(KswSvmRead64(&destination, KSW_VMCB_S_CET) == 0x3333333333333333ULL);
+    CHECK(KswSvmRead64(&destination, KSW_VMCB_SSP) == 0x3333333333333333ULL);
+    CHECK(KswSvmRead64(&destination, KSW_VMCB_ISST) == 0x3333333333333333ULL);
     CHECK(KswSvmRead64(&destination, KSW_VMCB_CR4) == 0x3333333333333333ULL);
     CHECK(KswSvmRead64(&destination, KSW_VMCB_RIP) == 0x3333333333333333ULL);
     CHECK(KswSvmRead64(&destination, KSW_VMCB_RAX) == 0x3333333333333333ULL);
@@ -347,6 +353,9 @@ static int test_state(void)
     KswSvmWrite64(&source, 0x68, 1);
     memset(&destination, 0xaa, sizeof(destination));
     KswSvmNestedReflectExit(&destination, &source, 1);
+    CHECK(KswSvmRead64(&destination, KSW_VMCB_S_CET) == 0x3333333333333333ULL);
+    CHECK(KswSvmRead64(&destination, KSW_VMCB_SSP) == 0x3333333333333333ULL);
+    CHECK(KswSvmRead64(&destination, KSW_VMCB_ISST) == 0x3333333333333333ULL);
     CHECK(KswSvmRead64(&destination, KSW_VMCB_EXITCODE) == KSW_SVM_EXIT_NPF);
     CHECK(KswSvmRead64(&destination, KSW_VMCB_EXITINFO1) == (KSW_NMMU_FINAL | 7));
     CHECK(KswSvmRead64(&destination, KSW_VMCB_EXITINFO2) == 0x12345000);

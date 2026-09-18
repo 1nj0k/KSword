@@ -81,7 +81,8 @@ static ULONG_PTR KswSvmIpi(ULONG_PTR Parameter)
         /* Request complete native restoration, not just exit from VMRUN. */
         if (cpu->NativeReturnSeen || KswordSvmAsmCall(KSW_SVM_CALL_STOP) != 0) { status = STATUS_HV_OPERATION_FAILED; }
         /* The hypercall returned only after EFER/HSAVE/stack restoration. */
-        else if ((__readmsr(KSW_SVM_MSR_EFER) & KSW_SVM_EFER_SVME) || __readmsr(KSW_SVM_MSR_HSAVE) != cpu->OriginalHsave) {
+        else if ((__readmsr(KSW_SVM_MSR_EFER) & KSW_SVM_EFER_SVME) || __readmsr(KSW_SVM_MSR_HSAVE) != cpu->OriginalHsave ||
+            !KswordSvmVerifyNativeState(cpu)) {
             /* Do not free resources when native ownership readback failed. */
             status = STATUS_HV_OPERATION_FAILED;
             /* The CPU did return natively; never execute a second native VMMCALL on retry. */

@@ -36,6 +36,14 @@ typedef char KSW_SVM_ASSERT_SEGMENT[(sizeof(KSW_SVM_SEGMENT) == 16) ? 1 : -1];
 #define KSW_SVM_MSR_VM_CR 0xc0010114U
 /* Per-processor host state-save ownership. */
 #define KSW_SVM_MSR_HSAVE 0xc0010117U
+/* CET supervisor controls are separate from the XSS-managed user state. */
+#define KSW_SVM_MSR_S_CET 0x6a2U
+/* Interrupt shadow-stack table is switched by VMRUN, not XSAVES. */
+#define KSW_SVM_MSR_ISST 0x6a8U
+/* Only the user CET supervisor-state component is supported in this revision. */
+#define KSW_SVM_XSS_CET_U (1ULL << 11)
+/* Other CR4 extensions still lack a complete native-return contract. */
+#define KSW_SVM_UNSUPPORTED_CR4 ((1ULL << 12) | (1ULL << 24) | (1ULL << 25))
 /* The only EFER bit owned by this backend. */
 #define KSW_SVM_EFER_SVME (1ULL << 12)
 /* CPUID exit. */
@@ -97,6 +105,9 @@ typedef char KSW_SVM_ASSERT_SEGMENT[(sizeof(KSW_SVM_SEGMENT) == 16) ? 1 : -1];
 #define KSW_VMCB_RFLAGS 0x570U
 #define KSW_VMCB_RIP 0x578U
 #define KSW_VMCB_RSP 0x5d8U
+#define KSW_VMCB_S_CET 0x5e0U
+#define KSW_VMCB_SSP 0x5e8U
+#define KSW_VMCB_ISST 0x5f0U
 #define KSW_VMCB_RAX 0x5f8U
 #define KSW_VMCB_STAR 0x600U
 #define KSW_VMCB_LSTAR 0x608U
@@ -109,6 +120,32 @@ typedef char KSW_SVM_ASSERT_SEGMENT[(sizeof(KSW_SVM_SEGMENT) == 16) ? 1 : -1];
 #define KSW_VMCB_CR2 0x640U
 #define KSW_VMCB_PAT 0x668U
 #define KSW_VMCB_DEBUGCTL 0x670U
+
+/* XSAVES handles CET_U; kernel shadow-stack continuations remain unimplemented. */
+static __inline unsigned int KswSvmUserCetValid(KSW_SVM_U64 cr4, KSW_SVM_U64 xcr0,
+    KSW_SVM_U64 xss, unsigned int xsaveFeatures, unsigned int cetPresent, KSW_SVM_U64 scet)
+{
+    /* LA57/PKS/UINTR and XCR0-managed CET are outside this save-area contract. */
+    if ((cr4 & KSW_SVM_UNSUPPORTED_CR4) || (xcr0 & (3ULL << 11))) { return 0; }
+    /* Never execute on a private host stack with supervisor CET enabled. */
+    if (scet || (xss & ~KSW_SVM_XSS_CET_U)) { return 0; }
+    /* Enabling CR4.CET or CET_U requires enumerated, readable CET registers. */
+    if (((cr4 & (1ULL << 23)) || xss) && !cetPresent) { return 0; }
+    /* A nonzero XSS requires the compacted XSAVES/XRSTORS instruction family. */
+    return !xss || (xsaveFeatures & 8U) != 0;
+}
+
+/* Idempotent writes cannot change the prepared cache or XSTATE/return contract. */
+static __inline unsigned int KswSvmStateMsrWriteAllowed(unsigned int msr,
+    KSW_SVM_U64 value, KSW_SVM_U64 pat, KSW_SVM_U64 xss)
+{
+    /* PAT retains the NPT cache interpretation. */
+    if (msr == 0x277U) { return value == pat; }
+    /* XSS cannot add, remove, or reinterpret compacted state components. */
+    if (msr == 0xda0U) { return value == xss; }
+    /* Supervisor CET must remain disabled for synthetic native returns. */
+    return msr == KSW_SVM_MSR_S_CET && value == 0;
+}
 
 /* Read aligned architectural words; offsets above are multiples of eight. */
 static __inline KSW_SVM_U64 KswSvmRead64(const KSW_SVM_VMCB* v, unsigned int offset)

@@ -41,20 +41,34 @@ endm
 
 ; Snapshot guest XSTATE without allowing CR0.TS/EM to generate #NM.
 KSW_SAVE_XSTATE macro
+    LOCAL StandardSave, Saved
     mov r8, [rcx+28h]             ; Aligned XSAVE area.
     mov rax, [rcx+30h]            ; Low and high enabled component masks.
     mov rdx, rax                 ; Preserve full mask for high dword.
     shr rdx, 32                  ; XSAVE takes EDX:EAX.
-    xsave64 [r8]                 ; Save standard-format user XSTATE.
+    cmp dword ptr [rcx+110h], 0  ; Prepared format is immutable for this CPU lifetime.
+    je StandardSave             ; Older VMware CPUs keep their proven standard path.
+    xsaves64 [r8]               ; Compacted user plus XSS.CET_U state, including PL3_SSP.
+    jmp Saved                   ; Never write both formats into the same buffer.
+StandardSave:
+    xsave64 [r8]                ; Save standard-format user XSTATE.
+Saved:
 endm
 
 ; Restore the complete currently supported XSTATE mask.
 KSW_LOAD_XSTATE macro
+    LOCAL StandardLoad, Loaded
     mov r8, [rcx+28h]             ; Aligned XSAVE area.
     mov rax, [rcx+30h]            ; Enabled state components.
     mov rdx, rax                 ; Split high mask for XRSTOR.
     shr rdx, 32                  ; XRSTOR takes EDX:EAX.
-    xrstor64 [r8]                ; Restore guest SIMD/x87/extended state.
+    cmp dword ptr [rcx+110h], 0  ; Restore with the exact instruction family used to save.
+    je StandardLoad             ; Standard header must never reach XRSTORS.
+    xrstors64 [r8]              ; Restore current guest user CET and SIMD state together.
+    jmp Loaded                  ; Do not reinterpret the compacted layout as standard.
+StandardLoad:
+    xrstor64 [r8]               ; Restore guest SIMD/x87/extended state.
+Loaded:
 endm
 
 KswordSvmAsmLaunch proc frame
@@ -179,6 +193,19 @@ KswSvmRun:
     wrmsr                        ; Restore current guest debug MSR.
     mov rax, [r15]               ; Guest VMLOAD image physical address.
     vmload rax                   ; Restore current guest FS/GS/TR/LDTR/syscall state.
+    cmp dword ptr [r15+114h], 0  ; Do not access CET registers on unsupported processors.
+    je KswSvmNativeCetDone        ; Preserve the original non-CET VMware return path.
+    mov ecx, 6a8h               ; ISST_ADDR is VMRUN state, not VMLOAD or XSAVES state.
+    mov rax, [rbx+5f0h]         ; Restore the current guest table, not the launch snapshot.
+    mov rdx, rax                ; Split the MSR value.
+    shr rdx, 32                 ; Upper address bits.
+    wrmsr                       ; Restore before any native interrupt can arrive.
+    mov ecx, 6a2h               ; Supervisor CET was held at zero by admission/MSRPM.
+    mov rax, [rbx+5e0h]         ; VMCB holds the current architecturally saved S_CET.
+    mov rdx, rax                ; Split the control value.
+    shr rdx, 32                 ; Upper control bits.
+    wrmsr                       ; No active supervisor shadow stack is admitted here.
+KswSvmNativeCetDone:
     mov ax, [rbx+400h]           ; Current guest ES selector.
     mov es, ax                   ; Restore ES.
     mov ax, [rbx+430h]           ; Current guest DS selector.
@@ -200,7 +227,7 @@ KswSvmRun:
     mov rax, [rbx+558h]          ; Current guest CR0, including TS/EM.
     mov cr0, rax                 ; No more SIMD instructions follow.
     mov rax, [r15+0f0h]          ; Guest RSP points at the original CALL return address.
-    sub rax, 8                   ; Reserve one temporary return slot; CET was gated off.
+    sub rax, 8                   ; Synthetic RET is safe only with admitted S_CET=0.
     mov rdx, [r15+0f8h]          ; Exact guest continuation.
     mov [rax], rdx               ; Synthetic return consumes only the temporary slot.
     mov rsp, rax                 ; Switch onto the complete native guest stack.

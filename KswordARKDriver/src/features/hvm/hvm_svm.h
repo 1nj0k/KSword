@@ -59,6 +59,12 @@ typedef struct _KSW_SVM_CAPS {
     ULONG RejectReason, StateValid, Cpuid1Ecx, XsaveFeatures;
     /* Read-only architectural state, never inferred from CPUID support alone. */
     ULONGLONG Cr4, Xcr0, Xss;
+    /* Valid only when CET was enumerated and both MSRs were read successfully. */
+    ULONGLONG Scet, Isst;
+    /* Current-thread user CET observations for bounded self-test return verification. */
+    ULONGLONG Ucet, Pl3Ssp;
+    /* CPUID.7.0 ECX.CET_SS; unsupported CPUs must not touch CET MSRs. */
+    ULONG CetPresent;
     /* The VMM may filter one-GiB page support. */
     BOOLEAN Page1Gb;
     /* Explicit SVM instruction availability. */
@@ -97,7 +103,7 @@ typedef struct _KSW_SVM_CPU {
     ULONGLONG LaunchRsp;
     /* 28: XSAVE area, 64-byte aligned. */
     PVOID Xstate;
-    /* 30: XCR0 bits saved/restored by XSAVE64. */
+    /* 30: requested XCR0 | XSS bits, paired with the selected save format. */
     ULONGLONG XstateMask;
     /* 38: original EFER before this CPU entered SVM. */
     ULONGLONG OriginalEfer;
@@ -123,6 +129,10 @@ typedef struct _KSW_SVM_CPU {
     ULONGLONG ReturnRsp, ReturnRip, ReturnFlags;
     /* 108: physical address written to VM_HSAVE_PA before launch. */
     ULONGLONG HsavePa;
+    /* 110: zero selects XSAVE64; one selects compacted XSAVES64/XRSTORS64. */
+    ULONG XstateCompacted;
+    /* 114: CET MSRs exist and native return must restore ISST_ADDR/S_CET. */
+    ULONG CetPresent;
     /* Resource and runtime ownership beyond the assembly prefix. */
     KSW_HVM_RUNTIME* Runtime;
     /* Public row owns processor identity and common states. */
@@ -168,6 +178,11 @@ C_ASSERT(FIELD_OFFSET(KSW_SVM_CPU, HostCr3) == 0xe8);
 C_ASSERT(FIELD_OFFSET(KSW_SVM_CPU, ReturnRsp) == 0xf0);
 /* The assembler uses this final fixed-prefix field during initial ownership setup. */
 C_ASSERT(FIELD_OFFSET(KSW_SVM_CPU, HsavePa) == 0x108);
+/* Keep the format selector and optional native-return MSR guard paired with MASM. */
+C_ASSERT(FIELD_OFFSET(KSW_SVM_CPU, XstateCompacted) == 0x110);
+C_ASSERT(FIELD_OFFSET(KSW_SVM_CPU, CetPresent) == 0x114);
+/* MASM native restoration consumes these exact ordinary-VMCB offsets. */
+C_ASSERT(KSW_VMCB_S_CET == 0x5e0 && KSW_VMCB_SSP == 0x5e8 && KSW_VMCB_ISST == 0x5f0);
 
 /* Fixed assembly prefix field; never insert data ahead of this member. */
 C_ASSERT(FIELD_OFFSET(KSW_SVM_CPU, GuestPa) == 0x0);
@@ -228,6 +243,8 @@ VOID KswordNptRelease(KSW_NPT* Npt);
 /* Processor-pinned, nonpageable execution helpers. */
 NTSTATUS KswordSvmBuildVmcb(KSW_SVM_CPU* Cpu);
 NTSTATUS KswordSvmEnterCurrent(KSW_SVM_CPU* Cpu);
+/* Called only after the assembly continuation has returned to native Windows. */
+BOOLEAN KswordSvmVerifyNativeState(KSW_SVM_CPU* Cpu);
 VOID KswordSvmTrace(KSW_SVM_CPU* Cpu, ULONG Stage);
 ULONG KswordSvmExit(KSW_SVM_CPU* Cpu);
 /* AMD assembly wrappers, never called on Intel. */

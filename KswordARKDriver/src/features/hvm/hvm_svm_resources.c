@@ -83,7 +83,7 @@ NTSTATUS KswordSvmProbeCpu(KSW_SVM_CAPS* Caps)
     Caps->StateValid |= KSWORD_ARK_SVM_VALID_CPUID1;
     /* Both XSAVE and OSXSAVE must be present before reading XCR0. */
     if ((Caps->Cpuid1Ecx & (3U << 26)) != (3U << 26)) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_XSAVE, STATUS_NOT_SUPPORTED); }
-    /* The first backend handles XCR0 state; active supervisor XSTATE is refused. */
+    /* Discover the save family before admitting XSS-managed user CET. */
     __cpuidex(r, 0xd, 1);
     /* Preserve the actual XSAVE instruction-family enumeration. */
     Caps->XsaveFeatures = (ULONG)r[0];
@@ -102,16 +102,52 @@ NTSTATUS KswordSvmProbeCpu(KSW_SVM_CAPS* Caps)
             /* An observed zero is now distinguishable from a skipped/failed read. */
             Caps->StateValid |= KSWORD_ARK_SVM_VALID_XSS;
         }
+        /* Query CET enumeration only when basic leaf seven exists. */
+        __cpuid(r, 0);
+        /* CPUs without CET retain zero state and never execute a CET MSR read. */
+        if ((ULONG)r[0] >= 7U) {
+            /* AMD CET_SS enumerates the architectural shadow-stack MSRs. */
+            __cpuidex(r, 7, 0);
+            /* Record support independently from the current CR4 enable bit. */
+            Caps->CetPresent = ((ULONG)r[2] >> 7) & 1U;
+        }
+        /* Even CR4.CET=0 must not hide nonzero supervisor controls. */
+        if (Caps->CetPresent) {
+            /* Supervisor CET cannot run on the current private root stack. */
+            Caps->Scet = __readmsr(KSW_SVM_MSR_S_CET);
+            /* Retain the interrupt shadow-stack table for the initial VMCB. */
+            Caps->Isst = __readmsr(KSW_SVM_MSR_ISST);
+            /* Bounded self-tests must prove that both user CET MSRs survived the round trip. */
+            Caps->Ucet = __readmsr(0x6a0U);
+            /* PL3_SSP is live per-thread state, not a processor preparation constant. */
+            Caps->Pl3Ssp = __readmsr(0x6a7U);
+        }
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         /* Preserve the exact exception instead of fabricating absent supervisor state. */
         Caps->Exception = GetExceptionCode();
         /* No virtualization ownership was acquired by these reads. */
         return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_XSTATE_READ, Caps->Exception);
     }
-    /* CET, LA57, PKS and user-interrupt state transfers remain unsupported. */
-    if (Caps->Cr4 & ((1ULL << 12) | (1ULL << 23) | (1ULL << 24) | (1ULL << 25))) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_CR4, STATUS_NOT_SUPPORTED); }
-    /* The XSAVE/XRSTOR entry path still cannot preserve enabled supervisor state. */
-    if (Caps->Xss) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_XSS, STATUS_NOT_SUPPORTED); }
+    /* LA57, PKS and user-interrupt state transfers remain unsupported. */
+    if (Caps->Cr4 & KSW_SVM_UNSUPPORTED_CR4) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_CR4, STATUS_NOT_SUPPORTED); }
+    /* Only CET_U has a supported supervisor XSTATE save/restore contract. */
+    if (Caps->Xss & ~KSW_SVM_XSS_CET_U) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_XSS, STATUS_NOT_SUPPORTED); }
+    /* Never admit supervisor CET or a missing XSAVES path merely by clearing a gate. */
+    if (!KswSvmUserCetValid(Caps->Cr4, Caps->Xcr0, Caps->Xss, Caps->XsaveFeatures, Caps->CetPresent, Caps->Scet)) {
+        /* Keep this distinguishable from unrelated CR4 and XSS refusals. */
+        return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_CET_STATE, STATUS_NOT_SUPPORTED);
+    }
+    /* Validate the advertised compacted supervisor component before executing XSAVES. */
+    if (Caps->Xss) {
+        /* D.1 enumerates XSS bits in EDX:ECX. */
+        __cpuidex(r, 0xd, 1);
+        /* This implementation requires exactly the architecturally defined CET_U component. */
+        if (!((ULONG)r[2] & (1U << 11))) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_CET_STATE, STATUS_NOT_SUPPORTED); }
+        /* Component eleven contains two eight-byte MSRs and is supervisor-managed. */
+        __cpuidex(r, 0xd, 11);
+        /* Reject inconsistent outer-VMM enumeration before allocating or entering. */
+        if ((ULONG)r[0] != 16U || !((ULONG)r[2] & 1U)) { return KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_CET_STATE, STATUS_NOT_SUPPORTED); }
+    }
     /* Capability success does not itself prove that VMRUN works. */
     return KswNptAddressMask(Caps->PhysicalBits) ? STATUS_SUCCESS : KswSvmReject(Caps, KSWORD_ARK_SVM_REJECT_PHYSICAL_WIDTH, STATUS_NOT_SUPPORTED);
 }
@@ -312,10 +348,14 @@ NTSTATUS KswordSvmPrepare(KSW_HVM_RUNTIME* Runtime, ULONG Flags)
         status = KswordSvmProbeCpu(&cpu->Caps);
         /* Record the currently enabled user XSTATE mask and storage requirement. */
         if (NT_SUCCESS(status)) {
-            /* XSAVE standard-format size for the current XCR0. */
-            __cpuidex(r, 0xd, 0); cpu->XstateBytes = (ULONG)r[1];
-            /* Save exactly the currently enabled state components. */
-            cpu->XstateMask = _xgetbv(0);
+            /* XSS selects a compacted XSAVES area; standard XSAVE cannot save CET_U. */
+            cpu->XstateCompacted = cpu->Caps.Xss != 0;
+            /* D.1 EBX includes current XCR0 and XSS; D.0 EBX is standard user state. */
+            __cpuidex(r, 0xd, (int)cpu->XstateCompacted); cpu->XstateBytes = (ULONG)r[1];
+            /* Save exactly the enabled components using the matching instruction family. */
+            cpu->XstateMask = cpu->Caps.Xcr0 | cpu->Caps.Xss;
+            /* Assembly must never touch CET MSRs on the old non-CET VMware baseline. */
+            cpu->CetPresent = cpu->Caps.CetPresent;
         }
         /* Never leave the control thread pinned after probing. */
         KeRevertToUserGroupAffinityThread(&previous);
@@ -328,7 +368,7 @@ NTSTATUS KswordSvmPrepare(KSW_HVM_RUNTIME* Runtime, ULONG Flags)
             status = STATUS_NOT_SUPPORTED; break;
         }
         /* Bound the saved state size before allocation arithmetic. */
-        if (cpu->XstateBytes < 512 || cpu->XstateBytes > 65536) { status = STATUS_NOT_SUPPORTED; break; }
+        if (cpu->XstateBytes < 576 || cpu->XstateBytes > 65536) { status = STATUS_NOT_SUPPORTED; break; }
         /* Associate common and private state without reusing VMX fields. */
         cpu->Runtime = Runtime; cpu->Resource = &Runtime->Processors[index];
         /* Retain the System CR3 captured by the common prepare path. */

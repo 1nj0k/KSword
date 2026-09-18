@@ -25,6 +25,38 @@ int main(void)
     KswSvmWrite32(&v, KSW_VMCB_ASID, 1);
     CHECK(((unsigned char*)&v)[KSW_VMCB_TLB] == 0xa5);
     CHECK(KSW_VMCB_RAX == 0x5f8 && KSW_VMCB_RSP == 0x5d8 && KSW_VMCB_RIP == 0x578);
+    /* CET core fields occupy the gap between RSP and RAX in the ordinary VMCB. */
+    CHECK(KSW_VMCB_S_CET == 0x5e0 && KSW_VMCB_SSP == 0x5e8 && KSW_VMCB_ISST == 0x5f0);
+    /* Reproduce the physical host contract, with confirmed-disabled supervisor controls. */
+    CHECK(KswSvmUserCetValid(0xb50ef8ULL, 0xe7, 0x800, 15, 1, 0));
+    /* Missing XSAVES, missing CET, kernel CET and unsupported XSS must all refuse. */
+    CHECK(!KswSvmUserCetValid(0xb50ef8ULL, 0xe7, 0x800, 7, 1, 0));
+    CHECK(!KswSvmUserCetValid(0xb50ef8ULL, 0xe7, 0x800, 15, 0, 0));
+    CHECK(!KswSvmUserCetValid(0xb50ef8ULL, 0xe7, 0x800, 15, 1, 1));
+    CHECK(!KswSvmUserCetValid(0xb50ef8ULL, 0xe7, 0x1800, 15, 1, 0));
+    CHECK(!KswSvmUserCetValid(0xb50ef8ULL, 0x8e7, 0x800, 15, 1, 0));
+    /* A CPU without CET retains the preexisting standard-format path. */
+    CHECK(KswSvmUserCetValid(0x350ef8, 7, 0, 1, 0, 0));
+    /* Disabled CR4.CET is not proof that supervisor controls are zero. */
+    CHECK(!KswSvmUserCetValid(0x350ef8, 7, 0, 15, 1, 1));
+    for (bits = 0; bits < 64; ++bits) {
+        /* Enumerate every XSS and supervisor CET bit, including unknown future states. */
+        CHECK(KswSvmUserCetValid(0xb50ef8, 0xe7, 1ULL << bits, 15, 1, 0) == (unsigned)(bits == 11));
+        CHECK(!KswSvmUserCetValid(0xb50ef8, 0xe7, 0x800, 15, 1, 1ULL << bits));
+    }
+    CHECK(!KswSvmUserCetValid(0xb51ef8, 0xe7, 0x800, 15, 1, 0));
+    CHECK(!KswSvmUserCetValid(0x1b50ef8, 0xe7, 0x800, 15, 1, 0));
+    CHECK(!KswSvmUserCetValid(0x2b50ef8, 0xe7, 0x800, 15, 1, 0));
+    /* Writes may repeat the existing XSS contract, never turn CET_U off or add CET_S. */
+    CHECK(KswSvmStateMsrWriteAllowed(0xda0, 0x800, 0, 0x800));
+    CHECK(!KswSvmStateMsrWriteAllowed(0xda0, 0, 0, 0x800));
+    CHECK(!KswSvmStateMsrWriteAllowed(0xda0, 0x1800, 0, 0x800));
+    CHECK(KswSvmStateMsrWriteAllowed(0xda0, 0, 0, 0));
+    CHECK(KswSvmStateMsrWriteAllowed(0x6a2, 0, 0, 0x800));
+    CHECK(!KswSvmStateMsrWriteAllowed(0x6a2, 1, 0, 0x800));
+    CHECK(KswSvmStateMsrWriteAllowed(0x277, 0x70106, 0x70106, 0x800));
+    CHECK(!KswSvmStateMsrWriteAllowed(0x277, 0, 0x70106, 0x800));
+    CHECK(!KswSvmStateMsrWriteAllowed(0x123, 0, 0, 0));
     for (bank = 0; bank < 3; ++bank) {
         for (msr = 0; msr < 8192; ++msr) {
             unsigned bit = KswSvmMsrpmBit(bases[bank] + msr, 0);

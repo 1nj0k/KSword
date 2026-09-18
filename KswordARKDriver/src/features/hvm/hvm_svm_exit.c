@@ -88,10 +88,8 @@ static VOID KswSvmMsr(KSW_SVM_CPU* Cpu)
     if (write) {
         /* Idempotent EFER writes preserve Windows behavior without permitting nested SVM. */
         if (msr == KSW_SVM_MSR_EFER && value == efer) { KswSvmAdvance(Cpu); return; }
-        /* Idempotent PAT writes do not change the identity-map cache interpretation. */
-        if (msr == 0x277U && value == Cpu->Caps.Pat) { KswSvmAdvance(Cpu); return; }
-        /* Supervisor XSTATE remains inactive in the baseline backend. */
-        if (msr == 0xda0U && value == 0) { KswSvmAdvance(Cpu); return; }
+        /* Preserve the prepared XSS mask, cache interpretation and disabled supervisor CET. */
+        if (KswSvmStateMsrWriteAllowed(msr, value, Cpu->Caps.Pat, Cpu->Caps.Xss)) { KswSvmAdvance(Cpu); return; }
         /* Deny changes rather than forwarding writes to host state. */
         KswSvmInject(Cpu, 13); return;
     }
