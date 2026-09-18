@@ -232,7 +232,7 @@ jobs:
               ["git", "ls-files", "--", "*.json"], text=True
           ).splitlines()
           for raw_path in paths:
-              with open(raw_path, encoding="utf-8") as source:
+              with open(raw_path, encoding="utf-8-sig") as source:
                   json.load(source)
           print(f"Validated {len(paths)} tracked JSON file(s).")
           '@ | python -
