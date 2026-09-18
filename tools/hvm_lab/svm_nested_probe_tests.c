@@ -10,6 +10,8 @@ static KSW_SVM_NESTED nested;
 static KSW_SVM_VMCB guest, operand[2];
 static KSW_NPT outer;
 static unsigned char stack[KSW_SVM_STACK_BYTES];
+static unsigned char msrpm[KSW_NSVM_MSRPM_BYTES], iopm[KSW_NSVM_IOPM_BYTES];
+static unsigned char merged[KSW_NSVM_MSRPM_BYTES + KSW_NSVM_IOPM_BYTES];
 __declspec(align(4096)) static KSW_SVM_U64 shadow[8][512];
 static KSW_SVM_U64 memory[64][512];
 static ULONGLONG fakeRip;
@@ -43,6 +45,10 @@ static int initialize(void)
     memset(&guest, 0, sizeof(guest));
     memset(memory, 0, sizeof(memory));
     cpu.Guest = &guest;
+    memset(msrpm, 0, sizeof(msrpm));
+    memset(iopm, 0, sizeof(iopm));
+    cpu.Msrpm = msrpm; cpu.Iopm = iopm;
+    msrpm[0x820] = 3; /* EFER read/write, independent APM offset. */
     cpu.Nested = &nested;
     cpu.Caps.PhysicalBits = 45;
     cpu.Caps.Page1Gb = TRUE;
@@ -53,6 +59,8 @@ static int initialize(void)
     cpu.Gpr[3] = 0x1122334455667788ULL;
     nested.Operand = operand;
     nested.OperandPa = 0x10000;
+    nested.MergedMaps = merged;
+    nested.MergedMapsPa = 0x80000;
     nested.Stack = stack;
     nested.Outer = &outer;
     outer.RootPa = 0x1000;
@@ -67,6 +75,9 @@ static int initialize(void)
     KswSvmWrite64(&guest, KSW_VMCB_EFER, 0x1d01);
     KswSvmWrite64(&guest, KSW_VMCB_RFLAGS, 0x202);
     KswSvmWrite64(&guest, KSW_VMCB_GS, 0xaabbccdd);
+    KswSvmWrite32(&guest, KSW_VMCB_MISC1, (1U << 18) | KSW_NSVM_MSR_PROT);
+    KswSvmWrite64(&guest, KSW_VMCB_MSRPM, 0x20000);
+    KswSvmWrite64(&guest, KSW_VMCB_IOPM, 0x22000);
     CHECK(KswordSvmNestedBuildProbe(&cpu) == STATUS_SUCCESS);
     CHECK(nested.Sequence == 1 && !nested.Entries && !nested.Reflections);
     CHECK(KswSvmRead64(&guest, KSW_VMCB_RAX) == nested.OperandPa);
@@ -110,6 +121,9 @@ static int test_roundtrip(void)
     continuation = fakeRip + 3;
     CHECK(emit(KSW_SVM_EXIT_VMRUN, nested.OperandPa) == 0);
     CHECK(nested.RunningL2 && nested.Entries == 1 && !nested.Reflections);
+    CHECK(nested.Permissions.Ready == 1 && merged[0x820] == 3);
+    CHECK(KswSvmRead64(&guest, KSW_VMCB_MSRPM) == 0x80000);
+    CHECK(KswSvmRead64(&guest, KSW_VMCB_IOPM) == 0x82000);
     CHECK(KswSvmRead64(&guest, KSW_VMCB_NCR3) == nested.Pages[0].Physical);
     CHECK(KswSvmRead64(&guest, KSW_VMCB_RIP) == (ULONGLONG)(ULONG_PTR)KswordSvmAsmNestedPayload);
     KswSvmWrite64(&guest, KSW_VMCB_EXITINFO1, KSW_NMMU_FINAL | 6);
@@ -120,6 +134,8 @@ static int test_roundtrip(void)
     CHECK(!nested.RunningL2 && nested.Reflections == 1 && nested.LastMarker == KSW_NSVM_INNER_MARKER);
     CHECK(KswSvmRead64(&guest, KSW_VMCB_RIP) == continuation);
     CHECK(KswSvmRead64(&guest, KSW_VMCB_RAX) == nested.OperandPa);
+    CHECK(KswSvmRead64(&guest, KSW_VMCB_MSRPM) == 0x20000);
+    CHECK(KswSvmRead64(&guest, KSW_VMCB_IOPM) == 0x22000);
     CHECK(KswSvmRead64(operand, KSW_VMCB_EXITCODE) == KSW_SVM_EXIT_CPUID);
     CHECK(KswSvmRead64(operand, KSW_VMCB_GS) == 0xbeef);
     CHECK(emit(0x83, nested.OperandPa) == 0);
@@ -137,7 +153,7 @@ static int test_roundtrip(void)
 static int test_failures(void)
 {
     unsigned scenario;
-    for (scenario = 0; scenario < 7; ++scenario) {
+    for (scenario = 0; scenario < 9; ++scenario) {
         if (initialize() || begin()) { return 1; }
         if (scenario == 0) { CHECK(emit(KSW_SVM_EXIT_CPUID, KSW_NSVM_DONE_MARKER) == 1); }
         if (scenario == 1) { CHECK(emit(KSW_SVM_EXIT_VMRUN, nested.OperandPa + 4096) == 1); }
@@ -146,7 +162,19 @@ static int test_failures(void)
             KswSvmWrite64(&guest, KSW_VMCB_RFLAGS, 0x202);
             CHECK(emit(KSW_SVM_EXIT_VMRUN, nested.OperandPa) == 1);
         }
-        if (scenario >= 4) {
+        if (scenario == 7) {
+            KswSvmWrite64(operand, KSW_VMCB_MSRPM, 0x70000);
+            CHECK(emit(KSW_SVM_EXIT_VMRUN, nested.OperandPa) == 1);
+            CHECK(!nested.Permissions.Ready && !nested.Entries);
+        }
+        if (scenario == 8) {
+            /* Hardware CPUID trapped by L0 cannot falsely count as an L1-requested exit. */
+            KswSvmWrite32(operand, KSW_VMCB_MISC1, KSW_NSVM_MSR_PROT);
+            CHECK(emit(KSW_SVM_EXIT_VMRUN, nested.OperandPa) == 0);
+            CHECK(emit(KSW_SVM_EXIT_CPUID, KSW_NSVM_INNER_MARKER) == 1);
+            CHECK(!nested.Reflections);
+        }
+        if (scenario >= 4 && scenario < 7) {
             CHECK(emit(KSW_SVM_EXIT_VMRUN, nested.OperandPa) == 0);
             if (scenario == 4) { CHECK(emit(KSW_SVM_EXIT_CPUID, 0) == 1); }
             if (scenario == 5) { CHECK(emit(KSW_SVM_EXIT_INVALID, 0) == 1); }

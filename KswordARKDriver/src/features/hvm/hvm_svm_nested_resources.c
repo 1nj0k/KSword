@@ -81,6 +81,8 @@ VOID KswordSvmNestedRelease(KSW_SVM_CPU* Cpu)
     }
     /* The private inner stack is ordinary nonpaged NX memory. */
     if (nested->Stack) { ExFreePoolWithTag(nested->Stack, 'pSvK'); }
+    /* Hardware permission maps remain owned until the inner CPU is native. */
+    if (nested->MergedMaps) { MmFreeContiguousMemory(nested->MergedMaps); }
     /* One contiguous allocation owns both operand and virtual HSAVE pages. */
     if (nested->Operand) { MmFreeContiguousMemory(nested->Operand); }
     /* Drop CPU-local snapshots last. */
@@ -96,6 +98,8 @@ NTSTATUS KswordSvmNestedPrepare(KSW_SVM_CPU* Cpu, ULONG Index)
     KSW_SVM_NESTED* nested;
     /* Bound hardware pages to the same address width as the outer backend. */
     PHYSICAL_ADDRESS highest;
+    /* Validate both subranges without trusting allocator alignment implicitly. */
+    ULONGLONG mapBase;
     /* Populate the fixed-capacity pool without runtime allocation. */
     ULONG page;
     /* Current backend lifetime holds the shared NPT throughout this preparation. */
@@ -120,10 +124,19 @@ NTSTATUS KswordSvmNestedPrepare(KSW_SVM_CPU* Cpu, ULONG Index)
     highest.QuadPart = (LONGLONG)(state->Npt.Limit - 1);
     /* VMCB12 and virtual HSAVE are adjacent only for the bounded assembly probe. */
     nested->Operand = MmAllocateContiguousMemory(8192, highest);
+    /* Independent merged maps ensure L1 cannot weaken or overwrite L0's maps. */
+    nested->MergedMaps = MmAllocateContiguousMemory(KSW_NSVM_MSRPM_BYTES + KSW_NSVM_IOPM_BYTES, highest);
     /* The inner test has a full private kernel-sized stack. */
     nested->Stack = KswordARKAllocateNonPagedPool(KSW_SVM_STACK_BYTES, 'pSvK');
     /* Leave acquired pointers in the release ledger. */
-    if (!nested->Operand || !nested->Stack) { return STATUS_INSUFFICIENT_RESOURCES; }
+    if (!nested->Operand || !nested->MergedMaps || !nested->Stack) { return STATUS_INSUFFICIENT_RESOURCES; }
+    /* Resolve the entire combined allocation before entering the exit loop. */
+    nested->MergedMapsPa = (ULONGLONG)MmGetPhysicalAddress(nested->MergedMaps).QuadPart;
+    /* Hardware requires page alignment even though guest permission bases ignore low bits. */
+    if ((nested->MergedMapsPa & 4095ULL) ||
+        !KswSvmNestedMapAddress(nested->MergedMapsPa, KSW_NSVM_MSRPM_BYTES, Cpu->Caps.PhysicalBits, &mapBase) ||
+        !KswSvmNestedMapAddress(nested->MergedMapsPa + KSW_NSVM_MSRPM_BYTES,
+            KSW_NSVM_IOPM_BYTES, Cpu->Caps.PhysicalBits, &mapBase)) { return STATUS_DATA_ERROR; }
     /* Resolve the operand identity only at PASSIVE_LEVEL. */
     nested->OperandPa = (ULONGLONG)MmGetPhysicalAddress(nested->Operand).QuadPart;
     /* Every shadow table must be independently aligned/physically contiguous. */

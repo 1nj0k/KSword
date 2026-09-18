@@ -15,6 +15,8 @@ typedef struct _KSW_NPT {
 } KSW_NPT;
 typedef struct _KSW_SVM_CPU {
     KSW_SVM_VMCB* Guest;
+    void* Msrpm;
+    void* Iopm;
     ULONGLONG Gpr[16], LaunchRsp, LaunchFlags, OriginalEfer;
     struct { ULONG PhysicalBits; BOOLEAN Page1Gb; ULONGLONG Pat, VmCr; } Caps;
     NTSTATUS Result;

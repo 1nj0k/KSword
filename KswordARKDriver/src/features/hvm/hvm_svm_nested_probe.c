@@ -1,6 +1,36 @@
 /* Bounded executable nesting probe. This is not admission for an arbitrary inner VMM. */
 #include "hvm_svm_nested_runtime.h"
 
+/* Only the bounded probe's already owned maps are readable by this adapter.
+   General L1 physical reads require the separate NPT01/RAM snapshot adapter. */
+static int KswNsvmProbeReadMap(void* Context, KSW_SVM_U64 Address, unsigned char* Page)
+{
+    /* All source addresses were resolved while building the original outer VMCB. */
+    KSW_SVM_CPU* cpu = Context;
+    /* Original preserves those owned pointers across the virtual VMRUN transition. */
+    ULONGLONG msr = KswSvmRead64(&cpu->Nested->Original, KSW_VMCB_MSRPM);
+    /* Disabled IOPM still has an owned, valid physical allocation. */
+    ULONGLONG io = KswSvmRead64(&cpu->Nested->Original, KSW_VMCB_IOPM);
+    /* Capture only makes aligned, full-page requests. */
+    if (Address & 4095ULL) { return 0; }
+    /* A caller cannot substitute an arbitrary guest physical address. */
+    if (Address >= msr && Address - msr < KSW_NSVM_MSRPM_BYTES && cpu->Msrpm) {
+        /* Borrow the stable CPU-private map, never dereference the supplied physical value. */
+        RtlCopyMemory(Page, (PUCHAR)cpu->Msrpm + (SIZE_T)(Address - msr), 4096);
+        /* One complete owned page was captured. */
+        return 1;
+    }
+    /* Apply the same exact allocation ownership check to all three I/O pages. */
+    if (Address >= io && Address - io < KSW_NSVM_IOPM_BYTES && cpu->Iopm) {
+        /* No guest-writable mapping survives this copy. */
+        RtlCopyMemory(Page, (PUCHAR)cpu->Iopm + (SIZE_T)(Address - io), 4096);
+        /* Snapshot capture can proceed to the next owned page. */
+        return 1;
+    }
+    /* Unknown operands terminate the probe; they never become permissive zero pages. */
+    return 0;
+}
+
 /* Complete the controlled probe using its original, fully captured Windows context. */
 static ULONG KswNsvmFinish(KSW_SVM_CPU* Cpu, NTSTATUS Status)
 {
@@ -52,7 +82,10 @@ NTSTATUS KswordSvmNestedBuildProbe(KSW_SVM_CPU* Cpu)
     /* Resources can only have been acquired by explicit prepare-svm-probe. */
     KSW_SVM_NESTED* nested = Cpu->Nested;
     /* A missing pool is a preparation failure, never a reason to allocate at high IRQL. */
-    if (!nested || !nested->Operand || !nested->Stack || !nested->Shadow.Pages || nested->RunningL2) { return STATUS_DEVICE_NOT_READY; }
+    if (!nested || !nested->Operand || !nested->Stack || !nested->MergedMaps ||
+        !nested->Shadow.Pages || nested->RunningL2) { return STATUS_DEVICE_NOT_READY; }
+    /* Previous permission snapshots cannot authorize a later probe invocation. */
+    nested->Permissions.Ready = 0;
     /* Reusing this CPU must invalidate previous shadow translations/evidence. */
     if (KswSvmNestedShadowReset(&nested->Shadow) != KSW_NSHADOW_OK) { return STATUS_INTEGER_OVERFLOW; }
     /* Invalidate previous published completion before changing any probe evidence. */
@@ -203,7 +236,8 @@ ULONG KswordSvmNestedProbeExit(KSW_SVM_CPU* Cpu)
         /* Sparse NPT02 creates demand faults even for guest page-table walks. */
         if (code == KSW_SVM_EXIT_NPF) { return KswNsvmNpf(Cpu); }
         /* Only execution of the known inner marker proves this probe's hardware entry. */
-        if (code != KSW_SVM_EXIT_CPUID || (ULONG)operand != KSW_NSVM_INNER_MARKER) {
+        if (code != KSW_SVM_EXIT_CPUID || (ULONG)operand != KSW_NSVM_INNER_MARKER ||
+            KswSvmNestedInterceptRequested(&nested->Vmcb12, code) != 1U) {
             /* Unknown exits are evidence of failure, never a guessed successful reflection. */
             return KswNsvmFinish(Cpu, STATUS_HV_OPERATION_FAILED);
         }
@@ -235,21 +269,49 @@ ULONG KswordSvmNestedProbeExit(KSW_SVM_CPU* Cpu)
         /* VMSAVE leaves all VMRUN controls and automatic state untouched. */
         else { KswSvmNestedCopyVmload(nested->Operand, Cpu->Guest); }
     } else if (code == KSW_SVM_EXIT_VMRUN) {
+        /* Keep source ownership separate from the executable combined permission maps. */
+        KSW_NSVM_PERMISSION_VIEW outer, inner;
         /* Entry is restricted to the fixed probe operand and its declared virtual HSAVE. */
         if (!(nested->Msrs.Efer & KSW_SVM_EFER_SVME) || operand != nested->OperandPa ||
             nested->Msrs.Hsave != nested->OperandPa + 4096ULL || nested->Entries ||
             (KswSvmRead64(Cpu->Guest, KSW_VMCB_RFLAGS) & 0x200ULL)) { return KswNsvmFinish(Cpu, STATUS_INVALID_DEVICE_STATE); }
+        /* The operand belongs to this CPU and cannot be changed by another test participant. */
+        RtlCopyMemory(&nested->Vmcb12, nested->Operand, sizeof(nested->Vmcb12));
+        /* Capture a private L1 map image before changing any executable controls. */
+        if (!KswSvmNestedCapturePermissions(&nested->Permissions,
+            *(ULONG*)(nested->Vmcb12.control + KSW_VMCB_MISC1),
+            KswSvmRead64(&nested->Vmcb12, KSW_VMCB_MSRPM),
+            KswSvmRead64(&nested->Vmcb12, KSW_VMCB_IOPM), Cpu->Caps.PhysicalBits,
+            KswNsvmProbeReadMap, Cpu) || !KswSvmNestedPermissionView(&nested->Permissions, &inner)) {
+            /* A partial or foreign map never reaches VMRUN. */
+            return KswNsvmFinish(Cpu, STATUS_ACCESS_DENIED);
+        }
+        /* Outer maps are frozen per CPU for the lifetime of this backend prepare. */
+        outer.Flags = *(ULONG*)(Cpu->Guest->control + KSW_VMCB_MISC1);
+        /* Read the original owned maps, not the inner operand's physical pointers. */
+        outer.Msr = Cpu->Msrpm; outer.Io = Cpu->Iopm;
+        /* L0 restrictions survive every attempted inner permission relaxation. */
+        if (!KswSvmNestedMergePermissions(&outer, &inner, nested->MergedMaps,
+            nested->MergedMaps + KSW_NSVM_MSRPM_BYTES)) { return KswNsvmFinish(Cpu, STATUS_DATA_ERROR); }
         /* Preserve the correct host continuation; VMRUN completes only after reflection. */
         if (!KswNsvmAdvance(Cpu)) { return KswNsvmFinish(Cpu, STATUS_DATA_ERROR); }
         /* Capture complete L1 state privately rather than interpreting hardware HSAVE bytes. */
         RtlCopyMemory(&nested->L1, Cpu->Guest, sizeof(*Cpu->Guest));
-        /* The operand belongs to this CPU and cannot be changed by another test participant. */
-        RtlCopyMemory(&nested->Vmcb12, nested->Operand, sizeof(nested->Vmcb12));
         /* Copy only the automatic guest-state subset; retain L1's current VMLOAD state. */
         KswSvmNestedCopyVmrun(Cpu->Guest, &nested->Vmcb12, 1);
         /* Hardware receives only our owned shadow root, never NPT12 directly. */
         KswSvmWrite64(Cpu->Guest, KSW_VMCB_NCR3, nested->Pages[0].Physical);
-        /* The fixed probe shares the already-built outer interception/permission maps. */
+        /* Hardware sees only the independently owned, complete merged permission maps. */
+        KswSvmWrite64(Cpu->Guest, KSW_VMCB_MSRPM, nested->MergedMapsPa);
+        /* IOPM starts after the two contiguous MSRPM pages. */
+        KswSvmWrite64(Cpu->Guest, KSW_VMCB_IOPM, nested->MergedMapsPa + KSW_NSVM_MSRPM_BYTES);
+        /* Preserve raw non-map L0 intercepts as well as every fixed inner request. */
+        KswSvmWrite32(Cpu->Guest, KSW_VMCB_MISC1,
+            outer.Flags | *(ULONG*)(nested->Vmcb12.control + KSW_VMCB_MISC1));
+        /* Miscellaneous SVM instruction interception remains owned by L0. */
+        KswSvmWrite32(Cpu->Guest, KSW_VMCB_MISC2,
+            *(ULONG*)(nested->L1.control + KSW_VMCB_MISC2) | *(ULONG*)(nested->Vmcb12.control + KSW_VMCB_MISC2));
+        /* The bounded payload injects no event into its inner context. */
         KswSvmWrite64(Cpu->Guest, KSW_VMCB_EVENT, 0);
         /* Every shadow mapping initially faults and must pass both source translations. */
         nested->RunningL2 = 1;

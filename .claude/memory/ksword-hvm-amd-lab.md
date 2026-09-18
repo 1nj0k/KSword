@@ -1,5 +1,7 @@
 # AMD 实验后端与重启续接
 
+2026-09-19晚间收尾：按用户授权已推送一次，远端前进导致首次拒绝后fetch/merge，保留hvm_internal.h双方字段（BackendContext及NativeVmcsFields），合并提交02655653已推送；真实32核5秒证据提交4c9295bc。远端提示新地址KSwordDEV/KSword，origin未擅改。随后实现hvm_svm_nested_permissions：私有权限图捕获/失效、完整地址范围、启用位感知OR、MSR/IOIO逐位归属（包括IOPM尾部不回绕、隐式MSR拦截）。每核新增20KiB连续合并图，生产固定探针在VMRUN前实际捕获/合并并替换硬件指针，反射恢复L1原指针；只接受原有固定map地址。917803项权限图断言、158生产分派模拟、AMD74056/nested449/Intel85通过，标准WDK/API/CAT零警告。通用L1物理快照适配、跨核失效、VMCB合法性、一般IRQ/NMI/GIF与真实L2 OS仍未完成；正常CPUID继续隐藏SVM。Release SYS已被新未签名构建替换，旧通过候选仍在artifacts/amd-host-cet-user-v6；现有host测试哈希锁会拒绝新SYS，不可直接让用户跑旧脚本当成新验证。用户明确今晚不再动态验证，当前代码本地commit后执行shutdown -s -t 0；不再推送、不再额外审计。
+
 实体机32核完整短常驻PASS（2026-09-19）：host-self-test-20260919-000749-f718b7a6f2e548dc9146617747f6547d原始证据经生产验证器独立回放：32核串行自检、并发进入、两次Active查询间隔5.0321852秒且代次不变、全核stop、teardown归零、SCM STOPPED。报告docs/next/evidence/amd-host-resident-32cpu-5seconds.json；仍是7004a13c/age13候选，不是L2操作系统通过。随后用户手动常驻32核，VMware报AMD-V/RVI不可用、MonitorMode失败；当前普通CPUID隐藏SVM且不提供通用SVM转发，与此现象相符。此次VMware失败仅有用户报告，未取得对应vmware.log。用户明确授权本次提交后推送一次，再继续实现；后续不自动再推送。当前SCM独立查询已Stopped。
 
 STOP_PENDING续接（2026-09-19）：用户完成teardown/sc stop后立刻重跑，脚本因尚未STOPPED拒绝。独立观察STOP_PENDING持续超过额外30秒，发现宿主Ksword5.1 PID32092自00:01:40运行；用户完全退出主程序后SCM即确认STOPPED/exit0，未重启。符合主程序设备句柄延迟卸载，但未取得句柄级归因。Test-HostSvmSelfTest现用SCM ServiceController：仅StopPending等待最多30秒、Running仍拒绝；stop后等待完成再发布结果，超时不当成功；入口要求主程序退出。PS5显式加载System.ServiceProcess，37项回归及实际STOPPED查询通过。驱动不改，下一步直接重跑-ResidentSeconds5，无需再次teardown/sc stop。

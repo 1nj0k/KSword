@@ -24,6 +24,12 @@
 
 ## 已写入源码
 
+2026-09-19 权限图增量：`hvm_svm_nested_permissions.c/.h` 实现按启用位捕获8 KiB MSRPM/12 KiB IOPM、MAXPHYADDR完整范围检查（按APM忽略基址低12位）、失败撤销Ready、L0/L1按位OR合并以及MSR/IOIO退出归属查询。MSR范围外访问仅在MSR_PROT启用时隐式拦截；I/O按1/2/4字节检查，包括65535端口之后的三个尾部位，不能回绕到端口0。L0与L1共同请求时返回双重归属，未来分派须先反射L1，不提前执行MSR/I/O副作用。
+
+受控探针现已实际调用捕获和合并器：每核PASSIVE_LEVEL新增20 KiB连续硬件权限图，进入内层前完成私有快照与合并，VMCB02仅使用合并后的自有物理地址；退出后恢复L1原权限图指针。探针读取适配器仅接受本CPU已拥有的固定权限图；通用L1物理地址的NPT01/RAM/cache验证读取适配器仍待接线。捕获不是相对于并发L1写入的原子快照，也没有实现跨核权限图失效；本次不得宣传通用嵌套支持。
+
+本增量完成标准MSVC/WDK Release x64编译链接、x64 ApiValidator及CAT生成，零警告/错误；权限图917803项断言（含全端口及所有启用组合）、生产探针分派158项模拟检查、AMD74056/嵌套449/Intel85项通过。未签名、未加载、未执行新硬件验证，普通常驻仍隐藏SVM。新Release SYS不能冒充此前已签名的7004a13c候选；旧候选保存在本地`tools/hvm_lab/artifacts/amd-host-cet-user-v6`，测试脚本原哈希锁仍在。今晚按用户要求停止动态验证并关机。
+
 | 模块 | 实际行为 |
 | --- | --- |
 | `hvm_svm_nested_npt.h` | AMD 四级页表遍历；4 KiB/2 MiB/1 GiB；MAXPHYADDR、保留位、Present/RW/US/NX 校验；PAT 索引解码；完整路径记录；比较交换更新 A/D；WB/UC 4 KiB 叶项合成 |
@@ -44,7 +50,7 @@ HVM v5 增加 SVM_NESTED_PROBE 控制标志（仅 prepare/self-test，Intel 拒�
 5. 四级页表当前接受 32–48 位物理宽度。带 PWT/PCD 的 NCR3、五级页表及扩展保护语义尚未接入，须在入口明确拒绝，不能静默屏蔽后继续。
 6. 叶项合成只实现 WB/UC 子集；这不等于完整三层 PAT/MTRR 虚拟化。正式入口还须检查内层 guest PAT、虚拟 MTRR/CD 语义；不能仅因当前某页使用 WB 就对内层 VMM 宣称全部缓存模式可用。
 7. 状态搬运函数只操作已拥有的 VMCB 快照，不做 guest 物理读取或合法性审查。LBR/CET/SEV/AVIC/VGIF 等扩展不在这些 baseline 拷贝函数的支持范围。VMRUN 合法性校验、段 canonicalization、虚拟 host restore 和 GPR/RAX/RSP 特例必须在入口/退出状态机处理。
-8. MSR/IOIO 原始 intercept 位只表示需要进一步查权限图，不等于直接反射。控制位、MSRPM/IOPM 合并和 ownership 分派尚未实现；未知退出不能盲目重入。
+8. MSR/IOIO 原始 intercept 位只表示需要进一步查权限图，不等于直接反射。权限图捕获、合并与细粒度ownership查询已实现，受控探针已接入合并；通用分派的反射/本地仿真、并发失效仍待实现。未知退出不能盲目重入。
 
 ## 本轮验证
 
