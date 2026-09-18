@@ -2,6 +2,8 @@
 
 ## 当前边界（2026-09-18）
 
+22:37 更新：4 vCPU/100轮串行逐核探针通过，624文件独立核验；各核完成序列200，每轮NPF5，无失败，释放完整。[四核探针证据](evidence/amd-nested-probe-4cpu.json)记录400次CPU往返及原始导出manifest哈希。
+
 22:33 更新：同一候选在 2 vCPU 完成 20 轮逐核探针，40 次 CPU 往返均通过。144 个文件哈希/大小、逐条控制顺序、精确 CPU 集合、递增完成序列、电源代次和最终资源释放独立核验。两核最后 sequence=40、每轮 NPF=5。报告见 [双核探针证据](evidence/amd-nested-probe-2cpu.json)，可使用 `tools/hvm_lab/verify_nested_probe.py` 从原始导出重新验证。此项仍是串行逐核执行。
 
 22:24 更新：1 vCPU/1 次受控硬件探针已通过，导出 30 文件独立核验。每核 entries=1/reflections=1/NPF=5，原始退出0x72、内层marker0x4B534E31，原生返回后完成序列2；teardown后资源归零。SYS/PDB age9匹配，来宾签名/加载及KD私有符号已确认。下文“尚待硬件”的表述记录接线时状态，以本段为最新结果。该自检按CPU串行运行，后续多CPU探针也不能替代并发内层OS验证。

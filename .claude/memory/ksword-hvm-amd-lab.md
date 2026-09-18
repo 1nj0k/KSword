@@ -1,5 +1,9 @@
 # AMD 实验后端与重启续接
 
+最新硬件里程碑（2026-09-18 22:37）：4vCPU/100轮受控嵌套探针PASS。用户仅回贴命令，但宿主已收到nested-probe-20260918-223710-9e5e89f87bac4713aa6a96526ef296ce完整导出，verify_nested_probe.py独立核验624文件哈希/大小及所有控制/逐核结果。CPU0:0..3各100轮，共400次往返，完成序列均200，每轮NPF5、entries/reflections1、exit72/marker4B534E31、failure0，最终资源归零；同一age9候选。报告docs/next/evidence/amd-nested-probe-4cpu.json。仅逐核串行自检，不是并发内层OS；按要求立即commit，下一步8核100轮。
+
+四核探针准备（2026-09-18 22:36）：双核20轮已提交5dabd644，未推送；正常关机保存AMD-NestedProbe-2CPU-20Cycles-PASS-20260918冷态快照。克隆改单插槽4vCPU并启动GUI，VMware确认CPL0/NumVCPUs4，Tools running、KD78911重新连接，源/结果共享已恢复。沿用age9候选，等待来宾Start-GuestNestedProbe.ps1 -Vcpu 4 -Cycles 100。尚无四核嵌套探针结果；上一阶段四核常驻100轮是另一项验收。
+
 最新硬件里程碑（2026-09-18 22:33）：2vCPU/20轮受控嵌套探针PASS。回传nested-probe-20260918-223305-8a32023c694c43178321d1b125402751共144文件SHA256/大小核验；生产CLI控制日志顺序完整，CPU0:0/0:1各20轮，completion sequence均到40，每轮每核entries/reflections=1、NPF=5、exit72/marker4B534E31、failure0，电源代次一致；teardown后资源归零。源候选仍age9，与单核同一SYS/PDB/CLI。新增verify_nested_probe.py独立验证器，处理PS5 Tee-Object UTF16与CLI UTF8；报告docs/next/evidence/amd-nested-probe-2cpu.json。自检是逐核串行，不宣称并发多核内层OS。按用户要求通过即本地commit，不推送；下一阶段4核。
 
 双核探针准备（2026-09-18 22:31）：单核通过点已提交d9413087，未推送。正常关机后保存冷态快照AMD-NestedProbe-1CPU-PASS-20260918，克隆改为单插槽2vCPU并冷启动；VMware日志CPL0/NumVCPUs2，KD78911已重连，映像/PDB仍为nested-probe候选age9。沿用已验证的候选，不替换SYS；下一步来宾管理员执行共享nested-probe/Start-GuestNestedProbe.ps1 -Vcpu 2 -Cycles 20，脚本加载独立候选并自动回传。尚无双核嵌套探针结果。

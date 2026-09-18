@@ -1,0 +1,46 @@
+{
+  "result": "PASS",
+  "scope": "bounded-svm-nested-probe",
+  "vcpu": 4,
+  "cycles": 100,
+  "filesVerified": 624,
+  "completedCpuRoundTrips": 400,
+  "released": true,
+  "innerOperatingSystemTested": false,
+  "concurrentInnerVcpusTested": false,
+  "rsds": {
+    "guid": "f0725672-1a1e-4104-890a-1b5744c5c7a9",
+    "age": 9
+  },
+  "exportManifestSha256": "f5694be4a2a24a2cf01e2ac06f212b83bb0fa0da20f6394f5dfa5ffb614c2453",
+  "processors": [
+    {
+      "group": 0,
+      "number": 0,
+      "finalSequence": 200,
+      "npfMin": 5,
+      "npfMax": 5
+    },
+    {
+      "group": 0,
+      "number": 1,
+      "finalSequence": 200,
+      "npfMin": 5,
+      "npfMax": 5
+    },
+    {
+      "group": 0,
+      "number": 2,
+      "finalSequence": 200,
+      "npfMin": 5,
+      "npfMax": 5
+    },
+    {
+      "group": 0,
+      "number": 3,
+      "finalSequence": 200,
+      "npfMin": 5,
+      "npfMax": 5
+    }
+  ]
+}
