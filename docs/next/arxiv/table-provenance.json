@@ -1,0 +1,109 @@
+{
+  "inputs": {
+    "20260916-followup/analysis-followup.json": "efd10e85aaf10aa795755c2e7c29bcd78e68fc5a43f5e7cc2bdf8d225b765461",
+    "20260916-followup/exit-cost-derived.json": "98fdd4f375544fbfcd45382cab108ea41a18afe60c5de721ef0862cbc58a0604",
+    "20260916-large-leaf/admission-probe.json": "dae6b87d42d494002f797c371ea539b1f1e6b578b140b3b4eae4828025d42918",
+    "20260916-large-leaf/published.json": "d769e0499128d783a6072fc69634eae1b80071d9364a1f01ed2d4202232ab34a",
+    "20260916-large-leaf/decoupling.json": "fe810d0deeb6f1ea9a705db3ffea4da266c95e21e912c7202071d45002d8effa",
+    "20260916-guest-workload/extent-768m-idle.json": "e558ca3a3b5280704771874339d04a71f6111075a03cdba1187e87290968656d",
+    "20260916-guest-workload/extent-768m-after-400mib-fill.json": "1b5c5dfe9a2f12feb45f459be220fe541a2be47ed62df0c1192d9df35424b38a",
+    "20260916-guest-workload/extent-4g-done-30.json": "839752768a24679cd1c4ffd0dcf9ad8b80ad5fd2702ab306a64e500bc4979e00",
+    "20260916-guest-workload/extent-4g-done-30-coarse.json": "55170692470288b43055a7f31740c48577c77722004c197bd6afb9356cfcd2e4",
+    "20260916-guest-workload/large-leaf-above-1gib.json": "71e96a7be1845ad2bd787917422e8f1ae583bcc7e22ef3b546252fa1b3653f9d",
+    "20260916-followup/latency-runs.csv": "d103e8188dadc2abb4eb90796fe706edce9c1c0ebe423cc50128813f811afd73",
+    "20260916-followup/lifecycle/derived/smp-summary.json": "86254878bd34a0646c7844e7c85319df0ed112b1052e55e9c4fd98235aebe0e1",
+    "20260915-4x2/derived/nested-improvements.csv": "8852237127ac09ac715516a85d057ab8692ef918833a08e97310e9c186752c34",
+    "20260915-4x2/after/derived/windows-overhead.csv": "8ec9fab6a285f78c2a5dd1e08368808c614288f2fed7e9c1d9e0a41aa5826f57",
+    "20260916-followup/application/derived/http-page-summary.json": "1d57458bc8d39f957a6aea59e681fc9923eecdae76b92ddc3cc0d50ccb67f5e9",
+    "20260916-followup/application/derived/policy-comparison.json": "e0f14139eb77243aa45eec4947530b42455690358b5f7633c2fa3fde07465c05"
+  },
+  "derivedClaims": {
+    "cpuidRatio": 8.759411283925095,
+    "tcpRttOverheadPercent": 30.691399019102693,
+    "completeEptApplicationTrials": 3,
+    "pacedTcpResponses": 74145,
+    "transitionTimesUs": {
+      "insert": {
+        "driverCommandUs": {
+          "median": 2595.3,
+          "max": 3053.9
+        },
+        "rendezvousUs": {
+          "median": 111.6,
+          "max": 148.2
+        }
+      },
+      "remove": {
+        "driverCommandUs": {
+          "median": 1107.4,
+          "max": 1275.2
+        },
+        "rendezvousUs": {
+          "median": 55.8,
+          "max": 393.8
+        }
+      }
+    },
+    "cpuidCostBudget": {
+      "cpuidOffNs": 332.792,
+      "cpuidNestedNs": 2915.062,
+      "cpuidAddedNs": 2582.27,
+      "profiledBodyNs": 180.87184929419914,
+      "instrumentNs": 65.10439601558215,
+      "timestampsPerExit": 11,
+      "dispatcherNsInstrumentRemoved": 115.76745327861698,
+      "dispatcherSharePercentRange": [
+        4.483166101090009,
+        7.004374031150853
+      ],
+      "residualNsRange": [
+        2401.3981507058006,
+        2466.502546721383
+      ],
+      "residualSharePercentRange": [
+        92.99562596884914,
+        95.51683389891
+      ],
+      "vmreadNsPerRead": {
+        "256": 7.956792968749999,
+        "512": 7.753191406249999
+      },
+      "dispatcherVmcsReadsImplied": 5.92377895652642,
+      "fullPathVmreadCount": 6,
+      "emptyTimestampPairCycles": 25,
+      "ceilingRatioIfBodyFree": 8.215913094983657,
+      "measuredRatio": 8.759411283925095
+    },
+    "largeLeafAdmission": {
+      "attempts": 9,
+      "captured": 8,
+      "distinctSourceShifts": [
+        "12"
+      ],
+      "publishedByCoarseSourceRule": 0,
+      "publishedByScanRule": 2,
+      "scannedLeavesPerRegion": 512,
+      "ept12Pointer": "0x1507C05E",
+      "liveEpt12Pointer": "0x151F905E"
+    },
+    "regionDecoupling": {
+      "regions": 2,
+      "idleSamplesPerRegion": 4,
+      "backingChangesWhileIdle": 0,
+      "regionBytes": 2097152
+    },
+    "guestWorkloadReachability": {
+      "basesProbed": 8,
+      "publishedWhileIdle": 0,
+      "publishedAfterFill": 3,
+      "fillMebibytes": 400,
+      "oneGibRequestedSourceShift": 12,
+      "oneGibLeavesRead": 0,
+      "scanBoundEntries": 512,
+      "highRegionBase": "0x60000000",
+      "highRegionLeavesRead": 512
+    },
+    "metadataAbstractCharacters": 1913
+  },
+  "note": "Inputs are derived evidence summaries, whose raw inputs are indexed in their datasets. Cohorts are not pooled."
+}

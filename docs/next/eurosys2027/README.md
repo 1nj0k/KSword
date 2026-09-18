@@ -1,5 +1,8 @@
 # EuroSys 2027 — Abstract review draft
 
+后续完整论文已整理为 [arXiv 预印本初稿](../arxiv/README.md)，包含最新 Pro 批次数据。
+本目录保留早期 EuroSys/HotCRP 摘要材料，以下数据仍属于其原始版本。
+
 状态：2026-09-15 至 2026-09-16 UTC 的 4×2 实验已整理，尚未投稿。
 当前证据见 [20260915-4x2](../paper-data/20260915-4x2/README.md)；旧批次保留，分版本分析。
 

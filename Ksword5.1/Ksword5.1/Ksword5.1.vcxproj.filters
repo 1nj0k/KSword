@@ -2194,9 +2194,11 @@
     <ClCompile Include="ArkDriverClient\HvmCommandEngine.c"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="ArkDriverClient\HvmCommandProcess.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="UI\KvmCommandPanel.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="UI\KvmGuestVmPanel.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClInclude Include="ArkDriverClient\HvmCommandCatalog.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="ArkDriverClient\HvmCommandProcess.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="UI\KvmCommandPanel.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="UI\KvmGuestVmPanel.h"><Filter>Header Files</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup><ClInclude Include="..\..\shared\driver\KswordArkHvmRequest.h" /></ItemGroup>
 </Project>

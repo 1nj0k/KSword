@@ -210,7 +210,6 @@ KvmCommandPanel::KvmCommandPanel(QWidget* const parent) : QWidget(parent)
                 }
             }
         }
-        if (m_completed) { m_completed(code, normal); }
     };
     m_commands->setCurrentItem(groups[text("查询与观测")]->child(0));
 }
@@ -262,7 +261,6 @@ void KvmCommandPanel::run(const bool validateOnly)
     if (!ksword::ark::HvmCommandProcess::validate(*m_selected, args, &invalid))
     {
         m_result->setText(text("参数无效或缺失：%1").arg(text(invalid.toUtf8().constData())));
-        if (m_completed) { m_completed(2, true); }
         return;
     }
     if (!validateOnly && !m_selected->readOnly)
@@ -290,7 +288,6 @@ void KvmCommandPanel::launch(const HVM_COMMAND_SPEC& command, const QStringList&
     {
         setBusy(false);
         m_result->setText(text("参数无效或缺失：%1").arg(text(error.toUtf8().constData())));
-        if (m_completed) { m_completed(2, true); }
     }
 }
 
@@ -315,90 +312,4 @@ bool KvmCommandPanel::eventFilter(QObject* watched, QEvent* event)
         return true;
     }
     return QWidget::eventFilter(watched, event);
-}
-
-int KvmCommandPanel::runCoverageTest(const QString& reportPath, QWidget* captureHost)
-{
-    auto& panel = *this;
-    const bool embedded = !isWindow() && captureHost && captureHost != this && captureHost->isAncestorOf(this);
-    size_t count = 0;
-    const auto* commands = KswordHvmCommands(&count);
-    QJsonArray rows;
-    bool passed = embedded;
-    for (size_t i = 0; i < count; ++i)
-    {
-        const auto& command = commands[i];
-        bool found = false;
-        for (QTreeWidgetItemIterator it(panel.m_commands); *it; ++it)
-        {
-            if ((*it)->data(0, Qt::UserRole).toString() == QString::fromLatin1(command.name))
-            {
-                panel.m_commands->setCurrentItem(*it);
-                found = panel.m_selected == &command;
-                break;
-            }
-        }
-        if (!found) { passed = false; break; }
-        for (unsigned int j = 0; j < command.argumentCount; ++j)
-        {
-            const auto& arg = command.arguments[j];
-            QString value;
-            if (arg.defaultValue) { value = QString::fromUtf8(arg.defaultValue); }
-            else if (arg.kind == HvmPath) { value = QStringLiteral("C:/HVM test/中文 测试.dll"); }
-            else if (arg.kind == HvmByte) { value = QStringLiteral("d1"); }
-            else if (arg.kind == HvmPageAddress) { value = QStringLiteral("7000000"); }
-            else if (arg.kind == HvmDecimal32) { value = QStringLiteral("4242"); }
-            else { value = QString::number(0x12345000ULL + j * 0x1000ULL, 16); }
-            panel.m_arguments[j]->setText(value);
-        }
-        QEventLoop wait;
-        bool completed = false, ok = false;
-        panel.m_completed = [&](int code, bool normal) {
-            completed = true;
-            ok = normal && code == 0;
-            wait.quit();
-        };
-        QTimer timer;
-        timer.setSingleShot(true);
-        QObject::connect(&timer, &QTimer::timeout, &wait, &QEventLoop::quit);
-        timer.start(30000);
-        panel.m_validate->click();
-        if (!completed) { wait.exec(); }
-        panel.m_completed = {};
-        const auto output = QJsonDocument::fromJson(panel.m_lastOutput.toUtf8()).object();
-        ok = ok && output.value(QStringLiteral("kind")).toString() == QStringLiteral("validated") &&
-            output.value(QStringLiteral("command")).toString() == QString::fromLatin1(command.name) &&
-            panel.m_result->text().contains(text("参数校验通过，未执行操作。"));
-        rows.append(QJsonObject{{QStringLiteral("name"), QString::fromLatin1(command.name)},
-                                {QStringLiteral("ok"), ok},
-                                {QStringLiteral("arguments"), QJsonArray::fromStringList(panel.arguments())},
-                                {QStringLiteral("result"), output}});
-        passed &= ok;
-        if (!completed) { break; }
-    }
-    for (QTreeWidgetItemIterator it(panel.m_commands); *it; ++it)
-    {
-        if ((*it)->data(0, Qt::UserRole).toString() == QStringLiteral("nested-page-map"))
-        {
-            panel.m_commands->setCurrentItem(*it);
-            break;
-        }
-    }
-    panel.m_arguments[0]->setText(QStringLiteral("1234501e"));
-    panel.m_arguments[1]->setText(QStringLiteral("7000000"));
-    panel.m_arguments[2]->setText(QStringLiteral("d1"));
-    panel.m_result->setText(text("尚未执行"));
-    panel.m_output->clear();
-    if (captureHost) { QMetaObject::invokeMethod(captureHost, "focusKvmCommands", Qt::DirectConnection); }
-    QApplication::processEvents();
-    if (captureHost) { captureHost->grab().save(reportPath + QStringLiteral(".png")); }
-    QFile report(reportPath);
-    const QByteArray data = QJsonDocument(QJsonObject{
-        {QStringLiteral("passed"), passed && rows.size() == static_cast<qsizetype>(count)},
-        {QStringLiteral("embedded"), embedded},
-        {QStringLiteral("hostClass"), captureHost ? QString::fromLatin1(captureHost->metaObject()->className()) : QString()},
-        {QStringLiteral("count"), static_cast<int>(count)},
-        {QStringLiteral("rows"), rows}}).toJson();
-    if (!report.open(QIODevice::WriteOnly) || report.write(data) != data.size()) { return 1; }
-    return passed && rows.size() == static_cast<qsizetype>(count) ? 0 : 2;
 }

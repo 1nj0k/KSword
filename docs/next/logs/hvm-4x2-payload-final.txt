@@ -1,0 +1,3 @@
+xorriso 1.5.6 : RockRidge filesystem manipulator, libburnia project.
+
+7cfc60401274f71107b7505404b3139d6332f56890bcf469d1cf37cf2715d647  .deps/hvm-paper/payload.iso

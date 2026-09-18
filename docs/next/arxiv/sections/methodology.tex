@@ -1,0 +1,136 @@
+\section{Experimental method}
+\label{sec:method}
+\subsection{Machine, configurations, and version separation}
+Table~\ref{tab:environment} identifies the physical machine and the main current
+configuration. The physical CPU has heterogeneous cores; the reported guest
+affinities are virtual processor identities, not a claim of fixed placement on
+particular physical core types. Firmware menu settings were not directly
+photographed or queried. Windows feature fields that report virtualization as
+false beneath an active hypervisor are retained literally and are not interpreted
+as proof that firmware VMX is disabled.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Single-machine environment. The Hyper-V compatibility experiment uses
+a separate Windows~1 boot from the VMware and performance experiments.}
+\label{tab:environment}
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Component & Recorded configuration \\
+\midrule
+Physical CPU & Intel Core i7-13700F; family 6, model 183, stepping 1;
+16 cores, 24 logical processors \\
+Outer Windows & Windows 11 Pro for Workstations Insider, 26300.9022 \\
+Outer Hyper-V & \code{hvix64.exe} 10.0.26100.9022; outer HVCI running \\
+Firmware & ASUS S501ME.331; exact firmware VMX/VT-d menu state unobserved \\
+Windows 1 & Windows 11 Pro 22621.4317; 4 vCPUs, fixed 8 GiB;
+Generation 2 outer VM, nested extensions exposed \\
+VMware & Workstation 17.6.4, build 24832109; virtual hardware version 21 \\
+Descendant & TinyCore 17.1; Linux 6.18.35-tinycore64; normal \code{/init};
+2 online vCPUs, 768 MiB; reconfigured to 4096 MiB for the reachability and
+region sweeps, which state which \\
+Inner Hyper-V fixture & Generation 1, 2 vCPUs, fixed 768 MiB;
+diskless TinyCore evidence ISO \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+We separate four evidence scopes. The \emph{current Pro cohort} uses the
+implementation subsequently committed as \code{bd703d84}, the version~3 lease,
+and the driver hash beginning \code{3b44132f}; it supplies every performance,
+latency and lifecycle number. The \emph{region cohort} is a later build of the
+same driver carrying the version~4 lease, and supplies only the large-leaf,
+reachability, staging, digest and drift results; no performance number is
+carried across from it, and none of the current cohort's numbers were re-measured
+on it. The \emph{historical 4-by-2 cohort}
+uses Windows~1 Home before the Pro upgrade, implementation \code{b9bdda83}, and
+driver hash beginning \code{8850e28f}. It contains a broader benchmark suite,
+high-load page tests, and owner-exit tests. The inner Hyper-V admission experiment
+uses the preceding ordinarily test-signed driver, whose exact identity is
+recorded with that experiment. Its refusal precedes resource preparation.
+Full hashes and the evidence revision appear in Appendix~\ref{app:artifact}.
+The parent commit of a build made from a modified working tree is not treated
+as the complete measured source identity; provenance also records input hashes.
+
+Changing Windows edition, processor count, or inner Hyper-V startup required
+target reboots during preparation. These reboots are outside measured continuity
+intervals. The outer Hyper-V and HVCI remain active. For VMX-dependent experiments,
+inner Hyper-V startup is disabled before a separate boot; it is restored after
+cleanup. No experiment silently pools these boots or treats setup reboots as
+live transitions.
+
+The driver was built with the standard MSVC/WDK toolchain and separately signed
+with the existing ordinary laboratory test certificate. Variant signing was
+disabled. Driver loading on the target succeeded; an untrusted certificate root
+reported by host Authenticode verification is not represented as production
+trust certification. The current Pro cohort's driver was not rebuilt for
+preparation of this manuscript. The region cohort's was: its results come from
+binaries built and deployed during this work, and Appendix~\ref{app:artifact}
+names each by the hash of the file the service actually loaded --- because one
+of them turned out not to behave like a clean rebuild of the same sources, which
+is reported in Section~\ref{sec:limitations} rather than smoothed over here.
+
+\subsection{Continuity, clocks, and observation}
+The harness records Windows boot time, process PIDs and creation times, and
+per-CPU resident identities around insertion/removal. Descendant page runs add
+the VMware VMX process identity, guest boot ID and uptime, and CPU-pinned
+observers. HTTP runs additionally record the HTTP server PID/start ticks and
+fresh guest pagemap observations. These are sampled continuity checks over
+explicit intervals. They are stronger than process-name equality, but they are
+not a cryptographic proof that no unobserved state reconstruction could occur.
+
+QPC supplies Windows control, driver, and application timestamps. The analysis
+checks that the driver boundaries fall inside the control-call window. Guest
+uptime timestamps and serial output provide guest-side ordering; we do not
+subtract timestamps from different clock domains to infer sub-millisecond
+causal delays. TSC-cycle profiles use a separate invariant-TSC calibration.
+CPU rendezvous envelopes and entry-return skew describe internal synchronization,
+not a measured universal application stop time.
+
+\subsection{Workloads and repetition}
+The current performance experiment has six modes and two workloads: CPUID
+leaf~0 latency and TCP loopback RTT. Each mode/workload has one warmup and five
+measured repetitions, for 72 runs. Modes are deterministically shuffled within
+rounds using seed 20260916. All modes share a driver, controller, workload binary,
+and Windows boot, with descendant VMMs absent. The sparse/full nested comparison
+preserves nested policy and CPUID visibility; the artificial 256/512-VMREAD modes
+use ordinary residency and estimate the marginal cost of extra reads plus loop
+overhead.
+
+The separate disruption experiment uses a paced, closed-loop TCP client on
+Windows vCPU~2, an echo server on vCPU~1, and control on vCPU~0. It includes four
+conditions: sham query while off, insertion, sham query while on, and removal.
+Each condition has one warmup and five measured runs. Every response records
+sequence, request begin/end QPC values, and the previous completion. Pacing uses
+\code{Sleep(1)}. A command-overlap completion gap is a response-completion interval
+intersecting the control call; its duration includes pacing and scheduling as
+well as any effect of insertion.
+
+Page lifecycle trials require both TinyCore CPUs to read the complete 4096-byte
+page and match the expected MD5, together with complete event traces and
+allocation accounting. MD5 is used as a convenient non-adversarial equality
+check, not a collision-resistant integrity claim. The current cohort repeats
+each of five request-local fault modes three times and retains each run
+individually. Hardware invalidation failures are not manufactured by these
+software fault modes.
+
+The historical nested benchmark comparison uses the same static workload binary
+and pins it to guest CPU~0, with one warmup and three measured repetitions per
+workload. Its driver versions and guest boots differ. The historical Windows
+comparison uses off/pre, on, off/post blocks with seven measured runs per block
+after warmup. Reported bootstrap intervals describe resampling within that
+machine and boot; they are not independent-machine confidence bounds. We report
+medians and observed ranges for the smaller current samples without claiming
+statistical significance.
+
+\subsection{Retention and exclusions}
+Every run is retained as machine-readable JSON/JSONL or raw serial plus a
+per-run record. Warmups remain in the archive but are excluded from reported
+performance medians. Incomplete HTTP observation, setup failures, malformed
+requests, and rejected admission remain visible in their own categories.
+An earlier benchmark batch overlapping a host build is excluded from the
+historical main comparison and retained. For the guest direct-write application
+comparator, the analysis excludes six observations using the stated 0.5-second
+stage settling rule; Section~\ref{sec:application} explains its limits. There is
+no aggregate ``success rate'' combining different configurations, software
+versions, setup attempts, and observation contracts.

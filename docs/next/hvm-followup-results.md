@@ -152,7 +152,10 @@ requirements, not comparative throughput or recovery latency.
 - A substantial reduction in end-to-end exit/steady-state overhead.
 - Hardware fault and cross-machine validation; Windows 10 LTSC is deferred.
 - Overnight and current-build ten-minute soak: not newly run at the user's request.
-- A full anonymous buildable source artifact and the full manuscript.
+- A full anonymous buildable source artifact. The complete
+  [arXiv preprint draft](arxiv/README.md) now covers the measured results,
+  negative compatibility result, prior work and remaining limitations; author
+  review and public submission are separate steps.
 
 ## Final lab state
 

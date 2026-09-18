@@ -1,0 +1,91 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.015 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.6584 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Felix\CLionProjects\KSword\docs\next\logs\hvm-host-state-probe-crash-20260915.dmp]
+Mini Kernel Dump File: Only registers and stack trace are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release
+Deferred                                       srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release;srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 22621 MP (2 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS Personal
+Edition build lab: 22621.2506.amd64fre.ni_release_svc_prod3.231018-1809
+Kernel base = 0xfffff806`24400000 PsLoadedModuleList = 0xfffff806`250134b0
+Debug session time: Tue Sep 15 09:21:18.378 2026 (UTC - 4:00)
+System Uptime: 0 days 0:01:03.842
+Loading Kernel Symbols
+...............................................................
+................................................................
+.........................................
+Loading User Symbols
+
+Loading unloaded module list
+........
+For analysis of this file, run !analyze -v
+0: kd> cdb: Reading initial command '.reload /f KswordARK.sys; .trap ffffb70be2ef7cc0; ln @rip; u @rip L8; q'
+NOTE: The trap frame does not contain all registers.
+Some register values may be zeroed or incorrect.
+rax=0000000000006c0c rbx=0000000000000000 rcx=ffffb70be2ef7eb0
+rdx=000000000000abec rsi=0000000000000000 rdi=0000000000000000
+rip=fffff8063efd07bf rsp=ffffb70be2ef7e58 rbp=ffffb70be2ef7ea1
+ r8=0000000000000000  r9=0000000000000067 r10=000000000000008b
+r11=ffffa40dba8df960 r12=0000000000000000 r13=0000000000000000
+r14=0000000000000000 r15=0000000000000000
+iopl=0         nv up di pl zr na po nc
+KswordARK!KswordARKHvmNestedProbeL1Host+0xcf:
+fffff806`3efd07bf 0f78c2          vmread  rdx,rax
+Browse module
+Set bu breakpoint
+
+(fffff806`3efd06f0)   KswordARK!KswordARKHvmNestedProbeL1Host+0xcf   |  (fffff806`3efd09e0)   KswordARK!KswordARKHvmNestedProbeRun
+KswordARK!KswordARKHvmNestedProbeL1Host+0xcf:
+fffff806`3efd07bf 0f78c2          vmread  rdx,rax
+fffff806`3efd07c2 488955df        mov     qword ptr [rbp-21h],rdx
+fffff806`3efd07c6 761e            jbe     KswordARK!KswordARKHvmNestedProbeL1Host+0xf6 (fffff806`3efd07e6)
+fffff806`3efd07c8 b80e6c0000      mov     eax,6C0Eh
+fffff806`3efd07cd 410f78c0        vmread  r8,rax
+fffff806`3efd07d1 4c8945e7        mov     qword ptr [rbp-19h],r8
+fffff806`3efd07d5 760f            jbe     KswordARK!KswordARKHvmNestedProbeL1Host+0xf6 (fffff806`3efd07e6)
+fffff806`3efd07d7 48395511        cmp     qword ptr [rbp+11h],rdx
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'

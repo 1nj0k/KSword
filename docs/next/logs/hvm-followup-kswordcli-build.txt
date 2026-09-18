@@ -1,0 +1,31 @@
+
+  ArkDriverAudit.cpp
+  ArkDriverBlind.cpp
+  ArkDriverBugcheck.cpp
+  ArkDriverCallbackMonitor.cpp
+  ArkDriverClient.cpp
+  ArkDriverDebugOutput.cpp
+  ArkDriverError.cpp
+  ArkDriverFile.cpp
+  ArkDriverFileIrp.cpp
+  ArkDriverHvm.cpp
+  ArkDriverIoctlRegistry.cpp
+  ArkDriverKernel.cpp
+  ArkDriverKernelBaseline.cpp
+  ArkDriverKeyboard.cpp
+  ArkDriverNetworkTraffic.cpp
+  ArkDriverPiDdb.cpp
+  ArkDriverPower.cpp
+  ArkDriverProcessProtect.cpp
+  ArkDriverStorageForensics.cpp
+  ArkDriverSystemTime.cpp
+  正在编译...
+  ArkDriverVirtualization.cpp
+  ArkDriverWorkQueue.cpp
+  ArkDriverExtended.cpp
+  正在生成代码
+  0 of 2572 functions ( 0.0%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
+  已完成代码的生成
+  KswordCLI.vcxproj -> C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release\KswordCLI.exe

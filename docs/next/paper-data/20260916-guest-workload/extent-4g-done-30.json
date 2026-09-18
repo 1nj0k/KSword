@@ -1,0 +1,38 @@
+{
+    "eptp":  "0x00000000158FE05E",
+    "roots":  [
+                  "0x00000000158FE05E"
+              ],
+    "probes":  [
+                   {
+                       "base":  "0x40000000",
+                       "command":  "nested-page-map-region-scan",
+                       "leafShift":  30,
+                       "status":  1,
+                       "lastStatus":  "0xC00000BB",
+                       "active":  0,
+                       "sourceLeafShift":  12,
+                       "regionBytes":  0,
+                       "admittedByScan":  0,
+                       "scannedLeafCount":  0,
+                       "scannedSharedBits":  "0x0000000000000000",
+                       "composedCount":  0,
+                       "raw":  null
+                   },
+                   {
+                       "base":  "0x80000000",
+                       "command":  "nested-page-map-region-scan",
+                       "leafShift":  30,
+                       "status":  1,
+                       "lastStatus":  "0xC0000141",
+                       "active":  0,
+                       "sourceLeafShift":  0,
+                       "regionBytes":  0,
+                       "admittedByScan":  0,
+                       "scannedLeafCount":  0,
+                       "scannedSharedBits":  "0x0000000000000000",
+                       "composedCount":  0,
+                       "raw":  null
+                   }
+               ]
+}

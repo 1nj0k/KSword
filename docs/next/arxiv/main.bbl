@@ -1,0 +1,70 @@
+\begin{thebibliography}{10}
+
+\bibitem{subvirt}
+Samuel T. King, Peter M. Chen, Yi-Min Wang, Chad Verbowski, Helen J. Wang,
+and Jacob R. Lorch.
+\newblock SubVirt: Implementing Malware with Virtual Machines.
+\newblock In \emph{IEEE Symposium on Security and Privacy}, 2006.
+\newblock \url{https://www.microsoft.com/en-us/research/publication/subvirt-implementing-malware-with-virtual-machines/}.
+
+\bibitem{bluepill}
+Joanna Rutkowska.
+\newblock Subverting Vista Kernel for Fun and Profit.
+\newblock Black Hat USA presentation, 2006. Part II: Blue Pill.
+\newblock \url{https://blackhat.com/presentations/bh-usa-06/BH-US-06-Rutkowska.pdf}.
+
+\bibitem{turtles}
+Muli Ben-Yehuda, Michael D. Day, Zvi Dubitzky, Michael Factor, Nadav Har'El,
+Abel Gordon, Anthony Liguori, Orit Wasserman, and Ben-Ami Yassour.
+\newblock The Turtles Project: Design and Implementation of Nested Virtualization.
+\newblock In \emph{9th USENIX Symposium on Operating Systems Design and Implementation (OSDI)}, 2010.
+\newblock \url{https://www.usenix.org/legacy/event/osdi10/tech/full_papers/Ben-Yehuda.pdf}.
+
+\bibitem{intel}
+Intel Corporation.
+\newblock Intel 64 and IA-32 Architectures Software Developer's Manual,
+Volume 3C: System Programming Guide, Part 3.
+\newblock VMX, EPT, and translation invalidation documentation. Consulted September 2026.
+\newblock \url{https://cdrdv2-public.intel.com/671506/326019-sdm-vol-3c.pdf}.
+
+\bibitem{cloudvisor}
+Fengzhe Zhang, Jin Chen, Haibo Chen, and Binyu Zang.
+\newblock CloudVisor: Retrofitting Protection of Virtual Machines in Multi-tenant
+Cloud with Nested Virtualization.
+\newblock In \emph{23rd ACM Symposium on Operating Systems Principles (SOSP)}, 2011.
+\newblock \url{https://sigops.org/s/conferences/sosp/2011/current/abstracts.html}.
+
+\bibitem{hyperfresh}
+Spoorti Doddamani, Piush Sinha, Hui Lu, Tsu-Hsiang K. Cheng, Hardik H. Bagdi,
+and Kartik Gopalan.
+\newblock Fast and Live Hypervisor Replacement.
+\newblock In \emph{15th ACM SIGPLAN/SIGOPS International Conference on Virtual
+Execution Environments (VEE)}, 2019.
+\newblock \url{https://doi.org/10.1145/3313808.3313821}.
+
+\bibitem{hypertp}
+Tu Dinh Ngoc, Boris Teabe, Alain Tchana, Gilles Muller, and Daniel Hagimont.
+\newblock HyperTP: A Unified Approach for Live Hypervisor Replacement in Datacenters.
+\newblock \emph{Journal of Parallel and Distributed Computing}, 181:104733, 2023.
+\newblock \url{https://doi.org/10.1016/j.jpdc.2023.104733}.
+
+\bibitem{hyperturtle}
+Ori Ben Zur, Jakob Krebs, Shai Aviram Bergman, and Mark Silberstein.
+\newblock Accelerating Nested Virtualization with HyperTurtle.
+\newblock In \emph{2025 USENIX Annual Technical Conference (USENIX ATC)},
+pages 987--1002, 2025.
+\newblock \url{https://www.usenix.org/conference/atc25/presentation/zur}.
+
+\bibitem{hyperv-architecture}
+Microsoft.
+\newblock Hyper-V Architecture.
+\newblock Microsoft Learn. Consulted September 2026.
+\newblock \url{https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/architecture}.
+
+\bibitem{hyperv-nested}
+Microsoft.
+\newblock Run Hyper-V in a Virtual Machine with Nested Virtualization.
+\newblock Microsoft Learn. Consulted September 2026.
+\newblock \url{https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/enable-nested-virtualization}.
+
+\end{thebibliography}

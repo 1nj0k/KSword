@@ -5,6 +5,7 @@
 #include "../UI/FlowLayout.h"
 #include "../UI/KvmControl.h"
 #include "../UI/KvmCommandPanel.h"
+#include "../UI/KvmGuestVmPanel.h"
 #include "../theme.h"
 
 #include <QGroupBox>
@@ -125,12 +126,6 @@ void KvmDock::showCommandPanel()
     m_commandPanel->setFocus();
 }
 
-int KvmDock::runCommandCoverageTest(const QString& reportPath)
-{
-    showCommandPanel();
-    return m_commandPanel->runCoverageTest(reportPath, window());
-}
-
 void KvmDock::setOperationRunning(const bool running)
 {
     if (m_operationRunning == running)
@@ -140,6 +135,11 @@ void KvmDock::setOperationRunning(const bool running)
     m_operationRunning = running;
     m_commandPanel->setEnabled(!running);
     m_hvmTab->setEnabled(!running);
+    // 「跑第三方虚拟机」页发的是同一批控制命令，必须和其它入口一起串行化：
+    // 漏掉它，别处的命令在飞时用户仍能按下「一键完成全部五步」，两路 IOCTL
+    // 会同时压到驱动侧那把状态锁上。自己发起时它先经 setBusy 禁掉自家按钮，
+    // 再被这一行连同整页禁用，与「完整操作」页同一条路径。
+    m_guestVmPanel->setEnabled(!running);
     updateLifecycleView();
     if (!running)
     {
@@ -396,6 +396,20 @@ void KvmDock::initializeUi()
     // 它自己就带一个逐 CPU 表加一个详情面板，独占一页才有得看：原先跟
     // 控制面板共享一个分隔条时，默认分法只给它留下两三行表格。
     m_hvmTab = new KernelHvmTab(tabs);
+
+    // 「跑第三方虚拟机」排在最前面。
+    //
+    // 它是唯一一页写给不了解虚拟化的人看的：其余三页都假设读者知道 PREPARE、
+    // 常驻、EPT 是什么。而"装了 KSwordVM 之后 VMware 打不开"恰恰是普通用户最
+    // 容易撞上、也最不可能自己查出来的一件事——VMware 报的是"与 Hyper-V 不兼容"，
+    // 根本不指向我们。放第一页是为了让人不用先知道该找什么才能找到它。
+    m_guestVmPanel = new KvmGuestVmPanel(tabs);
+    m_guestVmPanel->onBusyChanged = [this](bool running) {
+        setOperationRunning(running);
+        if (m_commandOperationHandler) { m_commandOperationHandler(running); }
+    };
+    tabs->addTab(m_guestVmPanel,
+                 ks::i18n::sourceText(QStringLiteral("跑第三方虚拟机")));
 
     tabs->addTab(controlPanel, ks::i18n::sourceText(QStringLiteral("控制")));
     m_commandPanel = new KvmCommandPanel(tabs);

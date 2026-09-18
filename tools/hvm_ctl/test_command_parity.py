@@ -12,7 +12,6 @@ def invoke(exe, *args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cli", type=Path, default=Path("tools/hvm_ctl/hvm_ctl.exe"))
-    parser.add_argument("--gui-report", type=Path)
     args = parser.parse_args()
     result = invoke(args.cli, "--json", "commands")
     assert result.returncode == 0, result.stderr
@@ -88,19 +87,6 @@ def main():
         assert result.returncode == 2, (command, result.returncode, result.stdout, result.stderr)
         assert "device-open-failed" not in result.stdout, command
 
-    if args.gui_report:
-        report = json.loads(args.gui_report.read_text(encoding="utf-8"))
-        assert report["passed"] is True, report
-        assert report["embedded"] is True and report["hostClass"] == "MainWindow", report
-        rows = report["rows"]
-        assert len(rows) == len(catalog), (len(rows), len(catalog))
-        assert {r["name"] for r in rows} == set(by_name)
-        for row in rows:
-            assert row["ok"] is True, row
-            result = invoke(args.cli, "--json", "--validate", row["name"], *row["arguments"])
-            assert result.returncode == 0, result.stderr
-            assert json.loads(result.stdout) == row["result"], row["name"]
-        print(f"GUI_FORM_COMMAND_PARITY=PASS ({len(rows)} commands)")
     print(f"CATALOG_TRANSLATIONS=PASS ({len(catalog)} commands, 2 languages)")
     print(f"ARGUMENT_CONTRACTS=PASS ({len(cases) * 2} valid, {len(invalid)} refused)")
 

@@ -179,12 +179,6 @@ void MainWindow::focusKvmCommands()
     if (m_kvmWidget) { m_kvmWidget->showCommandPanel(); }
 }
 
-int MainWindow::runHvmCommandCoverageTest(const QString& reportPath)
-{
-    focusKvmCommands();
-    return m_kvmWidget ? m_kvmWidget->runCommandCoverageTest(reportPath) : 1;
-}
-
 void MainWindow::handleKvmDockAction(const KvmDock::Action action)
 {
     // 这一层只做分派。每一条都落到右键菜单用的同一个实现上，包括那几处

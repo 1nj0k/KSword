@@ -5720,9 +5720,11 @@ static int ResolveNestedPageOwner(DWORD requested, DWORD* owner, ULONGLONG* crea
     return 1;
 }
 
-static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
-                        unsigned long long eptp, unsigned long long gpa,
-                        unsigned char fill, unsigned long faultMode, unsigned long ownerPid)
+static int DoNestedPageEx(HANDLE h, int asJson, unsigned long operation,
+                          unsigned long long eptp, unsigned long long gpa,
+                          unsigned char fill, unsigned long faultMode, unsigned long ownerPid,
+                          unsigned long leafShift, unsigned long stagePageIndex,
+                          unsigned long extraFlags)
 {
     KSWORD_ARK_HVM_NESTED_PAGE_REQUEST request = { 0 };
     KSWORD_ARK_HVM_NESTED_PAGE_RESPONSE response = { 0 };
@@ -5730,6 +5732,13 @@ static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
     unsigned long index;
     request.version = KSWORD_ARK_HVM_NESTED_PAGE_VERSION;
     request.size = sizeof(request);
+    /*
+     * A query issues only the first request, so a flag meant for it has to be
+     * set here. Only for a query, though: the other operations use this first
+     * request to read the generation, and a flag the driver accepts only on the
+     * real operation would make that read a rejected request.
+     */
+    request.flags = (operation == KSWORD_ARK_HVM_NESTED_PAGE_QUERY) ? extraFlags : 0UL;
     if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_NESTED_PAGE,
                          &request, sizeof(request), &response, sizeof(response),
                          &returned, NULL) || returned != sizeof(response)) {
@@ -5739,12 +5748,16 @@ static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
     if (operation != KSWORD_ARK_HVM_NESTED_PAGE_QUERY) {
         if (response.status != 0UL) { return 2; }
         request.operation = operation;
-        request.flags = KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED |
+        request.flags = KSWORD_ARK_HVM_NESTED_PAGE_CONFIRMED | extraFlags |
             (faultMode << KSWORD_ARK_HVM_NESTED_PAGE_FAULT_SHIFT);
         request.confirmationToken = KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN;
         request.expectedGeneration = response.generation;
         request.ept12Pointer = eptp;
         request.guestPhysicalPage = gpa;
+        /* Zero keeps the driver's version-3 meaning; only MAP carries either. */
+        request.leafShift = (operation == KSWORD_ARK_HVM_NESTED_PAGE_MAP) ? leafShift : 0UL;
+        request.stagePageIndex =
+            (operation == KSWORD_ARK_HVM_NESTED_PAGE_STAGE) ? stagePageIndex : 0UL;
         memset(request.shadow, fill, sizeof(request.shadow));
         if (operation == KSWORD_ARK_HVM_NESTED_PAGE_MAP &&
             !ResolveNestedPageOwner(ownerPid, &request.ownerProcessId, &request.ownerCreationTime)) {
@@ -5764,12 +5777,21 @@ static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
                "\"ept12Pointer\":\"0x%016llX\",\"guestPhysicalPage\":\"0x%016llX\","
                "\"shadowPhysicalPage\":\"0x%016llX\",\"originalPhysicalPage\":\"0x%016llX\","
                "\"composedCount\":%llu,\"ownerProcessId\":%lu,\"ownerExited\":%lu,\"ownerCreationTime\":\"%llu\","
+               "\"leafShift\":%lu,\"sourceLeafShift\":%lu,\"regionBytes\":%llu,\"regionPageCount\":%llu,\"stagedPageCount\":%llu,"
+               "\"admittedByScan\":%lu,\"scannedLeafCount\":%llu,\"scannedSharedBits\":\"0x%016llX\","
+               "\"sourceDigest\":\"0x%016llX\",\"backingDigest\":\"0x%016llX\",\"digestBytes\":%llu,"
                "\"leaseRevocationReason\":%lu,\"sourcePhysicalPage\":\"0x%016llX\",\"sourceEntryCount\":%lu,\"sourcePath\":[",
                response.operationId, faultMode, response.status, response.lastStatus, response.generation, response.active,
                response.retired, response.residentProcessors, response.ept12Pointer,
                response.guestPhysicalPage, response.shadowPhysicalPage,
                response.originalPhysicalPage, response.composedCount, response.ownerProcessId,
-               response.ownerExited, response.ownerCreationTime, response.leaseRevocationReason,
+               response.ownerExited, response.ownerCreationTime,
+               response.leafShift, response.sourceLeafShift, response.regionBytes,
+               response.regionPageCount, response.stagedPageCount,
+               response.admittedByScan, response.scannedLeafCount,
+               response.scannedSharedBits,
+               response.sourceDigest, response.backingDigest, response.digestBytes,
+               response.leaseRevocationReason,
                response.sourcePhysicalPage, response.sourceEntryCount);
         for (index = 0; index < response.sourceEntryCount && index < 4; ++index) {
             printf("%s{\"address\":\"0x%016llX\",\"value\":\"0x%016llX\"}", index ? "," : "",
@@ -5778,9 +5800,13 @@ static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
         printf("],\"roots\":[");
     } else {
         printf("nested-page status=%lu nt=0x%08lX generation=%lu active=%lu retired=%lu cpus=%lu\n"
+               "leaf=%lu source-leaf=%lu region=%llu bytes (%llu pages) staged=%llu\n"
                "EPT12=0x%016llX GPA=0x%016llX shadow=0x%016llX original=0x%016llX composed=%llu\n",
                response.status, response.lastStatus, response.generation, response.active,
-               response.retired, response.residentProcessors, response.ept12Pointer,
+               response.retired, response.residentProcessors,
+               response.leafShift, response.sourceLeafShift, response.regionBytes,
+               response.regionPageCount, response.stagedPageCount,
+               response.ept12Pointer,
                response.guestPhysicalPage, response.shadowPhysicalPage,
                response.originalPhysicalPage, response.composedCount);
         printf("ownerPid=%lu ownerCreated=%llu ownerExited=%lu\n", response.ownerProcessId,
@@ -5794,6 +5820,16 @@ static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
     }
     if (asJson) { printf("]}\n"); }
     return response.status == 0UL ? 0 : 2;
+}
+
+/* Every command except the scanning one sets no extra request flags. */
+static int DoNestedPage(HANDLE h, int asJson, unsigned long operation,
+                        unsigned long long eptp, unsigned long long gpa,
+                        unsigned char fill, unsigned long faultMode, unsigned long ownerPid,
+                        unsigned long leafShift, unsigned long stagePageIndex)
+{
+    return DoNestedPageEx(h, asJson, operation, eptp, gpa, fill, faultMode,
+                          ownerPid, leafShift, stagePageIndex, 0UL);
 }
 
 
@@ -5860,11 +5896,17 @@ int KswordHvmCommandMain(int argc, char** argv)
     case HvmControl: rc = DoControl(h, spec, (unsigned long)v[0], asJson); break;
     case HvmStatus: rc = DoQuery(h, asJson); break;
     case HvmMetrics: rc = DoMetrics(h, asJson); break;
-    case HvmPageQuery: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_QUERY, 0, 0, 0, 0, 0); break;
-    case HvmPageMap: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], (unsigned char)v[2], 0, (unsigned long)v[3]); break;
-    case HvmPageMapTest: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], (unsigned char)v[2], (unsigned long)v[3], 0); break;
-    case HvmPageRemove: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_REMOVE, 0, 0, 0, 0, 0); break;
-    case HvmPageRemoveTest: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_REMOVE, 0, 0, 0, KSWORD_ARK_HVM_NESTED_PAGE_FAULT_REMOVE_FLUSH, 0); break;
+    case HvmPageQuery: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_QUERY, 0, 0, 0, 0, 0, 0, 0); break;
+    case HvmPageMap: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], (unsigned char)v[2], 0, (unsigned long)v[3], 0, 0); break;
+    /* Fill is zero and unused: a region map clones the original, and the driver
+       ignores the inline page whenever the granularity is larger than 4 KiB. */
+    case HvmPageMapRegion: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], 0, 0, (unsigned long)v[3], (unsigned long)v[2], 0); break;
+    case HvmPageMapRegionScan: rc = DoNestedPageEx(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], 0, 0, (unsigned long)v[3], (unsigned long)v[2], 0, KSWORD_ARK_HVM_NESTED_PAGE_SCAN_SOURCE); break;
+    case HvmPageDigest: rc = DoNestedPageEx(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_QUERY, 0, 0, 0, 0, 0, 0, 0, KSWORD_ARK_HVM_NESTED_PAGE_DIGEST); break;
+    case HvmPageStage: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_STAGE, 0, 0, (unsigned char)v[1], 0, 0, 0, (unsigned long)v[0]); break;
+    case HvmPageMapTest: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_MAP, v[0], v[1], (unsigned char)v[2], (unsigned long)v[3], 0, 0, 0); break;
+    case HvmPageRemove: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_REMOVE, 0, 0, 0, 0, 0, 0, 0); break;
+    case HvmPageRemoveTest: rc = DoNestedPage(h, asJson, KSWORD_ARK_HVM_NESTED_PAGE_REMOVE, 0, 0, 0, KSWORD_ARK_HVM_NESTED_PAGE_FAULT_REMOVE_FLUSH, 0, 0, 0); break;
     case HvmAcl: rc = DoAclProbe(h, asJson); break;
     case HvmNestedProbe: rc = DoNestedProbe(h, asJson, 0); break;
     case HvmNestedProbeAll: rc = DoNestedProbe(h, asJson, 1); break;

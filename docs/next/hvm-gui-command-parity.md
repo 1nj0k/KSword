@@ -51,37 +51,15 @@ GUI 快捷按钮仍采用菜单选择的设置；完整命令面板按所选 CLI
 python tools/hvm_ctl/test_command_parity.py
 ```
 
-实际 GUI 表单覆盖测试使用正常主程序产物，创建真实 `MainWindow` 并跳转到嵌入子页，
-依次选择每个树项、填写参数并点击
-**仅校验参数**按钮，保存子进程返回结果。不会执行修改驱动的操作：
+曾经还有一条 GUI 表单覆盖测试：主程序上挂 `--ksword-hvm-gui-test <报告路径>` 参数，
+起一个真实 `MainWindow`，逐个树项填参数并点「仅校验参数」，把结果写成 JSON 和截图。
+**2026-09-16 已整条删除**——它是塞在产品 `main()` 里的自检开关，产品的入口不是测试入口；
+而且它自己那个用途也没兑现：每条命令等最多 30 秒，整轮跑不完，实测 180 秒不返回只能强杀。
+`--gui-report` 这个入口随之作废。
 
-```powershell
-$qtRoot=(Resolve-Path '.deps\Qt\6.9.3\msvc2022_64').Path
-$savedQtEnvironment=@{}
-foreach ($name in @('PATH', 'QT_QPA_PLATFORM', 'QT_QPA_PLATFORM_PLUGIN_PATH')) {
-  $savedQtEnvironment[$name]=[Environment]::GetEnvironmentVariable($name, 'Process')
-}
-try {
-  $env:PATH=(Join-Path $qtRoot 'bin')+';'+$env:PATH
-  $env:QT_QPA_PLATFORM='windows'
-  $env:QT_QPA_PLATFORM_PLUGIN_PATH=Join-Path $qtRoot 'plugins\platforms'
-  # 等待 Windows 子系统程序退出，读取真实退出码。
-  $process=Start-Process '.\Ksword5.1\x64\Release\Ksword5.1.exe' -ArgumentList @(
-    '--ksword-hvm-gui-test', 'docs/next/logs/hvm-gui-form-report.json'
-  ) -WindowStyle Hidden -PassThru -Wait
-  if ($process.ExitCode -ne 0) { throw "GUI form test failed: $($process.ExitCode)" }
-} finally {
-  foreach ($name in $savedQtEnvironment.Keys) {
-    [Environment]::SetEnvironmentVariable($name, $savedQtEnvironment[$name], 'Process')
-  }
-}
-python tools/hvm_ctl/test_command_parity.py --gui-report docs/next/logs/hvm-gui-form-report.json
-```
+`tools/hvm_ctl/test_command_parity.py` 的 CLI 侧校验不受影响，仍是上面那三条命令。
 
-测试同时保存 `<报告路径>.png`。无桌面环境可将平台改为 `offscreen`，仍需明确
-平台插件目录；该平台在本机的字体渲染不完整，界面外观以 Windows 平台截图为准。
-
-回归检查将 GUI 表单实际提交的每一组参数再交给独立 CLI，比较全部返回值。
+回归检查把每一组参数交给独立 CLI，比较全部返回值。
 此外验证已知进制/参数位置回归，以及缺参、溢出、未对齐等拒绝路径。
 真实 TinyCore 内存效果的边界与日志见 [单页 EPT 控制](nested-ept-page-control.md)。
 

@@ -1,0 +1,88 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.000 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.6584 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Felix\CLionProjects\KSword\docs\next\logs\hvm-nested-page-start-crash-20260915.dmp]
+Mini Kernel Dump File: Only registers and stack trace are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release
+Deferred                                       srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release;srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 22621 MP (2 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS Personal
+Edition build lab: 22621.2506.amd64fre.ni_release_svc_prod3.231018-1809
+Kernel base = 0xfffff804`17c00000 PsLoadedModuleList = 0xfffff804`188134b0
+Debug session time: Tue Sep 15 10:06:00.922 2026 (UTC - 4:00)
+System Uptime: 0 days 0:02:00.012
+Loading Kernel Symbols
+...............................................................
+................................................................
+.........................................
+Loading User Symbols
+
+Loading unloaded module list
+........
+For analysis of this file, run !analyze -v
+0: kd> cdb: Reading initial command '.trap ffff860b0345ec60; r; r cr0 cr4; u @rip-20 L18; q'
+NOTE: The trap frame does not contain all registers.
+Some register values may be zeroed or incorrect.
+rax=0000000080040033 rbx=0000000000000000 rcx=fffff80412b6f180
+rdx=fffff80412b6f180 rsi=0000000000000000 rdi=0000000000000000
+rip=ffff9a011eb8b902 rsp=ffff860b0345edf0 rbp=ffff860b0345eef0
+ r8=0000000021601c84  r9=0000000000000002 r10=0000000000000000
+r11=ffff9a011eb761eb r12=0000000000000000 r13=0000000000000000
+r14=0000000000000000 r15=0000000000000000
+iopl=0         nv up ei pl zr na po cy
+ffff9a01`1eb8b902 0f22c0          mov     cr0,rax
+Last set context:
+rax=0000000080040033 rbx=0000000000000000 rcx=fffff80412b6f180
+rdx=fffff80412b6f180 rsi=0000000000000000 rdi=0000000000000000
+rip=ffff9a011eb8b902 rsp=ffff860b0345edf0 rbp=ffff860b0345eef0
+ r8=0000000021601c84  r9=0000000000000002 r10=0000000000000000
+r11=ffff9a011eb761eb r12=0000000000000000 r13=0000000000000000
+r14=0000000000000000 r15=0000000000000000
+iopl=0         nv up ei pl zr na po cy
+cs=0010  ss=0018  ds=0000  es=0000  fs=0000  gs=0000             efl=00040247
+ffff9a01`1eb8b902 0f22c0          mov     cr0,rax
+Last set context:
+                                       ^ Syntax error in '.trap ffff860b0345ec60; r; r cr0 cr4; u @rip-20 L18; q'
+0: kd> NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'

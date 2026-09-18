@@ -1,0 +1,240 @@
+\section{Artifact identity and reproduction}
+\label{app:artifact}
+The repository is \url{https://github.com/KSwordDEV/KSword}. The source revisions
+used in this preprint are:
+\begin{center}\footnotesize
+\begin{tabular}{@{}ll@{}}
+Evidence snapshot & \code{d0d15798f1d92cbdb66244370e6c0c2d4487feb9} \\
+Current implementation & \code{bd703d84a0f45f7567c8d05113578ae9e4adf1bd} \\
+Historical optimized & \code{b9bdda8358fc7278e79053f2cc4dbf2056a900b9} \\
+\end{tabular}
+\end{center}
+These full identifiers identify source revisions, not merely a branch name.
+\code{provenance.json} and the historical build provenance additionally record
+source-file byte hashes and measured binary identities. The current driver and
+controller SHA256 values, respectively, are:
+\begin{center}\footnotesize
+\code{3b44132f82febce3fcdf059b697d938479b9f791a628c00b55bc2cf397d5d500}\\[3pt]
+\code{4dd0d8dabb3019503e15d70692759ff0502cac46635d53f266a577caad5972ae}
+\end{center}
+The historical optimized driver SHA256 is:
+\begin{center}\footnotesize
+\code{8850e28f7f43cf12f95116c862e0aa9fb4b609d60446ee1d46ddc1b900ab7a04}.
+\end{center}
+The region cohort ran later builds of the same driver, carrying the version~4
+lease. Their identity is taken from the file the service actually loaded
+(\code{ImagePath} \path{\??\C:\ksword\KswordARK.sys}), not from a build output
+directory, because an equal build-output hash proves only that a copy was
+faithful. The reachability sweeps, the above-1\,GiB publish/stage/remove
+sequence and the 1\,GiB refusals ran on
+\begin{center}\footnotesize
+\code{9b7771ca1868177fb9f490dce736b2a1756877e4dc450a97a7a769cd5fcecba4},
+\end{center}
+and the region recheck was subsequently moved into the portable planner, which
+is a code change and therefore a different binary. Two were produced from those
+sources and they are not interchangeable: \code{088c44a0\ldots}, from
+\code{msbuild /t:Build}, under which the descendant's VM entry failed in every
+run, and the clean rebuild that replaced it, which is the binary the revocation
+and post-refactor reachability results ran on:
+\begin{center}\footnotesize
+\code{ea6965f0569050eede9f3a2917769c01231146bab18bc4a5f6d0097dfad60b4b}.
+\end{center}
+The controller is unchanged across both, at
+\begin{center}\footnotesize
+\code{cacbb90e5b1a29d7ce98bc87398838d1f924f9a5cb1a5214b640db129ce64e88}.
+\end{center}
+No measurement is carried across those two binaries.
+
+\subsection{Evidence locations}
+All paths below are relative to the repository root. The current dataset is
+\path{docs/next/paper-data/20260916-followup/}. Its raw index binds 268
+non-derived records; the dataset includes environment identities, per-run data,
+analysis summaries, measured scripts, and validation results. Its key groups are:
+\begin{itemize}
+\item \path{attribution/}, \path{attribution-runs.csv}, and
+      \path{analysis-followup.json}: same-binary performance runs and summaries.
+\item \path{latency/} and \path{latency-runs.csv}: every TCP request and each
+      control call, identities, overlap gaps, and internal timing.
+\item \path{lifecycle/}: individual map/remove/fault/rejection records, serial
+      observations, event traces, and \path{derived/smp-summary.json}.
+\item \path{application/}: all four EPT application attempts, the three
+      direct-write records, setup failures, exact measured scripts, and the
+      strict HTTP and policy-comparison summaries.
+\item \path{hyperv-*} records: fixture attempts, normal-init serial, root
+      capability refusal, and identity snapshots around admission.
+\item \path{outer-environment.json}, \path{outer-cpu-identity.json},
+      \path{outer-deviceguard.json}, and \path{provenance.json}: platform,
+      HVCI, source, and binary identities.
+\end{itemize}
+
+The large-leaf results are \path{docs/next/paper-data/20260916-large-leaf/}.
+\path{admission-probe.json} holds the coarse-source attempts,
+\path{published.json} the both-rules comparison,
+\path{stage-and-uniformity.json} the uniformity survey and the staging sequence,
+\path{decoupling.json} the idle digest samples, and \path{inner-hyperv.json}
+the inner Hyper-V admission attempts with the descendant's state. Each carries
+the driver and controller hashes, the live EPT12 pointer, and the raw JSON of
+every request and its removal.
+
+The workload and reachability results are
+\path{docs/next/paper-data/20260916-guest-workload/}. The \path{extent-*.json}
+files are guest-physical sweeps of the same descendant under six configurations
+--- 768\,MiB and 4096\,MiB, idle and after a workload, with and without the
+settings that pin its memory and disable page sharing --- each probe recording
+the status, the source leaf shift, and how many source entries the scanning rule
+read. \path{large-leaf-above-1gib.json} is one publish/idle/stage/refuse/remove
+sequence above the 1\,GiB line, \path{extent-4gplus.json} is the sweep that
+found this descendant's bulk memory above \texttt{0x100000000}, and
+\path{region-revocation.json} is the publish/snapshot/revoke/remove cycle with
+every response it polled. \path{vmware-monitor-panics.txt} summarises the
+descendant VMM's own log history and contains the incremental-versus-clean build
+comparison. \path{docs/next/logs/Probe-Ept12Extent.ps1},
+\path{docs/next/logs/Measure-LargeLeafAboveOneGiB.ps1},
+\path{docs/next/logs/Measure-RegionRevocation.ps1} and
+\path{docs/next/logs/Watch-RegionDrift.ps1} are the scripts that produced them;
+each requires a running descendant and cannot be replayed offline.
+
+The portable lease-walk results are
+\path{docs/next/paper-data/20260916-lease-largepage/}:
+\path{ept-lease-unit.txt} is the suite's own output, and
+\path{ept-lease-mutation.txt} is the mutation matrix, with a column
+for the suites as committed and a column for the current ones.
+\path{tools/hvm_paper/Test-EptLeaseMutation.sh} regenerates both without a VM; it
+fails if any mutation survives.
+
+The no-monitor VMware baseline attempts are
+\path{docs/next/paper-data/20260916-hot-insert/}. Each record states the driver
+service state, the resident-monitor state, the Windows boot identity, the
+observed \code{vmware-vmx} processes before and after, the launch result, and a
+status of either \code{vm\_started\_guest\_boot\_unverified} or
+\code{start\_rejected}. Neither is a usable baseline, and neither is reported as
+one.
+
+The historical cohort is \path{docs/next/paper-data/20260915-4x2/}.
+\path{derived/nested-improvements.csv} and
+\path{after/derived/windows-overhead.csv} supply the historical performance
+tables. \path{smp/derived/smp-summary.json} supplies its separate idle/load/fault
+results. \path{after/derived/internal-transition-cpus.csv} retains CPU phase
+times. \path{after-nested/counter-interval.json} preserves the counter-window
+boundaries. Historical records are not relabeled as current-build tests.
+
+\subsection{Offline analysis}
+Python 3.10 or later and the standard library suffice for the existing evidence
+analysis. From the repository root, the following PowerShell commands regenerate
+the current summaries without running a VM:
+\begin{center}\begin{minipage}{\linewidth}
+\begin{verbatim}
+$d = "docs/next/paper-data/20260916-followup"
+python tools/hvm_paper/analyze_followup.py $d
+python tools/hvm_paper/analyze_smp.py "$d/lifecycle"
+python tools/hvm_paper/analyze_http_page.py "$d/application"
+python tools/hvm_paper/analyze_policy_comparison.py "$d/application"
+python docs/next/arxiv/generate_tables.py
+\end{verbatim}
+\end{minipage}\end{center}
+\path{docs/next/arxiv/render_pages.py} rasterizes the built PDF one PNG per page,
+so the visual-review field in \path{build-validation.json} records pages someone
+looked at rather than a count of overfull boxes: a table can fit the text block
+and still collide with its caption, and a generated table can lose a column
+without \TeX{} reporting anything.
+Successful analysis means the stated predicates hold for the available records;
+it does not erase incomplete trials or prove untested runtime paths. The
+preprint's \path{table-provenance.json} records SHA256 values for consumed
+summaries and computed headline ratios. TeX inputs for every numeric table are
+included with the manuscript, so paper compilation does not require rerunning
+experiments or fetching evidence.
+
+\begin{samepage}
+The separate redacted evidence/analysis archive contains 1557 files and is
+11,122,891 bytes. Its SHA256 is:
+\begin{center}\footnotesize
+\code{d90ed459a5937000ff0df8d148086d2d603405dab2cd6726121fe62a8fdf6bef}.
+\end{center}
+\end{samepage}
+It supports offline recomputation and includes an integrity manifest; private
+identity mappings are excluded. It is distinct from the arXiv TeX source
+package and is not a complete anonymous buildable source artifact. The
+repository contains the unredacted versioned evidence. No archive upload or
+external artifact acceptance is claimed by this draft.
+
+\subsection{Example continuity identities}
+In the current application series, Windows~1 boot time is
+\code{2026-09-16T01:23:55.335060Z}; VMware VMX PID is 10748, created at
+\code{2026-09-16T01:38:09.239494Z}. The TinyCore boot ID is
+\begin{center}\small\code{e4b22249-5b20-4048-b466-f308c7e04a85},\end{center}
+and the HTTP server is PID 4578 with creation tick 52514. The raw per-run
+snapshots, per-response identities, and guest uptimes delimit the supported
+continuity intervals. The later lab cleanup reboot does not extend them.
+
+The separate Hyper-V baseline has Windows boot time
+\code{2026-09-16T00:53:15.158483Z}, worker PID 2824 with creation time
+\code{2026-09-16T01:17:54.101516Z}, and TinyCore boot ID
+\begin{center}\small\code{c6c03f47-16bc-4d0f-9dae-14194fa93ea9}.\end{center}
+The child VM GUID remains
+\code{74eb68a3-c16a-4e98-827a-05d363bdf3f6}. These identities substantiate an
+unchanged baseline during a refused operation, not successful interposition.
+
+\section{Historical Windows benchmark suite}
+\label{app:historical}
+Table~\ref{tab:windows-history} reports the historical Windows-only comparison
+in full. Off/pre and off/post each contribute seven measured runs; on contributes
+seven. The reference is the combined fourteen off-mode runs. Negative point
+estimates with intervals spanning zero do not demonstrate acceleration or zero
+cost. Intervals are descriptive within the measured machine and boot.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Historical Windows overhead. These values belong to the historical
+driver/boot and are not pooled with the current same-binary experiment.}
+\label{tab:windows-history}
+\input{tables/historical-windows}
+\end{table}
+
+\newpage
+\section{Compatibility and remaining validation matrix}
+\label{app:matrix}
+The highest-priority missing experiments are state handoff beneath an active
+VMM, current-build source-drift and owner-exit stress, a corrected per-response
+holder-liveness collector, an independent external application observer, and
+matched active-lease performance on additional machines. None of these is
+silently inferred from a successful marker-page demonstration.
+
+% The matrix is a tabularx and cannot break across pages, so without this the
+% caption stays behind on the previous page and the table arrives on the next
+% one with nothing naming it. TeX reports no warning for that.
+\newpage
+\begin{center}\small
+\captionsetup{hypcap=false}
+\captionof{table}{Evidence scope as of this draft. ``Not measured'', an observed
+refusal, and a recorded attempt that produced no usable result are three distinct
+statuses and are not merged. Each successful result is limited to its recorded
+version.}
+\label{tab:matrix}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.5cm}>{\raggedright\arraybackslash}p{4.2cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+Configuration & Operation & Status \\
+\midrule
+Hyper-V / Windows 1, VMM absent & Enter and exit KSword residency & Measured; same observed Windows boot/processes \\
+KSword / VMware / TinyCore, 4-by-2 & Later startup; page remap, restore, retirement & Current 3/3 cycles; historical 20/20 including load \\
+Already-running VMware / TinyCore & Insert beneath whole running stack & Outside the measured scope; ownership gate retained \\
+Inner Hyper-V / TinyCore, 4-by-2 & Normal boot; KSword admission & Baseline boots; VMX unavailable and admission refused \\
+Inner Hyper-V descendant & EPT control under inserted KSword & Not reached; the refusal above precedes it \\
+VMware / TinyCore, monitor absent & No-monitor backend baseline & Attempted twice; guest boot unverified, then start refused \\
+Windows 10 LTSC descendant & Compatibility and page control & Deferred; not measured \\
+Other CPU / Windows builds & Portability & Not measured \\
+Current 4-by-2 build & Ten-minute or overnight soak & Not newly measured \\
+2-MiB / 1-GiB source leaves & Lease capture, drift and rejection & Portable suite only; no such source leaf seen on hardware \\
+Large-leaf override, coarse-source rule & Publish 2 MiB on the live descendant & Refused 9/9; VMware backs this guest at 4 KiB \\
+Large-leaf override, scanning rule & Same, admitting on 512 agreeing entries & Published and removed; weaker drift detection \\
+Region staging & Rewrite one page of a published region & Measured by digest; out-of-range index refused \\
+Large leaf under inner Hyper-V & Publish any region & Not reachable; admission refused before any control request \\
+1-GiB leaf request on hardware & Publish 1 GiB under either rule & Refused by both; 262,144 entries against a 512 bound \\
+Base reachability versus configured memory & Which bases carry an override & Measured; mappings follow the workload, not memsize \\
+Composition saving from one large leaf & Fills to cover a region & One composition for 512 pages; workload not aimed at the region \\
+Region lease under a real source change & Snapshot the descendant while published & Revoked within 5 s, removed clean; reason is translation-changed \\
+Region drift recheck, reason 4 & Revoke on a page other than the captured one & Portable suite and mutation matrix; the always-on check wins every event we can trigger \\
+Incremental versus clean driver build & Same sources, \code{/t:Build} vs \code{/t:Rebuild} & Descendant VM entry failed 3/3 on the first, 0/1 on the second \\
+Arbitrary page reuse / DMA / hardware faults & General lifecycle and atomicity & Outside demonstrated contract \\
+\bottomrule
+\end{tabularx}
+\end{center}

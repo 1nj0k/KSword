@@ -1,0 +1,31 @@
+\begin{tikzpicture}[font=\small, node distance=4mm,
+  stage/.style={draw=blue!45!black,fill=blue!3,rounded corners=2pt,
+                align=left,text width=6.65cm,inner sep=8pt},
+  arrow/.style={-{Latex[length=2.2mm]},thick,draw=blue!55!black}]
+\node[stage] (a) {\textbf{1. Live insertion}\par\medskip
+  Outer Hyper-V\par
+  \hspace*{3mm}Root: Windows 0 / HVCI\par
+  \hspace*{3mm}Guest: running Windows 1\par\medskip
+  \textbf{Intermediate VMM absent}\par
+  Insert KSword; preserve Windows boot\par
+  and observed process identities.};
+\node[stage,right=10mm of a] (b) {\textbf{2. Later descendant execution}\par\medskip
+  Outer Hyper-V\par
+  \hspace*{3mm}Root: Windows 0 / HVCI\par
+  \hspace*{3mm}Guest: \textcolor{blue!65!black}{\textbf{KSword VMX}}\par
+  \hspace*{8mm}Same Windows 1 (4 vCPUs)\par
+  \hspace*{13mm}VMware (started afterward)\par
+  \hspace*{18mm}TinyCore (2 vCPUs)\par
+  \hspace*{18mm}\textcolor{blue!65!black}{Selected 4 KiB page}};
+\draw[arrow] (a.east) -- (b.west);
+\node[draw=green!40!black,fill=green!3,rounded corners=2pt,
+      align=center,below=7mm of b,text width=6.65cm,inner sep=8pt] (c)
+  {\textbf{Reversible composed-EPT control}\par\medskip
+   Original backing $\longrightarrow$ private backing\par
+   $\longrightarrow$ original backing after remove + drain};
+\draw[arrow] (b.south) -- (c.north);
+\node[align=left,text width=6.65cm,below=9mm of a,inner sep=4pt]
+  {\textbf{Continuity is measured per interval.}\par
+   Insertion and page control use separate\par
+   continuity intervals.};
+\end{tikzpicture}

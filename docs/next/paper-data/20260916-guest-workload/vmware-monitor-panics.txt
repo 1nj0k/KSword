@@ -1,0 +1,9 @@
+vmware-4.log  lastWrite=2026-09-16T18:43:30 lines=1678 monitorPanics=0
+vmware-3.log  lastWrite=2026-09-16T18:49:15 lines=1485 monitorPanics=0
+vmware-2.log  lastWrite=2026-09-16T19:11:09 lines=2028 monitorPanics=1
+    2026-09-16T23:05:59.415Z Wa(03) vcpu-0 MONITOR PANIC: vcpu-0:VM-entry failed; VMCS valid (error code 7)
+vmware-1.log  lastWrite=2026-09-16T19:32:06 lines=1983 monitorPanics=1
+    2026-09-16T23:26:42.535Z Wa(03) vcpu-0 MONITOR PANIC: vcpu-0:VM-entry failed; VMCS valid (error code 7)
+vmware-0.log  lastWrite=2026-09-16T19:43:53 lines=1831 monitorPanics=1
+    2026-09-16T23:40:35.567Z Wa(03) vcpu-1 MONITOR PANIC: vcpu-1:VM-entry failed; VMCS valid (error code 7)
+vmware.log    lastWrite=2026-09-16T19:58:33 lines=1853 monitorPanics=0

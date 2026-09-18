@@ -1,0 +1,17 @@
+{
+  "title": "Live Hypervisor Interposition for Reversible Memory Control in Nested Virtual Machines",
+  "authors": [
+    {
+      "givenName": "Jiaying",
+      "familyName": "Liu",
+      "affiliation": "Unaffiliated",
+      "email": "felixliujy@gmail.com"
+    }
+  ],
+  "suggestedPrimaryCategory": "cs.OS",
+  "suggestedCrossList": "cs.DC",
+  "status": "preprint draft; reviewed by the author, not peer reviewed, not submitted",
+  "license": null,
+  "journalReference": null,
+  "doi": null
+}

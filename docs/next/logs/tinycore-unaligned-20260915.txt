@@ -1,0 +1,1113 @@
+vmware-vmx = 1
+服务端版本 = RFB 003.008
+安全类型 = 1
+帧缓冲 = 720x400   名称 = Other Linux 6.x kernel 64-bit
+已送 100 个按键
+saved=C:\vmware\shot-serialboot.png 矩形数=2 bytes=9707
+服务端版本 = RFB 003.008
+安全类型 = 1
+帧缓冲 = 1024x768   名称 = Other Linux 6.x kernel 64-bit
+saved=C:\vmware\shot-serialafter.png 矩形数=4 bytes=2417
+串口共 82809 字节
+[    0.000000] Linux version 6.18.35-tinycore64 (tc@NUC12-Devel) (gcc (GCC) 15.2.0, GNU ld (GNU Binutils) 2.45.1) #1 SMP Wed Jun 17 00:02:49 UTC 2026
+[    0.000000] Command line: loglevel=3 vga=791 initrd=/boot/corepure64.gz console=ttyS0,115200n8 ignore-loglevel nosmp hpet=disable i8042.noaux i8042.nokbd printk.time=1 BOOT_IMAGE=/boot/vmlinuz64 
+[    0.000000] BIOS-provided physical RAM map:
+[    0.000000] BIOS-e820: [mem 0x0000000000000000-0x000000000009e7ff] usable
+[    0.000000] BIOS-e820: [mem 0x000000000009e800-0x000000000009ffff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000000dc000-0x00000000000fffff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000000100000-0x000000002fedffff] usable
+[    0.000000] BIOS-e820: [mem 0x000000002fee0000-0x000000002fefefff] ACPI data
+[    0.000000] BIOS-e820: [mem 0x000000002feff000-0x000000002fefffff] ACPI NVS
+[    0.000000] BIOS-e820: [mem 0x000000002ff00000-0x000000002fffffff] usable
+[    0.000000] BIOS-e820: [mem 0x00000000f0000000-0x00000000f7ffffff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000fec00000-0x00000000fec0ffff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000fee00000-0x00000000fee00fff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000fffe0000-0x00000000ffffffff] reserved
+[    0.000000] printk: debug: ignoring loglevel setting.
+[    0.000000] NX (Execute Disable) protection: active
+[    0.000000] APIC: Static calls initialized
+[    0.000000] SMBIOS 2.7 present.
+[    0.000000] DMI: VMware, Inc. VMware Virtual Platform/440BX Desktop Reference Platform, BIOS 6.00 11/12/2020
+[    0.000000] DMI: Memory slots populated: 2/128
+[    0.000000] vmware: hypercall mode: 0x02
+[    0.000000] Hypervisor detected: VMware
+[    0.000000] vmware: TSC freq read from hypervisor : 2112.010 MHz
+[    0.000000] vmware: Host bus clock speed read from hypervisor : 66000000 Hz
+[    0.000000] vmware: using clock offset of 52269181036 ns
+[    0.000681] tsc: Detected 2112.010 MHz processor
+[    0.004833] e820: update [mem 0x00000000-0x00000fff] usable ==> reserved
+[    0.004848] e820: remove [mem 0x000a0000-0x000fffff] usable
+[    0.004876] last_pfn = 0x30000 max_arch_pfn = 0x400000000
+[    0.008002] MTRR map: 7 entries (5 fixed + 2 variable; max 21), built from 8 variable MTRRs
+[    0.008115] x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT  
+[    0.021130] found SMP MP-table at [mem 0x000f6a70-0x000f6a7f]
+[    0.021304] Using GB pages for direct mapping
+[    0.021959] RAMDISK: [mem 0x2ed38000-0x2febefff]
+[    0.022015] ACPI: Early table checksum verification disabled
+[    0.022076] ACPI: RSDP 0x00000000000F6A00 000024 (v02 PTLTD )
+[    0.022220] ACPI: XSDT 0x000000002FEE865B 00005C (v01 INTEL  440BX    06040000 VMW  01324272)
+[    0.022372] ACPI: FACP 0x000000002FEFEE73 0000F4 (v04 INTEL  440BX    06040000 PTL  000F4240)
+[    0.022505] ACPI: DSDT 0x000000002FEEA6BB 0147B8 (v01 PTLTD  Custom   06040000 MSFT 03000001)
+[    0.022628] ACPI: FACS 0x000000002FEFFFC0 000040
+[    0.022630] ACPI: FACS 0x000000002FEFFFC0 000040
+[    0.022631] ACPI: BOOT 0x000000002FEEA693 000028 (v01 PTLTD  $SBFTBL$ 06040000  LTP 00000001)
+[    0.022760] ACPI: APIC 0x000000002FEE98BD 000742 (v01 PTLTD  ? APIC   06040000  LTP 00000000)
+[    0.022762] ACPI: MCFG 0x000000002FEE9881 00003C (v01 PTLTD  $PCITBL$ 06040000  LTP 00000001)
+[    0.022764] ACPI: SRAT 0x000000002FEE8757 0008A8 (v02 VMWARE MEMPLUG  06040000 VMW  00000001)
+[    0.022766] ACPI: HPET 0x000000002FEE871F 000038 (v01 VMWARE VMW HPET 06040000 VMW  00000001)
+[    0.022768] ACPI: WAET 0x000000002FEE86F7 000028 (v01 VMWARE VMW WAET 06040000 VMW  00000001)
+[    0.022769] ACPI: Reserving FACP table memory at [mem 0x2fefee73-0x2fefef66]
+[    0.022770] ACPI: Reserving DSDT table memory at [mem 0x2feea6bb-0x2fefee72]
+[    0.022771] ACPI: Reserving FACS table memory at [mem 0x2fefffc0-0x2fefffff]
+[    0.022771] ACPI: Reserving FACS table memory at [mem 0x2fefffc0-0x2fefffff]
+[    0.022771] ACPI: Reserving BOOT table memory at [mem 0x2feea693-0x2feea6ba]
+[    0.022772] ACPI: Reserving APIC table memory at [mem 0x2fee98bd-0x2fee9ffe]
+[    0.022772] ACPI: Reserving MCFG table memory at [mem 0x2fee9881-0x2fee98bc]
+[    0.022772] ACPI: Reserving SRAT table memory at [mem 0x2fee8757-0x2fee8ffe]
+[    0.022773] ACPI: Reserving HPET table memory at [mem 0x2fee871f-0x2fee8756]
+[    0.022773] ACPI: Reserving WAET table memory at [mem 0x2fee86f7-0x2fee871e]
+[    0.027788] Zone ranges:
+[    0.027861]   DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+[    0.027881]   DMA32    [mem 0x0000000001000000-0x000000002fffffff]
+[    0.027886]   Normal   empty
+[    0.027891] Movable zone start for each node
+[    0.027892] Early memory node ranges
+[    0.027892]   node   0: [mem 0x0000000000001000-0x000000000009dfff]
+[    0.027902]   node   0: [mem 0x0000000000100000-0x000000002fedffff]
+[    0.027902]   node   0: [mem 0x000000002ff00000-0x000000002fffffff]
+[    0.027912] Initmem setup node 0 [mem 0x0000000000001000-0x000000002fffffff]
+[    0.028676] On node 0, zone DMA: 1 pages in unavailable ranges
+[    0.041926] On node 0, zone DMA: 98 pages in unavailable ranges
+[    0.714322] On node 0, zone DMA32: 32 pages in unavailable ranges
+[    0.846551] CPU topo: Limiting to 1 possible CPUs
+[    0.846860] ACPI: PM-Timer IO Port: 0x1008
+[    0.847452] CPU topo: CPU limit of 1 reached. Ignoring further CPUs
+[    0.847464] ACPI: LAPIC_NMI (acpi_id[0x00] high edge lint[0x1])
+[    0.847485] ACPI: LAPIC_NMI (acpi_id[0x01] high edge lint[0x1])
+[    0.847485] ACPI: LAPIC_NMI (acpi_id[0x02] high edge lint[0x1])
+[    0.847486] ACPI: LAPIC_NMI (acpi_id[0x03] high edge lint[0x1])
+[    0.847486] ACPI: LAPIC_NMI (acpi_id[0x04] high edge lint[0x1])
+[    0.847486] ACPI: LAPIC_NMI (acpi_id[0x05] high edge lint[0x1])
+[    0.847487] ACPI: LAPIC_NMI (acpi_id[0x06] high edge lint[0x1])
+[    0.847487] ACPI: LAPIC_NMI (acpi_id[0x07] high edge lint[0x1])
+[    0.847487] ACPI: LAPIC_NMI (acpi_id[0x08] high edge lint[0x1])
+[    0.847488] ACPI: LAPIC_NMI (acpi_id[0x09] high edge lint[0x1])
+[    0.847488] ACPI: LAPIC_NMI (acpi_id[0x0a] high edge lint[0x1])
+[    0.847488] ACPI: LAPIC_NMI (acpi_id[0x0b] high edge lint[0x1])
+[    0.847489] ACPI: LAPIC_NMI (acpi_id[0x0c] high edge lint[0x1])
+[    0.847489] ACPI: LAPIC_NMI (acpi_id[0x0d] high edge lint[0x1])
+[    0.847489] ACPI: LAPIC_NMI (acpi_id[0x0e] high edge lint[0x1])
+[    0.847495] ACPI: LAPIC_NMI (acpi_id[0x0f] high edge lint[0x1])
+[    0.847501] ACPI: LAPIC_NMI (acpi_id[0x10] high edge lint[0x1])
+[    0.847501] ACPI: LAPIC_NMI (acpi_id[0x11] high edge lint[0x1])
+[    0.847502] ACPI: LAPIC_NMI (acpi_id[0x12] high edge lint[0x1])
+[    0.847502] ACPI: LAPIC_NMI (acpi_id[0x13] high edge lint[0x1])
+[    0.847502] ACPI: LAPIC_NMI (acpi_id[0x14] high edge lint[0x1])
+[    0.847503] ACPI: LAPIC_NMI (acpi_id[0x15] high edge lint[0x1])
+[    0.847503] ACPI: LAPIC_NMI (acpi_id[0x16] high edge lint[0x1])
+[    0.847503] ACPI: LAPIC_NMI (acpi_id[0x17] high edge lint[0x1])
+[    0.847504] ACPI: LAPIC_NMI (acpi_id[0x18] high edge lint[0x1])
+[    0.847504] ACPI: LAPIC_NMI (acpi_id[0x19] high edge lint[0x1])
+[    0.847504] ACPI: LAPIC_NMI (acpi_id[0x1a] high edge lint[0x1])
+[    0.847505] ACPI: LAPIC_NMI (acpi_id[0x1b] high edge lint[0x1])
+[    0.847505] ACPI: LAPIC_NMI (acpi_id[0x1c] high edge lint[0x1])
+[    0.847505] ACPI: LAPIC_NMI (acpi_id[0x1d] high edge lint[0x1])
+[    0.847506] ACPI: LAPIC_NMI (acpi_id[0x1e] high edge lint[0x1])
+[    0.847506] ACPI: LAPIC_NMI (acpi_id[0x1f] high edge lint[0x1])
+[    0.847506] ACPI: LAPIC_NMI (acpi_id[0x20] high edge lint[0x1])
+[    0.847507] ACPI: LAPIC_NMI (acpi_id[0x21] high edge lint[0x1])
+[    0.847507] ACPI: LAPIC_NMI (acpi_id[0x22] high edge lint[0x1])
+[    0.847507] ACPI: LAPIC_NMI (acpi_id[0x23] high edge lint[0x1])
+[    0.847508] ACPI: LAPIC_NMI (acpi_id[0x24] high edge lint[0x1])
+[    0.847508] ACPI: LAPIC_NMI (acpi_id[0x25] high edge lint[0x1])
+[    0.847508] ACPI: LAPIC_NMI (acpi_id[0x26] high edge lint[0x1])
+[    0.847509] ACPI: LAPIC_NMI (acpi_id[0x27] high edge lint[0x1])
+[    0.847509] ACPI: LAPIC_NMI (acpi_id[0x28] high edge lint[0x1])
+[    0.847510] ACPI: LAPIC_NMI (acpi_id[0x29] high edge lint[0x1])
+[    0.847510] ACPI: LAPIC_NMI (acpi_id[0x2a] high edge lint[0x1])
+[    0.847510] ACPI: LAPIC_NMI (acpi_id[0x2b] high edge lint[0x1])
+[    0.847511] ACPI: LAPIC_NMI (acpi_id[0x2c] high edge lint[0x1])
+[    0.847511] ACPI: LAPIC_NMI (acpi_id[0x2d] high edge lint[0x1])
+[    0.847511] ACPI: LAPIC_NMI (acpi_id[0x2e] high edge lint[0x1])
+[    0.847512] ACPI: LAPIC_NMI (acpi_id[0x2f] high edge lint[0x1])
+[    0.847512] ACPI: LAPIC_NMI (acpi_id[0x30] high edge lint[0x1])
+[    0.847512] ACPI: LAPIC_NMI (acpi_id[0x31] high edge lint[0x1])
+[    0.847513] ACPI: LAPIC_NMI (acpi_id[0x32] high edge lint[0x1])
+[    0.847513] ACPI: LAPIC_NMI (acpi_id[0x33] high edge lint[0x1])
+[    0.847513] ACPI: LAPIC_NMI (acpi_id[0x34] high edge lint[0x1])
+[    0.847514] ACPI: LAPIC_NMI (acpi_id[0x35] high edge lint[0x1])
+[    0.847514] ACPI: LAPIC_NMI (acpi_id[0x36] high edge lint[0x1])
+[    0.847514] ACPI: LAPIC_NMI (acpi_id[0x37] high edge lint[0x1])
+[    0.847515] ACPI: LAPIC_NMI (acpi_id[0x38] high edge lint[0x1])
+[    0.847515] ACPI: LAPIC_NMI (acpi_id[0x39] high edge lint[0x1])
+[    0.847515] ACPI: LAPIC_NMI (acpi_id[0x3a] high edge lint[0x1])
+[    0.847516] ACPI: LAPIC_NMI (acpi_id[0x3b] high edge lint[0x1])
+[    0.847516] ACPI: LAPIC_NMI (acpi_id[0x3c] high edge lint[0x1])
+[    0.847516] ACPI: LAPIC_NMI (acpi_id[0x3d] high edge lint[0x1])
+[    0.847522] ACPI: LAPIC_NMI (acpi_id[0x3e] high edge lint[0x1])
+[    0.847523] ACPI: LAPIC_NMI (acpi_id[0x3f] high edge lint[0x1])
+[    0.847523] ACPI: LAPIC_NMI (acpi_id[0x40] high edge lint[0x1])
+[    0.847523] ACPI: LAPIC_NMI (acpi_id[0x41] high edge lint[0x1])
+[    0.847524] ACPI: LAPIC_NMI (acpi_id[0x42] high edge lint[0x1])
+[    0.847524] ACPI: LAPIC_NMI (acpi_id[0x43] high edge lint[0x1])
+[    0.847524] ACPI: LAPIC_NMI (acpi_id[0x44] high edge lint[0x1])
+[    0.847525] ACPI: LAPIC_NMI (acpi_id[0x45] high edge lint[0x1])
+[    0.847525] ACPI: LAPIC_NMI (acpi_id[0x46] high edge lint[0x1])
+[    0.847525] ACPI: LAPIC_NMI (acpi_id[0x47] high edge lint[0x1])
+[    0.847526] ACPI: LAPIC_NMI (acpi_id[0x48] high edge lint[0x1])
+[    0.847526] ACPI: LAPIC_NMI (acpi_id[0x49] high edge lint[0x1])
+[    0.847526] ACPI: LAPIC_NMI (acpi_id[0x4a] high edge lint[0x1])
+[    0.847527] ACPI: LAPIC_NMI (acpi_id[0x4b] high edge lint[0x1])
+[    0.847527] ACPI: LAPIC_NMI (acpi_id[0x4c] high edge lint[0x1])
+[    0.847527] ACPI: LAPIC_NMI (acpi_id[0x4d] high edge lint[0x1])
+[    0.847533] ACPI: LAPIC_NMI (acpi_id[0x4e] high edge lint[0x1])
+[    0.847534] ACPI: LAPIC_NMI (acpi_id[0x4f] high edge lint[0x1])
+[    0.847539] ACPI: LAPIC_NMI (acpi_id[0x50] high edge lint[0x1])
+[    0.847539] ACPI: LAPIC_NMI (acpi_id[0x51] high edge lint[0x1])
+[    0.847540] ACPI: LAPIC_NMI (acpi_id[0x52] high edge lint[0x1])
+[    0.847540] ACPI: LAPIC_NMI (acpi_id[0x53] high edge lint[0x1])
+[    0.847540] ACPI: LAPIC_NMI (acpi_id[0x54] high edge lint[0x1])
+[    0.847541] ACPI: LAPIC_NMI (acpi_id[0x55] high edge lint[0x1])
+[    0.847541] ACPI: LAPIC_NMI (acpi_id[0x56] high edge lint[0x1])
+[    0.847542] ACPI: LAPIC_NMI (acpi_id[0x57] high edge lint[0x1])
+[    0.847542] ACPI: LAPIC_NMI (acpi_id[0x58] high edge lint[0x1])
+[    0.847542] ACPI: LAPIC_NMI (acpi_id[0x59] high edge lint[0x1])
+[    0.847543] ACPI: LAPIC_NMI (acpi_id[0x5a] high edge lint[0x1])
+[    0.847543] ACPI: LAPIC_NMI (acpi_id[0x5b] high edge lint[0x1])
+[    0.847543] ACPI: LAPIC_NMI (acpi_id[0x5c] high edge lint[0x1])
+[    0.847544] ACPI: LAPIC_NMI (acpi_id[0x5d] high edge lint[0x1])
+[    0.847544] ACPI: LAPIC_NMI (acpi_id[0x5e] high edge lint[0x1])
+[    0.847544] ACPI: LAPIC_NMI (acpi_id[0x5f] high edge lint[0x1])
+[    0.847545] ACPI: LAPIC_NMI (acpi_id[0x60] high edge lint[0x1])
+[    0.847545] ACPI: LAPIC_NMI (acpi_id[0x61] high edge lint[0x1])
+[    0.847545] ACPI: LAPIC_NMI (acpi_id[0x62] high edge lint[0x1])
+[    0.847546] ACPI: LAPIC_NMI (acpi_id[0x63] high edge lint[0x1])
+[    0.847546] ACPI: LAPIC_NMI (acpi_id[0x64] high edge lint[0x1])
+[    0.847546] ACPI: LAPIC_NMI (acpi_id[0x65] high edge lint[0x1])
+[    0.847547] ACPI: LAPIC_NMI (acpi_id[0x66] high edge lint[0x1])
+[    0.847547] ACPI: LAPIC_NMI (acpi_id[0x67] high edge lint[0x1])
+[    0.847547] ACPI: LAPIC_NMI (acpi_id[0x68] high edge lint[0x1])
+[    0.847548] ACPI: LAPIC_NMI (acpi_id[0x69] high edge lint[0x1])
+[    0.847548] ACPI: LAPIC_NMI (acpi_id[0x6a] high edge lint[0x1])
+[    0.847548] ACPI: LAPIC_NMI (acpi_id[0x6b] high edge lint[0x1])
+[    0.847554] ACPI: LAPIC_NMI (acpi_id[0x6c] high edge lint[0x1])
+[    0.847554] ACPI: LAPIC_NMI (acpi_id[0x6d] high edge lint[0x1])
+[    0.847555] ACPI: LAPIC_NMI (acpi_id[0x6e] high edge lint[0x1])
+[    0.847555] ACPI: LAPIC_NMI (acpi_id[0x6f] high edge lint[0x1])
+[    0.847555] ACPI: LAPIC_NMI (acpi_id[0x70] high edge lint[0x1])
+[    0.847556] ACPI: LAPIC_NMI (acpi_id[0x71] high edge lint[0x1])
+[    0.847556] ACPI: LAPIC_NMI (acpi_id[0x72] high edge lint[0x1])
+[    0.847556] ACPI: LAPIC_NMI (acpi_id[0x73] high edge lint[0x1])
+[    0.847557] ACPI: LAPIC_NMI (acpi_id[0x74] high edge lint[0x1])
+[    0.847557] ACPI: LAPIC_NMI (acpi_id[0x75] high edge lint[0x1])
+[    0.847557] ACPI: LAPIC_NMI (acpi_id[0x76] high edge lint[0x1])
+[    0.847558] ACPI: LAPIC_NMI (acpi_id[0x77] high edge lint[0x1])
+[    0.847558] ACPI: LAPIC_NMI (acpi_id[0x78] high edge lint[0x1])
+[    0.847558] ACPI: LAPIC_NMI (acpi_id[0x79] high edge lint[0x1])
+[    0.847559] ACPI: LAPIC_NMI (acpi_id[0x7a] high edge lint[0x1])
+[    0.847559] ACPI: LAPIC_NMI (acpi_id[0x7b] high edge lint[0x1])
+[    0.847559] ACPI: LAPIC_NMI (acpi_id[0x7c] high edge lint[0x1])
+[    0.847560] ACPI: LAPIC_NMI (acpi_id[0x7d] high edge lint[0x1])
+[    0.847560] ACPI: LAPIC_NMI (acpi_id[0x7e] high edge lint[0x1])
+[    0.847561] ACPI: LAPIC_NMI (acpi_id[0x7f] high edge lint[0x1])
+[    0.847582] ACPI: Skipping IOAPIC probe due to 'noapic' option.
+[    0.847584] ACPI: Using ACPI for processor (LAPIC) configuration information
+[    0.847604] ACPI: HPET id: 0x8086af01 base: 0xfed00000
+[    0.847705] Intel MultiProcessor Specification v1.4
+[    0.847727] MPTABLE: OEM ID: INTEL   
+[    0.847728] MPTABLE: Product ID: 440BX       
+[    0.847728] MPTABLE: APIC at: 0xFEE00000
+[    0.850015] IOAPIC[0]: apic_id 1, version 32, address 0xfec00000, GSI 0-23
+[    0.850032] TSC deadline timer available
+[    0.850051] CPU topo: Max. logical packages:   1
+[    0.850052] CPU topo: Max. logical dies:       1
+[    0.850052] CPU topo: Max. dies per package:   1
+[    0.850054] CPU topo: Max. threads per core:   1
+[    0.850059] CPU topo: Num. cores per package:     1
+[    0.850059] CPU topo: Num. threads per package:   1
+[    0.850059] CPU topo: Allowing 1 present CPUs plus 0 hotplug CPUs
+[    0.850060] CPU topo: Rejected CPUs 127
+[    0.850148] PM: hibernation: Registered nosave memory: [mem 0x00000000-0x00000fff]
+[    0.850158] PM: hibernation: Registered nosave memory: [mem 0x0009e000-0x000fffff]
+[    0.850158] PM: hibernation: Registered nosave memory: [mem 0x2fee0000-0x2fefffff]
+[    0.850164] [mem 0x30000000-0xefffffff] available for PCI devices
+[    0.850187] Booting paravirtualized kernel on VMware hypervisor
+[    0.850249] clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 6370452778343963 ns
+[    0.850312] setup_percpu: NR_CPUS:64 nr_cpumask_bits:1 nr_cpu_ids:1 nr_node_ids:1
+[    0.949511] percpu: Embedded 51 pages/cpu s172032 r8192 d28672 u2097152
+[    0.949649] pcpu-alloc: s172032 r8192 d28672 u2097152 alloc=1*2097152
+[    0.949665] pcpu-alloc: [0] 0 
+[    0.950123] Kernel command line: loglevel=3 vga=791 initrd=/boot/corepure64.gz console=ttyS0,115200n8 ignore-loglevel nosmp hpet=disable i8042.noaux i8042.nokbd printk.time=1 BOOT_IMAGE=/boot/vmlinuz64 
+[    0.950791] Unknown kernel command line parameters "vga=791", will be passed to user space.
+[    0.950885] random: crng init done
+[    0.950890] printk: log buffer data + meta data: 131072 + 458752 = 589824 bytes
+[    0.999161] Dentry cache hash table entries: 131072 (order: 8, 1048576 bytes, linear)
+[    1.023542] Inode-cache hash table entries: 65536 (order: 7, 524288 bytes, linear)
+[    1.028136] Built 1 zonelists, mobility grouping on.  Total pages: 196477
+[    1.028176] mem auto-init: stack:off, heap alloc:off, heap free:off
+[    1.044739] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    1.045514] rcu: Hierarchical RCU implementation.
+[    1.045523] rcu: .RCU restricting CPUs from NR_CPUS=64 to nr_cpu_ids=1.
+[    1.045528] .Tracing variant of Tasks RCU enabled.
+[    1.045551] rcu: RCU calculated value of scheduler-enlistment delay is 30 jiffies.
+[    1.045552] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=1
+[    1.045587] RCU Tasks Trace: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    1.045612] NR_IRQS: 4352, nr_irqs: 256, preallocated irqs: 16
+[    1.051518] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    1.056125] Console: colour dummy device 80x25
+[    1.058465] printk: legacy console [ttyS0] enabled
+[    8.286419] ACPI: Core revision 20250807
+[    8.310222] ACPI: setting ELCR to 0200 (from 0e80)
+[    8.333130] APIC: SMP mode deactivated
+[    8.350736] APIC: Switch to symmetric I/O mode setup in no SMP routine
+[    8.379079] Not enabling interrupt remapping due to skipped IO-APIC setup
+[    8.415122] clocksource: tsc-early: mask: 0xffffffffffffffff max_cycles: 0x1e7181df346, max_idle_ns: 440795224594 ns
+[    8.461273] Calibrating delay loop (skipped) preset value.. 4225.02 BogoMIPS (lpj=7040033)
+[    8.464486] x86/cpu: User Mode Instruction Prevention (UMIP) activated
+[    8.464486] Last level iTLB entries: 4KB 0, 2MB 0, 4MB 0
+[    8.464486] Last level dTLB entries: 4KB 0, 2MB 0, 4MB 0, 1GB 0
+[    8.464486] mitigations: Enabled attack vectors: user_kernel, user_user, guest_host, guest_guest, SMT mitigations: auto
+[    8.464486] Speculative Store Bypass: Mitigation: Speculative Store Bypass disabled via prctl
+[    8.464486] Spectre V2 : Mitigation: Enhanced / Automatic IBRS
+[    8.464486] RETBleed: Mitigation: Enhanced IBRS
+[    8.464486] Spectre V1 : Mitigation: usercopy/swapgs barriers and __user pointer sanitization
+[    8.464486] Spectre V2 : Spectre v2 / PBRSB-eIBRS: Retire a single CALL on VMEXIT
+[    8.464486] Spectre V2 : mitigation: Enabling conditional Indirect Branch Prediction Barrier
+[    8.464486] x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'
+[    8.464486] x86/fpu: Supporting XSAVE feature 0x002: 'SSE registers'
+[    8.464486] x86/fpu: Supporting XSAVE feature 0x004: 'AVX registers'
+[    8.464486] x86/fpu: Supporting XSAVE feature 0x800: 'Control-flow User registers'
+[    8.464486] x86/fpu: Supporting XSAVE feature 0x1000: 'Control-flow Kernel registers (KVM only)'
+[    8.464486] x86/fpu: xstate_offset[2]:  576, xstate_sizes[2]:  256
+[    8.464486] x86/fpu: xstate_offset[11]:  832, xstate_sizes[11]:   16
+[    8.464486] x86/fpu: xstate_offset[12]:  848, xstate_sizes[12]:   24
+[    8.464486] x86/fpu: Enabled xstate features 0x1807, context size is 872 bytes, using 'compacted' format.
+[    8.464486] Freeing SMP alternatives memory: 32K
+[    8.464486] pid_max: default: 32768 minimum: 301
+[    8.464486] Mount-cache hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    8.464486] Mountpoint-cache hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    8.464486] smpboot: SMP disabled
+[    8.464486] Performance Events: unsupported CPU family 6 model 183 no PMU driver, software events only.
+[    8.466075] signal: max sigframe size: 1776
+[    8.469261] rcu: Hierarchical SRCU implementation.
+[    8.471456] rcu: .Max phase no-delay instances is 1000.
+[    8.475185] smp: Bringing up secondary CPUs ...
+[    8.477950] smp: Brought up 1 node, 1 CPU
+[    8.481277] smpboot: Total of 1 processors activated (4225.02 BogoMIPS)
+[    8.487819] Memory: 723924K/785908K available (12785K kernel code, 1259K rwdata, 2736K rodata, 2656K init, 4176K bss, 59284K reserved, 0K cma-reserved)
+[    8.491153] ACPI: PM: Registering ACPI NVS region [mem 0x2feff000-0x2fefffff] (4096 bytes)
+[    8.492521] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 6370867519511994 ns
+[    8.494754] posixtimers hash table entries: 512 (order: 1, 8192 bytes, linear)
+[    8.497984] futex hash table entries: 256 (16384 bytes on 1 NUMA nodes, total 16 KiB, linear).
+[    8.501437] pinctrl core: initialized pinctrl subsystem
+[    8.505551] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    8.508198] DMA: preallocated 128 KiB GFP_KERNEL pool for atomic allocations
+[    8.511377] DMA: preallocated 128 KiB GFP_KERNEL|GFP_DMA pool for atomic allocations
+[    8.514655] DMA: preallocated 128 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations
+[    8.518793] thermal_sys: Registered thermal governor 'bang_bang'
+[    8.518796] thermal_sys: Registered thermal governor 'step_wise'
+[    8.521313] thermal_sys: Registered thermal governor 'user_space'
+[    8.524720] cpuidle: using governor ladder
+[    8.531327] cpuidle: using governor menu
+[    8.535561] Simple Boot Flag at 0x36 set to 0x80
+[    8.538911] acpiphp: ACPI Hot Plug PCI Controller Driver version: 0.5
+[    8.545454] PCI: ECAM [mem 0xf0000000-0xf7ffffff] (base 0xf0000000) for domain 0000 [bus 00-7f]
+[    8.548010] PCI: Using configuration type 1 for base access
+[    8.552018] HugeTLB: registered 2.00 MiB page size, pre-allocated 0 pages
+[    8.554626] HugeTLB: 28 KiB vmemmap can be freed for a 2.00 MiB page
+[    8.559615] ACPI: Added _OSI(Module Device)
+[    8.561270] ACPI: Added _OSI(Processor Device)
+[    8.564592] ACPI: Added _OSI(Processor Aggregator Device)
+[    8.571153] ACPI: 1 ACPI AML tables successfully acquired and loaded
+[    8.578891] ACPI: [Firmware Bug]: BIOS _OSI(Linux) query ignored
+[    8.655131] ACPI: Interpreter enabled
+[    8.659024] ACPI: PM: (supports S0 S1 S4 S5)
+[    8.661371] ACPI: Using PIC for interrupt routing
+[    8.665052] PCI: Using host bridge windows from ACPI; if necessary, use "pci=nocrs" and report a bug
+[    8.667942] PCI: Using E820 reservations for host bridge windows
+[    8.674321] ACPI: Enabled 4 GPEs in block 00 to 0F
+[    9.634486] ACPI: PCI Root Bridge [PCI0] (domain 0000 [bus 00-7f])
+[    9.634905] acpi PNP0A03:00: _OSC: OS supports [ExtendedConfig ASPM ClockPM Segments MSI HPX-Type3]
+[    9.639428] acpi PNP0A03:00: _OSC: platform does not support [LTR]
+[    9.643920] acpi PNP0A03:00: _OSC: OS now controls [PCIeHotplug PME PCIeCapability]
+[    9.694181] PCI host bridge to bus 0000:00
+[    9.694936] pci_bus 0000:00: root bus resource [mem 0x000a0000-0x000bffff window]
+[    9.698227] pci_bus 0000:00: root bus resource [mem 0x000d0000-0x000dbfff window]
+[    9.701405] pci_bus 0000:00: root bus resource [mem 0xc0000000-0xfebfffff window]
+[    9.704731] pci_bus 0000:00: root bus resource [io  0x0000-0x0cf7 window]
+[    9.708041] pci_bus 0000:00: root bus resource [io  0x0d00-0xfeff window]
+[    9.711522] pci_bus 0000:00: root bus resource [bus 00-7f]
+[    9.719121] pci 0000:00:00.0: [8086:7190] type 00 class 0x060000 conventional PCI endpoint
+[    9.751508] pci 0000:00:01.0: [8086:7191] type 01 class 0x060400 conventional PCI bridge
+[    9.764903] pci 0000:00:01.0: PCI bridge to [bus 01]
+[    9.784958] pci 0000:00:07.0: [8086:7110] type 00 class 0x060100 conventional PCI endpoint
+[    9.816072] pci 0000:00:07.1: [8086:7111] type 00 class 0x01018a conventional PCI endpoint
+[    9.830127] pci 0000:00:07.1: BAR 4 [io  0x1060-0x106f]
+[    9.832592] pci 0000:00:07.1: BAR 0 [io  0x01f0-0x01f7]: legacy IDE quirk
+[    9.834602] pci 0000:00:07.1: BAR 1 [io  0x03f6]: legacy IDE quirk
+[    9.837936] pci 0000:00:07.1: BAR 2 [io  0x0170-0x0177]: legacy IDE quirk
+[    9.841306] pci 0000:00:07.1: BAR 3 [io  0x0376]: legacy IDE quirk
+[    9.854166] pci 0000:00:07.3: [8086:7113] type 00 class 0x068000 conventional PCI endpoint
+[    9.868922] pci 0000:00:07.3: quirk: [io  0x1000-0x103f] claimed by PIIX4 ACPI
+[    9.871631] pci 0000:00:07.3: quirk: [io  0x1040-0x104f] claimed by PIIX4 SMB
+[    9.885598] pci 0000:00:07.7: [15ad:0740] type 00 class 0x088000 conventional PCI endpoint
+[    9.902433] pci 0000:00:07.7: BAR 0 [io  0x1080-0x10bf]
+[    9.905392] pci 0000:00:07.7: BAR 1 [mem 0xfebc0000-0xfebfffff 64bit]
+[    9.928057] pci 0000:00:0f.0: [15ad:0405] type 00 class 0x030000 conventional PCI endpoint
+[    9.944407] pci 0000:00:0f.0: BAR 0 [io  0x1070-0x107f]
+[    9.945279] pci 0000:00:0f.0: BAR 1 [mem 0xe8000000-0xefffffff pref]
+[    9.948352] pci 0000:00:0f.0: BAR 2 [mem 0xfe000000-0xfe7fffff]
+[    9.952630] pci 0000:00:0f.0: ROM [mem 0x00000000-0x00007fff pref]
+[    9.957168] pci 0000:00:0f.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
+[    9.976095] pci 0000:00:10.0: [1000:0030] type 00 class 0x010000 conventional PCI endpoint
+[    9.995288] pci 0000:00:10.0: BAR 0 [io  0x1400-0x14ff]
+[    9.998738] pci 0000:00:10.0: BAR 1 [mem 0xfeb80000-0xfeb9ffff 64bit]
+[   10.002464] pci 0000:00:10.0: BAR 3 [mem 0xfeba0000-0xfebbffff 64bit]
+[   10.006157] pci 0000:00:10.0: ROM [mem 0x00000000-0x00003fff pref]
+[   10.025980] pci 0000:00:11.0: [15ad:0790] type 01 class 0x060401 conventional PCI bridge
+[   10.034486] pci 0000:00:11.0: PCI bridge to [bus 02] (subtractive decode)
+[   10.035720] pci 0000:00:11.0:   bridge window [io  0x2000-0x3fff]
+[   10.038750] pci 0000:00:11.0:   bridge window [mem 0xfd500000-0xfdffffff]
+[   10.045012] pci 0000:00:11.0:   bridge window [mem 0xe7b00000-0xe7ffffff 64bit pref]
+[   10.065598] pci 0000:00:15.0: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.077305] pci 0000:00:15.0: PCI bridge to [bus 03]
+[   10.079066] pci 0000:00:15.0:   bridge window [io  0x4000-0x4fff]
+[   10.082064] pci 0000:00:15.0:   bridge window [mem 0xfd400000-0xfd4fffff]
+[   10.087464] pci 0000:00:15.0:   bridge window [mem 0xe7a00000-0xe7afffff 64bit pref]
+[   10.108350] pci 0000:00:15.0: PME# supported from D0 D3hot D3cold
+[   10.129841] pci 0000:00:15.1: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.140343] pci 0000:00:15.1: PCI bridge to [bus 04]
+[   10.142193] pci 0000:00:15.1:   bridge window [io  0x8000-0x8fff]
+[   10.145631] pci 0000:00:15.1:   bridge window [mem 0xfd000000-0xfd0fffff]
+[   10.151523] pci 0000:00:15.1:   bridge window [mem 0xe7600000-0xe76fffff 64bit pref]
+[   10.178204] pci 0000:00:15.1: PME# supported from D0 D3hot D3cold
+[   10.195375] pci 0000:00:15.2: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.205932] pci 0000:00:15.2: PCI bridge to [bus 05]
+[   10.209146] pci 0000:00:15.2:   bridge window [io  0xc000-0xcfff]
+[   10.211934] pci 0000:00:15.2:   bridge window [mem 0xfcc00000-0xfccfffff]
+[   10.217992] pci 0000:00:15.2:   bridge window [mem 0xe7200000-0xe72fffff 64bit pref]
+[   10.239603] pci 0000:00:15.2: PME# supported from D0 D3hot D3cold
+[   10.255669] pci 0000:00:15.3: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.266284] pci 0000:00:15.3: PCI bridge to [bus 06]
+[   10.269533] pci 0000:00:15.3:   bridge window [mem 0xfc800000-0xfc8fffff]
+[   10.274486] pci 0000:00:15.3:   bridge window [mem 0xe6e00000-0xe6efffff 64bit pref]
+[   10.294663] pci 0000:00:15.3: PME# supported from D0 D3hot D3cold
+[   10.312662] pci 0000:00:15.4: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.322205] pci 0000:00:15.4: PCI bridge to [bus 07]
+[   10.325952] pci 0000:00:15.4:   bridge window [mem 0xfc400000-0xfc4fffff]
+[   10.331827] pci 0000:00:15.4:   bridge window [mem 0xe6a00000-0xe6afffff 64bit pref]
+[   10.354620] pci 0000:00:15.4: PME# supported from D0 D3hot D3cold
+[   10.379473] pci 0000:00:15.5: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.390227] pci 0000:00:15.5: PCI bridge to [bus 08]
+[   10.393110] pci 0000:00:15.5:   bridge window [mem 0xfc000000-0xfc0fffff]
+[   10.399252] pci 0000:00:15.5:   bridge window [mem 0xe6600000-0xe66fffff 64bit pref]
+[   10.428967] pci 0000:00:15.5: PME# supported from D0 D3hot D3cold
+[   10.448709] pci 0000:00:15.6: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.460093] pci 0000:00:15.6: PCI bridge to [bus 09]
+[   10.462922] pci 0000:00:15.6:   bridge window [mem 0xfbc00000-0xfbcfffff]
+[   10.468128] pci 0000:00:15.6:   bridge window [mem 0xe6200000-0xe62fffff 64bit pref]
+[   10.494321] pci 0000:00:15.6: PME# supported from D0 D3hot D3cold
+[   10.512768] pci 0000:00:15.7: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.523152] pci 0000:00:15.7: PCI bridge to [bus 0a]
+[   10.526464] pci 0000:00:15.7:   bridge window [mem 0xfb800000-0xfb8fffff]
+[   10.531297] pci 0000:00:15.7:   bridge window [mem 0xe5e00000-0xe5efffff 64bit pref]
+[   10.555484] pci 0000:00:15.7: PME# supported from D0 D3hot D3cold
+[   10.573910] pci 0000:00:16.0: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.583520] pci 0000:00:16.0: PCI bridge to [bus 0b]
+[   10.585509] pci 0000:00:16.0:   bridge window [io  0x5000-0x5fff]
+[   10.589391] pci 0000:00:16.0:   bridge window [mem 0xfd300000-0xfd3fffff]
+[   10.595253] pci 0000:00:16.0:   bridge window [mem 0xe7900000-0xe79fffff 64bit pref]
+[   10.617819] pci 0000:00:16.0: PME# supported from D0 D3hot D3cold
+[   10.637512] pci 0000:00:16.1: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.647360] pci 0000:00:16.1: PCI bridge to [bus 0c]
+[   10.649376] pci 0000:00:16.1:   bridge window [io  0x9000-0x9fff]
+[   10.652236] pci 0000:00:16.1:   bridge window [mem 0xfcf00000-0xfcffffff]
+[   10.657819] pci 0000:00:16.1:   bridge window [mem 0xe7500000-0xe75fffff 64bit pref]
+[   10.680751] pci 0000:00:16.1: PME# supported from D0 D3hot D3cold
+[   10.703134] pci 0000:00:16.2: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.714163] pci 0000:00:16.2: PCI bridge to [bus 0d]
+[   10.715553] pci 0000:00:16.2:   bridge window [io  0xd000-0xdfff]
+[   10.718773] pci 0000:00:16.2:   bridge window [mem 0xfcb00000-0xfcbfffff]
+[   10.724277] pci 0000:00:16.2:   bridge window [mem 0xe7100000-0xe71fffff 64bit pref]
+[   10.748521] pci 0000:00:16.2: PME# supported from D0 D3hot D3cold
+[   10.772523] pci 0000:00:16.3: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.783598] pci 0000:00:16.3: PCI bridge to [bus 0e]
+[   10.786157] pci 0000:00:16.3:   bridge window [mem 0xfc700000-0xfc7fffff]
+[   10.791298] pci 0000:00:16.3:   bridge window [mem 0xe6d00000-0xe6dfffff 64bit pref]
+[   10.814669] pci 0000:00:16.3: PME# supported from D0 D3hot D3cold
+[   10.836728] pci 0000:00:16.4: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.848406] pci 0000:00:16.4: PCI bridge to [bus 0f]
+[   10.852969] pci 0000:00:16.4:   bridge window [mem 0xfc300000-0xfc3fffff]
+[   10.858381] pci 0000:00:16.4:   bridge window [mem 0xe6900000-0xe69fffff 64bit pref]
+[   10.882666] pci 0000:00:16.4: PME# supported from D0 D3hot D3cold
+[   10.914089] pci 0000:00:16.5: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   10.927059] pci 0000:00:16.5: PCI bridge to [bus 10]
+[   10.931153] pci 0000:00:16.5:   bridge window [mem 0xfbf00000-0xfbffffff]
+[   10.936993] pci 0000:00:16.5:   bridge window [mem 0xe6500000-0xe65fffff 64bit pref]
+[   10.969829] pci 0000:00:16.5: PME# supported from D0 D3hot D3cold
+[   11.016437] pci 0000:00:16.6: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.033180] pci 0000:00:16.6: PCI bridge to [bus 11]
+[   11.037800] pci 0000:00:16.6:   bridge window [mem 0xfbb00000-0xfbbfffff]
+[   11.043103] pci 0000:00:16.6:   bridge window [mem 0xe6100000-0xe61fffff 64bit pref]
+[   11.070636] pci 0000:00:16.6: PME# supported from D0 D3hot D3cold
+[   11.093212] pci 0000:00:16.7: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.104609] pci 0000:00:16.7: PCI bridge to [bus 12]
+[   11.110144] pci 0000:00:16.7:   bridge window [mem 0xfb700000-0xfb7fffff]
+[   11.115490] pci 0000:00:16.7:   bridge window [mem 0xe5d00000-0xe5dfffff 64bit pref]
+[   11.142533] pci 0000:00:16.7: PME# supported from D0 D3hot D3cold
+[   11.169729] pci 0000:00:17.0: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.185147] pci 0000:00:17.0: PCI bridge to [bus 13]
+[   11.189404] pci 0000:00:17.0:   bridge window [io  0x6000-0x6fff]
+[   11.191949] pci 0000:00:17.0:   bridge window [mem 0xfd200000-0xfd2fffff]
+[   11.197581] pci 0000:00:17.0:   bridge window [mem 0xe7800000-0xe78fffff 64bit pref]
+[   11.222333] pci 0000:00:17.0: PME# supported from D0 D3hot D3cold
+[   11.247724] pci 0000:00:17.1: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.257518] pci 0000:00:17.1: PCI bridge to [bus 14]
+[   11.258860] pci 0000:00:17.1:   bridge window [io  0xa000-0xafff]
+[   11.262702] pci 0000:00:17.1:   bridge window [mem 0xfce00000-0xfcefffff]
+[   11.267979] pci 0000:00:17.1:   bridge window [mem 0xe7400000-0xe74fffff 64bit pref]
+[   11.292093] pci 0000:00:17.1: PME# supported from D0 D3hot D3cold
+[   11.309761] pci 0000:00:17.2: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.320169] pci 0000:00:17.2: PCI bridge to [bus 15]
+[   11.322497] pci 0000:00:17.2:   bridge window [io  0xe000-0xefff]
+[   11.325448] pci 0000:00:17.2:   bridge window [mem 0xfca00000-0xfcafffff]
+[   11.331698] pci 0000:00:17.2:   bridge window [mem 0xe7000000-0xe70fffff 64bit pref]
+[   11.356938] pci 0000:00:17.2: PME# supported from D0 D3hot D3cold
+[   11.381622] pci 0000:00:17.3: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.396324] pci 0000:00:17.3: PCI bridge to [bus 16]
+[   11.400271] pci 0000:00:17.3:   bridge window [mem 0xfc600000-0xfc6fffff]
+[   11.405956] pci 0000:00:17.3:   bridge window [mem 0xe6c00000-0xe6cfffff 64bit pref]
+[   11.424486] pci 0000:00:17.3: PME# supported from D0 D3hot D3cold
+[   11.439670] pci 0000:00:17.4: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.451780] pci 0000:00:17.4: PCI bridge to [bus 17]
+[   11.456322] pci 0000:00:17.4:   bridge window [mem 0xfc200000-0xfc2fffff]
+[   11.461478] pci 0000:00:17.4:   bridge window [mem 0xe6800000-0xe68fffff 64bit pref]
+[   11.485436] pci 0000:00:17.4: PME# supported from D0 D3hot D3cold
+[   11.509263] pci 0000:00:17.5: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.521716] pci 0000:00:17.5: PCI bridge to [bus 18]
+[   11.526611] pci 0000:00:17.5:   bridge window [mem 0xfbe00000-0xfbefffff]
+[   11.531977] pci 0000:00:17.5:   bridge window [mem 0xe6400000-0xe64fffff 64bit pref]
+[   11.560552] pci 0000:00:17.5: PME# supported from D0 D3hot D3cold
+[   11.586823] pci 0000:00:17.6: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.598160] pci 0000:00:17.6: PCI bridge to [bus 19]
+[   11.603564] pci 0000:00:17.6:   bridge window [mem 0xfba00000-0xfbafffff]
+[   11.609173] pci 0000:00:17.6:   bridge window [mem 0xe6000000-0xe60fffff 64bit pref]
+[   11.638381] pci 0000:00:17.6: PME# supported from D0 D3hot D3cold
+[   11.664486] pci 0000:00:17.7: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.674410] pci 0000:00:17.7: PCI bridge to [bus 1a]
+[   11.675920] pci 0000:00:17.7:   bridge window [mem 0xfb600000-0xfb6fffff]
+[   11.680601] pci 0000:00:17.7:   bridge window [mem 0xe5c00000-0xe5cfffff 64bit pref]
+[   11.697969] pci 0000:00:17.7: PME# supported from D0 D3hot D3cold
+[   11.722689] pci 0000:00:18.0: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.732006] pci 0000:00:18.0: PCI bridge to [bus 1b]
+[   11.735378] pci 0000:00:18.0:   bridge window [io  0x7000-0x7fff]
+[   11.738603] pci 0000:00:18.0:   bridge window [mem 0xfd100000-0xfd1fffff]
+[   11.744392] pci 0000:00:18.0:   bridge window [mem 0xe7700000-0xe77fffff 64bit pref]
+[   11.767499] pci 0000:00:18.0: PME# supported from D0 D3hot D3cold
+[   11.787640] pci 0000:00:18.1: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.801530] pci 0000:00:18.1: PCI bridge to [bus 1c]
+[   11.805786] pci 0000:00:18.1:   bridge window [io  0xb000-0xbfff]
+[   11.809180] pci 0000:00:18.1:   bridge window [mem 0xfcd00000-0xfcdfffff]
+[   11.815795] pci 0000:00:18.1:   bridge window [mem 0xe7300000-0xe73fffff 64bit pref]
+[   11.845439] pci 0000:00:18.1: PME# supported from D0 D3hot D3cold
+[   11.875986] pci 0000:00:18.2: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.887965] pci 0000:00:18.2: PCI bridge to [bus 1d]
+[   11.892955] pci 0000:00:18.2:   bridge window [mem 0xfc900000-0xfc9fffff]
+[   11.898380] pci 0000:00:18.2:   bridge window [mem 0xe6f00000-0xe6ffffff 64bit pref]
+[   11.919820] pci 0000:00:18.2: PME# supported from D0 D3hot D3cold
+[   11.944486] pci 0000:00:18.3: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   11.954639] pci 0000:00:18.3: PCI bridge to [bus 1e]
+[   11.959819] pci 0000:00:18.3:   bridge window [mem 0xfc500000-0xfc5fffff]
+[   11.965028] pci 0000:00:18.3:   bridge window [mem 0xe6b00000-0xe6bfffff 64bit pref]
+[   11.989641] pci 0000:00:18.3: PME# supported from D0 D3hot D3cold
+[   12.011153] pci 0000:00:18.4: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   12.021807] pci 0000:00:18.4: PCI bridge to [bus 1f]
+[   12.026801] pci 0000:00:18.4:   bridge window [mem 0xfc100000-0xfc1fffff]
+[   12.032249] pci 0000:00:18.4:   bridge window [mem 0xe6700000-0xe67fffff 64bit pref]
+[   12.058215] pci 0000:00:18.4: PME# supported from D0 D3hot D3cold
+[   12.084285] pci 0000:00:18.5: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   12.094619] pci 0000:00:18.5: PCI bridge to [bus 20]
+[   12.100068] pci 0000:00:18.5:   bridge window [mem 0xfbd00000-0xfbdfffff]
+[   12.105238] pci 0000:00:18.5:   bridge window [mem 0xe6300000-0xe63fffff 64bit pref]
+[   12.129915] pci 0000:00:18.5: PME# supported from D0 D3hot D3cold
+[   12.160708] pci 0000:00:18.6: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   12.172825] pci 0000:00:18.6: PCI bridge to [bus 21]
+[   12.176166] pci 0000:00:18.6:   bridge window [mem 0xfb900000-0xfb9fffff]
+[   12.181040] pci 0000:00:18.6:   bridge window [mem 0xe5f00000-0xe5ffffff 64bit pref]
+[   12.197602] pci 0000:00:18.6: PME# supported from D0 D3hot D3cold
+[   12.212863] pci 0000:00:18.7: [15ad:07a0] type 01 class 0x060400 PCIe Root Port
+[   12.223118] pci 0000:00:18.7: PCI bridge to [bus 22]
+[   12.226093] pci 0000:00:18.7:   bridge window [mem 0xfb500000-0xfb5fffff]
+[   12.231736] pci 0000:00:18.7:   bridge window [mem 0xe5b00000-0xe5bfffff 64bit pref]
+[   12.253945] pci 0000:00:18.7: PME# supported from D0 D3hot D3cold
+[   12.275086] pci_bus 0000:01: extended config space not accessible
+[   12.281153] pci 0000:00:01.0: PCI bridge to [bus 01]
+[   12.287940] pci_bus 0000:02: extended config space not accessible
+[   12.291875] acpiphp: Slot [32] registered
+[   12.295670] acpiphp: Slot [33] registered
+[   12.298291] acpiphp: Slot [34] registered
+[   12.301973] acpiphp: Slot [35] registered
+[   12.305698] acpiphp: Slot [36] registered
+[   12.308336] acpiphp: Slot [37] registered
+[   12.311947] acpiphp: Slot [38] registered
+[   12.315718] acpiphp: Slot [39] registered
+[   12.319486] acpiphp: Slot [40] registered
+[   12.321917] acpiphp: Slot [41] registered
+[   12.325443] acpiphp: Slot [42] registered
+[   12.329593] acpiphp: Slot [43] registered
+[   12.332358] acpiphp: Slot [44] registered
+[   12.334997] acpiphp: Slot [45] registered
+[   12.339043] acpiphp: Slot [46] registered
+[   12.342683] acpiphp: Slot [47] registered
+[   12.346905] acpiphp: Slot [48] registered
+[   12.352179] acpiphp: Slot [49] registered
+[   12.356340] acpiphp: Slot [50] registered
+[   12.360062] acpiphp: Slot [51] registered
+[   12.361839] acpiphp: Slot [52] registered
+[   12.365718] acpiphp: Slot [53] registered
+[   12.369102] acpiphp: Slot [54] registered
+[   12.371641] acpiphp: Slot [55] registered
+[   12.375005] acpiphp: Slot [56] registered
+[   12.379342] acpiphp: Slot [57] registered
+[   12.382232] acpiphp: Slot [58] registered
+[   12.384988] acpiphp: Slot [59] registered
+[   12.388370] acpiphp: Slot [60] registered
+[   12.392000] acpiphp: Slot [61] registered
+[   12.396137] acpiphp: Slot [62] registered
+[   12.398332] acpiphp: Slot [63] registered
+[   12.404076] pci 0000:02:01.0: [8086:100f] type 00 class 0x020000 conventional PCI endpoint
+[   12.418278] pci 0000:02:01.0: BAR 0 [mem 0xfd5c0000-0xfd5dffff 64bit]
+[   12.421988] pci 0000:02:01.0: BAR 2 [mem 0xfdff0000-0xfdffffff 64bit]
+[   12.424950] pci 0000:02:01.0: BAR 4 [io  0x2000-0x203f]
+[   12.428674] pci 0000:02:01.0: ROM [mem 0x00000000-0x0000ffff pref]
+[   12.443478] pci 0000:02:01.0: PME# supported from D0 D3hot D3cold
+[   12.462580] pci 0000:02:02.0: [1274:1371] type 00 class 0x040100 conventional PCI endpoint
+[   12.477591] pci 0000:02:02.0: BAR 0 [io  0x2040-0x207f]
+[   12.497419] pci 0000:02:04.0: [15ad:07e0] type 00 class 0x010601 conventional PCI endpoint
+[   12.511286] pci 0000:02:04.0: BAR 5 [mem 0xfd5ef000-0xfd5effff]
+[   12.514945] pci 0000:02:04.0: ROM [mem 0x00000000-0x0000ffff pref]
+[   12.533544] pci 0000:02:04.0: PME# supported from D3hot
+[   12.561418] pci 0000:00:11.0: PCI bridge to [bus 02] (subtractive decode)
+[   12.567536] pci 0000:00:11.0:   bridge window [mem 0x000a0000-0x000bffff window] (subtractive decode)
+[   12.567961] pci 0000:00:11.0:   bridge window [mem 0x000d0000-0x000dbfff window] (subtractive decode)
+[   12.571290] pci 0000:00:11.0:   bridge window [mem 0xc0000000-0xfebfffff window] (subtractive decode)
+[   12.574894] pci 0000:00:11.0:   bridge window [io  0x0000-0x0cf7 window] (subtractive decode)
+[   12.577931] pci 0000:00:11.0:   bridge window [io  0x0d00-0xfeff window] (subtractive decode)
+[   12.591153] pci 0000:00:15.0: PCI bridge to [bus 03]
+[   12.607138] pci 0000:00:15.1: PCI bridge to [bus 04]
+[   12.622686] pci 0000:00:15.2: PCI bridge to [bus 05]
+[   12.636515] pci 0000:00:15.3: PCI bridge to [bus 06]
+[   12.651269] pci 0000:00:15.4: PCI bridge to [bus 07]
+[   12.669837] pci 0000:00:15.5: PCI bridge to [bus 08]
+[   12.683915] pci 0000:00:15.6: PCI bridge to [bus 09]
+[   12.700876] pci 0000:00:15.7: PCI bridge to [bus 0a]
+[   12.714927] pci 0000:00:16.0: PCI bridge to [bus 0b]
+[   12.734872] pci 0000:00:16.1: PCI bridge to [bus 0c]
+[   12.750155] pci 0000:00:16.2: PCI bridge to [bus 0d]
+[   12.766119] pci 0000:00:16.3: PCI bridge to [bus 0e]
+[   12.782936] pci 0000:00:16.4: PCI bridge to [bus 0f]
+[   12.801153] pci 0000:00:16.5: PCI bridge to [bus 10]
+[   12.820440] pci 0000:00:16.6: PCI bridge to [bus 11]
+[   12.837527] pci 0000:00:16.7: PCI bridge to [bus 12]
+[   12.854486] pci 0000:00:17.0: PCI bridge to [bus 13]
+[   12.877214] pci 0000:00:17.1: PCI bridge to [bus 14]
+[   12.894880] pci 0000:00:17.2: PCI bridge to [bus 15]
+[   12.917598] pci 0000:00:17.3: PCI bridge to [bus 16]
+[   12.929292] pci 0000:00:17.4: PCI bridge to [bus 17]
+[   12.943558] pci 0000:00:17.5: PCI bridge to [bus 18]
+[   12.957819] pci 0000:00:17.6: PCI bridge to [bus 19]
+[   12.970050] pci 0000:00:17.7: PCI bridge to [bus 1a]
+[   12.984243] pci 0000:00:18.0: PCI bridge to [bus 1b]
+[   12.995873] pci 0000:00:18.1: PCI bridge to [bus 1c]
+[   13.009571] pci 0000:00:18.2: PCI bridge to [bus 1d]
+[   13.022996] pci 0000:00:18.3: PCI bridge to [bus 1e]
+[   13.035288] pci 0000:00:18.4: PCI bridge to [bus 1f]
+[   13.056040] pci 0000:00:18.5: PCI bridge to [bus 20]
+[   13.072439] pci 0000:00:18.6: PCI bridge to [bus 21]
+[   13.089884] pci 0000:00:18.7: PCI bridge to [bus 22]
+[   13.164837] pci_bus 0000:00: on NUMA node 0
+[   13.604485] ACPI: PCI: Interrupt link LNKA configured for IRQ 9
+[   13.606346] ACPI: PCI: Interrupt link LNKB configured for IRQ 11
+[   13.609591] ACPI: PCI: Interrupt link LNKC configured for IRQ 10
+[   13.612306] ACPI: PCI: Interrupt link LNKD configured for IRQ 7
+[   13.796018] iommu: Default domain type: Translated
+[   13.798086] iommu: DMA domain TLB invalidation policy: lazy mode
+[   13.806899] SCSI subsystem initialized
+[   13.816554] libata version 3.00 loaded.
+[   13.818985] ACPI: bus type USB registered
+[   13.821836] usbcore: registered new interface driver usbfs
+[   13.825309] usbcore: registered new interface driver hub
+[   13.828398] usbcore: registered new device driver usb
+[   13.833476] mc: Linux media interface: v0.10
+[   13.837819] videodev: Linux video capture interface: v2.00
+[   13.841902] pps_core: LinuxPPS API ver. 1 registered
+[   13.844605] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[   13.847985] PTP clock support registered
+[   13.864486] PCI: Using ACPI for IRQ routing
+[   14.189885] PCI: pci_cache_line_size set to 64 bytes
+[   14.222892] e820: reserve RAM buffer [mem 0x0009e800-0x0009ffff]
+[   14.224637] e820: reserve RAM buffer [mem 0x2fee0000-0x2fffffff]
+[   14.230049] pci 0000:00:0f.0: vgaarb: setting as boot VGA device
+[   14.231153] pci 0000:00:0f.0: vgaarb: bridge control possible
+[   14.231153] pci 0000:00:0f.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+[   14.231347] vgaarb: loaded
+[   14.239084] clocksource: Switched to clocksource tsc-early
+[   14.296658] pnp: PnP ACPI init
+[   14.318038] system 00:00: [io  0x1000-0x103f] has been reserved
+[   14.347210] system 00:00: [io  0x1040-0x104f] has been reserved
+[   14.375409] system 00:00: [io  0x0cf0-0x0cf1] has been reserved
+[   14.411133] system 00:04: [mem 0xfed00000-0xfed003ff] has been reserved
+[   14.477542] pnp 00:06: [dma 2]
+[   14.497990] system 00:07: [io  0xfce0-0xfcff] has been reserved
+[   14.522688] system 00:07: [mem 0xf0000000-0xf7ffffff] has been reserved
+[   14.557370] system 00:07: [mem 0xfe800000-0xfe9fffff] has been reserved
+[   14.703690] pnp: PnP ACPI: found 8 devices
+[   14.785984] clocksource: acpi_pm: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 2085701024 ns
+[   14.831478] NET: Registered PF_INET protocol family
+[   14.862015] IP idents hash table entries: 16384 (order: 5, 131072 bytes, linear)
+[   14.902544] tcp_listen_portaddr_hash hash table entries: 512 (order: 1, 8192 bytes, linear)
+[   14.941881] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[   14.980796] TCP established hash table entries: 8192 (order: 4, 65536 bytes, linear)
+[   15.026864] TCP bind hash table entries: 8192 (order: 6, 262144 bytes, linear)
+[   15.078041] TCP: Hash tables configured (established 8192 bind 8192)
+[   15.124520] MPTCP token hash table entries: 1024 (order: 3, 24576 bytes, linear)
+[   15.162020] UDP hash table entries: 512 (order: 3, 32768 bytes, linear)
+[   15.200155] UDP-Lite hash table entries: 512 (order: 3, 32768 bytes, linear)
+[   15.237230] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[   15.278010] RPC: Registered named UNIX socket transport module.
+[   15.311000] RPC: Registered udp transport module.
+[   15.338917] RPC: Registered tcp transport module.
+[   15.368679] RPC: Registered tcp-with-tls transport module.
+[   15.399793] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[   15.436656] pci 0000:00:15.3: bridge window [io  0x1000-0x0fff] to [bus 06] add_size 1000
+[   15.487222] pci 0000:00:15.4: bridge window [io  0x1000-0x0fff] to [bus 07] add_size 1000
+[   15.535529] pci 0000:00:15.5: bridge window [io  0x1000-0x0fff] to [bus 08] add_size 1000
+[   15.578247] pci 0000:00:15.6: bridge window [io  0x1000-0x0fff] to [bus 09] add_size 1000
+[   15.619789] pci 0000:00:15.7: bridge window [io  0x1000-0x0fff] to [bus 0a] add_size 1000
+[   15.667308] pci 0000:00:16.3: bridge window [io  0x1000-0x0fff] to [bus 0e] add_size 1000
+[   15.707515] pci 0000:00:16.4: bridge window [io  0x1000-0x0fff] to [bus 0f] add_size 1000
+[   15.748982] pci 0000:00:16.5: bridge window [io  0x1000-0x0fff] to [bus 10] add_size 1000
+[   15.790395] pci 0000:00:16.6: bridge window [io  0x1000-0x0fff] to [bus 11] add_size 1000
+[   15.835125] pci 0000:00:16.7: bridge window [io  0x1000-0x0fff] to [bus 12] add_size 1000
+[   15.878695] pci 0000:00:17.3: bridge window [io  0x1000-0x0fff] to [bus 16] add_size 1000
+[   15.924788] pci 0000:00:17.4: bridge window [io  0x1000-0x0fff] to [bus 17] add_size 1000
+[   15.973196] pci 0000:00:17.5: bridge window [io  0x1000-0x0fff] to [bus 18] add_size 1000
+[   16.011852] pci 0000:00:17.6: bridge window [io  0x1000-0x0fff] to [bus 19] add_size 1000
+[   16.053674] pci 0000:00:17.7: bridge window [io  0x1000-0x0fff] to [bus 1a] add_size 1000
+[   16.094751] pci 0000:00:18.2: bridge window [io  0x1000-0x0fff] to [bus 1d] add_size 1000
+[   16.137785] pci 0000:00:18.3: bridge window [io  0x1000-0x0fff] to [bus 1e] add_size 1000
+[   16.180666] pci 0000:00:18.4: bridge window [io  0x1000-0x0fff] to [bus 1f] add_size 1000
+[   16.219991] pci 0000:00:18.5: bridge window [io  0x1000-0x0fff] to [bus 20] add_size 1000
+[   16.261098] pci 0000:00:18.6: bridge window [io  0x1000-0x0fff] to [bus 21] add_size 1000
+[   16.298937] pci 0000:00:18.7: bridge window [io  0x1000-0x0fff] to [bus 22] add_size 1000
+[   16.348592] pci 0000:00:10.0: ROM [mem 0xc0000000-0xc0003fff pref]: assigned
+[   16.386785] pci 0000:00:15.3: bridge window [io  size 0x1000]: can't assign; no space
+[   16.431608] pci 0000:00:15.3: bridge window [io  size 0x1000]: failed to assign
+[   16.470360] pci 0000:00:15.4: bridge window [io  size 0x1000]: can't assign; no space
+[   16.509867] pci 0000:00:15.4: bridge window [io  size 0x1000]: failed to assign
+[   16.546256] pci 0000:00:15.5: bridge window [io  size 0x1000]: can't assign; no space
+[   16.586782] pci 0000:00:15.5: bridge window [io  size 0x1000]: failed to assign
+[   16.624745] pci 0000:00:15.6: bridge window [io  size 0x1000]: can't assign; no space
+[   16.668235] pci 0000:00:15.6: bridge window [io  size 0x1000]: failed to assign
+[   16.702985] pci 0000:00:15.7: bridge window [io  size 0x1000]: can't assign; no space
+[   16.739859] pci 0000:00:15.7: bridge window [io  size 0x1000]: failed to assign
+[   16.773941] pci 0000:00:16.3: bridge window [io  size 0x1000]: can't assign; no space
+[   16.810194] pci 0000:00:16.3: bridge window [io  size 0x1000]: failed to assign
+[   16.845612] pci 0000:00:16.4: bridge window [io  size 0x1000]: can't assign; no space
+[   16.893527] pci 0000:00:16.4: bridge window [io  size 0x1000]: failed to assign
+[   16.936666] pci 0000:00:16.5: bridge window [io  size 0x1000]: can't assign; no space
+[   16.980742] pci 0000:00:16.5: bridge window [io  size 0x1000]: failed to assign
+[   17.015745] pci 0000:00:16.6: bridge window [io  size 0x1000]: can't assign; no space
+[   17.052646] pci 0000:00:16.6: bridge window [io  size 0x1000]: failed to assign
+[   17.085900] pci 0000:00:16.7: bridge window [io  size 0x1000]: can't assign; no space
+[   17.122266] pci 0000:00:16.7: bridge window [io  size 0x1000]: failed to assign
+[   17.159241] pci 0000:00:17.3: bridge window [io  size 0x1000]: can't assign; no space
+[   17.204235] pci 0000:00:17.3: bridge window [io  size 0x1000]: failed to assign
+[   17.242304] pci 0000:00:17.4: bridge window [io  size 0x1000]: can't assign; no space
+[   17.283095] pci 0000:00:17.4: bridge window [io  size 0x1000]: failed to assign
+[   17.321806] pci 0000:00:17.5: bridge window [io  size 0x1000]: can't assign; no space
+[   17.365887] pci 0000:00:17.5: bridge window [io  size 0x1000]: failed to assign
+[   17.400436] pci 0000:00:17.6: bridge window [io  size 0x1000]: can't assign; no space
+[   17.436343] pci 0000:00:17.6: bridge window [io  size 0x1000]: failed to assign
+[   17.472809] pci 0000:00:17.7: bridge window [io  size 0x1000]: can't assign; no space
+[   17.509127] pci 0000:00:17.7: bridge window [io  size 0x1000]: failed to assign
+[   17.542825] pci 0000:00:18.2: bridge window [io  size 0x1000]: can't assign; no space
+[   17.579054] pci 0000:00:18.2: bridge window [io  size 0x1000]: failed to assign
+[   17.613342] pci 0000:00:18.3: bridge window [io  size 0x1000]: can't assign; no space
+[   17.652802] pci 0000:00:18.3: bridge window [io  size 0x1000]: failed to assign
+[   17.689247] pci 0000:00:18.4: bridge window [io  size 0x1000]: can't assign; no space
+[   17.725557] pci 0000:00:18.4: bridge window [io  size 0x1000]: failed to assign
+[   17.760460] pci 0000:00:18.5: bridge window [io  size 0x1000]: can't assign; no space
+[   17.796433] pci 0000:00:18.5: bridge window [io  size 0x1000]: failed to assign
+[   17.830725] pci 0000:00:18.6: bridge window [io  size 0x1000]: can't assign; no space
+[   17.873162] pci 0000:00:18.6: bridge window [io  size 0x1000]: failed to assign
+[   17.916158] pci 0000:00:18.7: bridge window [io  size 0x1000]: can't assign; no space
+[   17.958225] pci 0000:00:18.7: bridge window [io  size 0x1000]: failed to assign
+[   17.996042] pci 0000:00:18.7: bridge window [io  size 0x1000]: can't assign; no space
+[   18.035763] pci 0000:00:18.7: bridge window [io  size 0x1000]: failed to assign
+[   18.071815] pci 0000:00:18.6: bridge window [io  size 0x1000]: can't assign; no space
+[   18.109802] pci 0000:00:18.6: bridge window [io  size 0x1000]: failed to assign
+[   18.148993] pci 0000:00:18.5: bridge window [io  size 0x1000]: can't assign; no space
+[   18.188535] pci 0000:00:18.5: bridge window [io  size 0x1000]: failed to assign
+[   18.224269] pci 0000:00:18.4: bridge window [io  size 0x1000]: can't assign; no space
+[   18.266574] pci 0000:00:18.4: bridge window [io  size 0x1000]: failed to assign
+[   18.302481] pci 0000:00:18.3: bridge window [io  size 0x1000]: can't assign; no space
+[   18.342572] pci 0000:00:18.3: bridge window [io  size 0x1000]: failed to assign
+[   18.379267] pci 0000:00:18.2: bridge window [io  size 0x1000]: can't assign; no space
+[   18.419197] pci 0000:00:18.2: bridge window [io  size 0x1000]: failed to assign
+[   18.455124] pci 0000:00:17.7: bridge window [io  size 0x1000]: can't assign; no space
+[   18.501640] pci 0000:00:17.7: bridge window [io  size 0x1000]: failed to assign
+[   18.542344] pci 0000:00:17.6: bridge window [io  size 0x1000]: can't assign; no space
+[   18.582251] pci 0000:00:17.6: bridge window [io  size 0x1000]: failed to assign
+[   18.617051] pci 0000:00:17.5: bridge window [io  size 0x1000]: can't assign; no space
+[   18.661595] pci 0000:00:17.5: bridge window [io  size 0x1000]: failed to assign
+[   18.704299] pci 0000:00:17.4: bridge window [io  size 0x1000]: can't assign; no space
+[   18.745428] pci 0000:00:17.4: bridge window [io  size 0x1000]: failed to assign
+[   18.781089] pci 0000:00:17.3: bridge window [io  size 0x1000]: can't assign; no space
+[   18.819169] pci 0000:00:17.3: bridge window [io  size 0x1000]: failed to assign
+[   18.858196] pci 0000:00:16.7: bridge window [io  size 0x1000]: can't assign; no space
+[   18.904502] pci 0000:00:16.7: bridge window [io  size 0x1000]: failed to assign
+[   18.940329] pci 0000:00:16.6: bridge window [io  size 0x1000]: can't assign; no space
+[   18.978305] pci 0000:00:16.6: bridge window [io  size 0x1000]: failed to assign
+[   19.014575] pci 0000:00:16.5: bridge window [io  size 0x1000]: can't assign; no space
+[   19.053278] pci 0000:00:16.5: bridge window [io  size 0x1000]: failed to assign
+[   19.102928] pci 0000:00:16.4: bridge window [io  size 0x1000]: can't assign; no space
+[   19.143289] pci 0000:00:16.4: bridge window [io  size 0x1000]: failed to assign
+[   19.184322] pci 0000:00:16.3: bridge window [io  size 0x1000]: can't assign; no space
+[   19.236544] pci 0000:00:16.3: bridge window [io  size 0x1000]: failed to assign
+[   19.275732] pci 0000:00:15.7: bridge window [io  size 0x1000]: can't assign; no space
+[   19.320878] pci 0000:00:15.7: bridge window [io  size 0x1000]: failed to assign
+[   19.374430] pci 0000:00:15.6: bridge window [io  size 0x1000]: can't assign; no space
+[   19.453546] pci 0000:00:15.6: bridge window [io  size 0x1000]: failed to assign
+[   19.493277] pci 0000:00:15.5: bridge window [io  size 0x1000]: can't assign; no space
+[   19.535426] pci 0000:00:15.5: bridge window [io  size 0x1000]: failed to assign
+[   19.576662] pci 0000:00:15.4: bridge window [io  size 0x1000]: can't assign; no space
+[   19.616469] pci 0000:00:15.4: bridge window [io  size 0x1000]: failed to assign
+[   19.653499] pci 0000:00:15.3: bridge window [io  size 0x1000]: can't assign; no space
+[   19.691640] pci 0000:00:15.3: bridge window [io  size 0x1000]: failed to assign
+[   19.727057] pci 0000:00:01.0: PCI bridge to [bus 01]
+[   19.756265] pci 0000:02:01.0: ROM [mem 0xfd500000-0xfd50ffff pref]: assigned
+[   19.795638] pci 0000:02:04.0: ROM [mem 0xfd510000-0xfd51ffff pref]: assigned
+[   19.830474] pci 0000:00:11.0: PCI bridge to [bus 02]
+[   19.859406] pci 0000:00:11.0:   bridge window [io  0x2000-0x3fff]
+[   19.897414] pci 0000:00:11.0:   bridge window [mem 0xfd500000-0xfdffffff]
+[   19.939661] pci 0000:00:11.0:   bridge window [mem 0xe7b00000-0xe7ffffff 64bit pref]
+[   19.990331] pci 0000:00:15.0: PCI bridge to [bus 03]
+[   20.019865] pci 0000:00:15.0:   bridge window [io  0x4000-0x4fff]
+[   20.052970] pci 0000:00:15.0:   bridge window [mem 0xfd400000-0xfd4fffff]
+[   20.087216] pci 0000:00:15.0:   bridge window [mem 0xe7a00000-0xe7afffff 64bit pref]
+[   20.135229] pci 0000:00:15.1: PCI bridge to [bus 04]
+[   20.165317] pci 0000:00:15.1:   bridge window [io  0x8000-0x8fff]
+[   20.200155] pci 0000:00:15.1:   bridge window [mem 0xfd000000-0xfd0fffff]
+[   20.235971] pci 0000:00:15.1:   bridge window [mem 0xe7600000-0xe76fffff 64bit pref]
+[   20.277155] pci 0000:00:15.2: PCI bridge to [bus 05]
+[   20.307311] pci 0000:00:15.2:   bridge window [io  0xc000-0xcfff]
+[   20.344242] pci 0000:00:15.2:   bridge window [mem 0xfcc00000-0xfccfffff]
+[   20.384317] pci 0000:00:15.2:   bridge window [mem 0xe7200000-0xe72fffff 64bit pref]
+[   20.434005] pci 0000:00:15.3: PCI bridge to [bus 06]
+[   20.471016] pci 0000:00:15.3:   bridge window [mem 0xfc800000-0xfc8fffff]
+[   20.511412] pci 0000:00:15.3:   bridge window [mem 0xe6e00000-0xe6efffff 64bit pref]
+[   20.552641] pci 0000:00:15.4: PCI bridge to [bus 07]
+[   20.579905] pci 0000:00:15.4:   bridge window [mem 0xfc400000-0xfc4fffff]
+[   20.615948] pci 0000:00:15.4:   bridge window [mem 0xe6a00000-0xe6afffff 64bit pref]
+[   20.656121] pci 0000:00:15.5: PCI bridge to [bus 08]
+[   20.683758] pci 0000:00:15.5:   bridge window [mem 0xfc000000-0xfc0fffff]
+[   20.719564] pci 0000:00:15.5:   bridge window [mem 0xe6600000-0xe66fffff 64bit pref]
+[   20.771170] pci 0000:00:15.6: PCI bridge to [bus 09]
+[   20.798221] pci 0000:00:15.6:   bridge window [mem 0xfbc00000-0xfbcfffff]
+[   20.835479] pci 0000:00:15.6:   bridge window [mem 0xe6200000-0xe62fffff 64bit pref]
+[   20.884183] pci 0000:00:15.7: PCI bridge to [bus 0a]
+[   20.918599] pci 0000:00:15.7:   bridge window [mem 0xfb800000-0xfb8fffff]
+[   20.962160] pci 0000:00:15.7:   bridge window [mem 0xe5e00000-0xe5efffff 64bit pref]
+[   21.011856] pci 0000:00:16.0: PCI bridge to [bus 0b]
+[   21.039515] pci 0000:00:16.0:   bridge window [io  0x5000-0x5fff]
+[   21.080388] pci 0000:00:16.0:   bridge window [mem 0xfd300000-0xfd3fffff]
+[   21.125229] pci 0000:00:16.0:   bridge window [mem 0xe7900000-0xe79fffff 64bit pref]
+[   21.176927] pci 0000:00:16.1: PCI bridge to [bus 0c]
+[   21.209194] pci 0000:00:16.1:   bridge window [io  0x9000-0x9fff]
+[   21.246651] pci 0000:00:16.1:   bridge window [mem 0xfcf00000-0xfcffffff]
+[   21.283940] pci 0000:00:16.1:   bridge window [mem 0xe7500000-0xe75fffff 64bit pref]
+[   21.328569] pci 0000:00:16.2: PCI bridge to [bus 0d]
+[   21.359765] pci 0000:00:16.2:   bridge window [io  0xd000-0xdfff]
+[   21.401676] pci 0000:00:16.2:   bridge window [mem 0xfcb00000-0xfcbfffff]
+[   21.446322] pci 0000:00:16.2:   bridge window [mem 0xe7100000-0xe71fffff 64bit pref]
+[   21.502798] pci 0000:00:16.3: PCI bridge to [bus 0e]
+[   21.533633] pci 0000:00:16.3:   bridge window [mem 0xfc700000-0xfc7fffff]
+[   21.574829] pci 0000:00:16.3:   bridge window [mem 0xe6d00000-0xe6dfffff 64bit pref]
+[   21.620546] pci 0000:00:16.4: PCI bridge to [bus 0f]
+[   21.654996] pci 0000:00:16.4:   bridge window [mem 0xfc300000-0xfc3fffff]
+[   21.698699] pci 0000:00:16.4:   bridge window [mem 0xe6900000-0xe69fffff 64bit pref]
+[   21.747867] pci 0000:00:16.5: PCI bridge to [bus 10]
+[   21.784358] pci 0000:00:16.5:   bridge window [mem 0xfbf00000-0xfbffffff]
+[   21.829952] pci 0000:00:16.5:   bridge window [mem 0xe6500000-0xe65fffff 64bit pref]
+[   21.876308] pci 0000:00:16.6: PCI bridge to [bus 11]
+[   21.904249] pci 0000:00:16.6:   bridge window [mem 0xfbb00000-0xfbbfffff]
+[   21.941537] pci 0000:00:16.6:   bridge window [mem 0xe6100000-0xe61fffff 64bit pref]
+[   21.984776] pci 0000:00:16.7: PCI bridge to [bus 12]
+[   22.013452] pci 0000:00:16.7:   bridge window [mem 0xfb700000-0xfb7fffff]
+[   22.052635] pci 0000:00:16.7:   bridge window [mem 0xe5d00000-0xe5dfffff 64bit pref]
+[   22.154263] pci 0000:00:17.0: PCI bridge to [bus 13]
+[   22.186605] pci 0000:00:17.0:   bridge window [io  0x6000-0x6fff]
+[   22.226735] pci 0000:00:17.0:   bridge window [mem 0xfd200000-0xfd2fffff]
+[   22.269245] pci 0000:00:17.0:   bridge window [mem 0xe7800000-0xe78fffff 64bit pref]
+[   22.315274] pci 0000:00:17.1: PCI bridge to [bus 14]
+[   22.346421] pci 0000:00:17.1:   bridge window [io  0xa000-0xafff]
+[   22.384660] pci 0000:00:17.1:   bridge window [mem 0xfce00000-0xfcefffff]
+[   22.426296] pci 0000:00:17.1:   bridge window [mem 0xe7400000-0xe74fffff 64bit pref]
+[   22.478239] pci 0000:00:17.2: PCI bridge to [bus 15]
+[   22.503707] pci 0000:00:17.2:   bridge window [io  0xe000-0xefff]
+[   22.536077] pci 0000:00:17.2:   bridge window [mem 0xfca00000-0xfcafffff]
+[   22.569909] pci 0000:00:17.2:   bridge window [mem 0xe7000000-0xe70fffff 64bit pref]
+[   22.610066] pci 0000:00:17.3: PCI bridge to [bus 16]
+[   22.636690] pci 0000:00:17.3:   bridge window [mem 0xfc600000-0xfc6fffff]
+[   22.671824] pci 0000:00:17.3:   bridge window [mem 0xe6c00000-0xe6cfffff 64bit pref]
+[   22.711568] pci 0000:00:17.4: PCI bridge to [bus 17]
+[   22.742800] pci 0000:00:17.4:   bridge window [mem 0xfc200000-0xfc2fffff]
+[   22.786233] pci 0000:00:17.4:   bridge window [mem 0xe6800000-0xe68fffff 64bit pref]
+[   22.833785] pci 0000:00:17.5: PCI bridge to [bus 18]
+[   22.866963] pci 0000:00:17.5:   bridge window [mem 0xfbe00000-0xfbefffff]
+[   22.903344] pci 0000:00:17.5:   bridge window [mem 0xe6400000-0xe64fffff 64bit pref]
+[   22.943547] pci 0000:00:17.6: PCI bridge to [bus 19]
+[   22.973298] pci 0000:00:17.6:   bridge window [mem 0xfba00000-0xfbafffff]
+[   23.012099] pci 0000:00:17.6:   bridge window [mem 0xe6000000-0xe60fffff 64bit pref]
+[   23.052851] pci 0000:00:17.7: PCI bridge to [bus 1a]
+[   23.080707] pci 0000:00:17.7:   bridge window [mem 0xfb600000-0xfb6fffff]
+[   23.120810] pci 0000:00:17.7:   bridge window [mem 0xe5c00000-0xe5cfffff 64bit pref]
+[   23.164329] pci 0000:00:18.0: PCI bridge to [bus 1b]
+[   23.191240] pci 0000:00:18.0:   bridge window [io  0x7000-0x7fff]
+[   23.221761] pci 0000:00:18.0:   bridge window [mem 0xfd100000-0xfd1fffff]
+[   23.256644] pci 0000:00:18.0:   bridge window [mem 0xe7700000-0xe77fffff 64bit pref]
+[   23.300157] pci 0000:00:18.1: PCI bridge to [bus 1c]
+[   23.333638] pci 0000:00:18.1:   bridge window [io  0xb000-0xbfff]
+[   23.377386] pci 0000:00:18.1:   bridge window [mem 0xfcd00000-0xfcdfffff]
+[   23.420144] pci 0000:00:18.1:   bridge window [mem 0xe7300000-0xe73fffff 64bit pref]
+[   23.507146] pci 0000:00:18.2: PCI bridge to [bus 1d]
+[   23.533810] pci 0000:00:18.2:   bridge window [mem 0xfc900000-0xfc9fffff]
+[   23.568664] pci 0000:00:18.2:   bridge window [mem 0xe6f00000-0xe6ffffff 64bit pref]
+[   23.608440] pci 0000:00:18.3: PCI bridge to [bus 1e]
+[   23.636565] pci 0000:00:18.3:   bridge window [mem 0xfc500000-0xfc5fffff]
+[   23.672023] pci 0000:00:18.3:   bridge window [mem 0xe6b00000-0xe6bfffff 64bit pref]
+[   23.711328] pci 0000:00:18.4: PCI bridge to [bus 1f]
+[   23.737464] pci 0000:00:18.4:   bridge window [mem 0xfc100000-0xfc1fffff]
+[   23.773815] pci 0000:00:18.4:   bridge window [mem 0xe6700000-0xe67fffff 64bit pref]
+[   23.816184] pci 0000:00:18.5: PCI bridge to [bus 20]
+[   23.843338] pci 0000:00:18.5:   bridge window [mem 0xfbd00000-0xfbdfffff]
+[   23.882042] pci 0000:00:18.5:   bridge window [mem 0xe6300000-0xe63fffff 64bit pref]
+[   23.931677] pci 0000:00:18.6: PCI bridge to [bus 21]
+[   23.961923] pci 0000:00:18.6:   bridge window [mem 0xfb900000-0xfb9fffff]
+[   23.999604] pci 0000:00:18.6:   bridge window [mem 0xe5f00000-0xe5ffffff 64bit pref]
+[   24.043813] pci 0000:00:18.7: PCI bridge to [bus 22]
+[   24.074948] pci 0000:00:18.7:   bridge window [mem 0xfb500000-0xfb5fffff]
+[   24.116746] pci 0000:00:18.7:   bridge window [mem 0xe5b00000-0xe5bfffff 64bit pref]
+[   24.161893] pci_bus 0000:00: Some PCI device resources are unassigned, try booting with pci=realloc
+[   24.207898] pci_bus 0000:00: resource 4 [mem 0x000a0000-0x000bffff window]
+[   24.242475] pci_bus 0000:00: resource 5 [mem 0x000d0000-0x000dbfff window]
+[   24.281348] pci_bus 0000:00: resource 6 [mem 0xc0000000-0xfebfffff window]
+[   24.315575] pci_bus 0000:00: resource 7 [io  0x0000-0x0cf7 window]
+[   24.346941] pci_bus 0000:00: resource 8 [io  0x0d00-0xfeff window]
+[   24.378375] pci_bus 0000:02: resource 0 [io  0x2000-0x3fff]
+[   24.407549] pci_bus 0000:02: resource 1 [mem 0xfd500000-0xfdffffff]
+[   24.438936] pci_bus 0000:02: resource 2 [mem 0xe7b00000-0xe7ffffff 64bit pref]
+[   24.474241] pci_bus 0000:02: resource 4 [mem 0x000a0000-0x000bffff window]
+[   24.508331] pci_bus 0000:02: resource 5 [mem 0x000d0000-0x000dbfff window]
+[   24.542256] pci_bus 0000:02: resource 6 [mem 0xc0000000-0xfebfffff window]
+[   24.578911] pci_bus 0000:02: resource 7 [io  0x0000-0x0cf7 window]
+[   24.610151] pci_bus 0000:02: resource 8 [io  0x0d00-0xfeff window]
+[   24.641331] pci_bus 0000:03: resource 0 [io  0x4000-0x4fff]
+[   24.670095] pci_bus 0000:03: resource 1 [mem 0xfd400000-0xfd4fffff]
+[   24.702056] pci_bus 0000:03: resource 2 [mem 0xe7a00000-0xe7afffff 64bit pref]
+[   24.738655] pci_bus 0000:04: resource 0 [io  0x8000-0x8fff]
+[   24.766774] pci_bus 0000:04: resource 1 [mem 0xfd000000-0xfd0fffff]
+[   24.799351] pci_bus 0000:04: resource 2 [mem 0xe7600000-0xe76fffff 64bit pref]
+[   24.842489] pci_bus 0000:05: resource 0 [io  0xc000-0xcfff]
+[   24.875451] pci_bus 0000:05: resource 1 [mem 0xfcc00000-0xfccfffff]
+[   24.914589] pci_bus 0000:05: resource 2 [mem 0xe7200000-0xe72fffff 64bit pref]
+[   24.957287] pci_bus 0000:06: resource 0 [io  size 0x1000]
+[   24.988952] pci_bus 0000:06: resource 1 [mem 0xfc800000-0xfc8fffff]
+[   25.021034] pci_bus 0000:06: resource 2 [mem 0xe6e00000-0xe6efffff 64bit pref]
+[   25.056967] pci_bus 0000:07: resource 0 [io  size 0x1000]
+[   25.084053] pci_bus 0000:07: resource 1 [mem 0xfc400000-0xfc4fffff]
+[   25.114693] pci_bus 0000:07: resource 2 [mem 0xe6a00000-0xe6afffff 64bit pref]
+[   25.152896] pci_bus 0000:08: resource 0 [io  size 0x1000]
+[   25.183298] pci_bus 0000:08: resource 1 [mem 0xfc000000-0xfc0fffff]
+[   25.216203] pci_bus 0000:08: resource 2 [mem 0xe6600000-0xe66fffff 64bit pref]
+[   25.252688] pci_bus 0000:09: resource 0 [io  size 0x1000]
+[   25.280926] pci_bus 0000:09: resource 1 [mem 0xfbc00000-0xfbcfffff]
+[   25.313052] pci_bus 0000:09: resource 2 [mem 0xe6200000-0xe62fffff 64bit pref]
+[   25.349176] pci_bus 0000:0a: resource 0 [io  size 0x1000]
+[   25.376916] pci_bus 0000:0a: resource 1 [mem 0xfb800000-0xfb8fffff]
+[   25.407862] pci_bus 0000:0a: resource 2 [mem 0xe5e00000-0xe5efffff 64bit pref]
+[   25.444399] pci_bus 0000:0b: resource 0 [io  0x5000-0x5fff]
+[   25.473508] pci_bus 0000:0b: resource 1 [mem 0xfd300000-0xfd3fffff]
+[   25.505893] pci_bus 0000:0b: resource 2 [mem 0xe7900000-0xe79fffff 64bit pref]
+[   25.542113] pci_bus 0000:0c: resource 0 [io  0x9000-0x9fff]
+[   25.572402] pci_bus 0000:0c: resource 1 [mem 0xfcf00000-0xfcffffff]
+[   25.603203] pci_bus 0000:0c: resource 2 [mem 0xe7500000-0xe75fffff 64bit pref]
+[   25.639360] pci_bus 0000:0d: resource 0 [io  0xd000-0xdfff]
+[   25.669029] pci_bus 0000:0d: resource 1 [mem 0xfcb00000-0xfcbfffff]
+[   25.701571] pci_bus 0000:0d: resource 2 [mem 0xe7100000-0xe71fffff 64bit pref]
+[   25.737317] pci_bus 0000:0e: resource 0 [io  size 0x1000]
+[   25.768129] pci_bus 0000:0e: resource 1 [mem 0xfc700000-0xfc7fffff]
+[   25.799297] pci_bus 0000:0e: resource 2 [mem 0xe6d00000-0xe6dfffff 64bit pref]
+[   25.835674] pci_bus 0000:0f: resource 0 [io  size 0x1000]
+[   25.864173] pci_bus 0000:0f: resource 1 [mem 0xfc300000-0xfc3fffff]
+[   25.899593] pci_bus 0000:0f: resource 2 [mem 0xe6900000-0xe69fffff 64bit pref]
+[   25.936397] pci_bus 0000:10: resource 0 [io  size 0x1000]
+[   25.964481] pci_bus 0000:10: resource 1 [mem 0xfbf00000-0xfbffffff]
+[   25.999202] pci_bus 0000:10: resource 2 [mem 0xe6500000-0xe65fffff 64bit pref]
+[   26.036689] pci_bus 0000:11: resource 0 [io  size 0x1000]
+[   26.067516] pci_bus 0000:11: resource 1 [mem 0xfbb00000-0xfbbfffff]
+[   26.100040] pci_bus 0000:11: resource 2 [mem 0xe6100000-0xe61fffff 64bit pref]
+[   26.136957] pci_bus 0000:12: resource 0 [io  size 0x1000]
+[   26.165732] pci_bus 0000:12: resource 1 [mem 0xfb700000-0xfb7fffff]
+[   26.209653] pci_bus 0000:12: resource 2 [mem 0xe5d00000-0xe5dfffff 64bit pref]
+[   26.247430] pci_bus 0000:13: resource 0 [io  0x6000-0x6fff]
+[   26.276346] pci_bus 0000:13: resource 1 [mem 0xfd200000-0xfd2fffff]
+[   26.308461] pci_bus 0000:13: resource 2 [mem 0xe7800000-0xe78fffff 64bit pref]
+[   26.345247] pci_bus 0000:14: resource 0 [io  0xa000-0xafff]
+[   26.374028] pci_bus 0000:14: resource 1 [mem 0xfce00000-0xfcefffff]
+[   26.406229] pci_bus 0000:14: resource 2 [mem 0xe7400000-0xe74fffff 64bit pref]
+[   26.442849] pci_bus 0000:15: resource 0 [io  0xe000-0xefff]
+[   26.472993] pci_bus 0000:15: resource 1 [mem 0xfca00000-0xfcafffff]
+[   26.504583] pci_bus 0000:15: resource 2 [mem 0xe7000000-0xe70fffff 64bit pref]
+[   26.541653] pci_bus 0000:16: resource 0 [io  size 0x1000]
+[   26.569632] pci_bus 0000:16: resource 1 [mem 0xfc600000-0xfc6fffff]
+[   26.602537] pci_bus 0000:16: resource 2 [mem 0xe6c00000-0xe6cfffff 64bit pref]
+[   26.639806] pci_bus 0000:17: resource 0 [io  size 0x1000]
+[   26.671910] pci_bus 0000:17: resource 1 [mem 0xfc200000-0xfc2fffff]
+[   26.704219] pci_bus 0000:17: resource 2 [mem 0xe6800000-0xe68fffff 64bit pref]
+[   26.741931] pci_bus 0000:18: resource 0 [io  size 0x1000]
+[   26.769354] pci_bus 0000:18: resource 1 [mem 0xfbe00000-0xfbefffff]
+[   26.800986] pci_bus 0000:18: resource 2 [mem 0xe6400000-0xe64fffff 64bit pref]
+[   26.837978] pci_bus 0000:19: resource 0 [io  size 0x1000]
+[   26.865273] pci_bus 0000:19: resource 1 [mem 0xfba00000-0xfbafffff]
+[   26.896751] pci_bus 0000:19: resource 2 [mem 0xe6000000-0xe60fffff 64bit pref]
+[   26.933481] pci_bus 0000:1a: resource 0 [io  size 0x1000]
+[   26.961051] pci_bus 0000:1a: resource 1 [mem 0xfb600000-0xfb6fffff]
+[   26.993825] pci_bus 0000:1a: resource 2 [mem 0xe5c00000-0xe5cfffff 64bit pref]
+[   27.030596] pci_bus 0000:1b: resource 0 [io  0x7000-0x7fff]
+[   27.061347] pci_bus 0000:1b: resource 1 [mem 0xfd100000-0xfd1fffff]
+[   27.092302] pci_bus 0000:1b: resource 2 [mem 0xe7700000-0xe77fffff 64bit pref]
+[   27.128650] pci_bus 0000:1c: resource 0 [io  0xb000-0xbfff]
+[   27.156701] pci_bus 0000:1c: resource 1 [mem 0xfcd00000-0xfcdfffff]
+[   27.189541] pci_bus 0000:1c: resource 2 [mem 0xe7300000-0xe73fffff 64bit pref]
+[   27.226085] pci_bus 0000:1d: resource 0 [io  size 0x1000]
+[   27.255252] pci_bus 0000:1d: resource 1 [mem 0xfc900000-0xfc9fffff]
+[   27.288715] pci_bus 0000:1d: resource 2 [mem 0xe6f00000-0xe6ffffff 64bit pref]
+[   27.326170] pci_bus 0000:1e: resource 0 [io  size 0x1000]
+[   27.359781] pci_bus 0000:1e: resource 1 [mem 0xfc500000-0xfc5fffff]
+[   27.394901] pci_bus 0000:1e: resource 2 [mem 0xe6b00000-0xe6bfffff 64bit pref]
+[   27.432588] pci_bus 0000:1f: resource 0 [io  size 0x1000]
+[   27.460681] pci_bus 0000:1f: resource 1 [mem 0xfc100000-0xfc1fffff]
+[   27.492483] pci_bus 0000:1f: resource 2 [mem 0xe6700000-0xe67fffff 64bit pref]
+[   27.530282] pci_bus 0000:20: resource 0 [io  size 0x1000]
+[   27.560895] pci_bus 0000:20: resource 1 [mem 0xfbd00000-0xfbdfffff]
+[   27.596013] pci_bus 0000:20: resource 2 [mem 0xe6300000-0xe63fffff 64bit pref]
+[   27.632771] pci_bus 0000:21: resource 0 [io  size 0x1000]
+[   27.667649] pci_bus 0000:21: resource 1 [mem 0xfb900000-0xfb9fffff]
+[   27.701628] pci_bus 0000:21: resource 2 [mem 0xe5f00000-0xe5ffffff 64bit pref]
+[   27.738414] pci_bus 0000:22: resource 0 [io  size 0x1000]
+[   27.765425] pci_bus 0000:22: resource 1 [mem 0xfb500000-0xfb5fffff]
+[   27.796795] pci_bus 0000:22: resource 2 [mem 0xe5b00000-0xe5bfffff 64bit pref]
+[   27.833747] pci 0000:00:00.0: Limiting direct PCI/PCI transfers
+[   27.865739] pci 0000:00:00.0: 0xffffffff817566b0 took 31241 usecs
+[   27.911613] pci 0000:02:01.0: CLS mismatch (32 != 64), using 64 bytes
+[   27.955244] Trying to unpack rootfs image as initramfs...
+[   27.988974] RAPL PMU: API unit is 2^-32 Joules, 0 fixed counters, 10737418240 ms ovfl timer
+[   28.050971] clocksource: tsc: mask: 0xffffffffffffffff max_cycles: 0x1e7181df346, max_idle_ns: 440795224594 ns
+[   28.174799] clocksource: Switched to clocksource tsc
+[   28.279361] workingset: timestamp_bits=62 max_order=18 bucket_order=0
+[   28.400538] NFS: Registering the id_resolver key type
+[   28.452254] Key type id_resolver registered
+[   28.510285] Key type id_legacy registered
+[   28.550786] nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[   28.578877] nfs4flexfilelayout_init: NFSv4 Flexfile Layout Driver Registering...
+[   28.694546] fuse: init (API version 7.45)
+[   28.763697] cryptd: max_cpu_qlen set to 1000
+[   28.812864] NET: Registered PF_ALG protocol family
+[   28.863669] Key type asymmetric registered
+[   28.904143] Asymmetric key parser 'x509' registered
+[   28.952186] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 246)
+[   28.987549] io scheduler mq-deadline registered
+[   29.009539] io scheduler kyber registered
+[   29.118743] ledtrig-cpu: registered to indicate activity on CPUs
+[   29.247943] pcieport 0000:00:15.0: PME: Signaling with IRQ 24
+[   29.308176] pcieport 0000:00:15.0: pciehp: Slot #160 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   29.500233] pcieport 0000:00:15.1: PME: Signaling with IRQ 25
+[   29.552029] pcieport 0000:00:15.1: pciehp: Slot #161 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   29.760645] pcieport 0000:00:15.2: PME: Signaling with IRQ 26
+[   29.832005] pcieport 0000:00:15.2: pciehp: Slot #162 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   30.076546] pcieport 0000:00:15.3: PME: Signaling with IRQ 27
+[   30.127251] pcieport 0000:00:15.3: pciehp: Slot #163 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   30.364706] pcieport 0000:00:15.4: PME: Signaling with IRQ 28
+[   30.422946] pcieport 0000:00:15.4: pciehp: Slot #164 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   30.647291] pcieport 0000:00:15.5: PME: Signaling with IRQ 29
+[   30.704165] pcieport 0000:00:15.5: pciehp: Slot #165 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   30.934238] pcieport 0000:00:15.6: PME: Signaling with IRQ 30
+[   31.010795] pcieport 0000:00:15.6: pciehp: Slot #166 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   31.243599] pcieport 0000:00:15.7: PME: Signaling with IRQ 31
+[   31.308031] pcieport 0000:00:15.7: pciehp: Slot #167 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   31.560300] pcieport 0000:00:16.0: PME: Signaling with IRQ 32
+[   31.614912] pcieport 0000:00:16.0: pciehp: Slot #192 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   31.854383] pcieport 0000:00:16.1: PME: Signaling with IRQ 33
+[   31.920981] pcieport 0000:00:16.1: pciehp: Slot #193 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   32.170081] pcieport 0000:00:16.2: PME: Signaling with IRQ 34
+[   32.234005] pcieport 0000:00:16.2: pciehp: Slot #194 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   32.465331] pcieport 0000:00:16.3: PME: Signaling with IRQ 35
+[   32.533871] pcieport 0000:00:16.3: pciehp: Slot #195 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   32.783483] pcieport 0000:00:16.4: PME: Signaling with IRQ 36
+[   32.838300] pcieport 0000:00:16.4: pciehp: Slot #196 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   33.040962] pcieport 0000:00:16.5: PME: Signaling with IRQ 37
+[   33.112085] pcieport 0000:00:16.5: pciehp: Slot #197 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   33.361196] pcieport 0000:00:16.6: PME: Signaling with IRQ 38
+[   33.413965] pcieport 0000:00:16.6: pciehp: Slot #198 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   33.610531] pcieport 0000:00:16.7: PME: Signaling with IRQ 39
+[   33.667225] pcieport 0000:00:16.7: pciehp: Slot #199 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   33.855684] pcieport 0000:00:17.0: PME: Signaling with IRQ 40
+[   33.916270] pcieport 0000:00:17.0: pciehp: Slot #224 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   34.154568] pcieport 0000:00:17.1: PME: Signaling with IRQ 41
+[   34.224345] pcieport 0000:00:17.1: pciehp: Slot #225 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   34.433762] pcieport 0000:00:17.2: PME: Signaling with IRQ 42
+[   34.493676] pcieport 0000:00:17.2: pciehp: Slot #226 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   34.714394] pcieport 0000:00:17.3: PME: Signaling with IRQ 43
+[   34.774078] pcieport 0000:00:17.3: pciehp: Slot #227 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   34.996827] pcieport 0000:00:17.4: PME: Signaling with IRQ 44
+[   35.048077] pcieport 0000:00:17.4: pciehp: Slot #228 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   35.247361] pcieport 0000:00:17.5: PME: Signaling with IRQ 45
+[   35.316177] pcieport 0000:00:17.5: pciehp: Slot #229 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   35.516798] pcieport 0000:00:17.6: PME: Signaling with IRQ 46
+[   35.584004] pcieport 0000:00:17.6: pciehp: Slot #230 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   35.783965] pcieport 0000:00:17.7: PME: Signaling with IRQ 47
+[   35.840568] pcieport 0000:00:17.7: pciehp: Slot #231 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   36.064274] pcieport 0000:00:18.0: PME: Signaling with IRQ 48
+[   36.147577] pcieport 0000:00:18.0: pciehp: Slot #256 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   36.389924] pcieport 0000:00:18.1: PME: Signaling with IRQ 49
+[   36.451095] pcieport 0000:00:18.1: pciehp: Slot #257 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   36.641082] pcieport 0000:00:18.2: PME: Signaling with IRQ 50
+[   36.711033] pcieport 0000:00:18.2: pciehp: Slot #258 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   36.961892] pcieport 0000:00:18.3: PME: Signaling with IRQ 51
+[   37.063769] pcieport 0000:00:18.3: pciehp: Slot #259 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   37.292241] pcieport 0000:00:18.4: PME: Signaling with IRQ 52
+[   37.373227] pcieport 0000:00:18.4: pciehp: Slot #260 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   37.671503] pcieport 0000:00:18.5: PME: Signaling with IRQ 53
+[   37.727798] pcieport 0000:00:18.5: pciehp: Slot #261 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   37.964395] pcieport 0000:00:18.6: PME: Signaling with IRQ 54
+[   38.038877] pcieport 0000:00:18.6: pciehp: Slot #262 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   38.253312] pcieport 0000:00:18.7: PME: Signaling with IRQ 55
+[   38.307282] pcieport 0000:00:18.7: pciehp: Slot #263 AttnBtn+ PwrCtrl+ MRL- AttnInd- PwrInd- HotPlug+ Surprise- Interlock- NoCompl+ IbPresDis- LLActRep+
+[   38.520774] input: Power Button as /devices/LNXSYSTM:00/LNXPWRBN:00/input/input0
+[   38.601252] ACPI: button: Power Button [PWRF]
+[   38.718674] Serial: 8250/16550 driver, 4 ports, IRQ sharing disabled
+[   38.824049] 00:05: ttyS0 at I/O 0x3f8 (irq = 4, base_baud = 115200) is a 16550A
+[   39.012047] hpet_acpi_add: no address or irqs in _CRS
+[   39.079444] Non-volatile memory driver v1.3
+[   39.104600] Hangcheck: starting hangcheck timer 0.9.1 (tick is 180 seconds, margin is 60 seconds).
+[   39.368543] brd: module loaded
+[   39.389496] mtip32xx Version 1.3.1
+[   39.469404] zram: Added device: zram0
+[   39.535366] VMware PVSCSI driver - version 1.0.7.0-k
+[   39.628310] Freeing initrd memory: 17948K
+[   39.714926] ACPI: \_SB_.PCI0.ISA_.LNKC: Enabled at IRQ 10
+[   39.752865] PCI: setting IRQ 10 as level-triggered
+[   39.905243] ahci 0000:02:04.0: AHCI vers 0001.0300, 32 command slots, 6 Gbps, SATA mode
+[   39.963159] ahci 0000:02:04.

@@ -1,0 +1,136 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.016 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.6584 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Felix\CLionProjects\KSword\docs\next\logs\hvm-0a-20260915.dmp]
+Mini Kernel Dump File: Only registers and stack trace are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 22621 MP (2 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS Personal
+Edition build lab: 22621.2506.amd64fre.ni_release_svc_prod3.231018-1809
+Kernel base = 0xfffff804`53000000 PsLoadedModuleList = 0xfffff804`53c134b0
+Debug session time: Tue Sep 15 08:44:08.132 2026 (UTC - 4:00)
+System Uptime: 0 days 0:02:09.841
+Loading Kernel Symbols
+...............................................................
+................................................................
+.........................................
+Loading User Symbols
+
+Loading unloaded module list
+........
+For analysis of this file, run !analyze -v
+1: kd> cdb: Reading initial command '.trap ffffa38c75ac9c60; r cr0; r cr4; r cr2; u @rip L8; lm m vmx86; lm m KswordARK; dps @rsp L28; q'
+NOTE: The trap frame does not contain all registers.
+Some register values may be zeroed or incorrect.
+rax=0000000080040033 rbx=0000000000000000 rcx=ffff920007e9d180
+rdx=ffff920007e9d180 rsi=0000000000000000 rdi=0000000000000000
+rip=ffffbd84fa1178ee rsp=ffffa38c75ac9df0 rbp=ffffa38c75ac9ef0
+ r8=0000000024201c84  r9=0000000000000002 r10=0000000000000000
+r11=ffffbd84fa1021d7 r12=0000000000000000 r13=0000000000000000
+r14=0000000000000000 r15=0000000000000000
+iopl=0         nv up ei pl zr na po cy
+ffffbd84`fa1178ee 0f22c0          mov     cr0,rax
+Last set context:
+cr0=0000000080050033
+Last set context:
+cr4=0000000000b52ef8
+Last set context:
+cr2=00007fffffff0000
+ffffbd84`fa1178ee 0f22c0          mov     cr0,rax
+ffffbd84`fa1178f1 458b8ba00a0000  mov     r9d,dword ptr [r11+0AA0h]
+ffffbd84`fa1178f8 498d93a80a0000  lea     rdx,[r11+0AA8h]
+ffffbd84`fa1178ff 49c1e104        shl     r9,4
+ffffbd84`fa117903 33c0            xor     eax,eax
+ffffbd84`fa117905 4c03ca          add     r9,rdx
+ffffbd84`fa117908 4d8bc1          mov     r8,r9
+ffffbd84`fa11790b 413983a40a0000  cmp     dword ptr [r11+0AA4h],eax
+Browse full module list
+start             end                 module name
+fffff804`5ca20000 fffff804`5ca43000   vmx86      (deferred)             
+Browse full module list
+start             end                 module name
+fffff804`6c020000 fffff804`6d281000   KswordARK   (deferred)             
+ffffa38c`75ac9df0  00000000`00000001
+ffffa38c`75ac9df8  ffffffff`b8797400
+ffffa38c`75ac9e00  00000000`00000000
+ffffa38c`75ac9e08  ffffa38c`75ac9ef0
+ffffa38c`75ac9e10  00000000`00000000
+ffffa38c`75ac9e18  00000001`00000001
+ffffa38c`75ac9e20  00000000`00000001
+ffffa38c`75ac9e28  00000000`00000001
+ffffa38c`75ac9e30  ffffa38c`75ac9f10
+ffffa38c`75ac9e38  00000000`0000002f
+ffffa38c`75ac9e40  ffffbd84`fa16493b
+ffffa38c`75ac9e48  fffff804`53290373 nt!HalpInterruptSendIpi+0x103
+ffffa38c`75ac9e50  ffffbd84`fa1021d7
+ffffa38c`75ac9e58  ffffa38c`75aca268
+ffffa38c`75ac9e60  00000000`00000001
+ffffa38c`75ac9e68  ffffbd84`fa727080
+ffffa38c`75ac9e70  ffffa38c`75ac9e90
+ffffa38c`75ac9e78  00000000`00000000
+ffffa38c`75ac9e80  00000000`00000000
+ffffa38c`75ac9e88  fffffff6`00000002
+ffffa38c`75ac9e90  00000001`00000000
+ffffa38c`75ac9e98  00000000`00000000
+ffffa38c`75ac9ea0  a39ffcdd`8bd8d6bf
+ffffa38c`75ac9ea8  ffffbd84`fa102a03
+ffffa38c`75ac9eb0  ffffbd84`fdeda080
+ffffa38c`75ac9eb8  ffffbd84`fdeda080
+ffffa38c`75ac9ec0  0000003f`10000004
+ffffa38c`75ac9ec8  00000000`00000000
+ffffa38c`75ac9ed0  00000000`00000000
+ffffa38c`75ac9ed8  00000000`00000000
+ffffa38c`75ac9ee0  00000000`00000000
+ffffa38c`75ac9ee8  b3b70963`de5b7d50
+ffffa38c`75ac9ef0  00000002`00000000
+ffffa38c`75ac9ef8  00000000`00000000
+ffffa38c`75ac9f00  00000000`00000000
+ffffa38c`75ac9f08  00000000`00000000
+ffffa38c`75ac9f10  00000157`00000000
+ffffa38c`75ac9f18  00000000`00000000
+ffffa38c`75ac9f20  00000000`00000000
+ffffa38c`75ac9f28  00000000`00000000
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'

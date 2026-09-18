@@ -1,0 +1,99 @@
+{
+    "eptp":  "0x000000011704405E",
+    "base":  "0x110000000",
+    "leafShift":  21,
+    "attempts":  [
+                     {
+                         "base":  "0x110000000",
+                         "status":  0,
+                         "lastStatus":  "0x00000000",
+                         "scannedLeafCount":  512,
+                         "scannedSharedBits":  "0x0000000000000077"
+                     }
+                 ],
+    "publish":  {
+                    "kind":  "nested-page",
+                    "operationId":  48,
+                    "faultMode":  0,
+                    "status":  0,
+                    "lastStatus":  "0x00000000",
+                    "generation":  30,
+                    "active":  1,
+                    "retired":  0,
+                    "residentProcessors":  4,
+                    "ept12Pointer":  "0x000000011704405E",
+                    "guestPhysicalPage":  "0x0000000110000000",
+                    "shadowPhysicalPage":  "0x00000001FF800000",
+                    "originalPhysicalPage":  "0x0000000000000000",
+                    "composedCount":  0,
+                    "ownerProcessId":  3520,
+                    "ownerExited":  0,
+                    "ownerCreationTime":  "134340760246686910",
+                    "leafShift":  21,
+                    "sourceLeafShift":  12,
+                    "regionBytes":  2097152,
+                    "regionPageCount":  512,
+                    "stagedPageCount":  0,
+                    "admittedByScan":  1,
+                    "scannedLeafCount":  512,
+                    "scannedSharedBits":  "0x0000000000000077",
+                    "sourceDigest":  "0x0000000000000000",
+                    "backingDigest":  "0x0000000000000000",
+                    "digestBytes":  0,
+                    "leaseRevocationReason":  0,
+                    "sourcePhysicalPage":  "0x000000002CE70000",
+                    "sourceEntryCount":  4,
+                    "sourcePath":  [
+                                       {
+                                           "address":  "0x0000000117044000",
+                                           "value":  "0x0000000117043007"
+                                       },
+                                       {
+                                           "address":  "0x0000000117043020",
+                                           "value":  "0x000000016E1DC007"
+                                       },
+                                       {
+                                           "address":  "0x000000016E1DC400",
+                                           "value":  "0x0000000198C39007"
+                                       },
+                                       {
+                                           "address":  "0x0000000198C39000",
+                                           "value":  "0x000000002CE70077"
+                                       }
+                                   ],
+                    "roots":  [
+                                  "0x000000011704405E"
+                              ]
+                },
+    "samples":  [
+                    {
+                        "second":  5,
+                        "active":  0,
+                        "retired":  1,
+                        "reason":  2,
+                        "composed":  0
+                    }
+                ],
+    "revocationReason":  2,
+    "removalAfterRevocation":  {
+                                   "status":  0,
+                                   "active":  0,
+                                   "retired":  0
+                               },
+    "republishWhileSnapshotted":  {
+                                      "status":  1,
+                                      "lastStatus":  "0xC0000141",
+                                      "scannedLeafCount":  0
+                                  },
+    "republishAfterDelete":  {
+                                 "status":  1,
+                                 "lastStatus":  "0xC0000141",
+                                 "scannedLeafCount":  0,
+                                 "scannedSharedBits":  "0x0000000000000000"
+                             },
+    "finalRemoval":  {
+                         "status":  0,
+                         "active":  0,
+                         "retired":  0
+                     }
+}

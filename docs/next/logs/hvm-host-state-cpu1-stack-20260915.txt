@@ -1,0 +1,222 @@
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   EnableRedirectToV8JsProvider : false
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.016 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+Microsoft (R) Windows Debugger Version 10.0.26100.6584 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Felix\CLionProjects\KSword\artifacts\hvm-host-state-probe-full.dmp]
+Kernel Bitmap Dump File: Kernel address space is available, User address space may not be available.
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release
+Deferred                                       srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release;srv*C:\Users\Felix\CLionProjects\KSword\artifacts\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 22621 MP (2 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS Personal
+Edition build lab: 22621.2506.amd64fre.ni_release_svc_prod3.231018-1809
+Kernel base = 0xfffff806`24400000 PsLoadedModuleList = 0xfffff806`250134b0
+Debug session time: Tue Sep 15 09:21:18.378 2026 (UTC - 4:00)
+System Uptime: 0 days 0:01:03.842
+Loading Kernel Symbols
+...............................................................
+................................................................
+.........................................
+Loading User Symbols
+
+Loading unloaded module list
+........
+For analysis of this file, run !analyze -v
+0: kd> cdb: Reading initial command '.reload /f KswordARK.sys; ln fffff8062481f925; u fffff8062481f925 L6; dps ffffb70be27a9c00 L90; q'
+Browse module
+Set bu breakpoint
+
+(fffff806`2481f7c5)   nt!RcContinueExit+0x160   |  (fffff806`2481f9c0)   nt!RcConsolidateFrames
+nt!RcContinueExit+0x160:
+fffff806`2481f925 48cf            iretq
+fffff806`2481f927 4883ec30        sub     rsp,30h
+fffff806`2481f92b 4c8bc4          mov     r8,rsp
+fffff806`2481f92e 4881ecf0040000  sub     rsp,4F0h
+fffff806`2481f935 488bf1          mov     rsi,rcx
+fffff806`2481f938 488bfc          mov     rdi,rsp
+ffffb70b`e27a9c00  00000000`00000000
+ffffb70b`e27a9c08  00000000`00000000
+ffffb70b`e27a9c10  00000000`00000000
+ffffb70b`e27a9c18  00000000`00000000
+ffffb70b`e27a9c20  00000000`00000000
+ffffb70b`e27a9c28  00000000`00000000
+ffffb70b`e27a9c30  00000000`00000000
+ffffb70b`e27a9c38  00000000`00000000
+ffffb70b`e27a9c40  00000000`00000000
+ffffb70b`e27a9c48  00000000`00000000
+ffffb70b`e27a9c50  00000000`00000000
+ffffb70b`e27a9c58  00000000`00000000
+ffffb70b`e27a9c60  00000000`00000000
+ffffb70b`e27a9c68  00000000`00000000
+ffffb70b`e27a9c70  00000000`00000000
+ffffb70b`e27a9c78  00000000`00000000
+ffffb70b`e27a9c80  00000000`00000000
+ffffb70b`e27a9c88  00000000`00000000
+ffffb70b`e27a9c90  00000000`00000000
+ffffb70b`e27a9c98  00000000`00000000
+ffffb70b`e27a9ca0  00000000`00000000
+ffffb70b`e27a9ca8  00000000`00000000
+ffffb70b`e27a9cb0  00000000`00000000
+ffffb70b`e27a9cb8  00000000`00000000
+ffffb70b`e27a9cc0  00000000`00000000
+ffffb70b`e27a9cc8  00000000`00000000
+ffffb70b`e27a9cd0  00000000`00000000
+ffffb70b`e27a9cd8  00000000`00000000
+ffffb70b`e27a9ce0  00000000`00000000
+ffffb70b`e27a9ce8  00000000`00000000
+ffffb70b`e27a9cf0  00000000`00000000
+ffffb70b`e27a9cf8  00000000`00000000
+ffffb70b`e27a9d00  00000000`00000000
+ffffb70b`e27a9d08  00000000`00000000
+ffffb70b`e27a9d10  00000000`00000000
+ffffb70b`e27a9d18  00000000`00000000
+ffffb70b`e27a9d20  00000000`00000000
+ffffb70b`e27a9d28  00000000`00000000
+ffffb70b`e27a9d30  00000000`00000000
+ffffb70b`e27a9d38  00000000`00000000
+ffffb70b`e27a9d40  00000000`00000000
+ffffb70b`e27a9d48  00000000`00000000
+ffffb70b`e27a9d50  00000000`00000000
+ffffb70b`e27a9d58  00000000`00000000
+ffffb70b`e27a9d60  00000000`00000000
+ffffb70b`e27a9d68  00000000`00000000
+ffffb70b`e27a9d70  00000000`00000000
+ffffb70b`e27a9d78  00000000`00000000
+ffffb70b`e27a9d80  00000000`00000000
+ffffb70b`e27a9d88  fffff806`3f340de0 KswordARK!g_KswordProbeSlots+0x590
+ffffb70b`e27a9d90  00000000`00000000
+ffffb70b`e27a9d98  00000000`00000001
+ffffb70b`e27a9da0  ffffa40d`ba94f9d8
+ffffb70b`e27a9da8  fffff806`3f363140 KswordARK!g_KswordHvmResident+0x9f20
+ffffb70b`e27a9db0  ffffb70b`e8edc1d0
+ffffb70b`e27a9db8  ffff9201`00000000
+ffffb70b`e27a9dc0  00000000`00000067
+ffffb70b`e27a9dc8  00000000`0000008b
+ffffb70b`e27a9dd0  ffffa40d`ba94f960
+ffffb70b`e27a9dd8  00000000`00000000
+ffffb70b`e27a9de0  00000000`00b52ef8
+ffffb70b`e27a9de8  fffff806`3f340d80 KswordARK!g_KswordProbeSlots+0x530
+ffffb70b`e27a9df0  ffffa40d`ba94fa60
+ffffb70b`e27a9df8  00000000`00010046
+ffffb70b`e27a9e00  fffff806`2481f925 nt!RcContinueExit+0x160
+ffffb70b`e27a9e08  fffff806`3efd02a7 KswordARK!KswordARKHvmNestedProbeExecute+0x443
+ffffb70b`e27a9e10  fffff806`3f340010 KswordARK!g_KswordHvmEvents+0xaf7d8
+ffffb70b`e27a9e18  ffffa40d`00040246
+ffffb70b`e27a9e20  ffffa40d`ba94f970
+ffffb70b`e27a9e28  00000000`00000018
+ffffb70b`e27a9e30  00000000`00000000
+ffffb70b`e27a9e38  00000000`00000001
+ffffb70b`e27a9e40  fffff806`3f363140 KswordARK!g_KswordHvmResident+0x9f20
+ffffb70b`e27a9e48  ffffb70b`e27a9ea1
+ffffb70b`e27a9e50  fffff806`3efd09b2 KswordARK!KswordARKHvmNestedProbeL1Host+0x2c2
+ffffb70b`e27a9e58  00000000`00010000
+ffffb70b`e27a9e60  00000000`00000000
+ffffb70b`e27a9e68  00000000`00000000
+ffffb70b`e27a9e70  00000000`00000000
+ffffb70b`e27a9e78  ffff9201`438f600c
+ffffb70b`e27a9e80  00000000`00000000
+ffffb70b`e27a9e88  00000000`00000000
+ffffb70b`e27a9e90  ffff9201`4349d000
+ffffb70b`e27a9e98  00000000`00000000
+ffffb70b`e27a9ea0  00000000`00000000
+ffffb70b`e27a9ea8  00000000`00000000
+ffffb70b`e27a9eb0  00000000`0000ffff
+ffffb70b`e27a9eb8  00000000`ffff0000
+ffffb70b`e27a9ec0  00100028`00000000
+ffffb70b`e27a9ec8  00280050`00280018
+ffffb70b`e27a9ed0  00000000`00400000
+ffffb70b`e27a9ed8  ffff8a73`2b54e221
+ffffb70b`e27a9ee0  00000000`00000000
+ffffb70b`e27a9ee8  ffffa40d`ba94fa60
+ffffb70b`e27a9ef0  fffff806`3f340d80 KswordARK!g_KswordProbeSlots+0x530
+ffffb70b`e27a9ef8  ffffa40d`ba94f9d8
+ffffb70b`e27a9f00  00000000`00000000
+ffffb70b`e27a9f08  00000000`00000001
+ffffb70b`e27a9f10  fffff806`3f363140 KswordARK!g_KswordHvmResident+0x9f20
+ffffb70b`e27a9f18  ffffb70b`e8edc1d0
+ffffb70b`e27a9f20  00000000`00000000
+ffffb70b`e27a9f28  00000000`00000000
+ffffb70b`e27a9f30  00000000`00000000
+ffffb70b`e27a9f38  00000000`00000000
+ffffb70b`e27a9f40  00000000`00000000
+ffffb70b`e27a9f48  00000000`00000000
+ffffb70b`e27a9f50  00000000`00000000
+ffffb70b`e27a9f58  00000000`00000000
+ffffb70b`e27a9f60  00000000`00000000
+ffffb70b`e27a9f68  00000000`00000000
+ffffb70b`e27a9f70  00000000`00000000
+ffffb70b`e27a9f78  00000000`00000000
+ffffb70b`e27a9f80  00000000`00000000
+ffffb70b`e27a9f88  00000000`00000000
+ffffb70b`e27a9f90  00000000`00000000
+ffffb70b`e27a9f98  00000000`00000000
+ffffb70b`e27a9fa0  00000000`00000000
+ffffb70b`e27a9fa8  00000000`00000000
+ffffb70b`e27a9fb0  00000000`00000000
+ffffb70b`e27a9fb8  00000000`00000000
+ffffb70b`e27a9fc0  00000000`00000000
+ffffb70b`e27a9fc8  00000000`00000000
+ffffb70b`e27a9fd0  00000000`00000000
+ffffb70b`e27a9fd8  00000000`00000000
+ffffb70b`e27a9fe0  00000000`00000000
+ffffb70b`e27a9fe8  00000000`00000000
+ffffb70b`e27a9ff0  00000000`00000000
+ffffb70b`e27a9ff8  00000000`00000000
+ffffb70b`e27aa000  46d5942c`544d4c9d
+ffffb70b`e27aa008  504a52d9`5cdf50bf
+ffffb70b`e27aa010  ffffb70b`e27aa048
+ffffb70b`e27aa018  0638067c`00000fb8
+ffffb70b`e27aa020  75626d75`0000001c
+ffffb70b`e27aa028  00000000`00000073
+ffffb70b`e27aa030  00000000`00000000
+ffffb70b`e27aa038  00000000`00000000
+ffffb70b`e27aa040  00000001`00000000
+ffffb70b`e27aa048  00000001`0024324c
+ffffb70b`e27aa050  b47969d7`000a0000
+ffffb70b`e27aa058  48749383`3da03663
+ffffb70b`e27aa060  f0fb97ce`1c222eb7
+ffffb70b`e27aa068  003c324c`01dd4514
+ffffb70b`e27aa070  000e0000`00000002
+ffffb70b`e27aa078  36c39a69`a765fc7e
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Usb4Kd.natvis'

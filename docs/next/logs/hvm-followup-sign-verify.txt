@@ -1,0 +1,29 @@
+
+
+Verifying: Ksword5.1/x64/Release/KswordARK.sys
+
+
+Signature Index: 0 (Primary Signature)
+Hash of file (sha256): CEFAEE969B52AD1125891E351259A61BE1366B07031642B5DF564F4F81154B91
+
+Signing Certificate Chain:
+    Issued to: KswordARK Test Signing Certificate
+
+    Issued by: KswordARK Test Signing Certificate
+
+    Expires:   Tue May 06 21:03:25 2036
+
+    SHA1 hash: 34E402E89002C19830BD6FE0C64EB292C6AB0C2C
+
+
+File is not timestamped.
+
+
+Number of files successfully Verified: 0
+
+Number of warnings: 0
+
+Number of errors: 1
+
+SignTool Error: A certificate chain processed, but terminated in a root
+	certificate which is not trusted by the trust provider.

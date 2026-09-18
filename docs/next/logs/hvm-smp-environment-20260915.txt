@@ -1,0 +1,31 @@
+串口 97719 字节
+[  234.677567] Initialized host personality
+[  235.099953] input: PC Speaker as /devices/platform/pcspkr/input/input4
+[  236.833548] zram0: detected capacity change from 0 to 160768
+[  237.353399] Adding 80380k swap on /dev/zram0.  Priority:-2 extents:1 across:80380k SS
+[  240.884099] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[  240.944504] e1000 0000:02:01.0 eth0: (PCI:66MHz:32-bit) 00:0c:29:77:a2:80
+[  240.990058] e1000 0000:02:01.0 eth0: Intel(R) PRO/1000 Network Connection
+[  241.223006] process '/sbin/ldconfig' started with executable stack
+[  247.970176] e1000: eth0 NIC Link is Up 1000 Mbps Full Duplex, Flow Control: None
+paper-smp-environment
+Linux box 6.18.35-tinycore64 #1 SMP Wed Jun 17 00:02:49 UTC 2026 x86_64 GNU/Linux
+loglevel=3 vga=791 initrd=/boot/corepure64.gz console=ttyS0,115200n8 ignore_loglevel vga=normal nomodeset console=tty0 printk.time=1 memmap=4K$0x7000000 BOOT_IMAGE=/boot/vmlinuz64 
+0-1
+13391ee4-65c6-4dd3-b3f7-17d181422f30
+404.27 383.35
+BusyBox v1.36.1 (2024-01-28 10:23:59 UTC) multi-call binary.
+
+Usage: taskset [-ap] [HEXMASK] { PID | PROG ARGS }
+
+Set or get CPU affinity
+
+.-p.Operate on PID
+.-a.Operate on all threads
+.-c.Affinity is a list, not mask
+1+0 records in
+1+0 records out
+4096 bytes (4.0KB) copied, 0.021310 seconds, 187.7KB/s
+paper-page-seeded
+17575e1bed6cb8f7b7c5c215f5e8c304  -
+

@@ -1105,9 +1105,11 @@
     <ClCompile Include="ArkDriverClient\HvmCommandEngine.c"><CompileAs>CompileAsC</CompileAs></ClCompile>
     <ClCompile Include="ArkDriverClient\HvmCommandProcess.cpp"></ClCompile>
     <ClCompile Include="UI\KvmCommandPanel.cpp"></ClCompile>
+    <ClCompile Include="UI\KvmGuestVmPanel.cpp"></ClCompile>
     <ClInclude Include="ArkDriverClient\HvmCommandCatalog.h" />
     <ClInclude Include="ArkDriverClient\HvmCommandProcess.h" />
     <ClInclude Include="UI\KvmCommandPanel.h" />
+    <ClInclude Include="UI\KvmGuestVmPanel.h" />
   </ItemGroup>
   <ItemGroup><ClInclude Include="..\..\shared\driver\KswordArkHvmRequest.h" /></ItemGroup>
   <Target Name="AuditKswordHvmCommandCatalog" BeforeTargets="ClCompile">

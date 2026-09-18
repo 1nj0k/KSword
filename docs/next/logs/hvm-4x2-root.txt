@@ -1,0 +1,9 @@
+服务端版本 = RFB 003.008
+安全类型 = 1
+帧缓冲 = 1024x768   名称 = Other Linux 6.x kernel 64-bit
+已送 8 个按键
+saved=C:\vmware\shot-command.png 矩形数=4 bytes=5014
+服务端版本 = RFB 003.008
+安全类型 = 1
+帧缓冲 = 1024x768   名称 = Other Linux 6.x kernel 64-bit
+saved=C:\vmware\shot-command.png 矩形数=4 bytes=5014

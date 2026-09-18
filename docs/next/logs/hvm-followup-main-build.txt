@@ -1,0 +1,18 @@
+BUILD_START action=Build wpo_disabled=False timeout_minutes=20
+BUILD_LOG=C:\Users\Felix\CLionProjects\KSword\.codex-build-logs\ksword-build-check-20260915-211240.raw.log
+BUILD_WAIT elapsed_seconds=45 pid=55792
+BUILD_WAIT elapsed_seconds=90 pid=55792
+BUILD_WAIT elapsed_seconds=135 pid=55792
+BUILD_WAIT elapsed_seconds=180 pid=55792
+BUILD_WAIT elapsed_seconds=225 pid=55792
+BUILD_WAIT elapsed_seconds=270 pid=55792
+BUILD_WAIT elapsed_seconds=315 pid=55792
+BUILD_RESULT=SUCCESS
+EXIT_CODE=0
+DURATION_SECONDS=330
+ARTIFACT=C:\Users\Felix\CLionProjects\KSword\Ksword5.1\x64\Release\Ksword5.1.exe
+ARTIFACT_BYTES=19132824
+ARTIFACT_UPDATED=True
+ARTIFACT_SHA256=70B6C2FE11CC05086B28FAA473D217EE86A06080664C2605B04DB7ADA6A33E15
+I18N_AUDIT_PASSED=True
+RAW_LOG=C:\Users\Felix\CLionProjects\KSword\.codex-build-logs\ksword-build-check-20260915-211240.raw.log

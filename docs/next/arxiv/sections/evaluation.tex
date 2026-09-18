@@ -1,0 +1,635 @@
+\section{Evaluation}
+\label{sec:evaluation}
+\subsection{Windows continuity and application-visible disruption}
+All 24 current paced TCP runs, including warmups, complete with 74,145 correctly
+sequenced responses, unchanged Windows boot identity, and unchanged monitored
+process identities. Table~\ref{tab:latency} summarizes the twenty measured runs.
+The p99 column is the median of five per-run p99 values, not a percentile over
+a pooled distribution. Each gap column concerns the largest completion gap
+overlapping that run's control call.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Current paced TCP experiment, five measured runs per condition. Gap
+columns summarize command-overlapping completion gaps. The call column is the
+median application-level control-call duration.}
+\label{tab:latency}
+\input{tables/latency}
+\end{table}
+
+Insertion's driver-body median is 2595.3\,\us{} (maximum 3053.9\,\us{}), with a
+rendezvous median of 111.6\,\us{} (maximum 148.2\,\us{}). Removal's corresponding
+medians are 1107.4 and 55.8\,\us{}, with maxima of 1275.2 and 393.8\,\us{}.
+Process creation and command work expand the application-level control window
+to roughly 20\,ms. These boundaries answer different questions and cannot be
+substituted for one another.
+
+The largest measured command-overlap gap is 6.2300\,ms during insertion. Sham
+conditions also contain multi-millisecond gaps; the on-mode sham has a
+16.1823\,ms RTT outlier outside its command window. We therefore do not call
+6.23\,ms the exact transition pause or subtract a sham maximum to produce a
+causal pause estimate. The closed-loop client limits offered load, and scheduler,
+socket, pacing, and observation work all contribute to the recorded intervals.
+
+The historical cohort supplies more detailed phase instrumentation across ten
+Windows-only insert/remove pairs. Its insertion-body median is 2.8005\,ms,
+resource preparation 2.65375\,ms, and rendezvous envelope 149.5\,\us{}. Across
+forty CPU-entry records, median state-capture/control-selection time is
+13.85\,\us{}, VMCS programming 5.0\,\us{}, and entry continuation 24.1\,\us{}.
+Entry-return skew has a 4.6\,\us{} median and 28.3\,\us{} maximum. A single cold
+EPT-build observation is 6.0918\,ms in preparation. Parallel intervals overlap
+and must not be added to estimate total pause. These older measurements
+demonstrate bounded observed skew, not simultaneous entry or a current-build
+replication of every phase statistic.
+
+\subsection{Multicore effects, faults, and reclamation}
+\label{sec:lifecycle-results}
+The current version completes three of three two-vCPU remap/restore cycles for
+reserved GPA \code{0x07000000}. Its original Windows~1 backing is
+\code{0xCDB03000}, with four captured source entries. Both CPU observers verify
+the full page in each stage. All fifteen request-local fault trials satisfy
+their expected reject, rollback, or retain-and-retry outcome; all three invalid
+requests are cleanly rejected. Table~\ref{tab:faults} states the tested failure
+semantics rather than reducing them to an unexplained PASS.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Current lifecycle fault and rejection matrix. Every trial has its own
+raw record. Drain faults omit one drain call at a software boundary; they are
+not actual hardware INVEPT failures.}
+\label{tab:faults}
+\begin{tabularx}{\linewidth}{@{}lrlX@{}}
+\toprule
+Condition & Trials & Expected result & Observed boundary \\
+\midrule
+Replacement allocation failure & 3 & Clean reject & No published replacement \\
+Cancel before commit & 3 & Clean cancel & Pre-publication allocations reclaimed \\
+Rollback after commit & 3 & Rollback & Override retired and backing reclaimed \\
+Omit commit drain & 3 & Rollback & Recovery drain required before free \\
+Omit retirement drain & 3 & Retain, then retry & Backing retained until successful retry \\
+GPA above 52 bits & 1 & Clean reject & No new mapping \\
+Unaligned GPA & 1 & Clean reject & No new mapping \\
+Unknown EPT root & 1 & Clean reject & No new mapping \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Table~\ref{tab:lifecycle-times} reports current driver-body and drain durations.
+The active and retired slots are empty after successful recovery, and the
+tracked rule/replacement allocations balance. These ledgers cover page-control
+objects and backing, not the entire driver's pool. The sampled readbacks and
+traces do not establish that an arbitrary reader never sees a mixed update.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Current page-control timing for three complete two-vCPU cycles.
+Drain times are contained within their corresponding control bodies.}
+\label{tab:lifecycle-times}
+\input{tables/lifecycle}
+\end{table}
+
+The historical version has twenty complete cycles: ten idle and ten with both
+guest CPUs under load, with observed CPU utilization 99.96\% and 98.77\%.
+A write-isolation trial observes an A5-filled original page, a D1-filled private
+page, a write of B2 into the private page's first four bytes, and restoration of
+the complete original A5 page on both CPUs. Its owner-exit trial observes
+\code{active=0, retired=1, ownerExited=1}; explicit removal then empties both
+slots and balances allocation counts without the previously seen Hyper-V
+18560 reset. These are historical results, not fresh runtime coverage of every
+version~3 path.
+
+Portable adversarial tests compile the same lease walker used by the driver and
+exercise bit changes at each level, A/D modes, unreadable paths, root/path reuse,
+and malformed requests.
+
+\paragraph{Leaves larger than 4 KiB.}
+A 2\,MiB or 1\,GiB EPT leaf terminates the walk one or two levels early, so a
+short capture must still expire on the same drift a full path does, and the
+levels it never read must stay outside verification. We extend the portable
+suite to cover both leaf sizes: capture and validation on each, a full 64-bit
+sweep of every captured entry requiring the ignored set to be exactly accessed at
+any level plus dirty at the terminating leaf, A/D-disabled behavior, unreadable
+leaves, and the guest offset folded into a large source frame. Two guest pages
+inside one 2\,MiB leaf are shown to share an entry path and differ only in source
+frame; both validate, which records that the lease proves path identity and never
+guest-page identity. Rejections specific to a 1\,GiB leaf are included: address
+bits inside its alignment, a non-writeback memory type, write without read, and a
+permission intersection emptied by an ancestor.
+
+Passing does not establish that a suite can detect anything, so we measure it.
+Thirty-six defects are injected one at a time into a copy of the relevant
+header and each is required to make its suite fail: unchecked reserved address
+bits under a large leaf, an unfolded guest offset, dirty treated as metadata only
+at the last level, a large-page bit accepted at the PTE level, validation that
+always walks four levels or that refuses short captures, an accepted empty
+permission intersection, a 4\,KiB offset mask applied to every leaf, a capture
+that always reports four entries, and, for the admission rules, an ignored or
+inverted granularity test, alignment checked only to a page, a short or
+misaligned backing accepted, region ownership and staging indices off by one, and
+a scan that accepts a disagreeing entry or reports an unreadable source as
+uniform. Eight cover the recheck that keeps a scan-admitted region honest, in
+both directions, because both are defects: a recheck that always agrees, that
+ignores a source page which went away, or whose cursor never folds back into the
+region leaves exactly the hole the scan exists to close, while one that always
+drifts, that counts accessed and dirty as disagreement, or that revokes on a
+failed read or a malformed table tears down a live region for no proven change.
+All thirty-six are killed. Run against the suites as committed before the
+recheck existed, those eight survive.
+
+The harness rebuilds both suite versions from the repository, so the count can be
+recomputed rather than taken on assertion, and it fails if a mutation stops
+applying -- a mutation whose expression no longer matches removes itself from the
+matrix silently, which reads as coverage. Three surviving mutations during
+development turned out to mark branches no input could reach: a region-end check
+made unreachable by the alignment test that precedes it, and two conditionals
+whose guard variable could not hold the value being tested. Each was removed
+rather than left in place looking like protection.
+
+These tests validate comparator behavior against synthetic tables. They do not
+replace hardware source-EPT mutation by a live intermediate VMM, adversarial
+multicore, or actual hardware-failure tests.
+
+\paragraph{Publishing an override at a larger granularity.}
+\ks{} can publish an override as a 2\,MiB or 1\,GiB shadow leaf rather than a
+4\,KiB one, allocating aligned contiguous replacement backing, initializing the
+whole region from the original bytes so that publication changes nothing the
+descendant can observe, and replacing individual pages afterwards. Admission is
+gated on the granularity the intermediate VMM already uses: a leaf larger than
+4\,KiB applies one permission set to every page beneath it, so it is admitted
+only where EPT12's own leaf covers the whole region. Composing a 2\,MiB leaf over
+512 separately mapped source pages would grant the descendant whatever the
+sampled page allowed, including access the intermediate VMM revoked on one of the
+other 511. A request that cannot be honoured at the granularity asked for is
+refused rather than narrowed.
+
+On the evaluated stack that gate never opens. Table~\ref{tab:large-leaf} reports
+nine admission attempts against the running VMware/TinyCore instance. Seven
+addresses captured a source translation, and every one of them terminated on a
+4\,KiB EPT12 leaf; none reported 2\,MiB or 1\,GiB. All seven were refused with
+the source-granularity status, one was refused on geometry, one address was not
+mapped at all, and no override was published by any attempt.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Large-leaf admission attempts against the live descendant. Requested and
+source shifts are base-two exponents: 12, 21 and 30 are 4\,KiB, 2\,MiB and
+1\,GiB. No attempt published an override.}
+\label{tab:large-leaf}
+\input{tables/large-leaf}
+\end{table}
+
+That result measures the intermediate VMM rather than the mechanism: VMware backs
+this descendant's guest-physical memory at 4\,KiB granularity, so a rule phrased
+in terms of the source's granularity has nothing to admit.
+
+\paragraph{Admitting by inspection instead.}
+Coarse source granularity is sufficient for one leaf to stand for a region, but
+it is not necessary. What a large leaf actually requires is that every source
+entry under the region grant the same access and the same memory type, and that
+can be established by reading them. \ks{} implements this as a second, explicitly
+requested rule: it walks all 512 source entries of a 2\,MiB region and admits the
+leaf only if they agree, treating accessed and dirty as per-page metadata rather
+than disagreement. The rule is opt-in because it is paid for with a weaker lease. Drift on the
+region's first page path is still detected at every composition; a change to one
+of the other entries is detected by sampling instead, because re-reading 512
+physical entries inside a path that runs on the order of $10^{5}$ times per
+second is not affordable. The difference is an interval, not a blind spot, and
+it is described below. A caller that does not ask for the rule keeps the
+stronger lease and the stricter rule.
+
+Table~\ref{tab:large-leaf-scan} is that comparison on the live stack. The same
+guest-physical address, the same driver and the same 4\,KiB source granularity
+are refused under the coarse-source rule and admitted under the scanning rule,
+which published a 2\,MiB shadow leaf over 2\,MiB-aligned contiguous replacement
+backing; all 512 entries were read and reported the same access bits. Each
+published region was removed, returning the active slot to zero, and the
+descendant and its VMM ran throughout.
+
+\begin{table}[tbp]
+\centering\small
+\caption{The same addresses under both admission rules. Only the rule differs.
+``Leaves read'' is the number of source entries the scanning rule examined.}
+\label{tab:large-leaf-scan}
+\input{tables/large-leaf-scan}
+\end{table}
+
+Nor does the scanning rule make the lease equivalent: its weaker drift detection
+is a property of the published region, not an implementation detail, which is why
+the response reports which rule admitted it.
+
+\paragraph{Rechecking what the scan proved.}
+Admission by scanning is a statement about one instant, and we measured that the
+instant matters: the same guest-physical region scanned 512 entries uniform on
+one run and stopped disagreeing partway through on another, with nothing in
+\ks{} changed between them. A region admitted on such a reading and never
+revisited would serve on a condition nobody looked at again, so one page of the
+region is re-walked per 4096 shadow fills, from a cursor that advances across
+the whole region, and an entry that has stopped agreeing --- or gone absent ---
+revokes the lease under a reason of its own.
+
+On hardware the lease does revoke when its source really changes: a snapshot of
+the descendant taken while a 2\,MiB region was published removes the
+intermediate VMM's entries for that region --- the same base answers
+address-not-associated for as long as the snapshot exists --- and the lease was
+revoked inside the first five-second sample and then removed with both slots
+empty. It reported translation-changed, not region-drifted, and the two are not
+interchangeable. The always-on check covers the path the lease was captured on
+and runs at every shadow fill, so it sees any change that touches the whole
+table first; the recheck exists for the case it structurally cannot see, one
+page of the region losing permission while the captured path stays identical.
+A whole-VM operation is never that case, which is why the reason we can trigger
+is not the reason the recheck reports.
+
+The decision is made by the same header that made the admitting scan, for two
+reasons that are worth separating from convenience. The bits compared must be
+exactly the bits the scan compared, and a comparison split across two files is
+how the two drift apart. And a decision that revokes a published lease is worth
+testing without a machine: eight of the injected defects in the mutation matrix
+target it, in both directions. A recheck that always agrees, that ignores a
+source page which went away, or whose cursor never folds back into the region
+leaves exactly the hole the scan exists to close; one that always drifts, that
+counts accessed and dirty as disagreement, or that revokes on a failed read
+tears down a live region for no proven change. Refusing to revoke on an
+unreadable entry is therefore a deliberate asymmetry rather than an omission: a
+read that failed is not evidence of a change.
+
+\paragraph{What a published region does, and what it leaves alone.}
+Checking the contents of a 2\,MiB region needs a readback, and a general
+``read this physical address'' request would be a far larger interface than the
+question deserves. The driver instead reports a digest of the region and of the
+source it was cloned from, on request, which answers whether the clone matched
+and whether a staged write landed where it was asked to, without returning bytes.
+
+Table~\ref{tab:region-decoupling} reports two regions published over the live
+descendant, each sampled four times about three seconds apart with nothing
+staged, then staged once. At publication the digests matched, so the clone was
+byte-identical over all 2\,MiB. Across every idle sample the backing digest was
+unchanged: the only thing that ever moved it was a staged write. The source
+digest moved on its own in both regions -- twice and three times respectively --
+which is what a working override looks like from here, since the descendant's
+writes are being served by the replacement and whatever still writes the original
+is no longer the descendant.
+
+\begin{table}[tbp]
+\centering\small
+\caption{A published 2\,MiB region over time. Digests are abbreviated to their
+low 32 bits. ``Changed while idle'' counts samples after the first that differ
+from it.}
+\label{tab:region-decoupling}
+\input{tables/region-decoupling}
+\end{table}
+
+Staging was exercised on the same regions: an index inside the region rewrites
+exactly one 4\,KiB page and moves only the backing digest, and an index of 512 in
+a 512-page region is refused with an invalid-parameter status, leaving the staged
+count unchanged. Publication followed by removal returned the active and retired
+slots to empty each time.
+
+Equality of the two digests is an observation at publication, not an invariant:
+the source is live memory that continues to change, as the table shows, so a
+later comparison is not expected to match and is not evidence of anything if it
+does.
+
+\paragraph{Reachability follows the workload, not the configuration.}
+Every result above is about a base the intermediate VMM had already mapped, and
+which bases those are is decided by the descendant rather than by its
+configuration. VMware populates EPT12 on demand, so a descendant configured with 4\,GiB has
+entries only where its guest has actually been: freshly booted and idle at
+4096\,MiB, every base we probed from 256\,MiB to 3.75\,GiB refused with an
+address-not-associated status and zero leaves read. This matters for reading the
+previous two tables, because a refusal at an unmapped base is not the admission
+rule answering; it is the question never reaching it.
+
+A later sweep sharpened that, and the correction is worth stating because it is
+the same trap one level down. Probing the same descendant above the 4\,GiB line
+finds four consecutive 2\,MiB bases, \texttt{0x108000000} through
+\texttt{0x120000000}, each admitted over 512 agreeing entries: at 4096\,MiB this
+descendant's bulk memory sits above \texttt{0x100000000}, so the idle sweep was
+also reporting which bases its guest uses at all. The claim that survives both
+readings is the narrower one --- a base carries an override only where the guest
+has been, and a base chosen by guessing produces a refusal that says nothing
+about the planner --- and the controlled demonstration of it is
+Table~\ref{tab:guest-workload}, where the bases are fixed and the workload is
+the only thing that changes.
+
+The lever is a workload inside the descendant, driven through its VNC
+framebuffer into the shell on its first virtual terminal. Table~\ref{tab:guest-workload}
+is one descendant, one driver and one set of eight bases, differing only in
+whether a 400\,MiB allocation had run inside it. Three bases move from having no
+entries at all to carrying a published 2\,MiB leaf over 512 uniform source
+entries. The bases that stay refused are the low ones, where kernel, DMA and
+firmware memory carry mixed attributes -- the scan stops at entry 24, 33 and 146
+-- which locates uniformity rather than merely reporting it: bulk memory the
+guest allocated in one request is what scans uniform.
+
+\begin{table}[tbp]
+\centering\small
+\caption{The same eight guest-physical bases before and after a workload ran
+inside the descendant. ``Leaves read'' is how many source entries the scanning
+rule examined before admitting or refusing; an unmapped base reads none.}
+\label{tab:guest-workload}
+\input{tables/guest-workload}
+\end{table}
+
+With 2.7\,GiB allocated inside a 4096\,MiB descendant the same procedure carries
+a 2\,MiB leaf to guest-physical \texttt{0x60000000}, above the 1\,GiB line: 512
+entries read and agreeing, backing 2\,MiB aligned, digests equal at publication
+and after an idle interval, one staged page moving the backing digest and not
+the source, page index 512 of a 512-page region refused with an
+invalid-parameter status, and removal returning the active slot to zero across
+all four processors.
+
+\paragraph{The 1\,GiB leaf, exercised and refused.}
+The same filled descendant refuses a 1\,GiB request under both rules, and the
+refusals are not interchangeable. The coarse-source rule refuses because EPT12's
+own leaf is 4\,KiB. The scanning rule refuses because a 1\,GiB region over
+4\,KiB source entries is 262,144 of them against a bound of 512 -- and that
+bound governs the drift recheck, not only the first pass, so it declines before
+reading anything. Zero leaves read at a base the VMM does map is the signature
+of the bound; an unmapped base reads zero for an unrelated reason, which is why
+the two are reported separately. Every mapped base we probed reported a 4\,KiB
+source leaf, at 768\,MiB and at 4096\,MiB, idle and filled, and with the
+descendant's memory pinned and page sharing disabled. Admitting a 1\,GiB leaf
+therefore needs an intermediate VMM whose own EPT is coarser; it is a property
+of that VMM, not of this planner, and no configuration available to us changed
+it.
+
+\paragraph{What this still does not establish.}
+There is no latency or exit-rate result for publication. The composition
+measurement is now partly available: with the 2\,MiB region published and the
+descendant reading a 2.7\,GiB file for ninety seconds, the override's
+composition count went from zero to one, so a single composition stood for all
+512 pages of the region where a 4\,KiB policy needs one per page. The
+denominator there is what the region contains, not what that workload provably
+touched -- we can start a workload in the descendant but not aim it at a chosen
+guest-physical address -- so we report the ratio as an upper bound on what one
+leaf saved here rather than as a measured speedup.
+
+\subsection{Remaining steady-state cost and attribution}
+\label{sec:performance}
+All 72 current attribution runs complete. Table~\ref{tab:attribution} reports
+the five measured repetitions per mode/workload. Descendant VMMs are absent;
+these are Windows-only synthetic measurements with residency toggled.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Current same-binary attribution. Values are median and observed
+minimum--maximum over five measured runs. CPUID is leaf~0; RTT is loopback.}
+\label{tab:attribution}
+\input{tables/attribution}
+\end{table}
+
+Sparse CPUID snapshots reduce the median from 2944.212 to 2915.062\,ns relative
+to the matching nested full-snapshot reference, an observed 0.99\% change with
+overlapping ranges. RTT does not improve. The sparse nested mode still costs
+8.7594 times the off-mode CPUID time and 30.6914\% more loopback RTT. A small
+telemetry optimization therefore does not resolve the major remaining cost.
+
+Adding 512 VMREADs to ordinary residency increases median CPUID latency from
+2905.918 to 6875.552\,ns. Dividing that difference by 512 estimates 7.753\,ns
+per added read, including loop overhead. The 256-read result is consistent with
+a similar marginal scale. Removing two reads cannot account for a
+microsecond-scale end-to-end gap.
+
+\paragraph{Where the added CPUID cost goes.}
+A separate million-exit CPU~0 profile measures an average 382 TSC cycles for the
+C dispatcher body, including 97 cycles for VMCS reads and 19 for telemetry. An
+invariant-TSC calibration near 2.112\,GHz converts 382 cycles to 180.9\,ns.
+Table~\ref{tab:attribution-budget} places that figure inside the measured cost of
+one CPUID.
+
+The profile is not free, and charging its cost correctly changes the answer. The
+body takes eleven timestamps, and an empty back-to-back pair costs 25 cycles, so
+roughly 65\,ns of the profiled 180.9\,ns is the instrument reading itself.
+Subtracting one pair, which is the obvious correction, would credit the
+dispatcher with most of that. We therefore report the dispatcher as a band whose
+upper end is the raw profile and whose lower end removes all eleven readings.
+
+That same 25-cycle pair is also the control the whole profile depends on. This
+processor is itself a guest: if the outer hypervisor intercepted \code{RDTSC},
+each of those eleven timestamps would be a VM exit of its own, and the
+unexplained majority of the total would be the instrument rather than the
+monitor. Two back-to-back reads answer that directly -- tens of cycles means the
+readings stand, hundreds or thousands would invalidate every number here. The
+measured 25 cycles is a native read.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Cost budget for one CPUID in nested sparse-snapshot mode. The residual
+is kept as an explicit row because it is the larger term; an attribution that
+omitted it would imply the dispatcher explains the overhead.}
+\label{tab:attribution-budget}
+\input{tables/attribution-budget}
+\end{table}
+
+The dispatcher accounts for 4.48\% to 7.00\% of the 2582.3\,ns that residency
+adds to a CPUID, depending on which end of that band is taken. The residual is
+93.00\% to 95.52\%, and we name what is inside it rather than leaving it
+implicit: the hardware VM exit and entry, our own entry and exit assembly, and
+the outer hypervisor's handling of an exit it must reflect to us. We do not split
+those three. Every timestamp in this profile is taken inside our C dispatcher, so
+none of them can observe anything on the far side of that boundary, and we have
+no instrumentation inside the outer hypervisor. Reporting a finer split would
+mean assigning time to code we did not measure.
+
+Two independent measurements cross-check the one interior term that can be
+checked. Adding 256 and 512 VMREADs to ordinary residency yields 7.957 and
+7.753\,ns per added read, agreeing to 2.6\%. Dividing the profile's 45.9\,ns of
+VMCS reads by the 512-read price implies 5.92 reads. The full snapshot path
+issues exactly six VMREADs -- exit reason, exit qualification, guest RIP, guest
+RSP, exit instruction length, and VM-instruction error -- and the profiled window
+is dominated by exits that take it. The cycle count and the marginal-cost
+experiment were collected separately and were not fitted to each other.
+
+The same price explains why the sparse snapshot changes so little. It omits two
+of the six reads for CPUID exits, predicting about 15.5\,ns; the observed
+difference between full and sparse snapshots is 29.2\,ns with overlapping ranges,
+so a two-read saving is at the resolution limit of this experiment rather than a
+demonstrated effect.
+
+The budget bounds what dispatcher-side optimization can achieve. Removing the
+profiled body entirely -- not merely the telemetry or the VMCS reads -- would
+move CPUID from 8.759 to 8.216 times the off-mode median, a 6.20\% reduction in
+the on-mode cost, and that figure is generous because it credits the removal with
+the instrument's own share. The measured 0.99\% gain from sparse snapshots sits
+inside that ceiling, which is why we treat further telemetry trimming as
+exhausted rather than promising. Reducing the residual is not a code change
+available to us in this topology: it requires either fewer exits or a cheaper
+exit path through the outer hypervisor, and the second is not ours to change.
+
+RTT admits only a bound, not a budget. Residency adds 4020.7\,ns per loopback
+round trip, which is 23.8 dispatcher bodies. That is an upper bound on the
+dispatcher's contribution and is reached only if every one of those exits costs
+a full dispatcher body and nothing else changes. RTT windows are dominated by
+HLT, MSR, and hypercall exits rather than CPUID, so reducing CPUID work alone is
+not a demonstrated networking optimization.
+
+\paragraph{Historical optimization evidence.}
+Table~\ref{tab:nested-history} shows all six historical nested workloads,
+including the unfavorable RTT result. The optimized memory-copy median is
+94.53\% lower and CPUID is 29.05\% lower than the earlier implementation.
+The pointer-chase process changes from three timeouts to three completions;
+its 20-second timeout includes initialization, so a 20/1.61 speedup ratio would
+be invalid. This is a comparison between implementations and boots, not a
+no-monitor overhead baseline or an ablation of individual changes.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Historical TinyCore implementation comparison, three measured runs
+per workload after warmup, same workload binary and guest CPU affinity.
+Negative elapsed change means a shorter duration. Driver and guest boot differ.}
+\label{tab:nested-history}
+\input{tables/historical-nested}
+\end{table}
+
+The historical Windows suite in Appendix~\ref{app:historical} covers CPU, memory,
+direct virtual-disk I/O, and loopback traffic. Broad intervals span zero for
+most workloads, while CPUID and RTT costs remain substantial. A 17.23\%
+off/post versus off/pre drift in bulk TCP highlights the limits of block order
+and a single boot. A matched no-monitor descendant baseline using the same
+VMware backend, a current active-lease performance suite, descendant persistent
+disk I/O, and external-network performance are not available.
+
+\paragraph{Exit and memory accounting.}
+A historical nested benchmark window records 19,489,348 resident dispatches,
+approximately 167,733 per second. VMREAD, HLT, VMWRITE, EPT violation, and CPUID
+account for approximately 6.36, 5.64, 2.65, 2.55, and 0.82 million events.
+The INVEPT-wrapper counter records 101,233 calls, about 874.4 per second, with
+zero failures. Counter queries have different interval boundaries; their
+denominators must not be mixed. These windows include startup and controller
+work and are not isolated steady-state rates or global outer-Hyper-V counts.
+An intercepted INVVPID instruction category is available, but an actual
+hardware INVVPID total is not. Actual newly ORed A/D bits are zero in this
+window, so it does not establish all A/D writeback semantics at runtime.
+
+The historical optimized structures reserve a computed 3.25\,MiB of relevant
+shadow tables, snapshots, and A/D ledger capacity per active CPU, or 13\,MiB
+for four CPUs. This is a structure-capacity calculation, not a measured total
+driver footprint. The increase trades memory and preparation cost for fewer
+shadow-cache capacity failures.
+
+\subsection{Reversible HTTP policy corruption}
+\label{sec:application}
+The application fixture uses an unmodified BusyBox HTTP server to serve a
+4096-byte file-cache page containing a price policy. A separate fixed-schema
+consumer validates the complete body and emits \code{quote-1250} for the valid
+policy or \code{reject-corrupt-policy} for the zeroed replacement. HTTP status
+200 alone is insufficient. A privileged guest helper uses mlock/pagemap to pin
+and identify the page; this is explicit instrumentation.
+
+The EPT intervention targets GPA \code{0x02479000}, with original Windows~1
+backing \code{0xCCF89000} and replacement \code{0x204FD4000}. In three complete
+trials, the observed decision sequence is valid quote, rejection, valid quote.
+The strict HTTP/PFN join validates ninety responses, ten per stage per trial.
+A second analysis tolerating unrelated serial-line interleaving validates
+ninety-one policy observations; the extra observation is not counted by the
+strict contiguous join. Table~\ref{tab:application-runs} retains the fourth,
+incomplete attempt, whose bounded observer expires after five mapped samples.
+Its successful removal and cleanup are retained. Extending the observation
+window precedes the final complete trial.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Current EPT application attempts on 2026-09-16 UTC. The run suffix is
+\texttt{HHMMSSmmm}. PFN age measures freshness of the associated pagemap sample.}
+\label{tab:application-runs}
+\input{tables/application-runs}
+\end{table}
+
+The direct-write comparator uses a different pinned file with identical initial
+bytes and the same HTTP server, after the original pin has expired. It saves
+the original contents, writes zeroes from within the guest, and restores the
+saved bytes. Its GPA is \code{0x170d1000}. Three trials complete with the same
+decision sequence and 78 analyzed responses. Six observations in settling
+windows are excluded and retained in raw serial. The 0.5-second rule is relative
+to the first observation after each marker, not a precise physical-write
+timestamp. Consequently this is a comparison of effects and required authority,
+not a timing, atomicity, or throughput comparison.
+
+\begin{table}[tbp]
+\centering\small
+\caption{Control requirements in the measured HTTP fixture. Both interventions
+achieve corruption and recovery; the experiment establishes no speed advantage.}
+\label{tab:application-comparison}
+\begin{tabularx}{\linewidth}{@{}lXX@{}}
+\toprule
+Property & EPT substitution & Guest direct write \\
+\midrule
+Complete trials & 3 of 4 attempts & 3 of 3 trials \\
+Authority after setup & Authorized containing-Windows driver control & Guest file-write permission \\
+Original backing & Retained while private backing is served & File contents overwritten \\
+Recovery & Remove override and drain translations & Write saved original contents \\
+Guest preparation & Privileged page selection/pinning & Page pinning and byte backup \\
+VMM intervention & No management call, hook, or injected component in intervention path & Ordinary guest file I/O; no VMM operation \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Windows boot, VMware PID/creation time, TinyCore boot ID, and server
+PID/creation ticks remain unchanged within the respective intervals. Each
+trial has advancing, fresh PFN samples. Post-run source review, however, found
+that the measured policy collector printed its holder-alive field as a constant
+one. The analysis explicitly reports \code{independentHolderLiveness=false};
+that field is not evidence of liveness at each response. Fresh PFN observations
+and server identities remain usable, with this limitation. The collector was
+subsequently changed to perform \code{kill -0}, but that change was not rerun.
+A read-only pre-comparator collection stall and an old-holder create-new
+rejection are retained as setup failures, not application successes.
+
+The useful capability is reversible data-fault injection from containing
+Windows without extending VMware and without overwriting the source data page.
+Direct writing also works and may be the simpler choice when guest write
+authority and restoration bytes are available. The fixture does not establish
+production fault tolerance, a general JSON oracle, or agent-free page discovery.
+
+\subsection{Intermediate Hyper-V: a negative compatibility result}
+\label{sec:hyperv}
+After upgrading Windows~1 to Pro, installing its Hyper-V role, and rebooting
+outside measured intervals, a Generation~1 two-vCPU TinyCore fixture boots
+through normal \code{/init}. The first two rebuilt ISO images fail in ISOLINUX;
+the third succeeds. These setup failures are retained, with no claim that one
+specific image field has been isolated as their cause.
+
+In this configuration, Windows~1 is an \emph{inner Hyper-V root partition}.
+Its CPUID.1 ECX is \code{0xFEFA3203}, with VMX bit~5 clear. The \ks{} capability
+query returns \code{STATUS\_NOT\_SUPPORTED} (\code{0xC00000BB}), and both prepare
+and resident-start requests are refused before a control IOCTL is submitted.
+No resident processors or prepared resources are reported. A first CLI version
+returned empty output with exit code~2; the corrected shared engine reports
+the query stage and \code{controlSubmitted=false}. Neither is successful insertion.
+
+Windows boot identity and child VM GUID remain stable around the first
+admission attempt. The worker remains PID~2824 with the same creation time,
+and child uptime advances from 203.659 to 203.784 seconds. The guest has its own
+recorded boot ID and repeated normal-init heartbeats. This is positive evidence
+for the Hyper-V/TinyCore fixture and negative evidence for \ks{} admission at
+that insertion point.
+
+That refusal was re-measured with the current driver while an inner Hyper-V
+descendant was running. With \code{hypervisorlaunchtype} set to \code{Auto} and
+Windows~1 rebooted, its CPUID.1 ECX reads \code{0xFEFA3203} with the VMX bit
+clear, and the reported features reduce to Intel and hypervisor-present with no
+VMX entry at all. The driver itself loads and its service reaches the running
+state; it is admission that fails. All four of prepare, EPT-switch prepare,
+self-test and nested residency return \code{STATUS\_NOT\_SUPPORTED} at the
+capability-query stage with \code{controlSubmitted} false, so no control request
+reaches the driver's own logic. Meanwhile the Hyper-V descendant -- a two-vCPU,
+768\,MiB TinyCore guest -- starts and runs, and its worker process is present
+throughout. The configuration was returned to \code{Off} afterwards and the
+VMware stack verified working again.
+
+This is why the large-leaf mechanism has no Hyper-V measurement. Not because the
+mechanism excludes it, but because \ks{} cannot be beneath that hypervisor at
+all: Hyper-V starts from the boot loader, before any driver loads, and takes the
+virtualization extensions with it. There is no ordering in which the monitor is
+already resident when the inner hypervisor starts.
+
+Microsoft describes Hyper-V as a hypervisor below its root partition, whose
+management stack creates child partitions~\cite{hyperv-architecture}. Exposing
+nested extensions to a managed child~\cite{hyperv-nested} does not establish
+VMX execution authority for another monitor in the inner root partition.
+Installing the role therefore changes the topology; it does not simply replace
+VMware with another process inside an otherwise unchanged Windows kernel.
+We make no impossibility claim about all alternative architectures or future
+builds. Descendant EPT control and live Hyper-V interposition remain unsupported
+by these measurements.

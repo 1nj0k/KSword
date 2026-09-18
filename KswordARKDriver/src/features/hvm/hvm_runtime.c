@@ -1798,6 +1798,16 @@ KswordARKHvmSelfTestProcessor(
     BOOLEAN transitionOwned = FALSE;
     BOOLEAN irqlRaised = FALSE;
     BOOLEAN cr4Changed = FALSE;
+    BOOLEAN vmxOwned = FALSE;
+    KSW_HVM_VMCS12_STATE* nativeScratch = NULL;
+
+    /* Allocate before affinity/IRQL changes; never put 16 KiB on a kernel stack. */
+    nativeScratch = (KSW_HVM_VMCS12_STATE*)KswordARKAllocateNonPagedPool(
+        sizeof(*nativeScratch), 'iVKH');
+    if (nativeScratch == NULL) {
+        Cpu->Row.lastStatus = STATUS_INSUFFICIENT_RESOURCES;
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
 
     /* Bind the current system thread to the exact resource-owning processor. */
     targetAffinity.Group = Cpu->Row.processorGroup;
@@ -1863,11 +1873,15 @@ KswordARKHvmSelfTestProcessor(
             __leave;
         }
 
-        /* A successful VMXON is immediately paired with VMXOFF. */
+        vmxOwned = TRUE;
+        /* Verify hardware field persistence and the importer on this exact CPU. */
+        status = KswordARKHvmNestedVmcsNativeSelfTest(Cpu, nativeScratch);
+        /* All private VMCSs have been cleared before relinquishing VMX. */
         (void)__vmx_off();
-        Cpu->Row.stateFlags |=
-            KSWORD_ARK_HVM_CPU_STATE_VMXON_SUCCEEDED;
-        status = STATUS_SUCCESS;
+        vmxOwned = FALSE;
+        if (NT_SUCCESS(status)) {
+            Cpu->Row.stateFlags |= KSWORD_ARK_HVM_CPU_STATE_VMXON_SUCCEEDED;
+        }
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
         Cpu->Row.stateFlags |=
@@ -1876,6 +1890,14 @@ KswordARKHvmSelfTestProcessor(
         status = GetExceptionCode();
     }
 
+    /* Exceptions after VMXON must not leave ownership behind. */
+    if (vmxOwned) {
+        unsigned __int64 physical = (ULONGLONG)Cpu->VmcsPhysical.QuadPart;
+        (void)__vmx_vmclear(&physical);
+        physical = (ULONGLONG)Cpu->Vmcs02Physical.QuadPart;
+        (void)__vmx_vmclear(&physical);
+        __vmx_off();
+    }
     /* Restore the original control register before lowering IRQL. */
     if (cr4Changed) {
         __try {
@@ -1897,6 +1919,7 @@ Complete:
     if (affinitySet) {
         KeRevertToUserGroupAffinityThread(&oldAffinity);
     }
+    ExFreePool(nativeScratch);
     Cpu->Row.lastStatus = status;
     return status;
 }

@@ -15,9 +15,221 @@ Environment:
 --*/
 
 #include "hvm_nested_vmcs.h"
+#include "hvm_vmcs.h"
+#if defined(_M_AMD64)
+#include <intrin.h>
+#endif
 
 /* Name Intel VM-entry invalid-control-fields error seven. */
 #define KSW_HVM_VMX_ERROR_INVALID_CONTROL_FIELDS 7UL
+
+/* Native VMCS layout is implementation-specific. Never decode its page bytes. */
+NTSTATUS KswordARKHvmNestedVmcsImportCleared(
+    ULONGLONG PhysicalAddress,
+    KSW_HVM_VMCS12_STATE* Destination,
+    const ULONG* SupportedFields,
+    ULONG* DiscoveredFields,
+    ULONG* FieldCount)
+{
+#if defined(_M_AMD64)
+    unsigned __int64 original = ~0ULL;
+    unsigned __int64 source = PhysicalAddress;
+    SIZE_T value = 0;
+    SIZE_T originalError = 0;
+    ULONG slot;
+    NTSTATUS status = STATUS_HV_OPERATION_FAILED;
+    BOOLEAN loaded = FALSE;
+    UCHAR cleared;
+    UCHAR restored = 0;
+
+    if (Destination == NULL || FieldCount == NULL || PhysicalAddress == 0 ||
+        (PhysicalAddress & 0xFFFULL) != 0 ||
+        (SupportedFields == NULL && DiscoveredFields == NULL)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    *FieldCount = 0;
+    __vmx_vmptrst(&original);
+    if (original == source) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    /* The caller admits only inactive VMCSs. VMCLEAR also validates the PA. */
+    if (__vmx_vmclear(&source) != 0) {
+        return STATUS_HV_OPERATION_FAILED;
+    }
+    if (__vmx_vmptrld(&source) == 0) {
+        loaded = TRUE;
+        KswordARKHvmNestedVmcsInitialize(Destination, NULL);
+        Destination->Current = TRUE;
+        Destination->PhysicalAddress = PhysicalAddress;
+        if (DiscoveredFields != NULL) {
+            RtlZeroMemory(DiscoveredFields, 64 * sizeof(ULONG));
+        }
+        /* Unsupported-field discovery itself changes VM_INSTRUCTION_ERROR. */
+        if (KswordARKHvmVmcsFieldLoad(0x4400, &originalError) == 0) {
+            status = STATUS_SUCCESS;
+            for (slot = 0; slot < KSW_HVM_VMCS12_SLOT_COUNT; ++slot) {
+                const ULONG encoding = ((slot / 512) << 13) |
+                    (((slot % 512) / 128) << 10) | ((slot % 128) << 1);
+                if (SupportedFields != NULL &&
+                    (SupportedFields[slot / 32] & (1UL << (slot % 32))) == 0) {
+                    continue;
+                }
+                if (encoding == 0x4400) {
+                    value = originalError;
+                } else if (KswordARKHvmVmcsFieldLoad(encoding, &value) != 0) {
+                    if (SupportedFields != NULL) {
+                        status = STATUS_HV_OPERATION_FAILED;
+                        break;
+                    }
+                    continue;
+                }
+                Destination->Fields[slot] = (ULONGLONG)value;
+                if (DiscoveredFields != NULL) {
+                    DiscoveredFields[slot / 32] |= 1UL << (slot % 32);
+                }
+                ++*FieldCount;
+            }
+            Destination->InstructionError = (ULONG)originalError;
+            Destination->WriteSerial = 1;
+            /* No guessed launch state: admission requires a clear boundary. */
+            Destination->Launched = FALSE;
+        }
+    }
+    cleared = loaded ? __vmx_vmclear(&source) : 0;
+    if (original != ~0ULL) {
+        restored = __vmx_vmptrld(&original);
+    }
+    if (cleared != 0 || restored != 0) {
+        /* A foreign/current or still-active VMCS cannot escape this helper. */
+        KeBugCheckEx(0x20001, 0x4E564D43, PhysicalAddress, cleared, restored);
+    }
+    return status;
+#else
+    UNREFERENCED_PARAMETER(PhysicalAddress);
+    UNREFERENCED_PARAMETER(Destination);
+    UNREFERENCED_PARAMETER(SupportedFields);
+    UNREFERENCED_PARAMETER(DiscoveredFields);
+    UNREFERENCED_PARAMETER(FieldCount);
+    return STATUS_NOT_SUPPORTED;
+#endif
+}
+
+NTSTATUS KswordARKHvmNestedVmcsNativeSelfTest(
+    KSW_HVM_CPU_RESOURCE* Cpu,
+    KSW_HVM_VMCS12_STATE* Scratch)
+{
+#if defined(_M_AMD64)
+    static const ULONG fields[] = {0x0802, 0x4004, 0x2010, 0x681E};
+    static const ULONGLONG values[] = {
+        0x28ULL, 0xA5010080ULL, 0x1122334455667788ULL, 0xFFFF800012345678ULL};
+    unsigned __int64 source = (ULONGLONG)Cpu->Vmcs02Physical.QuadPart;
+    unsigned __int64 anchor = (ULONGLONG)Cpu->VmcsPhysical.QuadPart;
+    unsigned __int64 current = ~0ULL;
+    ULONG count = 0, index;
+    ULONGLONG readback = 0;
+    NTSTATUS status = STATUS_HV_OPERATION_FAILED;
+    Cpu->NativeVmcsFieldCount = 0;
+    RtlZeroMemory(Cpu->NativeVmcsFields, sizeof(Cpu->NativeVmcsFields));
+    /*
+     * Say which step failed, not merely that one did.
+     *
+     * Four of the exits below return the same status, so a failure reported
+     * only as STATUS_HV_OPERATION_FAILED on four processors leaves no way to
+     * tell "vmcs02 would not load" from "this processor answered a capability
+     * question differently than the test assumed". The site is published in the
+     * per-processor row, which already carries VMX instruction results, and is
+     * cleared on success.
+     */
+    Cpu->Row.vmxInstructionResult = KSW_HVM_NATIVE_SITE_LOAD_SOURCE;
+    if (__vmx_vmclear(&source) != 0 || __vmx_vmptrld(&source) != 0) {
+        goto Cleanup;
+    }
+    Cpu->Row.vmxInstructionResult = KSW_HVM_NATIVE_SITE_STORE_FIELDS;
+    for (index = 0; index < RTL_NUMBER_OF(fields); ++index) {
+        if (KswordARKHvmVmcsFieldStore(fields[index], (SIZE_T)values[index]) != 0) {
+            goto Cleanup;
+        }
+    }
+    Cpu->Row.vmxInstructionResult = KSW_HVM_NATIVE_SITE_SWITCH_ANCHOR;
+    if (__vmx_vmclear(&source) != 0 || __vmx_vmclear(&anchor) != 0 ||
+        __vmx_vmptrld(&anchor) != 0) {
+        goto Cleanup;
+    }
+    /* Each condition gets its own site: they fail for unrelated reasons. */
+    Cpu->Row.vmxInstructionResult = KSW_HVM_NATIVE_SITE_IMPORT;
+    status = KswordARKHvmNestedVmcsImportCleared(
+        source, Scratch, NULL, Cpu->NativeVmcsFields, &count);
+    __vmx_vmptrst(&current);
+    if (!NT_SUCCESS(status)) { goto Cleanup; }
+    status = STATUS_DATA_ERROR;
+    if (current != anchor) {
+        Cpu->Row.vmxInstructionResult = KSW_HVM_NATIVE_SITE_IMPORT_ANCHOR;
+        goto Cleanup;
+    }
+    if (count == 0) {
+        Cpu->Row.vmxInstructionResult = KSW_HVM_NATIVE_SITE_IMPORT_EMPTY;
+        goto Cleanup;
+    }
+    if (Scratch->Launched) {
+        Cpu->Row.vmxInstructionResult = KSW_HVM_NATIVE_SITE_IMPORT_LAUNCHED;
+        goto Cleanup;
+    }
+    /*
+     * The error slot and the summary must agree.
+     *
+     * This used to compare against a value read from vmcs02 before the import
+     * cleared it, which is not a property anything guarantees: VM-instruction
+     * error is live state the processor rewrites, VMCLEAR resets it, and the
+     * import deliberately reloads the VMCS. Comparing across that boundary
+     * failed on all four processors and was testing the wrong thing.
+     *
+     * What the importer actually promises is internal: enumerating the fields
+     * issues VMREADs that themselves set VM-instruction error, so it snapshots
+     * the value on entry and substitutes that snapshot when it reaches the error
+     * field rather than reading it again. If that substitution were dropped the
+     * slot would hold whatever the last probe produced, so requiring the slot and
+     * the summary to match is exactly the check that catches it.
+     */
+    if (!NT_SUCCESS(KswordARKHvmNestedVmcs12Read(Scratch, 0x4400, &readback)) ||
+        readback != (ULONGLONG)Scratch->InstructionError) {
+        Cpu->Row.vmxInstructionResult = KSW_HVM_NATIVE_SITE_IMPORT_ERRORFIELD;
+        goto Cleanup;
+    }
+    Cpu->Row.vmxInstructionResult = KSW_HVM_NATIVE_SITE_IMPORT_FIELDS;
+    for (index = 0; index < RTL_NUMBER_OF(fields); ++index) {
+        if (!NT_SUCCESS(KswordARKHvmNestedVmcs12Read(Scratch, fields[index], &readback)) ||
+            readback != values[index]) {
+            goto Cleanup;
+        }
+    }
+    Cpu->Row.vmxInstructionResult = KSW_HVM_NATIVE_SITE_IMPORT_STEADY;
+    /* The steady-state importer reads only fields this CPU actually supports. */
+    status = KswordARKHvmNestedVmcsImportCleared(
+        source, Scratch, Cpu->NativeVmcsFields, NULL, &count);
+    __vmx_vmptrst(&current);
+    if (NT_SUCCESS(status) && current == anchor) {
+        Cpu->NativeVmcsFieldCount = count;
+    } else {
+        status = STATUS_DATA_ERROR;
+    }
+Cleanup:
+    if (__vmx_vmclear(&source) != 0 || __vmx_vmclear(&anchor) != 0) {
+        Cpu->Row.vmxInstructionResult = KSW_HVM_NATIVE_SITE_CLEANUP;
+        status = STATUS_HV_OPERATION_FAILED;
+    }
+    if (!NT_SUCCESS(status)) {
+        Cpu->NativeVmcsFieldCount = 0;
+    } else {
+        /* Nothing to attribute once the whole sequence has passed. */
+        Cpu->Row.vmxInstructionResult = KSW_HVM_NATIVE_SITE_NONE;
+    }
+    return status;
+#else
+    UNREFERENCED_PARAMETER(Cpu);
+    UNREFERENCED_PARAMETER(Scratch);
+    return STATUS_NOT_SUPPORTED;
+#endif
+}
 
 VOID
 KswordARKHvmNestedVmcsInitialize(

@@ -22,6 +22,7 @@ Environment:
 #include "hvm_vmcs.h"
 /* Immutable translation identity shared by page admission and root readers. */
 #include "hvm_nested_lease_walk.h"
+#include "hvm_nested_leaf_plan.h"
 
 /* Define the architectural page size used by VMX and EPT structures. */
 #define KSW_HVM_PAGE_BYTES 0x1000ULL
@@ -268,6 +269,9 @@ typedef struct _KSW_HVM_CPU_RESOURCE
     ULONGLONG ExitReasonCount[KSWORD_ARK_HVM_EXIT_REASON_SLOTS];
     /* Vendor-private resources; never interpreted as a VMX allocation. */
     PVOID BackendContext;
+    /* Populated on this CPU by the native VMCS self-test, never guessed. */
+    ULONG NativeVmcsFields[64];
+    ULONG NativeVmcsFieldCount;
 } KSW_HVM_CPU_RESOURCE;
 
 /* Track one contiguous page allocated for an EPT hierarchy. */
@@ -590,6 +594,38 @@ typedef struct _KSW_HVM_NESTED_PAGE {
     ULONGLONG OwnerCreationTime;
     /* Publication never automatically rebinds this path to a recycled GPA. */
     KSW_HVM_PAGE_TRANSLATION Translation;
+    /*
+     * Region this override owns, appended rather than inserted.
+     *
+     * Appended deliberately: this structure is read from VMX root by the
+     * composition path, and inserting a field mid-structure produces two
+     * different layouts across an incremental build, which shows up as a
+     * bugcheck rather than a compile error.
+     *
+     * Plan.LeafShift is 12 for the original single-page behaviour, so every
+     * field below is meaningful for a 4-KiB override too and the composition
+     * path needs no special case for it.
+     */
+    KSW_HVM_LEAF_PLAN Plan;
+    /* Bytes actually allocated for the replacement; freed as one block. */
+    ULONGLONG BackingBytes;
+    /* Count of staged page writes applied since publication, for evidence. */
+    volatile LONG64 StagedPageCount;
+    /*
+     * What the admitting scan proved, kept so it can be rechecked.
+     *
+     * Admission by scanning reads every source leaf under the region once. That
+     * is a statement about one instant, and the intermediate VMM keeps changing
+     * its per-page permissions while the guest runs - measured: a region that
+     * scanned uniform disagreed on a later run, and one that disagreed scanned
+     * uniform. Without these the region would keep serving on a condition
+     * nobody ever looked at again.
+     */
+    ULONGLONG ScanSharedBits;
+    /* Next page of the region for the sampler to recheck; wraps. */
+    volatile LONG ScanCursor;
+    /* Set only for regions the scanning rule admitted. */
+    BOOLEAN ScanAdmitted;
 } KSW_HVM_NESTED_PAGE;
 
 typedef struct _KSW_HVM_RUNTIME
