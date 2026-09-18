@@ -166,7 +166,7 @@ def duplicate_values(values: list[str]) -> list[str]:
 
 def load_context_translations(path: Path) -> dict[str, str]:
     """Load one language pack's semantic context translation mapping."""
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
     translations = payload.get("context_translations")
     if not isinstance(translations, dict):
         raise ValueError(f"{path}: context_translations is missing or not an object")
@@ -441,7 +441,7 @@ def validate() -> list[str]:
 
     for language_id, path in LANGUAGE_PATHS.items():
         try:
-            language_source = path.read_text(encoding="utf-8")
+            language_source = path.read_text(encoding="utf-8-sig")
             translations = load_context_translations(path)
         except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
             errors.append(str(error))
