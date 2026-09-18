@@ -52,6 +52,22 @@ Get-KswordVmwareEvidence -Vmx $labVmx | ConvertTo-Json -Depth 8
 该脚本不自动重启，不导入证书；Secure Boot 开启时先停下，在关闭的**克隆 VM**上调整虚拟固件设置。
 存在来宾组策略/UEFI 锁时仍以重启后实际 VBS 状态为准。
 
+已挂载 `KSwordLab` 共享目录时，可在克隆的**管理员 Windows PowerShell**运行：
+
+```powershell
+$share='\\vmware-host\Shared Folders\KSwordLab'
+& "$share\Bootstrap-GuestLab.ps1" -Mode Inspect
+# 只有 Inspect 显示 secureBoot=false 后：
+& "$share\Bootstrap-GuestLab.ps1" -Mode Configure
+```
+
+`Configure` 将匹配的候选文件复制到克隆的 `C:\KSwordLab\candidate`，仅在克隆中导入实验公钥，
+然后配置 KD、测试签名、VBS/Hyper-V Off 和转储。它不重启，也不作用于宿主或源 VM。
+
+克隆重启并确认 KD 已连接后，在同一管理员 PowerShell 运行 `Load-GuestCandidate.ps1`。
+它复核候选哈希及来宾证书信任，并用与主程序相同的 SCM 需求启动方式加载 `KswordARK`；
+成功时才运行一次只读 `hvm_ctl --json status`。加载失败时保留服务与证据，不自动卸载或继续 HVM 命令。
+
 ## 调试闭环
 
 隔离候选使用 `Sign-LabCandidate.ps1 -CandidateDirectory <候选目录>` 签名。
@@ -115,11 +131,20 @@ stage 3 不清除 Active，必须由真实全核 stop 收回已进入 CPU。
 cmd /c tools/hvm_lab/build-tests.cmd
 powershell.exe -NoProfile -File tools/hvm_lab/Test-BootPolicy.ps1
 powershell.exe -NoProfile -File tools/hvm_lab/Test-BootTransactions.ps1
+powershell.exe -NoProfile -File tools/hvm_lab/Test-BcdBinding.ps1
 cmd /c tools/hvm_ctl/build.cmd
 python tools/hvm_ctl/test_command_parity.py
+cmd /c tools/hvm_ctl/build-tests.cmd
+powershell.exe -NoProfile -File tools/hvm_lab/Test-GuestLoader.ps1
 ```
 
+`Load-GuestCandidate.ps1` 可在同一候选已经运行时重试，只查询该服务；活动的其它驱动路径仍拒绝修改。
+从共享目录运行时，脚本先核对本地 SYS/PDB 与共享清单相同，再更新本地 hvm_ctl/identity（不替换 SYS/PDB）。
+证据目录包含之前的身份清单、SCM 查询和分离的 status JSON/stderr。JSON 文本统一使用 ASCII Unicode escape，
+防止 Windows PowerShell 5.1 的 OEM/ANSI 解码损坏 UTF-8 及相邻引号；上述测试使用实际 query 格式化代码的模拟响应，不能替代 SVM 硬件验证。
+
 首版要求 NRIP，未实现安全的任意来宾指令读取/长度回退；不支持 >48 位物理地址、活动 CET/LA57/PKS/UINTR 或非零 XSS。
+BCD 绑定回归使用真实 System.Management 嵌入对象及本机 WMI 类元数据，不调用 BCD 读写方法；不能替代管理员环境的启动往返。
 XSAVE/XRSTOR 使用 XCR0 的标准格式；启动前重新核对，XSETBV 和相关 MSR 写入受控。
 NPT 使用 AMD 页表位，完整覆盖 CPUID 地址范围；同一遍历先精确计算包含 RAM 边界拆分的页表成本，超过 64 MiB 拒绝。
 RAM 选择现有 host PAT 的 WB 项、空洞/MMIO 选择 UC 项；最终类型仍按 AMD guest PAT、nested PAT、物理地址 MTRR 合成，未修改全局 PAT。

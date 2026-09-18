@@ -22,16 +22,37 @@ function Assert-AmdLabAdmin {
     }
 }
 
+function ConvertTo-AmdBcdInstance($Embedded) {
+    # Embedded WMI output is ManagementBaseObject (data only), not an invocable instance.
+    # Bind the documented key properties explicitly; embedded __PATH can be empty.
+    switch ([string]$Embedded.__CLASS) {
+        'BcdStore' {
+            $file = ([string]$Embedded.FilePath).Replace('\','\\').Replace('"','\"')
+            $path = 'BcdStore.FilePath="' + $file + '"'
+        }
+        'BcdObject' {
+            $file = ([string]$Embedded.StoreFilePath).Replace('\','\\').Replace('"','\"')
+            $id = [string]$Embedded.Id
+            if ($id -notmatch '^\{[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\}$') {
+                throw 'BCD provider returned an invalid object identifier.'
+            }
+            $path = 'BcdObject.Id="' + $id + '",StoreFilePath="' + $file + '"'
+        }
+        default { throw 'BCD provider returned an unexpected embedded class.' }
+    }
+    return [System.Management.ManagementObject]::new('root\WMI', $path, $null)
+}
+
 function Open-AmdBcdStore {
     $result = ([wmiclass]'root\WMI:BcdStore').OpenStore('')
     if (-not $result.ReturnValue) { throw 'Cannot open the system BCD store.' }
-    return $result.Store
+    return ConvertTo-AmdBcdInstance $result.Store
 }
 
 function Open-AmdBcdObject($Store, [string]$Id) {
     $result = $Store.OpenObject($Id)
     if (-not $result.ReturnValue) { throw "Cannot open BCD object $Id." }
-    return $result.Object
+    return ConvertTo-AmdBcdInstance $result.Object
 }
 
 function Get-AmdBcdElement($Object, [uint32]$Type) {

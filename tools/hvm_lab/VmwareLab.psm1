@@ -75,12 +75,12 @@ function Get-KswordVmwareEvidence {
     param([Parameter(Mandatory)][string]$Vmx)
     $config = Get-KswordVmx $Vmx
     $log = Join-Path (Split-Path $Vmx) 'vmware.log'
-    $matches = if (Test-Path $log) { @(Select-String -LiteralPath $log -Pattern 'Monitor Mode:|WHP|Hyper-V|AMD-V|SVM|VHV' | ForEach-Object Line) } else { @() }
+    $logLines = if (Test-Path $log) { @(Select-String -LiteralPath $log -Pattern 'Monitor Mode:|WHP|Hyper-V|AMD-V|SVM|VHV' | ForEach-Object Line) } else { @() }
     # ULM/WHP is not the native AMD-V configuration required by this experiment.
-    $native = @($matches | Where-Object { $_ -match 'Monitor Mode:\s*CPL0' }).Count -gt 0
-    $ulm = @($matches | Where-Object { $_ -match 'Monitor Mode:\s*ULM' }).Count -gt 0
+    $native = @($logLines | Where-Object { $_ -match 'Monitor Mode:\s*CPL0' }).Count -gt 0
+    $ulm = @($logLines | Where-Object { $_ -match 'Monitor Mode:\s*ULM' }).Count -gt 0
     [pscustomobject]@{ vmx=$Vmx; configuration=$config; nativeLogObserved=($native -and -not $ulm);
-        guestSvmVerified=$false; logEvidence=$matches }
+        guestSvmVerified=$false; logEvidence=$logLines }
 }
 
 function Invoke-KswordLabGuest {

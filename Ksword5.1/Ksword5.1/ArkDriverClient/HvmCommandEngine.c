@@ -906,12 +906,12 @@ static int DoCpuidView(int asJson)
     if (asJson) {
         printf("{\"kind\":\"cpuidView\",\"hypervisorPresent\":%s,"
                "\"leaf1Ecx\":\"0x%08X\","
-               "\"hvLeafEax\":\"0x%08X\",\"hvVendor\":\"%s\","
-               "\"hidden\":%s}\n",
+               "\"hvLeafEax\":\"0x%08X\",\"hvVendor\":",
                present ? "true" : "false",
                (unsigned int)leaf1[2],
-               (unsigned int)hvVendor[0],
-               vendor,
+               (unsigned int)hvVendor[0]);
+        KswordHvmPrintJsonString(vendor);
+        printf(",\"hidden\":%s}\n",
                (!present && hvVendor[0] == 0) ? "true" : "false");
         return 0;
     }
@@ -991,7 +991,7 @@ static int DoQuery(HANDLE h, int asJson)
                "\"nestedVmcs12EvictionCount\":%lu,"
                "\"nestedFuseTripCount\":%lu,"
                "\"nestedLastRefusalSite\":%u,"
-               "\"nestedLastRefusalSiteText\":\"%s\"",
+               "\"nestedLastRefusalSiteText\":",
                rsp.generation, rsp.processorCount,
                rsp.preparedProcessorCount, rsp.selfTestPassedProcessorCount,
                rsp.residentProcessorCount,
@@ -1018,8 +1018,8 @@ static int DoQuery(HANDLE h, int asJson)
                rsp.nestedL2LaunchRefusedCount,
                rsp.nestedVmcs12EvictionCount,
                rsp.nestedFuseTripCount,
-               (unsigned)rsp.nestedLastRefusalSite,
-               RefusalSiteName(rsp.nestedLastRefusalSite));
+               (unsigned)rsp.nestedLastRefusalSite);
+        KswordHvmPrintJsonString(RefusalSiteName(rsp.nestedLastRefusalSite));
         /*
          * 只发非零项，键是退出原因编号。
          *

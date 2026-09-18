@@ -254,11 +254,36 @@ int KswordHvmValidateArguments(const HVM_COMMAND_SPEC* command, int count,
 void KswordHvmPrintJsonString(const char* text)
 {
     const unsigned char* c = (const unsigned char*)text;
+    size_t remaining = strlen(text);
     putchar('"');
-    for (; *c; ++c) {
+    while (remaining) {
+        /* ASCII-only JSON survives Windows PowerShell's legacy pipe decoding.
+         * Decode UTF-8 before escaping: escaping individual bytes changes text.
+         * UTF-16 surrogate pairs are the JSON representation of non-BMP text. */
+        if (*c >= 0x80) {
+            wchar_t units[2];
+            int length = *c >= 0xF0 ? 4 : (*c >= 0xE0 ? 3 : 2);
+            int count = remaining >= (size_t)length
+                ? MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                                      (const char*)c, length, units, 2) : 0;
+            int i;
+            if (!count) {
+                printf("\\ufffd");
+                length = 1;
+            } else {
+                for (i = 0; i < count; ++i) {
+                    printf("\\u%04x", (unsigned int)units[i]);
+                }
+            }
+            c += length;
+            remaining -= (size_t)length;
+            continue;
+        }
         if (*c == '"' || *c == '\\') { putchar('\\'); putchar(*c); }
         else if (*c < 0x20) { printf("\\u%04x", *c); }
         else { putchar(*c); }
+        ++c;
+        --remaining;
     }
     putchar('"');
 }

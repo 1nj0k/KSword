@@ -1,7 +1,24 @@
-# AMD 实验实现状态（2026-09-17，硬件验收前）
+# AMD 实验实现状态（2026-09-18，单核自检前）
+
+## 当前进度（以下本节优先于后面的历史记录）
+
+- 宿主实验启动成功，HypervisorPresent=false、VBS=0；日常恢复方向尚未测试。
+- 独立 VMware 克隆为 Windows 10 家庭中文版 19042、1 vCPU/8 GiB、Secure Boot=false。CPL0、SVM/NPT 外层日志已保存；原 VM 未修改。
+- 来宾初始化完成并重启；WinDbg 已连接内核。普通驱动断点、匹配符号的实际加载和受控转储链仍待验证，连接成功不替代这些证据。
+- 用户实测候选加载脚本到达最后 JSON 解析处：签名信任、SCM RUNNING 检查及状态 IOCTL 已成功；AMD 响应 backend=2、slatType=2、ASID=64、physicalBits=45、msrValidMask=15、VM_CR=8、EFER=0x4D01、HSAVE=0。状态仅 INITIALIZED，未 prepare/self-test/resident。
+- 阻塞根因已在宿主复现：合法 UTF-8 `没有拒绝过` 经过代码页 936 解码后，末尾 UTF-8 字节和 ASCII 引号一起变坏，JSON 解析失败；437 只乱码，65001 正常。不能归因为驱动返回了损坏的 JSON（JSON 在用户态生成）。
+- 修复：共享 JSON 字符串打印器转义为 ASCII 的 Unicode escape，保留原字段及中文语义；query 使用该打印器。CLI Release /W4 /WX 构建通过；真实 query 格式化代码的模拟响应通过 PS 5.1/936 管道，含特殊字符、非 BMP 与非法 UTF-8 测例；命令一致性 60 命令通过。
+- 加载脚本支持正在运行且规范化路径精确匹配的候选，不 stop/config/start；从只读共享目录更新 CLI/identity 前核对原 SYS/PDB 哈希，绝不覆盖驱动。日志分开保留 stderr；修复 PS 5.1 provider 属性递归序列化造成的耗时。7 项模拟服务/更新测试通过，修复后仍需来宾实际重跑。
+- 下一步在已登录克隆运行共享目录的 Load-GuestCandidate.ps1。确认 status 可解析后，先完成 KD/转储证据，再执行单核 prepare/self-test；不能跳到多核压力。
+
+## 2026-09-17 至 09-18 早期记录（不是当前状态）
 
 目前是可编译的实验候选，**尚未执行第一次来宾 VMRUN，未证明单核或多核常驻可用**。
 本文件用于重启后续接，不能用作硬件通过报告。源代码尚未提交；候选清单绑定基准提交与修改文件哈希。
+
+2026-09-18 续记：上述实现已提交为 `d6218fd7`，未推送。首次管理员运行环境脚本在只读 OpenObject 处发现 WMI 嵌入对象缺少实例方法，尚未执行 BCD 修改。已补充显式实例绑定及 8 项真实 System.Management 类型/schema 回归；策略 12 项和模拟事务 21 项继续通过。等待管理员重试，宿主往返和 AMD 硬件测试仍未通过。
+
+同日实验启动成功：脚本核验 `LabHostReady`，独立读取的宿主状态为 HypervisorPresent=false、VBS=0。独立克隆以 1 vCPU/8 GiB 冷启动；VMware 日志为 `Monitor Mode: CPL0`，并报告 hv-svm/gphys-npt、SVM/NPT/NRIP 能力，Tools 运行。该结果证明外层实验条件，**不证明 KSword 曾执行 VMRUN**。来宾 Tools 不允许使用空密码的远程操作，因此已将候选与受限 Bootstrap-GuestLab.ps1 放入只读共享目录；来宾预检、Secure Boot 处理、KD、候选加载与第一次 SVM 自检尚未执行。
 
 ## 已实现与已验证
 
