@@ -2931,7 +2931,8 @@ KswordARKHvmControl(
             KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
             KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED |
             KSWORD_ARK_HVM_CONTROL_FLAG_ENABLE_EPTP_SWITCH |
-            KSWORD_ARK_HVM_CONTROL_FLAG_ENABLE_LOCAL_EPT;
+            KSWORD_ARK_HVM_CONTROL_FLAG_ENABLE_LOCAL_EPT |
+            KSWORD_ARK_HVM_CONTROL_FLAG_SVM_NESTED_PROBE;
         /* Stop after selecting the prepare flag set. */
         break;
     case KSWORD_ARK_HVM_CONTROL_SELF_TEST:
@@ -2939,7 +2940,8 @@ KswordARKHvmControl(
         allowedFlags =
             KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
             KSWORD_ARK_HVM_CONTROL_FLAG_FORCE |
-            KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED;
+            KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED |
+            KSWORD_ARK_HVM_CONTROL_FLAG_SVM_NESTED_PROBE;
         /* Stop after selecting the self-test flag set. */
         break;
     case KSWORD_ARK_HVM_CONTROL_TEARDOWN:
@@ -3094,6 +3096,15 @@ KswordARKHvmControl(
      * Refused here, before any allocation, so the caller gets a reason
      * instead of a half-built runtime.
      */
+    if ((Request->flags & KSWORD_ARK_HVM_CONTROL_FLAG_SVM_NESTED_PROBE) &&
+        g_KswordHvm.BackendId != KSWORD_ARK_HVM_BACKEND_SVM) {
+        /* Never reinterpret the AMD test flag as an Intel preparation option. */
+        Response->status = KSWORD_ARK_HVM_CONTROL_STATUS_UNSUPPORTED_CPU;
+        /* Return the precise unsupported backend selection without executing hardware. */
+        Response->lastStatus = STATUS_NOT_SUPPORTED;
+        /* Keep semantic failures available in the normal protocol response. */
+        return STATUS_SUCCESS;
+    }
     if ((Request->flags &
             KSWORD_ARK_HVM_CONTROL_FLAG_ENABLE_EPTP_SWITCH) != 0UL &&
         (Request->flags &

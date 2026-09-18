@@ -1,0 +1,171 @@
+/* Run the production exit dispatcher as a host state machine, without SVM instructions. */
+#include "../../KswordARKDriver/src/features/hvm/hvm_svm_nested_runtime.h"
+#include <stdio.h>
+#include <string.h>
+
+static unsigned checks;
+#define CHECK(x) do { ++checks; if (!(x)) { printf("FAIL %u: %s\n", __LINE__, #x); return 1; } } while (0)
+static KSW_SVM_CPU cpu;
+static KSW_SVM_NESTED nested;
+static KSW_SVM_VMCB guest, operand[2];
+static KSW_NPT outer;
+static unsigned char stack[KSW_SVM_STACK_BYTES];
+__declspec(align(4096)) static KSW_SVM_U64 shadow[8][512];
+static KSW_SVM_U64 memory[64][512];
+static ULONGLONG fakeRip;
+static unsigned traces;
+void KswordSvmTrace(KSW_SVM_CPU* c, ULONG stage) { (void)c; (void)stage; ++traces; }
+void KswordSvmAsmGuestResume(void) { }
+void KswordSvmAsmNestedProbe(void) { }
+void KswordSvmAsmNestedPayload(void) { }
+int KswordSvmNestedRead(void* context, KSW_SVM_U64 address, KSW_SVM_U64* value)
+{
+    (void)context;
+    if ((address & 7) || address >= sizeof(memory)) { return 0; }
+    *value = memory[address >> 12][(address & 4095) / 8];
+    return 1;
+}
+int KswordSvmNestedCompareOr(void* context, KSW_SVM_U64 address, KSW_SVM_U64 expected, KSW_SVM_U64 bits)
+{
+    KSW_SVM_U64* slot;
+    (void)context;
+    if ((address & 7) || address >= sizeof(memory)) { return 0; }
+    slot = &memory[address >> 12][(address & 4095) / 8];
+    if (*slot != expected) { return 0; }
+    *slot |= bits;
+    return 1;
+}
+static int initialize(void)
+{
+    unsigned i;
+    memset(&cpu, 0, sizeof(cpu));
+    memset(&nested, 0, sizeof(nested));
+    memset(&guest, 0, sizeof(guest));
+    memset(memory, 0, sizeof(memory));
+    cpu.Guest = &guest;
+    cpu.Nested = &nested;
+    cpu.Caps.PhysicalBits = 45;
+    cpu.Caps.Page1Gb = TRUE;
+    cpu.Caps.Pat = 0x0007010600070106ULL;
+    cpu.OriginalEfer = 0xd01;
+    cpu.LaunchRsp = 0xabc000;
+    cpu.LaunchFlags = 0x202;
+    cpu.Gpr[3] = 0x1122334455667788ULL;
+    nested.Operand = operand;
+    nested.OperandPa = 0x10000;
+    nested.Stack = stack;
+    nested.Outer = &outer;
+    outer.RootPa = 0x1000;
+    outer.AddressMask = KswNptAddressMask(45);
+    for (i = 0; i < 8; ++i) { nested.Pages[i].Words = shadow[i]; nested.Pages[i].Physical = 0x100000 + 4096ULL * i; }
+    CHECK(KswSvmNestedShadowInitialize(&nested.Shadow, nested.Pages, 8, 45) == KSW_NSHADOW_OK);
+    memory[1][0] = 0x2007;
+    memory[2][0] = 0x3007;
+    memory[3][0] = 0x4007;
+    for (i = 0; i < 64; ++i) { memory[4][i] = 4096ULL * i | 7; }
+    KswSvmWrite64(&guest, KSW_VMCB_CR3, 0x12345000);
+    KswSvmWrite64(&guest, KSW_VMCB_EFER, 0x1d01);
+    KswSvmWrite64(&guest, KSW_VMCB_RFLAGS, 0x202);
+    KswSvmWrite64(&guest, KSW_VMCB_GS, 0xaabbccdd);
+    CHECK(KswordSvmNestedBuildProbe(&cpu) == STATUS_SUCCESS);
+    CHECK(nested.Sequence == 1 && !nested.Entries && !nested.Reflections);
+    CHECK(KswSvmRead64(&guest, KSW_VMCB_RAX) == nested.OperandPa);
+    fakeRip = 0x8000;
+    traces = 0;
+    return 0;
+}
+static ULONG emit(ULONGLONG code, ULONGLONG rax)
+{
+    KswSvmWrite64(&guest, KSW_VMCB_EXITCODE, code);
+    KswSvmWrite64(&guest, KSW_VMCB_RAX, rax);
+    KswSvmWrite64(&guest, KSW_VMCB_RIP, fakeRip);
+    KswSvmWrite64(&guest, KSW_VMCB_NRIP, fakeRip + 3);
+    fakeRip += 3;
+    return KswordSvmNestedProbeExit(&cpu);
+}
+static ULONG write_msr(ULONG msr, ULONGLONG value)
+{
+    cpu.Gpr[1] = msr;
+    cpu.Gpr[2] = value >> 32;
+    KswSvmWrite64(&guest, KSW_VMCB_EXITINFO1, 1);
+    return emit(KSW_SVM_EXIT_MSR, (ULONG)value);
+}
+static int begin(void)
+{
+    cpu.Gpr[1] = KSW_SVM_CALL_SIGNATURE;
+    cpu.Gpr[2] = KSW_NSVM_BEGIN;
+    CHECK(emit(KSW_SVM_EXIT_VMMCALL, nested.OperandPa) == 0);
+    CHECK(nested.Begun && nested.OriginalGpr[3] == 0x1122334455667788ULL);
+    KswSvmWrite64(&guest, KSW_VMCB_RFLAGS, 2);
+    CHECK(write_msr(KSW_SVM_MSR_EFER, 0x1d01) == 0);
+    CHECK(write_msr(KSW_SVM_MSR_HSAVE, nested.OperandPa + 4096) == 0);
+    return 0;
+}
+static int test_roundtrip(void)
+{
+    ULONGLONG continuation;
+    if (initialize() || begin()) { return 1; }
+    KswSvmWrite64(operand, KSW_VMCB_GS, 0xbeef);
+    CHECK(emit(0x82, nested.OperandPa) == 0 && KswSvmRead64(&guest, KSW_VMCB_GS) == 0xbeef);
+    continuation = fakeRip + 3;
+    CHECK(emit(KSW_SVM_EXIT_VMRUN, nested.OperandPa) == 0);
+    CHECK(nested.RunningL2 && nested.Entries == 1 && !nested.Reflections);
+    CHECK(KswSvmRead64(&guest, KSW_VMCB_NCR3) == nested.Pages[0].Physical);
+    CHECK(KswSvmRead64(&guest, KSW_VMCB_RIP) == (ULONGLONG)(ULONG_PTR)KswordSvmAsmNestedPayload);
+    KswSvmWrite64(&guest, KSW_VMCB_EXITINFO1, KSW_NMMU_FINAL | 6);
+    KswSvmWrite64(&guest, KSW_VMCB_EXITINFO2, 0x2123);
+    CHECK(emit(KSW_SVM_EXIT_NPF, 0) == 0);
+    CHECK(nested.Faults == 1 && nested.LastTranslation.Status == KSW_NNPT_OK && nested.Shadow.Used == 4);
+    CHECK(emit(KSW_SVM_EXIT_CPUID, KSW_NSVM_INNER_MARKER) == 0);
+    CHECK(!nested.RunningL2 && nested.Reflections == 1 && nested.LastMarker == KSW_NSVM_INNER_MARKER);
+    CHECK(KswSvmRead64(&guest, KSW_VMCB_RIP) == continuation);
+    CHECK(KswSvmRead64(&guest, KSW_VMCB_RAX) == nested.OperandPa);
+    CHECK(KswSvmRead64(operand, KSW_VMCB_EXITCODE) == KSW_SVM_EXIT_CPUID);
+    CHECK(KswSvmRead64(operand, KSW_VMCB_GS) == 0xbeef);
+    CHECK(emit(0x83, nested.OperandPa) == 0);
+    CHECK(emit(0x84, nested.OperandPa) == 0 && nested.VirtualGif);
+    CHECK(write_msr(KSW_SVM_MSR_HSAVE, 0) == 0);
+    CHECK(write_msr(KSW_SVM_MSR_EFER, 0xd01) == 0);
+    cpu.Gpr[3] = 0xdeaddead;
+    CHECK(emit(KSW_SVM_EXIT_CPUID, KSW_NSVM_DONE_MARKER) == 1);
+    CHECK(cpu.Result == STATUS_SUCCESS && !nested.RunningL2 && traces == 0);
+    CHECK(KswSvmRead64(&guest, KSW_VMCB_RSP) == cpu.LaunchRsp && KswSvmRead64(&guest, KSW_VMCB_RFLAGS) == 0x202);
+    CHECK(KswSvmRead64(&guest, KSW_VMCB_GS) == 0xaabbccdd && cpu.Gpr[3] == 0x1122334455667788ULL);
+    CHECK(nested.Sequence == 1); /* Only real native MSR readback may publish an even sequence. */
+    return 0;
+}
+static int test_failures(void)
+{
+    unsigned scenario;
+    for (scenario = 0; scenario < 7; ++scenario) {
+        if (initialize() || begin()) { return 1; }
+        if (scenario == 0) { CHECK(emit(KSW_SVM_EXIT_CPUID, KSW_NSVM_DONE_MARKER) == 1); }
+        if (scenario == 1) { CHECK(emit(KSW_SVM_EXIT_VMRUN, nested.OperandPa + 4096) == 1); }
+        if (scenario == 2) { CHECK(write_msr(KSW_SVM_MSR_EFER, 0xffff) == 1); }
+        if (scenario == 3) {
+            KswSvmWrite64(&guest, KSW_VMCB_RFLAGS, 0x202);
+            CHECK(emit(KSW_SVM_EXIT_VMRUN, nested.OperandPa) == 1);
+        }
+        if (scenario >= 4) {
+            CHECK(emit(KSW_SVM_EXIT_VMRUN, nested.OperandPa) == 0);
+            if (scenario == 4) { CHECK(emit(KSW_SVM_EXIT_CPUID, 0) == 1); }
+            if (scenario == 5) { CHECK(emit(KSW_SVM_EXIT_INVALID, 0) == 1); }
+            if (scenario == 6) {
+                KswSvmWrite64(&guest, KSW_VMCB_EXITINFO1, KSW_NMMU_FINAL | 6);
+                KswSvmWrite64(&guest, KSW_VMCB_EXITINFO2, 1ULL << 45);
+                CHECK(emit(KSW_SVM_EXIT_NPF, 0) == 1);
+            }
+        }
+        CHECK(!NT_SUCCESS(cpu.Result) && !nested.RunningL2 && traces == 1);
+        CHECK(KswSvmRead64(&guest, KSW_VMCB_RSP) == cpu.LaunchRsp);
+        CHECK(KswSvmRead64(&guest, KSW_VMCB_CR3) == 0x12345000);
+        CHECK(cpu.Gpr[3] == 0x1122334455667788ULL);
+    }
+    return 0;
+}
+int main(void)
+{
+    if (test_roundtrip() || test_failures()) { return 1; }
+    printf("SVM_PRODUCTION_DISPATCH_CHECKS=%u RESULT=PASS (simulated exits, no hardware)\n", checks);
+    return 0;
+}

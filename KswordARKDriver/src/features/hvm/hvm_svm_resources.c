@@ -1,5 +1,6 @@
 /* AMD capability discovery and PASSIVE_LEVEL resource ownership. */
 #include "hvm_svm.h"
+#include "hvm_svm_nested_runtime.h"
 #include "../../platform/pool_compat.h"
 #include <intrin.h>
 
@@ -123,7 +124,8 @@ NTSTATUS KswordSvmProbe(KSW_HVM_RUNTIME* Runtime)
 NTSTATUS KswordSvmValidateFlags(KSW_HVM_RUNTIME* Runtime, ULONG Flags)
 {
     /* Only baseline lifecycle flags have AMD implementations. */
-    const ULONG allowed = KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED | KSWORD_ARK_HVM_CONTROL_FLAG_FORCE | KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED;
+    const ULONG allowed = KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED | KSWORD_ARK_HVM_CONTROL_FLAG_FORCE |
+        KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED | KSWORD_ARK_HVM_CONTROL_FLAG_SVM_NESTED_PROBE;
     /* Unknown/Intel-specific features must not silently degrade to baseline. */
     if (Flags & ~allowed) { return STATUS_NOT_SUPPORTED; }
     /* Running under a VMM requires opt-in and a specifically supported outer host. */
@@ -165,12 +167,14 @@ VOID KswordSvmRelease(KSW_HVM_RUNTIME* Runtime)
     /* Check individual owners as well as the summary count. */
     for (index = 0; state->Cpus != NULL && index < state->Count; ++index) {
         /* A stale summary cannot authorize freeing an active CPU's stack. */
-        if (state->Cpus[index].Active) { return; }
+        if (state->Cpus[index].Active || (state->Cpus[index].Nested && state->Cpus[index].Nested->RunningL2)) { return; }
     }
     /* Release per-CPU allocations in exact reverse ownership order. */
     for (index = state->Count; state->Cpus != NULL && index != 0;) {
         /* Select the next owned context. */
         KSW_SVM_CPU* cpu = &state->Cpus[--index];
+        /* Nested operands/cache pages share the same all-native release boundary. */
+        KswordSvmNestedRelease(cpu);
         /* NX XSTATE and host-stack allocations use the same pool tag. */
         if (cpu->XstateAllocation) { ExFreePoolWithTag(cpu->XstateAllocation, 'cSvK'); }
         /* The host stack remains alive until native return acknowledgement. */
@@ -332,6 +336,16 @@ NTSTATUS KswordSvmPrepare(KSW_HVM_RUNTIME* Runtime, ULONG Flags)
     }
     /* NPT uses the common cache/address-width contract established above. */
     if (NT_SUCCESS(status)) { status = KswordNptBuild(&state->Npt, &state->Cpus[0].Caps); }
+    /* Probe resources are opt-in and never allocated by ordinary prepare. */
+    if (NT_SUCCESS(status) && (Flags & KSWORD_ARK_HVM_CONTROL_FLAG_SVM_NESTED_PROBE)) {
+        /* Prepare every CPU before publishing any enhanced self-test readiness. */
+        for (index = 0; index < count; ++index) {
+            /* No mapping/stack allocation occurs in the later VMEXIT path. */
+            status = KswordSvmNestedPrepare(&state->Cpus[index], index);
+            /* The common reverse ledger unwinds the full partially allocated set. */
+            if (!NT_SUCCESS(status)) { break; }
+        }
+    }
     /* No preparation evidence may span a sleep/resume or topology change. */
     if (NT_SUCCESS(status) && (Runtime->PowerTransitionPending || Runtime->PowerTransitionGeneration != state->PreparedPowerGeneration ||
         KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS) != count)) { status = STATUS_POWER_STATE_INVALID; }

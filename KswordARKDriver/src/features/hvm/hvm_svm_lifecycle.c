@@ -189,7 +189,7 @@ NTSTATUS KswordSvmSelfTest(KSW_HVM_RUNTIME* Runtime, ULONG Flags)
         /* Prevent thread migration during the hardware ownership window. */
         KeRaiseIrql(DISPATCH_LEVEL, &previousIrql);
         /* Select the bounded one-shot CPUID guest. */
-        cpu->SelfTest = 1;
+        cpu->SelfTest = (Flags & KSWORD_ARK_HVM_CONTROL_FLAG_SVM_NESTED_PROBE) ? 2U : 1U;
         /* Execute VMRUN and the full native restoration path. */
         status = Runtime->PowerTransitionPending || Runtime->PowerTransitionGeneration != generation
             ? STATUS_POWER_STATE_INVALID : KswordSvmEnterCurrent(cpu);
@@ -253,6 +253,8 @@ NTSTATUS KswordSvmStart(KSW_HVM_RUNTIME* Runtime, ULONG Flags)
     NTSTATUS rollback;
     /* Validate common readiness plus AMD-specific resources. */
     if (!NT_SUCCESS(status)) { return status; }
+    /* A passed bounded probe does not authorize an arbitrary nested Windows workload. */
+    if (Flags & KSWORD_ARK_HVM_CONTROL_FLAG_SVM_NESTED_PROBE) { return STATUS_NOT_SUPPORTED; }
     /* Refuse missing lifecycle guards and partial self-test sets. */
     if (!Runtime->ResidentStartAllowed || state == NULL || !state->Npt.RootPa ||
         !(Runtime->StateFlags & KSWORD_ARK_HVM_STATE_SELF_TEST_PASSED) ||

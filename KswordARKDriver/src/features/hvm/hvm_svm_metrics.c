@@ -1,5 +1,6 @@
 /* Snapshot sparse AMD exit telemetry without reinterpreting Intel exit numbers. */
 #include "hvm_svm.h"
+#include "hvm_svm_nested_runtime.h"
 
 /* Runtime lifetime is protected by the metrics query's existing shared lock. */
 VOID KswordSvmMetrics(KSW_HVM_RUNTIME* Runtime, KSWORD_ARK_HVM_METRICS_RESPONSE* Response)
@@ -44,6 +45,31 @@ VOID KswordSvmMetrics(KSW_HVM_RUNTIME* Runtime, KSWORD_ARK_HVM_METRICS_RESPONSE*
         output->vmcbPa = cpu->GuestPa; output->hsavePa = cpu->HsavePa; output->nptRootPa = state->Npt.RootPa;
         /* Observed VMRUN completions requested the baseline full flush. */
         output->tlbRequests = *(volatile ULONGLONG*)&cpu->TlbRequests;
+        /* Bounded nested probes publish completion only after native MSR readback. */
+        if (cpu->Nested) {
+            /* A zero sequence means this prepared context has never executed a probe. */
+            LONG sequence = InterlockedCompareExchange(&cpu->Nested->Sequence, 0, 0);
+            /* Do not sample an in-progress test as a completed result. */
+            if (sequence != 0 && !(sequence & 1)) {
+                /* Retain exact status independently from the baseline self-test flags. */
+                output->nestedProbeStatus = (ULONG)cpu->Nested->CompletionStatus;
+                /* A VMRUN dispatch alone is insufficient; reflection and native return are separate evidence. */
+                output->nestedProbeEntries = cpu->Nested->Entries;
+                /* Publish the number of completed virtual host returns. */
+                output->nestedProbeReflections = cpu->Nested->Reflections;
+                /* Sparse shadow NPT faults establish that hardware used the composed root. */
+                output->nestedProbeFaults = cpu->Nested->Faults;
+                /* Preserve full-width raw inner exit evidence. */
+                output->nestedProbeExit = cpu->Nested->LastExit;
+                /* This marker was read from the real inner CPUID exit. */
+                output->nestedProbeMarker = cpu->Nested->LastMarker;
+                /* A racing new test makes this snapshot explicitly invalid. */
+                if (sequence == InterlockedCompareExchange(&cpu->Nested->Sequence, 0, 0)) {
+                    /* Publish coherent evidence without waiting for another processor. */
+                    output->nestedProbeValid = 1; output->nestedProbeSequence = (ULONG)sequence;
+                }
+            }
+        }
         /* Read at most three times; an invalid snapshot is preferable to a root stall. */
         for (attempt = 0; attempt < 3; ++attempt) {
             /* Observe the last completely published ring position. */

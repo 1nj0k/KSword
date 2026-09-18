@@ -6,9 +6,11 @@ param([Parameter(Mandatory)][string]$Ctl,
       [ValidateRange(1,1000)][int]$Cycles=20,
       [ValidateRange(1,60)][int]$IdleSeconds=10,
       [ValidateRange(0,86400)][int]$SoakSeconds=0,
-      [ValidateRange(10,600)][int]$CommandTimeoutSeconds=60)
+      [ValidateRange(10,600)][int]$CommandTimeoutSeconds=60,
+      [switch]$NestedProbe)
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
+if ($NestedProbe -and $SoakSeconds -ne 0) { throw 'The bounded nested probe cannot run a residency soak.' }
 $os=Get-CimInstance Win32_OperatingSystem
 $machine=Get-CimInstance Win32_ComputerSystem
 if ($os.Caption -notmatch 'Windows 10' -or [int]$os.BuildNumber -ge 22000 -or $machine.Manufacturer -notmatch 'VMware') {
@@ -75,12 +77,61 @@ function CheckSet($Query,[bool]$Active) {
     if ($Query.residentProcessorCount -ne $(if ($Active) {$Vcpu} else {0})) { throw 'Summary does not match per-CPU ownership.' }
     if ($Query.stateNames -contains 'ROLLBACK_REQUIRED' -or $Query.stateNames -contains 'FAULTED') { throw 'Driver retained a fault or rollback requirement.' }
 }
+function CheckNestedProbe($Metrics, $Previous) {
+    if ($Metrics.version -ne 4 -or $Metrics.backend -ne 2 -or @($Metrics.svmProcessors).Count -ne $Vcpu) {
+        throw 'Nested probe requires metrics v4 and a complete AMD CPU set.'
+    }
+    $seen=@{}
+    foreach ($cpu in $Metrics.svmProcessors) {
+        $id="$($cpu.group):$($cpu.number)"
+        if ($cpu.group -ne 0 -or $cpu.number -lt 0 -or $cpu.number -ge $Vcpu -or $seen.ContainsKey($id)) {
+            throw 'Duplicate, missing or unexpected nested probe CPU identity.'
+        }
+        $probe=$cpu.nestedProbe
+        if ($probe.valid -ne 1 -or $probe.status -ne '0x00000000' -or
+            $probe.sequence -le 0 -or ($probe.sequence % 2) -ne 0 -or
+            ($Previous.ContainsKey($id) -and $probe.sequence -le $Previous[$id]) -or
+            $probe.entries -ne 1 -or $probe.reflections -ne 1 -or $probe.faults -le 0 -or
+            $probe.exit -ne '0x0000000000000072' -or $probe.marker -ne '0x000000004B534E31') {
+            throw "CPU $id lacks a fresh, completed nested VMRUN/NPF/reflection/native-return result."
+        }
+        $seen[$id]=$probe.sequence
+    }
+    return $seen
+}
 $metadata=@{os=$os.Caption;build=$os.BuildNumber;bootId=$os.LastBootUpTime.ToUniversalTime().ToString('o');
-    cpuCount=$Vcpu;cycles=$Cycles;idleSeconds=$IdleSeconds;soakSeconds=$SoakSeconds;ctlHash=(Get-FileHash $Ctl).Hash;hardwareResult='NotRun'}
+    cpuCount=$Vcpu;cycles=$Cycles;idleSeconds=$IdleSeconds;soakSeconds=$SoakSeconds;ctlHash=(Get-FileHash $Ctl).Hash;hardwareResult='NotRun';
+    kind=$(if ($NestedProbe) {'bounded-svm-nested-probe'} else {'resident-acceptance'})}
 $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'guest.json') -Encoding UTF8
 try {
     $initial=Hvm status
     if ($initial.residentProcessorCount -ne 0 -or $initial.preparedProcessorCount -ne 0) { throw 'Start with a released, inactive driver.' }
+    if ($NestedProbe) {
+        Hvm prepare-svm-probe | Out-Null
+        $prepared=Hvm status
+        CheckSet $prepared $false
+        $epoch=$prepared.powerGeneration
+        $sequences=@{}
+        for ($cycle=1; $cycle -le $Cycles; $cycle++) {
+            Hvm self-test-svm-nested | Out-Null
+            $tested=Hvm status
+            CheckSet $tested $false
+            if ($tested.selfTestPassedProcessorCount -ne $Vcpu -or $tested.powerGeneration -ne $epoch) {
+                throw 'Nested probe did not complete on the prepared CPU/power generation.'
+            }
+            $sequences=CheckNestedProbe (Hvm metrics) $sequences
+            Write-Host ("Nested probe passed: {0}/{1}, vCPU={2}" -f $cycle,$Cycles,$Vcpu)
+        }
+        Hvm teardown | Out-Null
+        $released=Hvm status
+        if ($released.preparedProcessorCount -ne 0 -or $released.residentProcessorCount -ne 0) { throw 'Nested probe resources remain owned.' }
+        Record @{phase='complete';result='PASS';cycles=$Cycles;kind=$metadata.kind}
+        $metadata.hardwareResult='PASS'
+        $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'guest.json') -Encoding UTF8
+        [pscustomobject]@{result='PASS';kind=$metadata.kind;vcpu=$Vcpu;cycles=$Cycles;
+            innerOperatingSystemTested=$false;evidence=$EvidenceDirectory} | ConvertTo-Json
+        return
+    }
     Hvm prepare | Out-Null
     $prepared=Hvm status
     CheckSet $prepared $false

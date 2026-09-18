@@ -1,4 +1,4 @@
-﻿/*
+/*
  * hvm_ctl —— KSword HVM 控制与状态的最小命令行工具（无 Qt 依赖）。
  *
  * 存在的理由：KswordCLI 只提供只读的 hvm-status / hvm-events，启动 HVM 要走
@@ -5635,11 +5635,15 @@ static int DoMetrics(HANDLE h, int asJson)
                    "\"exitCode\":\"0x%016llX\",\"exitInfo1\":\"0x%016llX\",\"exitInfo2\":\"0x%016llX\","
                    "\"rip\":\"0x%016llX\",\"rsp\":\"0x%016llX\",\"cr3\":\"0x%016llX\",\"nrip\":\"0x%016llX\","
                    "\"event\":\"0x%016llX\",\"tsc\":\"%llu\",\"vmcbPa\":\"0x%016llX\",\"hsavePa\":\"0x%016llX\","
-                   "\"nptRootPa\":\"0x%016llX\",\"tlbRequests\":\"%llu\",\"ringPosition\":%lu,\"ringOverwritten\":%lu,\"msrValidMask\":%lu,\"svmFeatures\":%lu,\"asidCount\":%lu,\"physicalBits\":%lu,\"observedVmCr\":\"0x%016llX\",\"observedEfer\":\"0x%016llX\",\"observedHsave\":\"0x%016llX\",\"failureStatus\":\"0x%08lX\",\"failureStage\":%lu}",
+                   "\"nptRootPa\":\"0x%016llX\",\"tlbRequests\":\"%llu\",\"ringPosition\":%lu,\"ringOverwritten\":%lu,\"msrValidMask\":%lu,\"svmFeatures\":%lu,\"asidCount\":%lu,\"physicalBits\":%lu,\"observedVmCr\":\"0x%016llX\",\"observedEfer\":\"0x%016llX\",\"observedHsave\":\"0x%016llX\",\"failureStatus\":\"0x%08lX\",\"failureStage\":%lu,",
                    i ? "," : "", (unsigned)row->group, (unsigned)row->number, row->valid, row->sequence,
                    row->stage, row->asid, row->generation, row->exitCode, row->exitInfo1, row->exitInfo2,
                    row->rip, row->rsp, row->cr3, row->nrip, row->event, row->tsc, row->vmcbPa, row->hsavePa,
                    row->nptRootPa, row->tlbRequests, row->ringPosition, row->ringOverwritten, row->msrValidMask, row->svmFeatures, row->asidCount, row->physicalBits, row->observedVmCr, row->observedEfer, row->observedHsave, row->failureStatus, row->failureStage);
+            printf("\"nestedProbe\":{\"valid\":%lu,\"sequence\":%lu,\"status\":\"0x%08lX\",\"entries\":%lu,\"reflections\":%lu,\"faults\":%lu,\"exit\":\"0x%016llX\",\"marker\":\"0x%016llX\"}}",
+                   row->nestedProbeValid, row->nestedProbeSequence, row->nestedProbeStatus,
+                   row->nestedProbeEntries, row->nestedProbeReflections, row->nestedProbeFaults,
+                   row->nestedProbeExit, row->nestedProbeMarker);
         } else {
             printf("SVM cpu=%u:%u stage=%lu valid=%lu exit=0x%016llX info1=0x%016llX info2=0x%016llX flush=%llu\n",
                    (unsigned)row->group, (unsigned)row->number, row->stage, row->valid,

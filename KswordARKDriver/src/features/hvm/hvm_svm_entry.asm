@@ -94,10 +94,18 @@ KswordSvmAsmLaunch proc frame
     lea rax, KswordSvmAsmGuestResume ; First successful entry continuation.
     cmp dword ptr [r15+0d4h], 0  ; Select one-shot guest only for actual self-test.
     je KswSvmSetGuestRip          ; Normal resident path uses the Windows continuation.
+    cmp dword ptr [r15+0d4h], 2  ; Nested probing has an independent, bounded instruction stream.
+    jne KswSvmSelectBasicTest     ; Ordinary self-test remains the existing CPUID marker.
+    lea rax, KswordSvmAsmNestedProbe ; Run only the driver-owned nested test operand.
+    jmp KswSvmSetGuestRip         ; The builder already populated its starting RAX operand.
+KswSvmSelectBasicTest:
     lea rax, KswordSvmAsmTestGuest ; Self-test must execute an observed CPUID exit.
 KswSvmSetGuestRip:
     mov [rbx+578h], rax          ; Set final guest RIP close to VMRUN.
+    cmp dword ptr [r15+0d4h], 2  ; Preserve the nested probe's prevalidated operand PA.
+    je KswSvmOperandReady         ; Only nested probing starts with nonzero guest RAX.
     mov qword ptr [rbx+5f8h], 0  ; First continuation returns success in guest RAX.
+KswSvmOperandReady:
     mov rax, [r15+0e8h]          ; System CR3 outlives any user control process.
     mov cr3, rax                 ; Hardware HSAVE must capture a durable host CR3.
     mov rsp, [r15+18h]           ; Switch to this CPU's dedicated host stack.
@@ -251,6 +259,49 @@ KswordSvmAsmTestGuest proc
     cpuid                       ; Exit before the instruction executes natively.
     ud2                         ; Unexpected fallthrough is never accepted as success.
 KswordSvmAsmTestGuest endp
+
+; Bounded L1 test: every SVM ownership operation is intercepted by the monitor.
+KswordSvmAsmNestedProbe proc
+    mov rcx, 4b535753564d3031h    ; Begin with no nonvolatile register changes.
+    mov edx, 3                  ; Private nested-probe begin operation.
+    vmmcall                     ; Capture the executable Windows return image and original GPRs.
+    cli                         ; The probe never opens a maskable-interrupt window.
+    push rbx                    ; Preserve the Windows caller's nonvolatile scratch register.
+    mov rbx, rax                ; Keep the prevalidated VMCB12 physical operand.
+    mov ecx, 0c0000080h          ; Read the virtual EFER image.
+    rdmsr                       ; Must be handled as virtual ownership, not physical host state.
+    or eax, 1000h               ; Request virtual SVM ownership.
+    wrmsr                       ; The real EFER/HSAVE remain owned by the outer assembly loop.
+    lea rax, [rbx+1000h]         ; The adjacent driver-owned page is the virtual HSAVE declaration.
+    mov rdx, rax                ; Split the virtual physical address for WRMSR.
+    shr rdx, 32                 ; Upper address dword.
+    mov ecx, 0c0010117h          ; Virtual VM_HSAVE_PA.
+    wrmsr                       ; Record software ownership without installing real hardware state.
+    mov rax, rbx                ; VMCB12 contains the exact supported test state.
+    vmload rax                  ; Exercise the separately virtualized extended state subset.
+    vmrun rax                   ; Intercept, build VMCB02, enter the inner marker and reflect its exit.
+    vmsave rax                  ; Exercise state persistence across a virtual VMEXIT.
+    stgi                        ; Complete the virtual host's GIF transition in this IF=0 test.
+    xor eax, eax                ; Release the virtual HSAVE declaration.
+    xor edx, edx                ; Upper half must also be zero.
+    mov ecx, 0c0010117h          ; Virtual HSAVE register.
+    wrmsr                       ; No real save-area ownership changes here.
+    mov ecx, 0c0000080h          ; Read back the current virtual EFER.
+    rdmsr                       ; Preserve every non-SVME guest bit.
+    and eax, 0ffffefffh          ; Release only the virtual SVM owner.
+    wrmsr                       ; The dispatcher checks cleanup before final success.
+    pop rbx                     ; Restore the Windows caller's nonvolatile register.
+    mov eax, 4b534e32h           ; Unique outer continuation marker, not the inner CPUID marker.
+    cpuid                       ; Native return is permitted only after the complete nested round trip.
+    ud2                         ; A successful dispatcher never returns past the final marker.
+KswordSvmAsmNestedProbe endp
+
+; The inner guest executes two instructions and cannot enter arbitrary Windows code.
+KswordSvmAsmNestedPayload proc
+    mov eax, 4b534e31h           ; Prove that this inner instruction stream actually executed.
+    cpuid                       ; Reflect this intercepted exit into the virtual host VMCB12.
+    ud2                         ; Missing interception is a test failure, not a success continuation.
+KswordSvmAsmNestedPayload endp
 
 ; Private kernel-only hypercall; RCX argument becomes RDX operation.
 KswordSvmAsmCall proc

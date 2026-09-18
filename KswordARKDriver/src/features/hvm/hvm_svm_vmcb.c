@@ -1,5 +1,6 @@
 /* Build AMD control/save state from the currently pinned Windows processor. */
 #include "hvm_svm.h"
+#include "hvm_svm_nested_runtime.h"
 #include <intrin.h>
 
 /* Decode the GDT format into AMD segment attributes and expanded limits. */
@@ -75,7 +76,7 @@ NTSTATUS KswordSvmBuildVmcb(KSW_SVM_CPU* Cpu)
     /* Decode both long-mode system descriptors. */
     if (!KswSvmSegment(v, KSW_VMCB_LDTR, TRUE) || !KswSvmSegment(v, KSW_VMCB_TR, TRUE)) { return STATUS_NOT_SUPPORTED; }
     /* Intercept CPUID and MSRPM-controlled MSRs, not ordinary I/O or HLT. */
-    KswSvmWrite32(v, KSW_VMCB_MISC1, (1U << 18) | (1U << 28));
+    KswSvmWrite32(v, KSW_VMCB_MISC1, (1U << 18) | (1U << 26) | (1U << 28));
     /* Intercept all SVM operations plus XSETBV; nested SVM is not provided. */
     KswSvmWrite32(v, KSW_VMCB_MISC2, 0x7fU | (1U << 13));
     /* Give the CPU valid permission-map addresses even for disabled intercepts. */
@@ -159,6 +160,8 @@ NTSTATUS KswordSvmBuildVmcb(KSW_SVM_CPU* Cpu)
     KswSvmInterceptMsr(Cpu, 0x277U, TRUE);
     /* Active supervisor XSTATE is outside the initial XSAVE contract. */
     KswSvmInterceptMsr(Cpu, 0xda0U, TRUE);
+    /* Build the explicit nested operand only for the opt-in bounded self-test. */
+    if (Cpu->SelfTest == 2U) { return KswordSvmNestedBuildProbe(Cpu); }
     /* The assembly wrapper sets final RIP/RSP/RFLAGS immediately before VMRUN. */
     return STATUS_SUCCESS;
 }
@@ -183,7 +186,7 @@ NTSTATUS KswordSvmEnterCurrent(KSW_SVM_CPU* Cpu)
     /* An invalid VMCB also returns natively, but must never publish Active. */
     if (Cpu->Stage == KSWORD_ARK_HVM_STAGE_FAILED || Cpu->SelfTest) { status = Cpu->Result; }
     /* A self-test succeeds only after ownership registers are natively restored. */
-    if (Cpu->SelfTest && NT_SUCCESS(status) &&
+    if (Cpu->SelfTest &&
         (__readmsr(KSW_SVM_MSR_EFER) != Cpu->OriginalEfer || __readmsr(KSW_SVM_MSR_HSAVE) != Cpu->OriginalHsave)) {
         /* Preserve retained ownership evidence instead of publishing a false passed test. */
         Cpu->Stage = KSWORD_ARK_HVM_STAGE_FAILED;
@@ -191,6 +194,13 @@ NTSTATUS KswordSvmEnterCurrent(KSW_SVM_CPU* Cpu)
         KswordARKHvmStateSet(Cpu->Runtime, KSWORD_ARK_HVM_STATE_FAULTED | KSWORD_ARK_HVM_STATE_ROLLBACK_REQUIRED);
         /* Fail closed in the restored Windows calling context instead of fabricating self-test success. */
         KeBugCheckEx(0x20001, 0x53564dUL, (ULONG_PTR)Cpu, 4, 0);
+    }
+    /* Publish nested probe completion only after the actual native ownership readback. */
+    if (Cpu->SelfTest == 2U && Cpu->Nested) {
+        /* Retain failed test results as completed evidence, never as successful entries. */
+        Cpu->Nested->CompletionStatus = status;
+        /* Even sequence publishes counters and the precise status together. */
+        InterlockedIncrement(&Cpu->Nested->Sequence);
     }
     /* Guest/native continuation, not the host dispatcher, acknowledges completion. */
     if (NT_SUCCESS(status) && !Cpu->SelfTest) {

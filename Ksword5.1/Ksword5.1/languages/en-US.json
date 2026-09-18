@@ -5925,6 +5925,10 @@
     "settings.background.translucency_material.acrylic": "Frosted glass"
   },
   "source_translations": {
+    "准备 AMD 嵌套探针": "Prepare AMD nested probe",
+    "预分配 AMD 有界嵌套自检资源；不开放内层虚拟机运行。": "Preallocate the bounded AMD nested self-test; does not enable an inner VM workload.",
+    "AMD 嵌套 VMRUN 自检": "AMD nested VMRUN self-test",
+    "逐核执行虚拟 SVM 寄存器、VMRUN、内层退出反射与原生恢复；需要 prepare-svm-probe。": "Exercise virtual SVM registers, VMRUN, inner exit reflection and native restoration on each CPU; requires prepare-svm-probe.",
     "AMD 常驻不支持所选的 Intel 扩展。请关闭 EPT、嵌套派发、VE、VMFUNC 和身份隐藏选项后重试。": "AMD residency does not support the selected Intel extensions. Disable EPT, nested dispatch, VE, VMFUNC, and hypervisor hiding before retrying.",
     "读取逐核转换时间与资源计数；AMD 另含 SVM 原始退出与 NPT 诊断。": "Read per-CPU transition timing and resource counts; AMD also includes raw SVM exits and NPT diagnostics.",
     "按 VMX/EPT 或 SVM/NPT 后端分配资源，不进入常驻；允许受支持的外层虚拟化环境。": "Allocate VMX/EPT or SVM/NPT resources without entering residency; permits supported outer virtualization environments.",

@@ -3,7 +3,7 @@
 #include "KswordArkHvmIoctl.h"
 
 /* Independent versioning keeps existing HVM query clients ABI-compatible. */
-#define KSWORD_ARK_HVM_METRICS_VERSION 3UL
+#define KSWORD_ARK_HVM_METRICS_VERSION 4UL
 
 /* AMD diagnostics have their own full-width exit namespace and validity flag. */
 typedef struct _KSWORD_ARK_HVM_SVM_METRICS {
@@ -22,6 +22,12 @@ typedef struct _KSWORD_ARK_HVM_SVM_METRICS {
     unsigned long msrValidMask, svmFeatures, asidCount, physicalBits;
     /* Originating per-CPU failure survives a successful rollback. */
     unsigned long failureStatus, failureStage;
+    /* Valid only when the sequence is stable/even after complete native return. */
+    unsigned long nestedProbeValid, nestedProbeSequence, nestedProbeStatus;
+    /* These counters describe the bounded hardware probe, not general nested-VMM support. */
+    unsigned long nestedProbeEntries, nestedProbeReflections, nestedProbeFaults;
+    /* Preserve raw AMD exit and executed inner marker at full width. */
+    unsigned long long nestedProbeExit, nestedProbeMarker;
     /* Values must not be interpreted when the corresponding valid bit is clear. */
     unsigned long long observedVmCr, observedEfer, observedHsave;
 } KSWORD_ARK_HVM_SVM_METRICS;

@@ -5925,6 +5925,10 @@
     "settings.background.translucency_material.acrylic": "磨砂玻璃"
   },
   "source_translations": {
+    "准备 AMD 嵌套探针": "准备 AMD 嵌套探针",
+    "预分配 AMD 有界嵌套自检资源；不开放内层虚拟机运行。": "预分配 AMD 有界嵌套自检资源；不开放内层虚拟机运行。",
+    "AMD 嵌套 VMRUN 自检": "AMD 嵌套 VMRUN 自检",
+    "逐核执行虚拟 SVM 寄存器、VMRUN、内层退出反射与原生恢复；需要 prepare-svm-probe。": "逐核执行虚拟 SVM 寄存器、VMRUN、内层退出反射与原生恢复；需要 prepare-svm-probe。",
     "AMD 常驻不支持所选的 Intel 扩展。请关闭 EPT、嵌套派发、VE、VMFUNC 和身份隐藏选项后重试。": "AMD 常驻不支持所选的 Intel 扩展。请关闭 EPT、嵌套派发、VE、VMFUNC 和身份隐藏选项后重试。",
     "读取逐核转换时间与资源计数；AMD 另含 SVM 原始退出与 NPT 诊断。": "读取逐核转换时间与资源计数；AMD 另含 SVM 原始退出与 NPT 诊断。",
     "按 VMX/EPT 或 SVM/NPT 后端分配资源，不进入常驻；允许受支持的外层虚拟化环境。": "按 VMX/EPT 或 SVM/NPT 后端分配资源，不进入常驻；允许受支持的外层虚拟化环境。",

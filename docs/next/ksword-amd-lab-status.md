@@ -1,6 +1,12 @@
-# AMD 实验实现状态（2026-09-18，单核常驻故障修复待重测）
+# AMD 实验实现状态（2026-09-18，多核常驻与嵌套 SVM 开发）
 
 ## 当前进度（以下本节优先于后面的历史记录）
+
+**22:24 最新硬件结果：单核受控嵌套 SVM 探针 1 轮 PASS。** 30 个回传文件哈希/大小独立核验，驱动签名有效、SYS/PDB/CLI 身份匹配、KD 命中新候选。CPU 0:0 完成内层进入 1 次、NPT 缺页 5 次、退出反射 1 次，EXITCODE=0x72、marker=0x4B534E31、completion sequence=2；18 次 full-flush 请求，释放后 prepared/resident/slatReady 全零。报告 `tools/hvm_lab/artifacts/guest-results/verified-nested-probe-one-cpu.json`。此证据更新下方“新候选未加载”的历史状态；尚未测试内层操作系统或并发多核内层 VM。
+
+**最新接线：受控嵌套 SVM 探针已连接实际汇编/退出分派。** 虚拟 MSR、VMLOAD/VMRUN/VMSAVE、真实 NPT02 缺页合成、CPUID 退出反射与原生返回均已写入候选。新增 prepare-svm-probe/self-test-svm-nested、metrics v4 逐核完成证据和一条命令的来宾加载/验收/回传脚本。标准驱动构建及 WDK 校验通过，441 项嵌套逻辑、124 项生产分派模拟和既有 AMD/Intel 检查通过；PS5、CLI、命令/i18n/IOCTL门禁通过。**新候选尚未加载执行，不宣称任意内层操作系统可运行。** 下方“未接入运行时”是前一次提交阶段的历史状态，已由本段更新。
+
+**最新：上一阶段已提交 `4c6cd6a0`，未推送。** 用户中止 8 核压力并提供 `stop OK`：generation 304→305，prepared/selfTestPassed=8、failed/resident=0、VMEXIT=12496。两小时压力不记为通过；8 核 100 轮仍待原始日志核验。现开始嵌套 SVM 第二阶段，已增加 NPT12/NPT01 翻译、预分配影子 NPT、A/D 更新和 VMCB 状态子集模块；新增 427 次逻辑断言及既有 AMD/Intel 逻辑检查通过，WDK 编译链接/ApiValidator 通过。**尚未接入运行时，不支持在 KSword 后启动内层虚拟机。** 新 SYS 未签名/加载，当前共享候选未替换。实现与接线边界见 [第二阶段记录](amd-nested-svm-implementation.md)。
 
 **21:03 最新：4 vCPU、100轮、10秒空闲唤醒 PASS。** 1/2/4核原始日志已回传宿主：1876文件哈希一致；独立解析验证CPU集合、全部20/20/100轮启停、电源代次、末次各核VMMCALL/stage6/failure0及最终资源归零。可复现结果 `tools/hvm_lab/artifacts/guest-results/verified-through-four-cpu.json`。下一步8核100轮及2小时持续压力；故障注入、生命周期和外部网络I/O仍待完成。负载工具在宿主原生2线程smoke通过不算SVM压力通过。
 

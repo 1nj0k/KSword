@@ -128,6 +128,13 @@ stage 3 不清除 Active，必须由真实全核 stop 收回已进入 CPU。
 
 ## 无硬件测试与实现边界
 
+嵌套 SVM 第二阶段候选使用独立 `guest-bootstrap/nested-probe` 目录，保留上一阶段候选。
+来宾冷启动、旧驱动 STOPPED 后，管理员运行该目录的 `Start-GuestNestedProbe.ps1`（默认 1 vCPU/1 次）。
+脚本复制匹配 SYS/PDB/CLI 到独立目录，加载并执行 `prepare-svm-probe → self-test-svm-nested → metrics → teardown`，自动回传证据。
+`-Vcpu 2/4/8 -Cycles N` 只应在前一阶段硬件结果已确认后使用。
+metrics v4 的逐核 `nestedProbe` 是固定内层指令探针，不能当作任意内层操作系统或持续多核运行的验收。
+实现范围见 `docs/next/amd-nested-svm-implementation.md`。
+
 ```powershell
 cmd /c tools/hvm_lab/build-tests.cmd
 powershell.exe -NoProfile -File tools/hvm_lab/Test-BootPolicy.ps1

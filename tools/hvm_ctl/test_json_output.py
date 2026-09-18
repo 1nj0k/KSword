@@ -17,7 +17,13 @@ assert json.loads(strings[1]) == '\ufffd\ufffd'
 assert all(line.isascii() for line in strings)
 commands = subprocess.check_output([str(cli), '--json', 'commands'])
 assert commands.isascii()
-assert len(json.loads(commands)['commands']) == 60
+assert len(json.loads(commands)['commands']) == 62
+metrics = json.loads(subprocess.check_output([str(fixture), 'metrics']))
+assert metrics['version'] == 4 and metrics['backend'] == 2
+assert metrics['svmProcessors'][0]['nestedProbe'] == {
+    'valid': 1, 'sequence': 2, 'status': '0x00000000', 'entries': 1,
+    'reflections': 1, 'faults': 7, 'exit': '0xFEDCBA9876543210',
+    'marker': '0x000000004B534E31'}
 
 # This actually crosses the native stdout -> PS 5.1 string pipeline which failed
 # in the guest, with the Chinese legacy decoder explicitly selected.
@@ -27,7 +33,7 @@ $ErrorActionPreference='Stop'
 $value = & '%s' | ConvertFrom-Json
 if ($value.backend -ne 2 -or $value.nestedLastRefusalSiteText.Length -ne 5) { throw 'Status mismatch' }
 $catalog = & '%s' --json commands | ConvertFrom-Json
-if ($catalog.commands.Count -ne 60) { throw 'Catalog mismatch' }
+if ($catalog.commands.Count -ne 62) { throw 'Catalog mismatch' }
 'POWERSHELL_CP936_JSON=PASS'
 """ % (str(fixture).replace("'", "''"), str(cli).replace("'", "''"))
 result = subprocess.run(['powershell.exe', '-NoProfile', '-Command', script], capture_output=True)

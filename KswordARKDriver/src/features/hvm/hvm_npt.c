@@ -187,10 +187,7 @@ NTSTATUS KswordNptBuild(KSW_NPT* Npt, const KSW_SVM_CAPS* Caps)
     status = root != NULL ? KswNptFill(Npt, root, 4, 0, NULL) : STATUS_INSUFFICIENT_RESOURCES;
     /* An incomplete hierarchy must never survive as ready. */
     if (!NT_SUCCESS(status)) { KswordNptRelease(Npt); return status; }
-    /* RAM inventory is no longer consulted at runtime. */
-    ExFreePool(Npt->Ranges);
-    /* Prevent a double-free during teardown. */
-    Npt->Ranges = NULL;
+    /* Retain the validated inventory for VMEXIT-safe nested table RAM admission. */
     /* Complete identity coverage is ready. */
     return STATUS_SUCCESS;
 }

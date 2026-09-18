@@ -29,7 +29,7 @@ typedef struct _KSW_NPT {
     ULONG UcIndex;
     /* Allow a one-GiB leaf only when enumerated. */
     BOOLEAN Page1Gb;
-    /* Preparation-only RAM inventory, released after building. */
+    /* Immutable RAM inventory retained for nested physical-operand admission. */
     PPHYSICAL_MEMORY_RANGE Ranges;
 } KSW_NPT;
 
@@ -153,6 +153,8 @@ typedef struct _KSW_SVM_CPU {
     ULONGLONG TlbRequests;
     /* Fixed-capacity raw exit history. */
     KSW_SVM_TRACE Trace[KSW_SVM_TRACE_ROWS];
+    /* Optional bounded nested-probe state; appended after every assembly-visible field. */
+    struct _KSW_SVM_NESTED* Nested;
 } KSW_SVM_CPU;
 /* Assert all assembly-visible anchors against the C compiler. */
 C_ASSERT(FIELD_OFFSET(KSW_SVM_CPU, Gpr) == 0x48);

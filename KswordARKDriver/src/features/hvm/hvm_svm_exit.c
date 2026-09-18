@@ -1,5 +1,6 @@
 /* AMD VMEXIT dispatcher: processor-local writes, no pageable code or allocation. */
 #include "hvm_svm.h"
+#include "hvm_svm_nested_runtime.h"
 #include <intrin.h>
 
 /* Publish raw evidence without global locks or kernel logging in the hot path. */
@@ -123,6 +124,8 @@ ULONG KswordSvmExit(KSW_SVM_CPU* Cpu)
     Cpu->Resource->Row.svmExitCode = code;
     /* Publish raw trace before emulation changes RIP or operands. */
     KswordSvmTrace(Cpu, KSWORD_ARK_HVM_STAGE_EXIT);
+    /* Route the explicitly requested bounded nested probe before ordinary one-shot handling. */
+    if (Cpu->SelfTest == 2U && Cpu->Nested) { return KswordSvmNestedProbeExit(Cpu); }
     /* INVALID means the guest never executed; return to the saved kernel caller. */
     if (code == KSW_SVM_EXIT_INVALID) {
         /* Keep the failed stage authoritative after native return. */
@@ -190,7 +193,7 @@ ULONG KswordSvmExit(KSW_SVM_CPU* Cpu)
             /* Query completed successfully. */
             KswSvmAdvance(Cpu);
         } else { KswSvmInject(Cpu, 6); }
-    } else if ((code >= 0x80 && code <= 0x86) || code == 0x8d) {
+    } else if ((code >= 0x80 && code <= 0x86) || code == 0x7a || code == 0x8d) {
         /* SVM operations are absent from CPUID; XSETBV contract changes are denied. */
         KswSvmInject(Cpu, code == 0x8d ? 13 : 6);
     } else {
