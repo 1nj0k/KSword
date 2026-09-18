@@ -1,5 +1,7 @@
 # AMD 实验后端与重启续接
 
+实体机短常驻入口：Test-HostSvmSelfTest.ps1 新增显式 -ResidentSeconds 5（默认0仍只串行自检，最大30）。同一已通过32LP自检的7004a13c/age13候选，无驱动改动；自检后全32LP并发resident、5秒前后核对Active完整CPU集合/代次/卸载保护，finally请求stop核验逐核Stopped，然后teardown/卸载。执行/回滚证据不足时保留driver/resources，不从CLI结束推断停止。PS5证据验证器29项通过；本轮全核常驻尚未执行。32核串行自检里程碑已提交f1e4d60d，未推送。
+
 实体机32LP串行SVM自检已PASS（2026-09-18 23:45）：同一7004a13c/age13候选，a155d211脚本运行。原始host-self-test-20260918-234529-87219d5d131f46bd8a9649c57fdac932共23文件，独立检查SYS/CLI哈希、CPU0:0..31精确集合、每核CPUID EXITCODE72/VMEXIT1/TLB1/有效偶数序列、32个独立VMCB和HSAVE页。prepared/selfTest32，failed/resident0，generation2→3→4、power0，teardown后INITIALIZED/processor0/slat0，SCM STOPPED。报告docs/next/evidence/amd-host-self-test-32cpu.json。本机第一次真实VMRUN往返和原生状态返回验证已通过；不是全核同时常驻、内层OS或压力通过。下一阶段可做实体机全核短时resident→stop→release，不需再跑准入。
 
 下一步入口已准备：tools/hvm_lab/Test-HostSvmSelfTest.ps1，管理员一条命令装载→prepare→全部32LP串行self-test→核验逐核集合/状态/代次/EXITCODE72/TLB1→teardown→SCM STOPPED。锁定已通过准入的SYS/CLI哈希，不重编译，不resident，不修改虚拟机CPU配置。所有命令前落盘日志，失败/不完整证据保留driver/resources，不盲目卸载。PS5解析与21项生产证据验证器模拟测试通过，非管理员前置拒绝已实测；真实prepare/VMRUN尚待用户执行。准入里程碑commit d4c873e3，未推送。

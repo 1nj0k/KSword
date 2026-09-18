@@ -1,6 +1,6 @@
-# Physical-host bounded SVM round trips. No resident or nested-probe command is issued.
+# Physical-host SVM self-tests, with an explicit optional short resident/stop cycle.
 [CmdletBinding()]
-param()
+param([ValidateRange(0,30)][int]$ResidentSeconds=0)
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 
@@ -41,6 +41,32 @@ function Assert-HostSvmSelfTestEvidence($Prepared,$After,$Metrics,$Control,[int]
     }
 }
 
+function Assert-HostSvmResidentEvidence($Baseline,$Snapshot,[bool]$Active,[int]$Count) {
+    $expectedResident=0
+    $expectedStage=6
+    if ($Active) { $expectedResident=$Count; $expectedStage=3 }
+    if ($Snapshot.queryStatus -ne 0 -or $Snapshot.backend -ne 2 -or
+        $Snapshot.processorCount -ne $Count -or $Snapshot.preparedProcessorCount -ne $Count -or
+        $Snapshot.selfTestPassedProcessorCount -ne $Count -or $Snapshot.residentProcessorCount -ne $expectedResident -or
+        $Snapshot.powerGeneration -ne $Baseline.powerGeneration -or $Snapshot.generation -le $Baseline.generation) {
+        throw 'Resident CPU count or generation mismatch.'
+    }
+    if ($Active) {
+        # INITIALIZED/RESOURCES/SELF_TEST/ACTIVE/UNLOAD_GUARD, with no fault or pending transition.
+        if ($Snapshot.stateFlags -ne 0x00404013) { throw 'Resident state or unload guard not established.' }
+    } elseif ($Snapshot.stateFlags -ne 19) { throw 'Native stop was not fully acknowledged.' }
+    $expected=@($Baseline.processors|ForEach-Object {'{0}:{1}' -f $_.group,$_.number}|Sort-Object)
+    $actual=@($Snapshot.processors|ForEach-Object {'{0}:{1}' -f $_.group,$_.number}|Sort-Object)
+    if ($actual.Count -ne $Count -or @($actual|Select-Object -Unique).Count -ne $Count -or
+        ($expected -join ',') -ne ($actual -join ',')) { throw 'Resident CPU identity set changed.' }
+    foreach ($cpu in $Snapshot.processors) {
+        if ($cpu.backend -ne 2 -or $cpu.executionStage -ne $expectedStage -or
+            $cpu.lastStatus -ne '0x00000000' -or (($cpu.stateFlags -band 0x100) -ne 0) -ne $Active) {
+            throw 'A processor has not acknowledged the expected resident/native state.'
+        }
+    }
+}
+
 $principal=[Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Run from an elevated host PowerShell.' }
 $repository=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -58,7 +84,7 @@ $os=Get-CimInstance Win32_OperatingSystem
 $evidence=Join-Path $PSScriptRoot ('artifacts\host-self-test-'+(Get-Date -Format yyyyMMdd-HHmmss)+'-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $evidence | Out-Null
 $utf8=New-Object Text.UTF8Encoding($false)
-@{scope='physical-host-serial-per-cpu-svm-self-test';driverSha256=$accepted.driverSha256;
+@{scope='physical-host-svm-test';residentSeconds=$ResidentSeconds;driverSha256=$accepted.driverSha256;
     controlSha256=$accepted.controlSha256;logicalProcessors=$count;build=$os.BuildNumber;
     bootId=$os.LastBootUpTime.ToUniversalTime().ToString('o');hypervisorPresent=$machine.HypervisorPresent} |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence 'identity.json') -Encoding UTF8
@@ -83,7 +109,7 @@ function Invoke-HostSelfTestControl([string]$Command,[string]$Label) {
 
 $safeToUnload=$false
 $started=$false
-Write-Host "Evidence: $evidence; sequential self-test on $count logical processors. No resident start."
+Write-Host "Evidence: $evidence; sequential self-test on $count logical processors; resident seconds=$ResidentSeconds."
 try {
     Invoke-HostSelfTestService 'config' @('config','KswordARK','binPath=',$driver,'start=','demand')
     Invoke-HostSelfTestService 'start' @('start','KswordARK')
@@ -102,6 +128,26 @@ try {
     $after=Invoke-HostSelfTestControl 'status' 'after-self-test'
     $metrics=Invoke-HostSelfTestControl 'metrics' 'metrics'
     Assert-HostSvmSelfTestEvidence $prepared $after $metrics $control $count
+    if ($ResidentSeconds -gt 0) {
+        # Always request native stop after attempting residency, even if evidence validation fails.
+        # An unproven stop still leaves safeToUnload=false and retains the driver for diagnosis.
+        try {
+            Write-Host "Starting $count processors concurrently for $ResidentSeconds seconds."
+            $null=Invoke-HostSelfTestControl 'resident' 'resident'
+            $active=Invoke-HostSelfTestControl 'status' 'active'
+            Assert-HostSvmResidentEvidence $after $active $true $count
+            Start-Sleep -Seconds $ResidentSeconds
+            $stillActive=Invoke-HostSelfTestControl 'status' 'active-after-wait'
+            Assert-HostSvmResidentEvidence $after $stillActive $true $count
+            if ($stillActive.generation -ne $active.generation) { throw 'Resident lifecycle changed during the observation window.' }
+            $null=Invoke-HostSelfTestControl 'metrics' 'resident-metrics'
+        } finally {
+            $null=Invoke-HostSelfTestControl 'stop' 'resident-stop'
+            $stoppedState=Invoke-HostSelfTestControl 'status' 'native-after-stop'
+            Assert-HostSvmResidentEvidence $after $stoppedState $false $count
+            $null=Invoke-HostSelfTestControl 'metrics' 'stopped-metrics'
+        }
+    }
     $null=Invoke-HostSelfTestControl 'teardown' 'teardown'
     $final=Invoke-HostSelfTestControl 'status' 'released'
     if ($final.stateFlags -ne 1 -or $final.processorCount -ne 0 -or $final.preparedProcessorCount -ne 0 -or
@@ -119,5 +165,7 @@ try {
 $stopped=Get-CimInstance Win32_SystemDriver -Filter "Name='KswordARK'"
 if ($stopped.State -ne 'Stopped') { throw 'Service did not reach STOPPED.' }
 $result=[ordered]@{result='PASS';kind='physical-host-serial-svm-self-test';processors=$count;
-    residentTested=$false;innerOperatingSystemTested=$false;serviceState=$stopped.State;evidence=$evidence}
+    residentTested=($ResidentSeconds -gt 0);residentSeconds=$ResidentSeconds;
+    innerOperatingSystemTested=$false;serviceState=$stopped.State;evidence=$evidence}
+if ($ResidentSeconds -gt 0) { $result.kind='physical-host-short-resident-cycle' }
 $result|ConvertTo-Json|Tee-Object -FilePath (Join-Path $evidence 'result.json')

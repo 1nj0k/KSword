@@ -7,6 +7,8 @@
 宿主 CET 候选支持用户态 `XSS.CET_U`，使用 XSAVES/XRSTORS 保存当前线程状态；非零 `S_CET`（内核 CET 控制）仍明确拒绝，未实现内核影子栈返回链。构建后先用 `Test-HostSvmAdmission.ps1` 仅装载/查询/卸载核验准入；`backendStatus=0` 仅表示准入成功，不是 VMRUN 或常驻通过。该候选保持 HVM v6，不能把新 CLI 与旧 v5 来宾驱动混用。
 
 实体机准入通过后，管理员运行 `Test-HostSvmSelfTest.ps1`，其固定流程是装载→prepare→逐CPU串行self-test→status/metrics核验→teardown→卸载。SYS/CLI须匹配已归档准入哈希；每条命令执行前落盘日志，核对逐核集合、代次、CPUID退出和资源释放。不执行resident或内层VM；物理宿主32逻辑处理器即检查32个串行往返，不是32核并发常驻。若执行不完整或无法证明释放，保留驱动与资源并报告证据目录，不将CLI终止当作回滚成功。`Test-HostSelfTestEvidence.ps1`只运行证据验证器的模拟测试。
+
+逐核自检通过后，可显式加 `-ResidentSeconds 5`：自检之后新增全核同时resident→等待5秒→stop，再释放/卸载；省略参数仍只执行短自检。核对活动与停止的每核集合/阶段、卸载保护及等待期间代次不变；一旦尝试resident，异常路径也请求stop，无法证实完整退出时保留资源。此短测不等于负载或内层VM兼容测试。运行在实体机，请先保存工作。
 进入实验前保存工作；两份宿主脚本均需要**管理员 Windows PowerShell 5.1**。
 
 ## 两个宿主入口

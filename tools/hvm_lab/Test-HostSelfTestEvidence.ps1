@@ -6,6 +6,8 @@ $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot
 if ($errors.Count) { throw ($errors|Out-String) }
 $validator=$ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Assert-HostSvmSelfTestEvidence'},$true)
 Invoke-Expression $validator.Extent.Text
+$residentValidator=$ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Assert-HostSvmResidentEvidence'},$true)
+Invoke-Expression $residentValidator.Extent.Text
 function New-TestEvidence([int]$Count=2) {
     $cpus=@(0..($Count-1)|ForEach-Object {
         [pscustomobject]@{group=0;number=$_;backend=2;executionStage=2;stateFlags=3;
@@ -59,4 +61,33 @@ foreach ($change in $failures) {
     if (-not $rejected) { throw "Invalid evidence accepted: $change" }
     ++$checks
 }
+$t=New-TestEvidence
+$snapshot=($t.After|ConvertTo-Json -Depth 6|ConvertFrom-Json)
+$snapshot.generation=4; $snapshot.stateFlags=0x404013; $snapshot.residentProcessorCount=2
+foreach ($cpu in $snapshot.processors) { $cpu.executionStage=3; $cpu.stateFlags=0x103 }
+Assert-HostSvmResidentEvidence $t.After $snapshot $true 2
+++ $checks
+foreach ($change in @(
+    {param($s) $s.residentProcessorCount=1},
+    {param($s) $s.stateFlags=0x4013},
+    {param($s) $s.processors[1].number=0},
+    {param($s) $s.processors[1].stateFlags=3},
+    {param($s) $s.powerGeneration=1}
+)) {
+    $bad=$snapshot|ConvertTo-Json -Depth 6|ConvertFrom-Json
+    & $change $bad
+    $rejected=$false
+    try { Assert-HostSvmResidentEvidence $t.After $bad $true 2 } catch { $rejected=$true }
+    if (-not $rejected) { throw 'Incomplete residency was accepted.' }
+    ++$checks
+}
+$snapshot.generation=5; $snapshot.stateFlags=19; $snapshot.residentProcessorCount=0
+foreach ($cpu in $snapshot.processors) { $cpu.executionStage=6; $cpu.stateFlags=3 }
+Assert-HostSvmResidentEvidence $t.After $snapshot $false 2
+++ $checks
+$snapshot.processors[0].stateFlags=0x103
+$rejected=$false
+try { Assert-HostSvmResidentEvidence $t.After $snapshot $false 2 } catch { $rejected=$true }
+if (-not $rejected) { throw 'An active CPU survived a supposedly complete stop.' }
+++ $checks
 Write-Output "HOST_SELF_TEST_EVIDENCE_CHECKS=$checks PASS (simulated evidence; no driver loaded)"
