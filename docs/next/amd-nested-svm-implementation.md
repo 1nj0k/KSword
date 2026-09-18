@@ -2,6 +2,8 @@
 
 ## 当前边界（2026-09-18）
 
+22:40 更新：8 vCPU/100轮串行逐核探针通过，624文件独立核验；800次往返完整，八核最后sequence均200、每轮NPF5、无失败，资源归零。[八核探针证据](evidence/amd-nested-probe-8cpu.json)。固定探针的1/2/4/8核矩阵已完成，后续工作以通用内层VMM入口与真实OS覆盖为主；仍不能据此发布任意内层VMware兼容。
+
 22:37 更新：4 vCPU/100轮串行逐核探针通过，624文件独立核验；各核完成序列200，每轮NPF5，无失败，释放完整。[四核探针证据](evidence/amd-nested-probe-4cpu.json)记录400次CPU往返及原始导出manifest哈希。
 
 22:33 更新：同一候选在 2 vCPU 完成 20 轮逐核探针，40 次 CPU 往返均通过。144 个文件哈希/大小、逐条控制顺序、精确 CPU 集合、递增完成序列、电源代次和最终资源释放独立核验。两核最后 sequence=40、每轮 NPF=5。报告见 [双核探针证据](evidence/amd-nested-probe-2cpu.json)，可使用 `tools/hvm_lab/verify_nested_probe.py` 从原始导出重新验证。此项仍是串行逐核执行。

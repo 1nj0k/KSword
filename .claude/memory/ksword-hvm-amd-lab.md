@@ -1,5 +1,9 @@
 # AMD 实验后端与重启续接
 
+最新硬件里程碑（2026-09-18 22:40）：8vCPU/100轮受控嵌套探针PASS。回传nested-probe-20260918-224000-3121a1707dfe4fb7998257c004a2397c共624文件，verify_nested_probe.py独立核验全部哈希/大小、控制顺序、逐核状态/代次及最终释放。CPU0:0..7各100轮，共800次往返，完成序列均200，每轮每核NPF5、entries/reflections1、exit72/marker4B534E31、failure0，资源归零。报告docs/next/evidence/amd-nested-probe-8cpu.json。由此固定探针1核1次、2核20次、4/8核100次均已通过；不重复同类轮数来冒充通用内层VMM兼容。下一实现重点：任意VMCB快照/合法性检查、MSRPM/IOPM合并、IRQ/NMI/GIF、CLGI/INVLPGA与异常反射、一般L1 continuation和非身份NPT硬件覆盖，再测试内层OS。物理机常驻及并发内层多核均未验证；原2h压力仍是用户中止，不补记通过。
+
+八核探针准备（2026-09-18 22:39）：四核100轮已提交b4c5dc05，未推送；正常关机保存AMD-NestedProbe-4CPU-100Cycles-PASS-20260918冷态快照。克隆改单插槽8vCPU冷启动，VMware日志CPL0/NumVCPUs8，KD78911重连，同一nested-probe age9候选。下一步来宾共享Start-GuestNestedProbe.ps1 -Vcpu 8 -Cycles 100；尚无八核探针通过证据。
+
 最新硬件里程碑（2026-09-18 22:37）：4vCPU/100轮受控嵌套探针PASS。用户仅回贴命令，但宿主已收到nested-probe-20260918-223710-9e5e89f87bac4713aa6a96526ef296ce完整导出，verify_nested_probe.py独立核验624文件哈希/大小及所有控制/逐核结果。CPU0:0..3各100轮，共400次往返，完成序列均200，每轮NPF5、entries/reflections1、exit72/marker4B534E31、failure0，最终资源归零；同一age9候选。报告docs/next/evidence/amd-nested-probe-4cpu.json。仅逐核串行自检，不是并发内层OS；按要求立即commit，下一步8核100轮。
 
 四核探针准备（2026-09-18 22:36）：双核20轮已提交5dabd644，未推送；正常关机保存AMD-NestedProbe-2CPU-20Cycles-PASS-20260918冷态快照。克隆改单插槽4vCPU并启动GUI，VMware确认CPL0/NumVCPUs4，Tools running、KD78911重新连接，源/结果共享已恢复。沿用age9候选，等待来宾Start-GuestNestedProbe.ps1 -Vcpu 4 -Cycles 100。尚无四核嵌套探针结果；上一阶段四核常驻100轮是另一项验收。

@@ -1,0 +1,74 @@
+{
+  "result": "PASS",
+  "scope": "bounded-svm-nested-probe",
+  "vcpu": 8,
+  "cycles": 100,
+  "filesVerified": 624,
+  "completedCpuRoundTrips": 800,
+  "released": true,
+  "innerOperatingSystemTested": false,
+  "concurrentInnerVcpusTested": false,
+  "rsds": {
+    "guid": "f0725672-1a1e-4104-890a-1b5744c5c7a9",
+    "age": 9
+  },
+  "exportManifestSha256": "c8ca34293221a585ce0c684b6e477a9625d6fef3859eac709784ba837667d33a",
+  "processors": [
+    {
+      "group": 0,
+      "number": 0,
+      "finalSequence": 200,
+      "npfMin": 5,
+      "npfMax": 5
+    },
+    {
+      "group": 0,
+      "number": 1,
+      "finalSequence": 200,
+      "npfMin": 5,
+      "npfMax": 5
+    },
+    {
+      "group": 0,
+      "number": 2,
+      "finalSequence": 200,
+      "npfMin": 5,
+      "npfMax": 5
+    },
+    {
+      "group": 0,
+      "number": 3,
+      "finalSequence": 200,
+      "npfMin": 5,
+      "npfMax": 5
+    },
+    {
+      "group": 0,
+      "number": 4,
+      "finalSequence": 200,
+      "npfMin": 5,
+      "npfMax": 5
+    },
+    {
+      "group": 0,
+      "number": 5,
+      "finalSequence": 200,
+      "npfMin": 5,
+      "npfMax": 5
+    },
+    {
+      "group": 0,
+      "number": 6,
+      "finalSequence": 200,
+      "npfMin": 5,
+      "npfMax": 5
+    },
+    {
+      "group": 0,
+      "number": 7,
+      "finalSequence": 200,
+      "npfMin": 5,
+      "npfMax": 5
+    }
+  ]
+}
