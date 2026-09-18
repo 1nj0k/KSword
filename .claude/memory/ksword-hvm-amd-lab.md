@@ -1,5 +1,7 @@
 # AMD 实验后端与重启续接
 
+实体机32核完整短常驻PASS（2026-09-19）：host-self-test-20260919-000749-f718b7a6f2e548dc9146617747f6547d原始证据经生产验证器独立回放：32核串行自检、并发进入、两次Active查询间隔5.0321852秒且代次不变、全核stop、teardown归零、SCM STOPPED。报告docs/next/evidence/amd-host-resident-32cpu-5seconds.json；仍是7004a13c/age13候选，不是L2操作系统通过。随后用户手动常驻32核，VMware报AMD-V/RVI不可用、MonitorMode失败；当前普通CPUID隐藏SVM且不提供通用SVM转发，与此现象相符。此次VMware失败仅有用户报告，未取得对应vmware.log。用户明确授权本次提交后推送一次，再继续实现；后续不自动再推送。当前SCM独立查询已Stopped。
+
 STOP_PENDING续接（2026-09-19）：用户完成teardown/sc stop后立刻重跑，脚本因尚未STOPPED拒绝。独立观察STOP_PENDING持续超过额外30秒，发现宿主Ksword5.1 PID32092自00:01:40运行；用户完全退出主程序后SCM即确认STOPPED/exit0，未重启。符合主程序设备句柄延迟卸载，但未取得句柄级归因。Test-HostSvmSelfTest现用SCM ServiceController：仅StopPending等待最多30秒、Running仍拒绝；stop后等待完成再发布结果，超时不当成功；入口要求主程序退出。PS5显式加载System.ServiceProcess，37项回归及实际STOPPED查询通过。驱动不改，下一步直接重跑-ResidentSeconds5，无需再次teardown/sc stop。
 
 实体机首轮并发常驻（2026-09-19 00:00）：真实32核已全部进入(stage4/flags103/common404013/gen4)，finally stop也全部成功(stage6/flags403/common13/gen5/resident0、逐核VMMCALL exit81、failure0)。此次报错是脚本把ENTERED错写成3（实际3是ENTERING、4才ENTERED），模拟测试也复制了错误常量；已修正stage4，测试从共享协议取常量、增加ENTERING拒绝及本次真实32核快照回放。docs/next/evidence/amd-host-resident-enter-stop.json记录准确通过范围。5秒等待尚未执行，资源未teardown、驱动仍RUNNING；这不是退出失败，也不是完整5秒验收PASS。下一步管理员先核对status全核已stop，再teardown/sc stop，重跑同一-ResidentSeconds5脚本。驱动/SYS无需改动或重编译。新错误输出含group:number/期望实际stage/flags/status，避免再次只报笼统异常。

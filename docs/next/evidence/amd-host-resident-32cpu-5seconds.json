@@ -1,0 +1,217 @@
+{
+  "result": "PASS",
+  "kind": "physical-host-32cpu-short-resident-cycle",
+  "sourceCommit": "7004a13c",
+  "runnerCommit": "e3280310",
+  "identity": {
+    "residentSeconds": 5,
+    "logicalProcessors": 32,
+    "driverSha256": "0BB1B03F4B6A688C9725C8EB7EB75A4ABD3FB0611B9F8787D4F935940DE94A2A",
+    "bootId": "2026-09-18T15:01:19.5Z",
+    "hypervisorPresent": false,
+    "build": "19045",
+    "controlSha256": "64927AF8ED7600AD3336A19DA2F2BBBC2630DBF117C7DF14A6453032B39856C6",
+    "scope": "physical-host-svm-test"
+  },
+  "processors": 32,
+  "activeQueryIntervalSeconds": 5.0321852,
+  "generations": [
+    2,
+    3,
+    4,
+    4,
+    5,
+    6
+  ],
+  "serviceState": "Stopped",
+  "innerOperatingSystemTested": false,
+  "scope": "32 processors entered concurrently, remained active across a five-second wait, stopped, released and driver unloaded. No VMware compatibility or long soak claim.",
+  "rawEvidence": "tools/hvm_lab/artifacts/host-self-test-20260919-000749-f718b7a6f2e548dc9146617747f6547d",
+  "files": [
+    {
+      "name": "active-after-wait.json",
+      "bytes": 11486,
+      "sha256": "9396883B01D998F5B15B6ECD397D196818B825078672F84CA2069DDC9DEC5BF4"
+    },
+    {
+      "name": "active-after-wait.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "active.json",
+      "bytes": 11479,
+      "sha256": "F25F71879F5C61C698CECDF0491B8918DE02560999393F43EA2A78721C836CFA"
+    },
+    {
+      "name": "active.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "after-self-test.json",
+      "bytes": 10804,
+      "sha256": "6E59D701D5E338E0BB5874138C6035BF103EA69E550C8BEE3D388B5D3CF9D601"
+    },
+    {
+      "name": "after-self-test.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "commands.log",
+      "bytes": 1066,
+      "sha256": "B7F962463C2442DBC81D5F6262B207DCA765A601A8820232BA2E14E8C57D16E6"
+    },
+    {
+      "name": "config.txt",
+      "bytes": 70,
+      "sha256": "185FD1A24A95295E0E5CA03A36EF5C35761D52592CC46FA7EF9DE907ED4EF44F"
+    },
+    {
+      "name": "identity.json",
+      "bytes": 395,
+      "sha256": "3A9CB9A26F753624CFB5ACE1AF88627DE2DDB749EDAFF7E00870D3C59E9039AB"
+    },
+    {
+      "name": "initial.json",
+      "bytes": 2015,
+      "sha256": "60EE70E5A499C9AC61852973FB2DA50BAC425DE064456709B201FF62301B52DF"
+    },
+    {
+      "name": "initial.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "metrics.json",
+      "bytes": 28767,
+      "sha256": "1E6984D64128E51C29F009E52851AA62D926956BEDA88DD475AB9D06C592DD61"
+    },
+    {
+      "name": "metrics.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "native-after-stop.json",
+      "bytes": 11419,
+      "sha256": "C424880810ED8ED6B3482037E3D2C93FA5F3A5A30E61D9684EFD981E92CD16E2"
+    },
+    {
+      "name": "native-after-stop.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "prepare.json",
+      "bytes": 900,
+      "sha256": "EF6331CBD414612A046A961B6CC3E3F25A5D953623A57253B1CAAA662EFB2DD3"
+    },
+    {
+      "name": "prepare.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "prepared.json",
+      "bytes": 10334,
+      "sha256": "1CF12B16346A4EB658C534C1184BD47AAA3C251EF7D29A8CDEBCA13787158A03"
+    },
+    {
+      "name": "prepared.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "query-after-stop.txt",
+      "bytes": 532,
+      "sha256": "56F254D271DBC2BE435D5FBD4B7CDD0BC5E09926693BB24CC22568FF50DF2A96"
+    },
+    {
+      "name": "released.json",
+      "bytes": 2015,
+      "sha256": "45DF44ACC22D556AEC345039D69965325F09DA70DC5BFA3BA8E063F59F0FE914"
+    },
+    {
+      "name": "released.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "resident-metrics.json",
+      "bytes": 34051,
+      "sha256": "25F96BF7403B78393F69249ABD9FEB1B669986ADA221A5EE341A774324ECF8A5"
+    },
+    {
+      "name": "resident-metrics.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "resident-stop.json",
+      "bytes": 925,
+      "sha256": "84F1177C1190B0A312E1370D9F2D02145405BE0CD4504DD2A3B882F58AAF7343"
+    },
+    {
+      "name": "resident-stop.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "resident.json",
+      "bytes": 958,
+      "sha256": "A861B225A79E8C77F5B71A169FE10F1EF0E06CBD7420EB252A1D6BC697BC3E3C"
+    },
+    {
+      "name": "resident.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "result.json",
+      "bytes": 754,
+      "sha256": "E814FD6142689D386EEE722CDA504567C70AB1ECD2FA6F33005ABD28F32AF65D"
+    },
+    {
+      "name": "self-test.json",
+      "bytes": 923,
+      "sha256": "1ED4F6072C9F6099EAC19C29D2BE98F453000F916C680FC85D75F45E5F5BCE75"
+    },
+    {
+      "name": "self-test.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "start.txt",
+      "bytes": 812,
+      "sha256": "56E5D6C44C35007F49A44A7ADAFECFBFE98B809B2F53EC145FC0BAD346B1DE2A"
+    },
+    {
+      "name": "stop.txt",
+      "bytes": 532,
+      "sha256": "56F254D271DBC2BE435D5FBD4B7CDD0BC5E09926693BB24CC22568FF50DF2A96"
+    },
+    {
+      "name": "stopped-metrics.json",
+      "bytes": 34083,
+      "sha256": "DD56A139500C07FEE6A8A6F09E4E2A796F755F74020E2DB3B097AE96A4A4DFE7"
+    },
+    {
+      "name": "stopped-metrics.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+      "name": "teardown.json",
+      "bytes": 882,
+      "sha256": "9AEA1A1DD4243EB8BDEC18B74ED5D52CFE6304ECACC63430A8975FD602C43B8D"
+    },
+    {
+      "name": "teardown.stderr.txt",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    }
+  ]
+}
