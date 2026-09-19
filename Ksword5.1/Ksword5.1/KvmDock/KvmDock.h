@@ -33,6 +33,7 @@ class QShowEvent;
 class QTimer;
 class QTabWidget;
 class KvmGuestVmPanel;
+class KvmWatchPanel;
 
 class KernelHvmTab;
 
@@ -103,6 +104,7 @@ private:
     std::function<void(bool)> m_commandOperationHandler;
     QTabWidget* m_tabs = nullptr;
     KvmGuestVmPanel* m_guestVmPanel = nullptr;
+    KvmWatchPanel* m_watchPanel = nullptr;
     QTimer* m_pollTimer = nullptr;
 
     // 只留派生位而不是整个 KvmState：把 KvmControl.h 拖进本头文件，

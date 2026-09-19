@@ -1662,6 +1662,11 @@ namespace ksword::kvm
             entry.access = row.access;
             entry.ruleId = row.ruleId;
             entry.status = row.status;
+            /* 命中现场里只能在 VM-exit 那一刻取到的两个寄存器，原样上抬。 */
+            entry.guestRsp = row.guestRsp;
+            entry.guestCr3 = row.guestCr3;
+            entry.watchState = row.watchState;
+            entry.eventFlags = row.eventFlags;
             events.events.append(entry);
         }
         return events;

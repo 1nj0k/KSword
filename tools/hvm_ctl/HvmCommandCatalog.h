@@ -21,6 +21,8 @@ typedef enum HVM_COMMAND_HANDLER {
        of the published region at a time. Appended rather than inserted so every
        existing handler keeps its ordinal. */
     HvmPageMapRegion, HvmPageMapRegionScan, HvmPageStage, HvmPageDigest,
+    /* First-touch memory watch.  Appended so every existing ordinal is kept. */
+    HvmWatchAddVa, HvmWatchAddPa, HvmWatchList, HvmWatchRearm, HvmWatchRemove,
     HvmHelp, HvmCommands
 } HVM_COMMAND_HANDLER;
 

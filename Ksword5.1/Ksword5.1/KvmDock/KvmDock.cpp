@@ -5,6 +5,7 @@
 #include "../UI/FlowLayout.h"
 #include "../UI/KvmControl.h"
 #include "../UI/KvmGuestVmPanel.h"
+#include "../UI/KvmWatchPanel.h"
 #include "../theme.h"
 
 #include <QGroupBox>
@@ -127,6 +128,8 @@ void KvmDock::setOperationRunning(const bool running)
     }
     m_operationRunning = running;
     m_hvmTab->setEnabled(!running);
+    // 内存监视发的是同一条 EPT 规则 IOCTL，与其余入口共用驱动侧那把状态锁。
+    m_watchPanel->setEnabled(!running);
     // 「跑第三方虚拟机」页发的是同一批控制命令，必须和其它入口一起串行化：
     // 漏掉它，别处的命令在飞时用户仍能按下「一键完成全部五步」，两路 IOCTL
     // 会同时压到驱动侧那把状态锁上。自己发起时它先经 setBusy 禁掉自家按钮，
@@ -424,6 +427,20 @@ void KvmDock::initializeUi()
                  ks::i18n::sourceText(QStringLiteral("跑第三方虚拟机")));
 
     tabs->addTab(controlPanel, ks::i18n::sourceText(QStringLiteral("控制")));
+
+    // 内存监视排在控制之后、状态详情之前。
+    //
+    // 它是这一页里唯一一个**产出证据**而不是改状态的功能：其余几页回答的是
+    // "现在装了什么、走到哪一步了"，这一页回答的是"下一次是谁动了它"。紧挨着
+    // 控制页，是因为它有一个硬前置条件——常驻必须在跑，否则装上的监视永远不会
+    // 响，而那个条件正是控制页在管的。
+    m_watchPanel = new KvmWatchPanel(tabs);
+    m_watchPanel->onBusyChanged = [this](bool running) {
+        setOperationRunning(running);
+        if (m_commandOperationHandler) { m_commandOperationHandler(running); }
+    };
+    tabs->addTab(m_watchPanel, ks::i18n::sourceText(QStringLiteral("内存监视")));
+
     tabs->addTab(detailPage, ks::i18n::sourceText(QStringLiteral("状态详情")));
     // 页名不再写 VT-x/EPT：同一页在 AMD 机器上显示 SVM/NPT 的读数，
     // 页名钉死在一套架构上会让另一套的用户以为这页与自己无关。

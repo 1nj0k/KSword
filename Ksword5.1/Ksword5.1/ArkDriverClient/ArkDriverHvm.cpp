@@ -264,6 +264,71 @@ namespace ksword::ark
         return result;
     }
 
+    HvmEptRuleResult DriverClient::controlHvmEptWatch(
+        const HvmEptWatchRequest& watch) const
+    {
+        HvmEptRuleResult result{};
+        KSWORD_ARK_HVM_EPT_RULE_REQUEST request{};
+        const bool mutating =
+            watch.operation != KSWORD_ARK_HVM_EPT_RULE_WATCH_QUERY &&
+            watch.operation != KSWORD_ARK_HVM_EPT_RULE_QUERY;
+
+        request.version = KSWORD_ARK_HVM_PROTOCOL_VERSION;
+        request.size = sizeof(request);
+        request.operation = watch.operation;
+        request.expectedGeneration = watch.expectedGeneration;
+        request.ruleId = watch.watchId;
+        request.deniedAccess = watch.requestedAccess;
+        request.physicalAddress = watch.physicalPage;
+        /*
+         * 一条 watch 恒定覆盖一页。
+         *
+         * 页数不是调用方能选的：EPT 权限本来就是页粒度，多页的 watch 只是几条
+         * 独立的 watch 共用一个标识和一个命中计数，而那个计数答不出"被动的是
+         * 哪一页"。驱动侧同样拒绝 pageCount != 1，这里写死是为了让这条约束在
+         * 客户端就成立，而不是靠一次失败的 IOCTL 才发现。
+         */
+        request.pageCount = 1ULL;
+        request.requestedAddress = watch.requestedAddress;
+        request.requestedLength = watch.requestedLength;
+        request.requestedAccess = watch.requestedAccess;
+        request.addressKind = watch.addressKind;
+        /* ADD 时带上处置标志；REARM 靠 ruleId 找到已有记录，不需要重复声明。 */
+        if (watch.operation == KSWORD_ARK_HVM_EPT_RULE_ADD)
+        {
+            request.flags |= KSWORD_ARK_HVM_EPT_RULE_FLAG_WATCH_ONCE;
+        }
+        if (mutating)
+        {
+            request.flags |= KSWORD_ARK_HVM_EPT_RULE_FLAG_UI_CONFIRMED;
+            request.confirmationToken =
+                KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN;
+        }
+
+        result.io = deviceIoControl(
+            IOCTL_KSWORD_ARK_HVM_EPT_RULE,
+            &request,
+            sizeof(request),
+            &result.response,
+            sizeof(result.response));
+        result.unsupported = !result.io.ok &&
+            isUnsupportedHvmError(result.io.win32Error);
+        result.io.ntStatus = result.response.lastStatus;
+
+        std::ostringstream stream;
+        stream << "HVM watch operation=" << watch.operation
+            << ", status=" << result.response.status
+            << ", watchId=" << result.response.ruleId
+            << ", rows=" << result.response.returnedWatchRows
+            << ", page=0x" << std::hex << watch.physicalPage << std::dec;
+        if (result.unsupported)
+        {
+            stream << ", unsupported=true";
+        }
+        result.io.message = stream.str();
+        return result;
+    }
+
     HvmEventResult DriverClient::queryHvmEvents(
         const std::uint64_t afterSequence,
         const unsigned long maxRows,

@@ -459,6 +459,8 @@
     <ClCompile Include="UI\KvmDomainDialog.cpp" />
     <ClCompile Include="UI\KvmMsrPolicyDialog.cpp" />
     <ClCompile Include="UI\KvmProcessDialog.cpp" />
+    <ClCompile Include="UI\KvmWatch.cpp" />
+    <ClCompile Include="UI\KvmWatchPanel.cpp" />
     <ClCompile Include="UI\KvmEventDialog.cpp" />
     <ClCompile Include="UI\KvmCrPolicyDialog.cpp" />
     <ClCompile Include="UI\CommandExecutionPopup.cpp" />

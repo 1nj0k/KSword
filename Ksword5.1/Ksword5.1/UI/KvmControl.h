@@ -10,6 +10,7 @@
 //   SOAK 更是会占用驱动侧状态锁数十秒，绝不能在 UI 线程调用。
 
 #include <QByteArray>
+#include <QMetaType>
 #include <QString>
 #include <QVector>
 
@@ -451,6 +452,15 @@ namespace ksword::kvm
         // ruleId 对 EPT 视图翻转承载的是 viewId：两者共用这一列。
         unsigned long ruleId = 0;
         long status = 0;
+        // 命中那一刻的栈指针与地址空间。只能在 VM-exit 现场取：一旦 VMRESUME
+        // 回去，它们描述的就是另一个线程了。零表示驱动没能读到（外层
+        // hypervisor 会拒绝某些客户状态编码），不是"值就是 0"。
+        unsigned long long guestRsp = 0;
+        unsigned long long guestCr3 = 0;
+        // 见 KSWORD_ARK_HVM_EPT_WATCH_STATE_*，只对 watch 命中行有意义。
+        unsigned long watchState = 0;
+        // 见 KSWORD_ARK_HVM_EVENT_FLAG_*。
+        unsigned long eventFlags = 0;
     };
 
     // KvmEventResult：一次事件读取的结果。
@@ -609,4 +619,125 @@ namespace ksword::kvm
     // releaseInjection/releaseAllInjections：撤销注入。受写权限门约束。
     KvmInjectResult releaseInjection(unsigned long processId);
     KvmInjectResult releaseAllInjections();
+
+    // ——— R-1 内存监视（首次访问归因） ———
+    //
+    // 它回答的是别的机制答不了的一个问题：某个内核对象被改过之后，**下一次**是
+    // 谁动的、从哪条指令动的。快照式检测只能给出"改之前是 A，改之后是 B"，中间
+    // 那个动作没有任何证据。
+    //
+    // 边界必须说清楚，因为它很容易被当成不是的东西：这是观察与归因，不是保护。
+    // 它不阻止访问（命中后原访问照常完成）、不是安全边界（EPT 是页粒度，DMA 不
+    // 经过 CPU EPT，目标换掉自己那一页的物理页就不在被监视的页上了）、也不是
+    // 持续监视（第一版只保证"下一次访问产生一次可靠事件"）。
+
+    // KvmWatchEntry：一条 watch 的完整快照。
+    struct KvmWatchEntry
+    {
+        unsigned long watchId = 0;
+        // 见 KSWORD_ARK_HVM_EPT_WATCH_STATE_*。
+        unsigned long state = 0;
+        // 用户勾的 / 实际装上的访问类型。两个都要：EPT 不允许 W=1 而 R=0，
+        // 所以"只监视读"在硬件上一定连写也监视了。只显示其中一个，要么替用户
+        // 改了他的请求，要么谎称监视得比实际更细。
+        unsigned long requestedAccess = 0;
+        unsigned long effectiveAccess = 0;
+        unsigned long addressKind = 0;
+        unsigned long hitCount = 0;
+        unsigned long long lastHitSequence = 0;
+        // 见 KSWORD_ARK_HVM_EPT_WATCH_HIT_*。EVENT_LOST 与"从未命中"必须分开。
+        unsigned long lastHitStatus = 0;
+        unsigned long armedGeneration = 0;
+        // 用户请求的那一段，与硬件真正监视的那一页。前者可能是 8 字节，
+        // 后者恒为 4096 —— 界面必须两套都摆出来。
+        unsigned long long requestedAddress = 0;
+        unsigned long long requestedLength = 0;
+        unsigned long long physicalPage = 0;
+        unsigned long long pageCount = 0;
+        unsigned long long lastHitRip = 0;
+        unsigned long long lastHitGuestLinearAddress = 0;
+        unsigned long long lastHitGuestPhysicalAddress = 0;
+        unsigned long long lastHitCr3 = 0;
+        unsigned long long lastHitRsp = 0;
+        unsigned long long lastHitTimestamp = 0;
+        unsigned short lastHitProcessorGroup = 0;
+        unsigned char lastHitProcessorNumber = 0;
+        bool lastHitGuestLinearValid = false;
+        // 命中的 GLA 落在 requestedAddress/Length 之内，而不只是同一页上。
+        bool lastHitRangeMatch = false;
+    };
+
+    // KvmWatchResult：一次 watch 操作的结果。
+    struct KvmWatchResult
+    {
+        bool ok = false;
+        unsigned long protocolStatus = 0; // KSWORD_ARK_HVM_EPT_RULE_STATUS_*。
+        long lastStatus = 0;
+        // 冲突时占着这一页的是谁，见 KSWORD_ARK_HVM_WATCH_CONFLICT_*。
+        unsigned long conflictOwnerId = 0;
+        unsigned long conflictOwnerKind = 0;
+        unsigned long watchCount = 0;
+        QVector<KvmWatchEntry> watches;
+        QString message;
+    };
+
+    // listWatches：读取整张 watch 表。只读，不需要写权限。
+    KvmWatchResult listWatches();
+
+    // KvmWatchTarget：一次 watch 安装请求。
+    struct KvmWatchTarget
+    {
+        // 为真表示 address 是内核虚拟地址，安装前先翻译成物理页。
+        bool virtualAddress = true;
+        unsigned long long address = 0;
+        // 用户真正关心的字节数。给 0 表示整页。
+        unsigned long long length = 0;
+        // KSWORD_ARK_HVM_EPT_ACCESS_* 的组合。
+        unsigned long access = 0;
+    };
+
+    // addWatch：安装一条首次访问 watch。受写权限门约束。
+    //
+    // 虚拟地址会在这里翻译一次并记下结果；**不跟踪后续的重映射**。安装之后
+    // guest 页表把同一个 VA 指到别的物理页，这条 watch 仍然监视原来那一页，
+    // 界面要能检测出这个分歧并说出来，而不是继续声称"正在监视该 VA"。
+    KvmWatchResult addWatch(const KvmWatchTarget& target);
+
+    // rearmWatch：把一条已命中或已失效的 watch 重新武装，保留标识与历史。
+    KvmWatchResult rearmWatch(unsigned long watchId);
+
+    // removeWatch/clearWatches：移除。clearWatches 复用 EPT 规则的 CLEAR，
+    // 因此会连同普通 EPT 规则一起清掉——调用点必须把这一点说给用户听。
+    KvmWatchResult removeWatch(unsigned long watchId);
+
+    // KvmWatchAttribution：把一个客户 RIP 归到某个已加载内核模块上。
+    //
+    // 只做"地址落在哪个模块的映像范围里"这一步。它在 R3 普通上下文做，不在
+    // VMX root 做：那里解析 Windows 对象是拿整台机器冒险，而这一步晚几毫秒
+    // 做完全不影响结论。
+    struct KvmWatchAttribution
+    {
+        bool resolved = false;
+        QString moduleName;
+        QString modulePath;
+        unsigned long long moduleBase = 0;
+        unsigned long long moduleSize = 0;
+        // 相对模块基址的偏移，resolved 为真时有效。
+        unsigned long long relativeAddress = 0;
+    };
+
+    // attributeKernelAddress：把一个内核地址归到模块。
+    // 归不到任何已加载模块时 resolved 为假——那是一条结论（"未知可执行区域"），
+    // 不是失败，调用方应当据此提供打开内存/反汇编的入口而不是只显示 Unknown。
+    KvmWatchAttribution attributeKernelAddress(unsigned long long address);
+
+    // describeWatchState/describeWatchAccess：把协议值翻译成可直接显示的文字。
+    QString describeWatchState(unsigned long state);
+    QString describeWatchAccess(unsigned long access);
+    // describeWatchConflict：冲突时说清楚是谁占着这一页。
+    QString describeWatchConflict(unsigned long ownerKind, unsigned long ownerId);
 }
+
+// 表格行要把整条快照存进 Qt::UserRole：从已本地化的单元格文字反推回数值，
+// 会在第一个被翻译的词上出错。
+Q_DECLARE_METATYPE(ksword::kvm::KvmWatchEntry)

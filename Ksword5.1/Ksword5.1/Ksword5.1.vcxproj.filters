@@ -912,6 +912,12 @@
     <ClCompile Include="UI\KvmProcessDialog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="UI\KvmWatch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\KvmWatchPanel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="UI\KvmEventDialog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

@@ -5474,6 +5474,249 @@ static int ProcessIoctl(HANDLE h,
     return 1;
 }
 
+/* ——— 内存监视（首次访问归因） ——— */
+
+static const char* WatchStateName(unsigned long state)
+{
+    switch (state) {
+    case KSWORD_ARK_HVM_EPT_WATCH_STATE_ARMED: return "armed";
+    case KSWORD_ARK_HVM_EPT_WATCH_STATE_TRIGGERED: return "triggered";
+    case KSWORD_ARK_HVM_EPT_WATCH_STATE_DISARMED: return "disarmed";
+    case KSWORD_ARK_HVM_EPT_WATCH_STATE_INVALIDATED: return "invalidated";
+    case KSWORD_ARK_HVM_EPT_WATCH_STATE_FAULTED: return "faulted";
+    default: break;
+    }
+    return "none";
+}
+
+static const char* WatchHitStatusName(unsigned long status)
+{
+    switch (status) {
+    case KSWORD_ARK_HVM_EPT_WATCH_HIT_PUBLISHED: return "published";
+    /*
+     * "命中了但事件丢了" 与 "从未命中" 在事件列表里长得一模一样，而结论正好
+     * 相反。自动化判据要能分开这两种，所以它是一个独立的名字而不是空值。
+     */
+    case KSWORD_ARK_HVM_EPT_WATCH_HIT_EVENT_LOST: return "event-lost";
+    default: break;
+    }
+    return "none";
+}
+
+static const char* WatchRuleStatusName(unsigned long status)
+{
+    switch (status) {
+    case KSWORD_ARK_HVM_EPT_RULE_STATUS_OK: return "ok";
+    case KSWORD_ARK_HVM_EPT_RULE_STATUS_INVALID_REQUEST: return "invalid-request";
+    case KSWORD_ARK_HVM_EPT_RULE_STATUS_CONFIRMATION_REQUIRED: return "confirmation-required";
+    case KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_PREPARED: return "not-prepared";
+    case KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_FOUND: return "not-found";
+    case KSWORD_ARK_HVM_EPT_RULE_STATUS_TABLE_FULL: return "table-full";
+    case KSWORD_ARK_HVM_EPT_RULE_STATUS_SPLIT_FAILED: return "split-failed";
+    case KSWORD_ARK_HVM_EPT_RULE_STATUS_PARTIAL: return "partial";
+    case KSWORD_ARK_HVM_EPT_RULE_STATUS_UNIMPLEMENTED: return "unimplemented";
+    case KSWORD_ARK_HVM_EPT_RULE_STATUS_MULTIPROCESSOR_UNSAFE: return "multiprocessor-unsafe";
+    case KSWORD_ARK_HVM_EPT_RULE_STATUS_LEAF_CONFLICT: return "leaf-conflict";
+    case KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_RESIDENT: return "not-resident";
+    default: break;
+    }
+    return "unknown";
+}
+
+static const char* WatchConflictName(unsigned long kind)
+{
+    switch (kind) {
+    case KSWORD_ARK_HVM_WATCH_CONFLICT_VIEW: return "view";
+    case KSWORD_ARK_HVM_WATCH_CONFLICT_RULE: return "rule";
+    case KSWORD_ARK_HVM_WATCH_CONFLICT_WATCH: return "watch";
+    default: break;
+    }
+    return "none";
+}
+
+/* 把访问掩码写成 rwx 形式，未置位处写 '-'。 */
+static void WatchAccessText(unsigned long access, char out[4])
+{
+    out[0] = (access & KSWORD_ARK_HVM_EPT_ACCESS_READ) ? 'r' : '-';
+    out[1] = (access & KSWORD_ARK_HVM_EPT_ACCESS_WRITE) ? 'w' : '-';
+    out[2] = (access & KSWORD_ARK_HVM_EPT_ACCESS_EXECUTE) ? 'x' : '-';
+    out[3] = '\0';
+}
+
+static void PrintWatchRow(const KSWORD_ARK_HVM_EPT_WATCH_ROW* row, int asJson)
+{
+    char requested[4];
+    char effective[4];
+
+    WatchAccessText(row->requestedAccess, requested);
+    WatchAccessText(row->effectiveAccess, effective);
+    if (asJson) {
+        printf("{\"watchId\":%lu,\"state\":\"%s\",\"addressKind\":\"%s\","
+               "\"requestedAddress\":\"0x%016llX\",\"requestedLength\":%llu,"
+               "\"physicalPage\":\"0x%016llX\",\"effectiveBytes\":4096,"
+               "\"requestedAccess\":\"%s\",\"effectiveAccess\":\"%s\","
+               "\"hitCount\":%lu,\"lastHitSequence\":%llu,"
+               "\"lastHitStatus\":\"%s\",\"armedGeneration\":%lu,"
+               "\"lastHitRip\":\"0x%016llX\",\"lastHitRsp\":\"0x%016llX\","
+               "\"lastHitCr3\":\"0x%016llX\",\"lastHitGpa\":\"0x%016llX\","
+               "\"lastHitGla\":\"0x%016llX\",\"lastHitGlaValid\":%s,"
+               "\"lastHitRangeMatch\":%s,\"lastHitCpu\":\"%u:%u\"}",
+               row->watchId, WatchStateName(row->state),
+               row->addressKind == KSWORD_ARK_HVM_WATCH_ADDRESS_VIRTUAL
+                   ? "virtual" : "physical",
+               row->requestedAddress, row->requestedLength,
+               row->physicalPage, requested, effective,
+               row->hitCount, row->lastHitSequence,
+               WatchHitStatusName(row->lastHitStatus), row->armedGeneration,
+               row->lastHitRip, row->lastHitRsp, row->lastHitCr3,
+               row->lastHitGuestPhysicalAddress, row->lastHitGuestLinearAddress,
+               row->lastHitGuestLinearValid ? "true" : "false",
+               row->lastHitRangeMatch ? "true" : "false",
+               (unsigned)row->lastHitProcessorGroup,
+               (unsigned)row->lastHitProcessorNumber);
+        return;
+    }
+    printf("  #%-4lu %-11s  %s 0x%016llX (%llu B)  页=0x%016llX(4096 B)"
+           "  请求=%s 实际=%s  命中=%lu(%s)\n",
+           row->watchId, WatchStateName(row->state),
+           row->addressKind == KSWORD_ARK_HVM_WATCH_ADDRESS_VIRTUAL
+               ? "VA" : "PA",
+           row->requestedAddress, row->requestedLength, row->physicalPage,
+           requested, effective, row->hitCount,
+           WatchHitStatusName(row->lastHitStatus));
+    if (row->hitCount != 0UL) {
+        printf("        rip=0x%016llX rsp=0x%016llX cr3=0x%016llX cpu=%u:%u seq=%llu\n",
+               row->lastHitRip, row->lastHitRsp, row->lastHitCr3,
+               (unsigned)row->lastHitProcessorGroup,
+               (unsigned)row->lastHitProcessorNumber,
+               row->lastHitSequence);
+        printf("        gpa=0x%016llX gla=0x%016llX(%s) 落在请求范围内=%s\n",
+               row->lastHitGuestPhysicalAddress,
+               row->lastHitGuestLinearAddress,
+               row->lastHitGuestLinearValid ? "有效" : "处理器未报告",
+               row->lastHitGuestLinearValid
+                   ? (row->lastHitRangeMatch ? "是" : "否")
+                   : "无法判断");
+    }
+}
+
+/* 下发一次 watch 操作并把结果打印出来。 */
+static int DoWatch(HANDLE h, unsigned long op, unsigned long watchId,
+                   unsigned long long physicalPage,
+                   unsigned long long requestedAddress,
+                   unsigned long long requestedLength,
+                   unsigned long access, unsigned long addressKind, int asJson)
+{
+    KSWORD_ARK_HVM_EPT_RULE_REQUEST req;
+    KSWORD_ARK_HVM_EPT_RULE_RESPONSE rsp;
+    DWORD returned = 0;
+    unsigned long i = 0UL;
+
+    memset(&req, 0, sizeof(req));
+    memset(&rsp, 0, sizeof(rsp));
+    req.version = KSWORD_ARK_HVM_PROTOCOL_VERSION;
+    req.size = (unsigned long)sizeof(req);
+    req.operation = op;
+    req.ruleId = watchId;
+    req.deniedAccess = access;
+    req.physicalAddress = physicalPage;
+    /* 一条监视恒定一页：驱动侧同样拒绝其它值。 */
+    req.pageCount = 1ULL;
+    req.requestedAddress = requestedAddress;
+    req.requestedLength = requestedLength;
+    req.requestedAccess = access;
+    req.addressKind = addressKind;
+    if (op == KSWORD_ARK_HVM_EPT_RULE_ADD) {
+        req.flags |= KSWORD_ARK_HVM_EPT_RULE_FLAG_WATCH_ONCE;
+    }
+    if (op != KSWORD_ARK_HVM_EPT_RULE_WATCH_QUERY) {
+        req.flags |= KSWORD_ARK_HVM_EPT_RULE_FLAG_UI_CONFIRMED;
+        req.confirmationToken = KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN;
+    }
+    if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_EPT_RULE, &req, sizeof(req),
+                         &rsp, (DWORD)sizeof(rsp), &returned, NULL)) {
+        fprintf(stderr, "EPT_RULE 下发失败：win32=%lu\n", GetLastError());
+        return 1;
+    }
+    if (asJson) {
+        printf("{\"kind\":\"watch\",\"operation\":%lu,\"status\":%lu,"
+               "\"statusName\":\"%s\",\"lastStatus\":\"0x%08lX\","
+               "\"generation\":%lu,\"watchCount\":%lu,"
+               "\"conflictOwnerKind\":\"%s\",\"conflictOwnerId\":%lu,"
+               "\"watches\":[",
+               op, rsp.status, WatchRuleStatusName(rsp.status),
+               (unsigned long)rsp.lastStatus, rsp.generation,
+               rsp.watchRowCount,
+               WatchConflictName(rsp.conflictOwnerKind), rsp.conflictOwnerId);
+        if (rsp.returnedWatchRows != 0UL) {
+            for (i = 0UL; i < rsp.returnedWatchRows &&
+                          i < KSWORD_ARK_HVM_MAX_EPT_WATCH_ROWS; ++i) {
+                if (i != 0UL) { printf(","); }
+                PrintWatchRow(&rsp.watchRows[i], 1);
+            }
+        } else if (rsp.watch.watchId != 0UL) {
+            PrintWatchRow(&rsp.watch, 1);
+        }
+        printf("]}\n");
+    } else {
+        printf("\n=== R-1 内存监视 ===\n");
+        printf("  status       : %lu (%s)  lastStatus=0x%08lX  代次=%lu\n",
+               rsp.status, WatchRuleStatusName(rsp.status),
+               (unsigned long)rsp.lastStatus, rsp.generation);
+        if (rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_LEAF_CONFLICT) {
+            printf("  ** 这一页已经被 %s #%lu 占着 **：一页只能有一个主人。\n",
+                   WatchConflictName(rsp.conflictOwnerKind), rsp.conflictOwnerId);
+            printf("     先把它撤掉再装监视；这里不会静默覆盖别人的叶项。\n");
+        }
+        if (rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_RESIDENT) {
+            printf("  ** 常驻没在跑 **：EPT 权限只在有处理器加载了这套 EPT 指针时\n");
+            printf("     才会产生退出。现在装上的监视永远不会响，所以直接拒绝。\n");
+        }
+        if (rsp.returnedWatchRows != 0UL) {
+            printf("  表内条数     : %lu\n", rsp.watchRowCount);
+            for (i = 0UL; i < rsp.returnedWatchRows &&
+                          i < KSWORD_ARK_HVM_MAX_EPT_WATCH_ROWS; ++i) {
+                PrintWatchRow(&rsp.watchRows[i], 0);
+            }
+        } else if (rsp.watch.watchId != 0UL) {
+            PrintWatchRow(&rsp.watch, 0);
+        } else if (op == KSWORD_ARK_HVM_EPT_RULE_WATCH_QUERY) {
+            printf("  （表里没有任何监视）\n");
+        }
+        printf("\n  监视单位是 4 KiB 物理页，不是上面的请求长度；命中不阻止访问。\n");
+    }
+    return rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_OK ? 0 : 2;
+}
+
+/* 把一个内核虚拟地址翻译成物理地址。失败返回非零。 */
+static int WatchTranslate(HANDLE h, unsigned long long virtualAddress,
+                          unsigned long long* physicalOut)
+{
+    KSWORD_ARK_HVM_MEMORY_REQUEST mreq;
+    KSWORD_ARK_HVM_MEMORY_RESPONSE mrsp;
+    DWORD returned = 0;
+
+    memset(&mreq, 0, sizeof(mreq));
+    memset(&mrsp, 0, sizeof(mrsp));
+    mreq.version = KSWORD_ARK_HVM_MEMORY_PROTOCOL_VERSION;
+    mreq.size = (unsigned long)sizeof(mreq);
+    mreq.operation = KSWORD_ARK_HVM_MEMORY_OP_TRANSLATE;
+    mreq.flags = KSWORD_ARK_HVM_MEMORY_FLAG_UI_CONFIRMED;
+    mreq.confirmationToken = KSWORD_ARK_HVM_MEMORY_CONFIRMATION_TOKEN;
+    mreq.address = virtualAddress;
+    mreq.length = 1UL;
+    if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_MEMORY, &mreq, sizeof(mreq),
+                         &mrsp, (DWORD)sizeof(mrsp), &returned, NULL) ||
+        mrsp.status != KSWORD_ARK_HVM_MEMORY_STATUS_OK ||
+        mrsp.physicalAddress == 0ULL) {
+        fprintf(stderr, "翻译失败：status=%lu nt=0x%08lX win32=%lu\n",
+                mrsp.status, (unsigned long)mrsp.ntStatus, GetLastError());
+        return 1;
+    }
+    *physicalOut = mrsp.physicalAddress;
+    return 0;
+}
+
 /*
  * R-1 进程处置。
  *
@@ -5941,6 +6184,42 @@ int KswordHvmCommandMain(int argc, char** argv)
     case HvmProcRelease: rc = DoProcess(h, KSWORD_ARK_HVM_PROCESS_OP_RELEASE, (unsigned long)v[0], 0, asJson); break;
     case HvmProcFreeze: rc = DoProcess(h, KSWORD_ARK_HVM_PROCESS_OP_FREEZE, (unsigned long)v[0], v[1], asJson); break;
     case HvmProcTerminate: rc = DoProcess(h, KSWORD_ARK_HVM_PROCESS_OP_TERMINATE, (unsigned long)v[0], v[1], asJson); break;
+    case HvmWatchAddVa: {
+        unsigned long long physical = 0ULL;
+
+        /*
+         * 翻译一次并就此绑定。
+         *
+         * 之后来宾把同一个虚拟地址重映射到别的物理页，这条监视也不会跟过去；
+         * 这里把翻译结果原样打在输出里，正是为了让自动化判据能核对"我监视的
+         * 到底是哪一页"，而不是只看一个虚拟地址就以为绑定关系恒成立。
+         */
+        rc = WatchTranslate(h, v[0], &physical);
+        if (rc == 0) {
+            rc = DoWatch(h, KSWORD_ARK_HVM_EPT_RULE_ADD, 0UL,
+                         physical & ~0xFFFULL, v[0], v[1],
+                         (unsigned long)v[2],
+                         KSWORD_ARK_HVM_WATCH_ADDRESS_VIRTUAL, asJson);
+        }
+        break;
+    }
+    case HvmWatchAddPa:
+        rc = DoWatch(h, KSWORD_ARK_HVM_EPT_RULE_ADD, 0UL,
+                     v[0] & ~0xFFFULL, v[0], v[1], (unsigned long)v[2],
+                     KSWORD_ARK_HVM_WATCH_ADDRESS_PHYSICAL, asJson);
+        break;
+    case HvmWatchList:
+        rc = DoWatch(h, KSWORD_ARK_HVM_EPT_RULE_WATCH_QUERY, 0UL,
+                     0ULL, 0ULL, 0ULL, 0UL, 0UL, asJson);
+        break;
+    case HvmWatchRearm:
+        rc = DoWatch(h, KSWORD_ARK_HVM_EPT_RULE_REARM, (unsigned long)v[0],
+                     0ULL, 0ULL, 0ULL, 0UL, 0UL, asJson);
+        break;
+    case HvmWatchRemove:
+        rc = DoWatch(h, KSWORD_ARK_HVM_EPT_RULE_REMOVE, (unsigned long)v[0],
+                     0ULL, 0ULL, 0ULL, 0UL, 0UL, asJson);
+        break;
     default: rc = 2; break;
     }
     CloseHandle(h);
