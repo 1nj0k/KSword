@@ -33458,7 +33458,6 @@
     "已命中，但事件环没接住这条证据": "Hit, but the event ring did not keep this evidence",
     "已失效，需重新武装": "Invalidated, needs re-arming",
     "已把这条监视的完整证据复制到剪贴板。": "The complete evidence for this watch was copied to the clipboard.",
-    "常驻没在运行，装上的监视永远不会响": "residency is not running, so an installed watch would never fire",
     "归因": "Attribution",
     "当前有 %1 条内存监视。": "%1 memory watch(es) currently installed.",
     "无法判断（没有有效的客户线性地址）": "Cannot tell (no valid guest-linear address)",
@@ -33502,6 +33501,7 @@
     "部分处理器未能完成失效": "some processors did not complete the invalidation",
     "重新武装": "Re-arm",
     "重新武装内存监视": "Re-arming the memory watch",
-    "首次访问": "First touch"
+    "首次访问": "First touch",
+    "常驻运行中：EPT 规则表在常驻期间冻结，安装与撤销都要先停止常驻": "residency is running: the EPT rule table is frozen for its whole duration, so installing or releasing requires stopping residency first"
   }
 }

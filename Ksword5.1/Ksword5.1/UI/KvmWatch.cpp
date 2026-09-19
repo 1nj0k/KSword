@@ -75,8 +75,8 @@ namespace ksword::kvm
                 return ks::i18n::sourceText(QStringLiteral("这台机器上无法安全实现该处置"));
             case KSWORD_ARK_HVM_EPT_RULE_STATUS_LEAF_CONFLICT:
                 return ks::i18n::sourceText(QStringLiteral("这一页已经被别的 EPT 机制占着"));
-            case KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_RESIDENT:
-                return ks::i18n::sourceText(QStringLiteral("常驻没在运行，装上的监视永远不会响"));
+            case KSWORD_ARK_HVM_EPT_RULE_STATUS_RESIDENT_FROZEN:
+                return ks::i18n::sourceText(QStringLiteral("常驻运行中：EPT 规则表在常驻期间冻结，安装与撤销都要先停止常驻"));
             default:
                 break;
             }

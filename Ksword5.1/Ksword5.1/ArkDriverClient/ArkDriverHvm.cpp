@@ -277,26 +277,38 @@ namespace ksword::ark
         request.size = sizeof(request);
         request.operation = watch.operation;
         request.expectedGeneration = watch.expectedGeneration;
-        request.ruleId = watch.watchId;
-        request.deniedAccess = watch.requestedAccess;
-        request.physicalAddress = watch.physicalPage;
         /*
-         * 一条 watch 恒定覆盖一页。
+         * 每种操作**只**填它自己那几个字段，其余一律留零。
          *
-         * 页数不是调用方能选的：EPT 权限本来就是页粒度，多页的 watch 只是几条
-         * 独立的 watch 共用一个标识和一个命中计数，而那个计数答不出"被动的是
-         * 哪一页"。驱动侧同样拒绝 pageCount != 1，这里写死是为了让这条约束在
-         * 客户端就成立，而不是靠一次失败的 IOCTL 才发现。
+         * 驱动侧对 REMOVE / CLEAR / QUERY / REARM / WATCH_QUERY 都有"字段必须
+         * 为空"的契约：带了值就说明调用方把它当成了别的操作，整条请求被判
+         * STATUS_INVALID_PARAMETER。无条件填满看着更简单，代价是四种操作里有
+         * 三种恒定被拒，而用户看到的只有一个 win32=87。
          */
-        request.pageCount = 1ULL;
-        request.requestedAddress = watch.requestedAddress;
-        request.requestedLength = watch.requestedLength;
-        request.requestedAccess = watch.requestedAccess;
-        request.addressKind = watch.addressKind;
-        /* ADD 时带上处置标志；REARM 靠 ruleId 找到已有记录，不需要重复声明。 */
         if (watch.operation == KSWORD_ARK_HVM_EPT_RULE_ADD)
         {
+            request.deniedAccess = watch.requestedAccess;
+            request.physicalAddress = watch.physicalPage;
+            /*
+             * 一条 watch 恒定覆盖一页。
+             *
+             * 页数不是调用方能选的：EPT 权限本来就是页粒度，多页的 watch 只是
+             * 几条独立的 watch 共用一个标识和一个命中计数，而那个计数答不出
+             * "被动的是哪一页"。驱动侧同样拒绝 pageCount != 1，这里写死是为了
+             * 让这条约束在客户端就成立，而不是靠一次失败的 IOCTL 才发现。
+             */
+            request.pageCount = 1ULL;
+            request.requestedAddress = watch.requestedAddress;
+            request.requestedLength = watch.requestedLength;
+            request.requestedAccess = watch.requestedAccess;
+            request.addressKind = watch.addressKind;
             request.flags |= KSWORD_ARK_HVM_EPT_RULE_FLAG_WATCH_ONCE;
+        }
+        else if (watch.operation == KSWORD_ARK_HVM_EPT_RULE_REARM ||
+                 watch.operation == KSWORD_ARK_HVM_EPT_RULE_REMOVE)
+        {
+            /* 两者都只按编号找已有记录，其余字段来自安装时存下的那一份。 */
+            request.ruleId = watch.watchId;
         }
         if (mutating)
         {

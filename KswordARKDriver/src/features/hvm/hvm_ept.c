@@ -913,23 +913,10 @@ KswordARKHvmEptRuleControlLocked(
             return STATUS_SUCCESS;
         }
         /*
-         * Arming without residency would install a tripwire nothing can trip:
-         * EPT permissions only produce exits while a processor runs with this
-         * EPT pointer loaded.  Reporting success there would promise an
-         * observation that cannot happen.
+         * Re-arming, like arming, happens while residency is stopped: the
+         * caller never reaches here otherwise, because the rule table is
+         * frozen for the whole of residency.
          */
-        if (InterlockedCompareExchange(
-                &Runtime->ResidentProcessorCount,
-                0L,
-                0L) <= 0L) {
-            /* Publish the stable not-resident protocol status. */
-            Response->status =
-                KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_RESIDENT;
-            /* Publish the authoritative state failure. */
-            Response->lastStatus = STATUS_DEVICE_NOT_READY;
-            /* Return a protocol-level result successfully. */
-            return STATUS_SUCCESS;
-        }
         /* Refuse to re-arm onto a page another mechanism has since claimed. */
         if (KswordARKHvmEptPageHasOwner(
                 Runtime,
@@ -1130,19 +1117,23 @@ KswordARKHvmEptRuleControlLocked(
                 /* Return a protocol-level result successfully. */
                 return STATUS_SUCCESS;
             }
-            /* Refuse a tripwire nothing can trip because nobody is resident. */
-            if (InterlockedCompareExchange(
-                    &Runtime->ResidentProcessorCount,
-                    0L,
-                    0L) <= 0L) {
-                /* Publish the stable not-resident protocol status. */
-                Response->status =
-                    KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_RESIDENT;
-                /* Publish the authoritative state failure. */
-                Response->lastStatus = STATUS_DEVICE_NOT_READY;
-                /* Return a protocol-level result successfully. */
-                return STATUS_SUCCESS;
-            }
+            /*
+             * A watch is armed while residency is STOPPED, exactly like every
+             * other EPT rule, and takes effect when residency starts.
+             *
+             * An earlier version refused a watch unless residency was already
+             * running, reasoning that a tripwire nothing can trip is worse than
+             * a refusal.  That reasoning produced a rule that could never be
+             * installed at all: KswordARKHvmEptRuleControl deliberately freezes
+             * the whole rule table while resident, because VM exits scan it
+             * without taking the PASSIVE_LEVEL lock.  The two conditions were
+             * mutually exclusive.
+             *
+             * The honest fix is not to weaken that freeze - it is a real
+             * safety invariant - but to drop the extra gate and let the state
+             * be visible instead: an armed watch with residency stopped reads
+             * as exactly that, and the callers say so.
+             */
             /* Refuse a page another EPT mechanism already owns. */
             if (KswordARKHvmEptPageHasOwner(
                     Runtime,

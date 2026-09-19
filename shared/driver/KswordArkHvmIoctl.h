@@ -727,12 +727,18 @@
  */
 #define KSWORD_ARK_HVM_EPT_RULE_STATUS_LEAF_CONFLICT         10UL
 /*
- * 常驻没跑，或者这条 watch 绑定的代次已经过期。
+ * 常驻正在跑，而规则表在整个常驻期间是冻结的。
  *
- * watch 只在常驻期间有意义：EPT 权限是加载在 VMCS 上的，没有常驻就没有人会
- * 因为访问它而退出。装一条"看上去装上了、但永远不会响"的 watch 比拒绝更糟。
+ * 这不是"部分成功"：一个字段都没改过。它原先复用 PARTIAL（"部分处理器未能完成
+ * 失效"）上报，而那句话描述的是一件根本没发生的事，还把用户引向失效机制去查。
+ *
+ * 冻结本身不是保守，是必需的：常驻期间的 VM-exit 路径不取 PASSIVE 级别的锁就
+ * 扫规则表与 split 叶，PASSIVE 侧同时改它就是一场没有诊断面的竞争。
+ *
+ * 所以所有 EPT 规则（含内存监视）的安装、重新武装、移除都在常驻停着时做，
+ * 启动常驻后生效——这与分离视图、MSR 策略、CR 策略的窗口期是同一个。
  */
-#define KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_RESIDENT          11UL
+#define KSWORD_ARK_HVM_EPT_RULE_STATUS_RESIDENT_FROZEN       11UL
 
 #define KSWORD_ARK_HVM_EVENT_TYPE_VMEXIT          1UL
 #define KSWORD_ARK_HVM_EVENT_TYPE_EPT_VIOLATION   2UL

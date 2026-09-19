@@ -457,9 +457,18 @@ KswordARKHvmIoctlEptRule(
     /* Bind the fixed protocol output view. */
     ruleResponse =
         (KSWORD_ARK_HVM_EPT_RULE_RESPONSE*)outputBuffer;
-    /* Apply central high-risk policy to every mutating EPT rule operation. */
+    /*
+     * Apply central high-risk policy to every mutating EPT rule operation.
+     *
+     * Both query forms are exempt: they read rule records and publish nothing.
+     * Auditing a read as KERNEL_PATCH would record a mutation that never
+     * happened, and a stricter policy configuration would then deny the one
+     * operation a user needs most - reading back what a watch caught.
+     */
     if (ruleRequest->operation !=
-        KSWORD_ARK_HVM_EPT_RULE_QUERY) {
+            KSWORD_ARK_HVM_EPT_RULE_QUERY &&
+        ruleRequest->operation !=
+            KSWORD_ARK_HVM_EPT_RULE_WATCH_QUERY) {
         KSWORD_ARK_SAFETY_CONTEXT safetyContext = { 0 };
 
         /* Bind policy auditing to the kernel-patch operation class. */

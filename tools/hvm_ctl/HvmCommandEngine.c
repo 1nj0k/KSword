@@ -5517,7 +5517,7 @@ static const char* WatchRuleStatusName(unsigned long status)
     case KSWORD_ARK_HVM_EPT_RULE_STATUS_UNIMPLEMENTED: return "unimplemented";
     case KSWORD_ARK_HVM_EPT_RULE_STATUS_MULTIPROCESSOR_UNSAFE: return "multiprocessor-unsafe";
     case KSWORD_ARK_HVM_EPT_RULE_STATUS_LEAF_CONFLICT: return "leaf-conflict";
-    case KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_RESIDENT: return "not-resident";
+    case KSWORD_ARK_HVM_EPT_RULE_STATUS_RESIDENT_FROZEN: return "resident-frozen";
     default: break;
     }
     return "unknown";
@@ -5617,17 +5617,26 @@ static int DoWatch(HANDLE h, unsigned long op, unsigned long watchId,
     req.version = KSWORD_ARK_HVM_PROTOCOL_VERSION;
     req.size = (unsigned long)sizeof(req);
     req.operation = op;
-    req.ruleId = watchId;
-    req.deniedAccess = access;
-    req.physicalAddress = physicalPage;
-    /* 一条监视恒定一页：驱动侧同样拒绝其它值。 */
-    req.pageCount = 1ULL;
-    req.requestedAddress = requestedAddress;
-    req.requestedLength = requestedLength;
-    req.requestedAccess = access;
-    req.addressKind = addressKind;
+    /*
+     * 每种操作**只**填它自己那几个字段，其余一律留零。
+     *
+     * 驱动侧对 REMOVE / REARM / WATCH_QUERY 都有"字段必须为空"的契约：带了值
+     * 就说明调用方把它当成了别的操作，整条请求被判参数非法。无条件填满看着更
+     * 简单，代价是三种操作恒定被拒，而用户看到的只有一个 win32=87。
+     */
     if (op == KSWORD_ARK_HVM_EPT_RULE_ADD) {
+        req.deniedAccess = access;
+        req.physicalAddress = physicalPage;
+        /* 一条监视恒定一页：驱动侧同样拒绝其它值。 */
+        req.pageCount = 1ULL;
+        req.requestedAddress = requestedAddress;
+        req.requestedLength = requestedLength;
+        req.requestedAccess = access;
+        req.addressKind = addressKind;
         req.flags |= KSWORD_ARK_HVM_EPT_RULE_FLAG_WATCH_ONCE;
+    } else if (op == KSWORD_ARK_HVM_EPT_RULE_REARM ||
+               op == KSWORD_ARK_HVM_EPT_RULE_REMOVE) {
+        req.ruleId = watchId;
     }
     if (op != KSWORD_ARK_HVM_EPT_RULE_WATCH_QUERY) {
         req.flags |= KSWORD_ARK_HVM_EPT_RULE_FLAG_UI_CONFIRMED;
@@ -5668,9 +5677,9 @@ static int DoWatch(HANDLE h, unsigned long op, unsigned long watchId,
                    WatchConflictName(rsp.conflictOwnerKind), rsp.conflictOwnerId);
             printf("     先把它撤掉再装监视；这里不会静默覆盖别人的叶项。\n");
         }
-        if (rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_RESIDENT) {
-            printf("  ** 常驻没在跑 **：EPT 权限只在有处理器加载了这套 EPT 指针时\n");
-            printf("     才会产生退出。现在装上的监视永远不会响，所以直接拒绝。\n");
+        if (rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_RESIDENT_FROZEN) {
+            printf("  ** 常驻运行中 **：退出路径不取 PASSIVE 锁就扫规则表，所以\n");
+            printf("     整张表在常驻期间冻结。先 stop，装完监视再 resident。\n");
         }
         if (rsp.returnedWatchRows != 0UL) {
             printf("  表内条数     : %lu\n", rsp.watchRowCount);
@@ -5736,7 +5745,14 @@ static int WatchTranslate(HANDLE h, unsigned long long virtualAddress,
  * 或者被当成 PASS 掩盖掉一个真问题。
  */
 
-#define KSW_WATCH_SELFTEST_CASES 12U
+/*
+ * 用例上限。
+ *
+ * 写成 12 的那一版实际填了 13 条，于是 WatchCase 写进了数组末尾之外，进程在
+ * 靶机上直接 0xC0000005。留出余量并在 WatchCase 里挡一道：这段代码的全部意义
+ * 是产出可信判据，而一个会自己崩掉的自检产出的是"没有读数"，不是"失败"。
+ */
+#define KSW_WATCH_SELFTEST_CASES 16U
 
 typedef struct _KSW_WATCH_CASE
 {
@@ -5751,6 +5767,8 @@ static void WatchCase(KSW_WATCH_CASE* slot, const char* name,
                       const char* expectation, int ok,
                       unsigned long long observed, const char* remark)
 {
+    /* 越界写比任何一条判据都糟：它换来的是没有读数，而不是一个失败的读数。 */
+    if (slot == NULL) { return; }
     slot->name = name;
     slot->expectation = expectation;
     slot->verdict = ok ? "PASS" : "FAIL";
@@ -5792,16 +5810,19 @@ static int WatchIoctl(HANDLE h, unsigned long op, unsigned long watchId,
     req.version = KSWORD_ARK_HVM_PROTOCOL_VERSION;
     req.size = (unsigned long)sizeof(req);
     req.operation = op;
-    req.ruleId = watchId;
-    req.deniedAccess = access;
-    req.physicalAddress = physicalPage;
-    req.pageCount = 1ULL;
-    req.requestedAddress = requestedAddress;
-    req.requestedLength = requestedLength;
-    req.requestedAccess = access;
-    req.addressKind = KSWORD_ARK_HVM_WATCH_ADDRESS_VIRTUAL;
+    /* 与 DoWatch 同理：只填本操作允许的字段，其余留零。 */
     if (op == KSWORD_ARK_HVM_EPT_RULE_ADD) {
+        req.deniedAccess = access;
+        req.physicalAddress = physicalPage;
+        req.pageCount = 1ULL;
+        req.requestedAddress = requestedAddress;
+        req.requestedLength = requestedLength;
+        req.requestedAccess = access;
+        req.addressKind = KSWORD_ARK_HVM_WATCH_ADDRESS_VIRTUAL;
         req.flags |= KSWORD_ARK_HVM_EPT_RULE_FLAG_WATCH_ONCE;
+    } else if (op == KSWORD_ARK_HVM_EPT_RULE_REARM ||
+               op == KSWORD_ARK_HVM_EPT_RULE_REMOVE) {
+        req.ruleId = watchId;
     }
     if (op != KSWORD_ARK_HVM_EPT_RULE_WATCH_QUERY) {
         req.flags |= KSWORD_ARK_HVM_EPT_RULE_FLAG_UI_CONFIRMED;
@@ -5824,6 +5845,30 @@ static const KSWORD_ARK_HVM_EPT_WATCH_ROW* WatchFindRow(
         }
     }
     return NULL;
+}
+
+/*
+ * 在自检内部推进一步生命周期。
+ *
+ * 自检必须自己起停常驻：watch 与其余 EPT 规则一样只能在常驻停着时装（退出路径
+ * 不取 PASSIVE 锁就扫规则表，所以整张表在常驻期间冻结），而命中又只发生在常驻
+ * 跑着的时候。把这两件事交给调用方手工穿插，等于让判据依赖一串没人核对的前置
+ * 步骤——而漏掉其中任何一步，得到的都是一个看起来像"功能没生效"的结果。
+ */
+static int WatchLifecycle(HANDLE h, unsigned long command, unsigned long flags)
+{
+    KSWORD_ARK_CONTROL_HVM_REQUEST req;
+    KSWORD_ARK_CONTROL_HVM_RESPONSE rsp;
+    DWORD returned = 0;
+
+    memset(&req, 0, sizeof(req));
+    memset(&rsp, 0, sizeof(rsp));
+    KswordArkHvmBuildControlRequest(&req, command, flags, 0UL, 0UL);
+    if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_CONTROL_HVM, &req, sizeof(req),
+                         &rsp, (DWORD)sizeof(rsp), &returned, NULL)) {
+        return 1;
+    }
+    return rsp.status == KSWORD_ARK_HVM_CONTROL_STATUS_OK ? 0 : 2;
 }
 
 static int DoWatchSelfTest(HANDLE h, int asJson)
@@ -5849,21 +5894,25 @@ static int DoWatchSelfTest(HANDLE h, int asJson)
 
     memset(cases, 0, sizeof(cases));
 
-    /* --- 0. 常驻必须在跑；否则整条自检没有意义，记 BLOCKED 而不是 FAIL --- */
-    residentBefore = WatchResidentCount(h);
-    if (residentBefore == 0xFFFFFFFFUL || residentBefore == 0UL) {
-        if (asJson) {
-            printf("{\"kind\":\"watch-selftest\",\"verdict\":\"BLOCKED\","
-                   "\"reason\":\"not-resident\",\"residentBefore\":%lu,"
-                   "\"cases\":[]}\n", residentBefore);
-        } else {
-            printf("\n=== 内存监视端到端自检 ===\n");
-            printf("  BLOCKED：常驻没在跑（residentBefore=%lu）。\n", residentBefore);
-            printf("  EPT 权限只在有处理器加载了这套 EPT 指针时才产生退出，\n");
-            printf("  所以这不是失败，是这台机器此刻问不出来。先启动常驻再跑。\n");
-        }
-        return 3;
+    /*
+     * --- 0. 先把常驻停下 ---
+     *
+     * 顺序是被机制逼出来的，不是偏好：规则表在常驻期间冻结，所以 watch 只能
+     * 在停着时装；而命中只发生在跑着的时候，所以装完必须再起来。自检自己走完
+     * 这一圈，判据才不依赖调用方记不记得穿插这几步。
+     */
+    if (WatchResidentCount(h) != 0UL) {
+        (void)WatchLifecycle(h, KSWORD_ARK_HVM_CONTROL_STOP_RESIDENT,
+                             KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED);
     }
+    /* 资源与逐核自检是启动常驻的前置；已经做过时它们是幂等的。 */
+    (void)WatchLifecycle(h, KSWORD_ARK_HVM_CONTROL_PREPARE,
+                         KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
+                         KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED);
+    (void)WatchLifecycle(h, KSWORD_ARK_HVM_CONTROL_SELF_TEST,
+                         KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
+                         KSWORD_ARK_HVM_CONTROL_FLAG_FORCE |
+                         KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED);
 
     /* --- 1. 拿一页自己的内存并落地成真实物理页 --- */
     page = (volatile unsigned char*)VirtualAlloc(
@@ -5911,7 +5960,7 @@ static int DoWatchSelfTest(HANDLE h, int asJson)
          * 其余是 FAIL。把两者混成一个"失败"会让一台本来就装不上的机器
          * 永远绿不了，或者让一个真缺陷被当成环境问题放过去。
          */
-        blocked = rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_RESIDENT ||
+        blocked = rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_RESIDENT_FROZEN ||
                   rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_LEAF_CONFLICT ||
                   rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_SPLIT_FAILED ||
                   rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_PREPARED;
@@ -5947,7 +5996,31 @@ static int DoWatchSelfTest(HANDLE h, int asJson)
               "hitCount = 0",
               rsp.watch.hitCount == 0UL, rsp.watch.hitCount, NULL);
 
-    /* --- 3. 触发一次写。这条指令的地址就是 RIP 判据 --- */
+    /*
+     * --- 3. 起常驻，然后触发一次写 ---
+     *
+     * residentBefore 在这里取，而不是自检一开始：验收要问的是"命中有没有让
+     * 处理器掉出虚拟化"，那就必须拿命中前后两个读数比，而不是拿自检开始时的
+     * 读数比 —— 后者会把自检自己做的那次停机算进差值里。
+     */
+    if (WatchLifecycle(h, KSWORD_ARK_HVM_CONTROL_START_RESIDENT,
+                       KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED |
+                       KSWORD_ARK_HVM_CONTROL_FLAG_FORCE |
+                       KSWORD_ARK_HVM_CONTROL_FLAG_ALLOW_NESTED) != 0) {
+        if (asJson) {
+            printf("{\"kind\":\"watch-selftest\",\"verdict\":\"BLOCKED\","
+                   "\"reason\":\"resident-start-refused\",\"cases\":[]}\n");
+        } else {
+            printf("\n=== 内存监视端到端自检 ===\n");
+            printf("  BLOCKED：监视装上了，但这台机器起不了常驻，命中路径问不出来。\n");
+        }
+        (void)WatchIoctl(h, KSWORD_ARK_HVM_EPT_RULE_REMOVE, watchId, 0ULL,
+                         0ULL, 0ULL, 0UL, &rsp);
+        VirtualFree((LPVOID)page, 0, MEM_RELEASE);
+        return 3;
+    }
+    residentBefore = WatchResidentCount(h);
+    /* 这条写指令的地址就是 RIP 判据。 */
     page[0] = 0x5AU;
 
     /* --- 4. 读回并逐项核对 --- */
@@ -6031,7 +6104,14 @@ static int DoWatchSelfTest(HANDLE h, int asJson)
               residentAfter == residentBefore, residentAfter,
               "这是 WATCH_ONCE 与严格 tripwire 的**根本**区别");
 
-    /* --- 7. 收尾：撤掉监视，不给机器留状态 --- */
+    /*
+     * --- 7. 收尾：先停常驻再撤监视，不给机器留状态 ---
+     *
+     * 顺序不能反：规则表在常驻期间冻结，常驻还跑着时的撤销会被直接拒绝，
+     * 于是监视留在表里，下一次自检撞上 LEAF_CONFLICT 而看不出前因。
+     */
+    (void)WatchLifecycle(h, KSWORD_ARK_HVM_CONTROL_STOP_RESIDENT,
+                         KSWORD_ARK_HVM_CONTROL_FLAG_UI_CONFIRMED);
     (void)WatchIoctl(h, KSWORD_ARK_HVM_EPT_RULE_REMOVE, watchId, 0ULL, 0ULL,
                      0ULL, 0UL, &rsp);
     VirtualFree((LPVOID)page, 0, MEM_RELEASE);
