@@ -4,6 +4,8 @@
         <file>Resource/Logo/MainLogo.png</file>
         <file>Resource/Logo/KswordHome-En.png</file>
         <file>Resource/Logo/KswordHome-ZH.png</file>
+        <file>Resource/Logo/OB_BUFF.png</file>
+        <file>Resource/Logo/WangWei_CM..jpg</file>
     </qresource>
     <qresource prefix="/Data">
         <file alias="startup_registry_locations.txt">StartupDock/startup_registry_locations.txt</file>

@@ -251,10 +251,16 @@ void PerformanceNavCard::paintEvent(QPaintEvent* paintEventPointer)
     painter.drawRoundedRect(cardRect, 4.0, 4.0);
 
     // 缩略图区域：保留边框与曲线，内部背景保持透明。
-    // compactMode 用途：窄宽度/低高度下收缩缩略图和文字字号，避免左侧列表触发滚动条。
+    // showSparkChart 用途：欢迎页在 800px 以下优先保留文字，不让五张卡片互相挤压。
+    const QWidget* hostWindow = window();
+    const bool showSparkChart = hostWindow == nullptr || hostWindow->width() >= 800;
+    // compactMode 用途：窄宽度/低高度下收缩文字字号，避免左侧列表触发滚动条。
     const bool compactMode = cardRect.width() < 176 || cardRect.height() < 48;
     const int sparkInset = compactMode ? 4 : 5;
-    const int sparkWidth = std::clamp(cardRect.width() / 3, 8, compactMode ? 44 : 56);
+    // 800px 以上时折线图与文字各占卡片内容宽度的一半，不再使用固定的窄图比例。
+    const int sparkWidth = showSparkChart
+        ? std::max(1, cardRect.width() / 2 - sparkInset)
+        : 0;
     const QRect sparkRect(
         cardRect.left() + sparkInset,
         cardRect.top() + sparkInset,
@@ -264,21 +270,24 @@ void PerformanceNavCard::paintEvent(QPaintEvent* paintEventPointer)
     const QColor sparkBorderColor = KswordTheme::WithAlpha(
         m_accentColor,
         m_selected ? 220 : 150);
-    painter.setBrush(Qt::NoBrush);
-    QPen sparkBorderPen(sparkBorderColor);
-    sparkBorderPen.setWidthF(1.2);
-    painter.setPen(sparkBorderPen);
-    painter.drawRect(sparkRect);
-
-    // 网格线：浅色辅助线，提升趋势可读性但不喧宾夺主。
-    QPen gridPen(m_accentColor);
-    gridPen.setWidthF(0.8);
-    gridPen.setColor(KswordTheme::WithAlpha(m_accentColor, 45));
-    painter.setPen(gridPen);
-    for (int rowIndex = 1; rowIndex < 4; ++rowIndex)
+    if (showSparkChart)
     {
-        const int yValue = sparkRect.top() + (sparkRect.height() * rowIndex / 4);
-        painter.drawLine(sparkRect.left(), yValue, sparkRect.right(), yValue);
+        painter.setBrush(Qt::NoBrush);
+        QPen sparkBorderPen(sparkBorderColor);
+        sparkBorderPen.setWidthF(1.2);
+        painter.setPen(sparkBorderPen);
+        painter.drawRect(sparkRect);
+
+        // 网格线：浅色辅助线，提升趋势可读性但不喧宾夺主。
+        QPen gridPen(m_accentColor);
+        gridPen.setWidthF(0.8);
+        gridPen.setColor(KswordTheme::WithAlpha(m_accentColor, 45));
+        painter.setPen(gridPen);
+        for (int rowIndex = 1; rowIndex < 4; ++rowIndex)
+        {
+            const int yValue = sparkRect.top() + (sparkRect.height() * rowIndex / 4);
+            painter.drawLine(sparkRect.left(), yValue, sparkRect.right(), yValue);
+        }
     }
 
     // drawSeriesPath 作用：
@@ -359,14 +368,19 @@ void PerformanceNavCard::paintEvent(QPaintEvent* paintEventPointer)
         };
 
     // 双线卡片先画次序列再画主序列，确保主线不会被遮住。
-    if (m_secondarySeriesVisible)
+    if (showSparkChart && m_secondarySeriesVisible)
     {
         drawSeriesPath(m_secondarySamples, m_secondarySeriesColor, m_previousSecondarySample);
     }
-    drawSeriesPath(m_primarySamples, m_primarySeriesColor, m_previousPrimarySample);
+    if (showSparkChart)
+    {
+        drawSeriesPath(m_primarySamples, m_primarySeriesColor, m_previousPrimarySample);
+    }
 
     // 文本区域：主标题加粗，副标题使用次级颜色。
-    const int textLeft = sparkRect.right() + (compactMode ? 5 : 7);
+    const int textLeft = showSparkChart
+        ? sparkRect.right() + (compactMode ? 5 : 7)
+        : cardRect.left() + (compactMode ? 5 : 8);
     const int textWidth = std::max(0, cardRect.right() - textLeft - 4);
     const int titleHeight = std::max(1, cardRect.height() / 2);
     const QRect titleRect(textLeft, cardRect.top() + 2, textWidth, titleHeight);

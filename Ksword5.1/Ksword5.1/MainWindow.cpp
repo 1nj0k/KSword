@@ -10645,7 +10645,10 @@ void MainWindow::initDockWidgets()
     }
     if (shouldEagerLoad(QStringLiteral("kvm"))) { m_kvmWidget = createKvmDockContent(); }
     if (shouldEagerLoad(QStringLiteral("monitor"))) { m_monitorWidget = new MonitorDock(this); }
-    if (shouldEagerLoad(QStringLiteral("hardware"))) { m_hardwareWidget = new HardwareDock(this); }
+    // 欢迎页的性能卡片复用 HardwareDock 的唯一采样源，因此硬件采样器随主窗口一并创建；
+    // 硬件 Dock 本身仍保持按需显示，避免复制 PDH/DXGI 采样实现。
+    m_hardwareWidget = new HardwareDock(this);
+    m_welcomeWidget->setHardwareDock(m_hardwareWidget);
     if (shouldEagerLoad(QStringLiteral("privilege"))) { m_privilegeWidget = new PrivilegeDock(this); }
     if (shouldEagerLoad(QStringLiteral("window"))) { m_windowWidget = new WindowDock(this); }
     if (shouldEagerLoad(QStringLiteral("registry"))) { m_registryWidget = new RegistryDock(this); }
@@ -10799,7 +10802,11 @@ void MainWindow::initDockWidgets()
     };
 
     // 创建所有 Dock 壳；重页面若未预加载，则先挂占位页并排入显示后补载队列。
-    m_dockWelcome = createDockWidget(m_welcomeWidget, ks::i18n::text(QStringLiteral("dock.welcome"), QStringLiteral("欢迎")), QStringLiteral("welcome"));
+    m_dockWelcome = createDockWidget(
+        m_welcomeWidget,
+        ks::i18n::text(QStringLiteral("dock.welcome"), QStringLiteral("欢迎")),
+        QStringLiteral("welcome"),
+        ads::CDockWidget::ForceNoScrollArea);
     createLazyDockWidget(m_dockProcess, m_processWidget, ks::i18n::text(QStringLiteral("dock.process"), QStringLiteral("进程")), QStringLiteral("process"));
     createLazyDockWidget(m_dockNetwork, m_networkWidget, ks::i18n::text(QStringLiteral("dock.network"), QStringLiteral("网络")), QStringLiteral("network"));
     createLazyDockWidget(m_dockMemory, m_memoryWidget, ks::i18n::text(QStringLiteral("dock.memory"), QStringLiteral("内存")), QStringLiteral("memory"));

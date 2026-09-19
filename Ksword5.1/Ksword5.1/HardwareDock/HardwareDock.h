@@ -60,6 +60,25 @@ public:
     // - 作用：停止采样定时器并释放 PDH 查询句柄。
     ~HardwareDock() override;
 
+    // startPerformanceSampling 作用：启动供 WelcomeDock 复用的首轮采样和周期刷新。
+    // includeDriverHealth=false 时只启用用户态性能采样，不访问 R0 硬件健康 IOCTL。
+    void startPerformanceSampling(bool includeDriverHealth = true);
+
+signals:
+    // performanceSnapshotChanged 作用：发布与性能监控页相同的聚合采样结果。
+    // 磁盘、网络和 GPU 参数由调用方按设备综合值展示；不会复制另一套采样器。
+    void performanceSnapshotChanged(
+        double cpuUsagePercent,
+        double memoryUsagePercent,
+        double diskReadBytesPerSec,
+        double diskWriteBytesPerSec,
+        double networkRxBytesPerSec,
+        double networkTxBytesPerSec,
+        double gpuUsagePercent);
+
+    // staticOverviewChanged 作用：发布硬件 Dock 已经异步采集的静态硬件摘要文本。
+    void staticOverviewChanged(const QString& overviewText);
+
 protected:
     // resizeEvent 作用：
     // - 窗口尺寸变化时动态重排“利用率”页图表高度；
@@ -686,6 +705,7 @@ private:
     std::atomic_bool m_sensorRefreshing{ false };     // m_sensorRefreshing：传感器异步刷新锁。
     std::atomic_bool m_r0HardwareHealthRefreshing{ false }; // m_r0HardwareHealthRefreshing：R0硬件健康异步刷新锁。
     bool m_initialSamplingStarted = false;            // m_initialSamplingStarted：首次显示时是否已启动首轮采样。
+    bool m_driverHealthSamplingEnabled = false;        // m_driverHealthSamplingEnabled：是否允许周期触发 R0 健康查询。
     std::uint64_t m_lastNetworkRxBytes = 0;           // m_lastNetworkRxBytes：兼容旧聚合网络采样的累计接收字节。
     std::uint64_t m_lastNetworkTxBytes = 0;           // m_lastNetworkTxBytes：兼容旧聚合网络采样的累计发送字节。
     qint64 m_lastNetworkSampleMs = 0;                 // m_lastNetworkSampleMs：兼容旧聚合网络采样时间戳(ms)。

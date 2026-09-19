@@ -3414,14 +3414,29 @@ void HardwareDock::showEvent(QShowEvent* showEventPointer)
 {
     QWidget::showEvent(showEventPointer);
 
-    if (!m_initialSamplingStarted)
+    // R0 证据页构造后会立即发起驱动查询；欢迎页只复用本 Dock 的用户态
+    // 性能采样，因此必须把该页延迟到用户真正打开硬件 Dock 后再创建。
+    if (m_r0EvidencePage == nullptr && m_sideTabWidget != nullptr)
     {
-        m_initialSamplingStarted = true;
-        startInitialSamplingAfterFirstPaint();
+        initializeR0EvidenceTab();
     }
+
+    startPerformanceSampling(true);
 
     // 首次显示阶段分阶段重排，确保滚动区 viewport 高度已经稳定。
     scheduleUtilizationLayoutRefresh();
+}
+
+void HardwareDock::startPerformanceSampling(const bool includeDriverHealth)
+{
+    m_driverHealthSamplingEnabled = includeDriverHealth;
+    if (m_initialSamplingStarted)
+    {
+        return;
+    }
+
+    m_initialSamplingStarted = true;
+    startInitialSamplingAfterFirstPaint();
 }
 
 void HardwareDock::startInitialSamplingAfterFirstPaint()
@@ -3451,7 +3466,10 @@ void HardwareDock::startInitialSamplingAfterFirstPaint()
         dockPointer->refreshAllViews();
         dockPointer->requestAsyncStaticInfoRefresh();
         dockPointer->requestAsyncSensorRefresh();
-        dockPointer->requestAsyncR0HardwareHealthRefresh();
+        if (dockPointer->m_driverHealthSamplingEnabled)
+        {
+            dockPointer->requestAsyncR0HardwareHealthRefresh();
+        }
 
         if (dockPointer->m_refreshTimer != nullptr)
         {
@@ -3495,7 +3513,6 @@ void HardwareDock::initializeUi()
     initializeDeviceManagerTab();
     initializeOtherDevicesTab();
     initializeHwidDispatchTab();
-    initializeR0EvidenceTab();
     initializeDeviceStackTab();
     initializeKeyboardMouseHidTab();
     initializeI8042AuditTab();
@@ -6039,6 +6056,8 @@ void HardwareDock::refreshAllViews()
 
     double diskReadBytesPerSec = 0.0;
     double diskWriteBytesPerSec = 0.0;
+    double diskReadAverageBytesPerSec = 0.0;
+    double diskWriteAverageBytesPerSec = 0.0;
     std::vector<DiskRateSample> diskSampleList;
     if (sampleDiskRates(&diskSampleList))
     {
@@ -6046,6 +6065,12 @@ void HardwareDock::refreshAllViews()
         {
             diskReadBytesPerSec += std::max(0.0, sample.readBytesPerSec);
             diskWriteBytesPerSec += std::max(0.0, sample.writeBytesPerSec);
+        }
+        if (!diskSampleList.empty())
+        {
+            const double diskCount = static_cast<double>(diskSampleList.size());
+            diskReadAverageBytesPerSec = diskReadBytesPerSec / diskCount;
+            diskWriteAverageBytesPerSec = diskWriteBytesPerSec / diskCount;
         }
     }
     else
@@ -6056,6 +6081,8 @@ void HardwareDock::refreshAllViews()
 
     double networkRxBytesPerSec = 0.0;
     double networkTxBytesPerSec = 0.0;
+    double networkRxAverageBytesPerSec = 0.0;
+    double networkTxAverageBytesPerSec = 0.0;
     std::vector<NetworkRateSample> networkSampleList;
     if (sampleNetworkRates(&networkSampleList))
     {
@@ -6063,6 +6090,12 @@ void HardwareDock::refreshAllViews()
         {
             networkRxBytesPerSec += std::max(0.0, sample.rxBytesPerSec);
             networkTxBytesPerSec += std::max(0.0, sample.txBytesPerSec);
+        }
+        if (!networkSampleList.empty())
+        {
+            const double networkCount = static_cast<double>(networkSampleList.size());
+            networkRxAverageBytesPerSec = networkRxBytesPerSec / networkCount;
+            networkTxAverageBytesPerSec = networkTxBytesPerSec / networkCount;
         }
     }
     else
@@ -6072,12 +6105,19 @@ void HardwareDock::refreshAllViews()
     }
 
     double gpuUsagePercent = 0.0;
+    double gpuUsageAveragePercent = 0.0;
     std::vector<GpuUsageSample> gpuSampleList;
     if (sampleGpuUsages(&gpuSampleList))
     {
+        double gpuUsageSum = 0.0;
         for (const GpuUsageSample& sample : gpuSampleList)
         {
             gpuUsagePercent = std::max(gpuUsagePercent, sample.overallUsagePercent);
+            gpuUsageSum += std::clamp(sample.overallUsagePercent, 0.0, 100.0);
+        }
+        if (!gpuSampleList.empty())
+        {
+            gpuUsageAveragePercent = gpuUsageSum / static_cast<double>(gpuSampleList.size());
         }
     }
     else
@@ -6102,7 +6142,10 @@ void HardwareDock::refreshAllViews()
     pushBoundedHistorySample(
         &m_networkAggregateHistoryBytesPerSec,
         std::max(0.0, networkRxBytesPerSec) + std::max(0.0, networkTxBytesPerSec));
-    requestAsyncR0HardwareHealthRefresh();
+    if (m_driverHealthSamplingEnabled)
+    {
+        requestAsyncR0HardwareHealthRefresh();
+    }
     updateOverviewText(totalCpuUsage, memoryUsagePercent);
     updateUtilizationView(
         coreUsageList,
@@ -6125,6 +6168,14 @@ void HardwareDock::refreshAllViews()
         networkRxBytesPerSec,
         networkTxBytesPerSec,
         gpuUsagePercent);
+    emit performanceSnapshotChanged(
+        totalCpuUsage,
+        memoryUsagePercent,
+        diskReadAverageBytesPerSec,
+        diskWriteAverageBytesPerSec,
+        networkRxAverageBytesPerSec,
+        networkTxAverageBytesPerSec,
+        gpuUsageAveragePercent);
     // 高度重排只在 resize/tab 切换时执行，避免每秒重算导致核心图容器抖动。
 
     // 周期刷新策略：
@@ -9432,6 +9483,7 @@ void HardwareDock::requestAsyncStaticInfoRefresh()
                 {
                     safeThis->m_gpuDedicatedMemoryGiB = gpuSummary.dedicatedMemoryGiB;
                 }
+                emit safeThis->staticOverviewChanged(safeThis->m_cachedOverviewStaticText);
                 safeThis->refreshStaticHardwareTexts(false);
                 safeThis->m_staticInfoRefreshing.store(false);
             },

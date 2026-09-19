@@ -465,6 +465,8 @@ def allows_han_in_english_source(source_text: str) -> bool:
     return (
         source_text
         == "Mapleleaf,存钱买油条（云舟API）,Extrella_Explorer,NtKrnl64,一花一树叶,hzh"
+        # 开发者自述是展示身份的一部分，英文界面也按本人要求保留中文原文。
+        or source_text == "一个臭写C++的"
         or "$verdict = if($lower -match 'audit|审计|" in source_text
     )
 

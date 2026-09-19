@@ -4,13 +4,19 @@
 #include <QPushButton>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QVector>
 #include <QDesktopServices>
 #include <QUrl>
 
 class QEvent;
+class QGridLayout;
 class QHideEvent;
+class QScrollArea;
 class QShowEvent;
 class QTimer;
+class QToolButton;
+class HardwareDock;
+class PerformanceNavCard;
 
 class WelcomeDock : public QWidget
 {
@@ -37,6 +43,24 @@ public:
     QHBoxLayout* m_btnLayout;       // 按钮水平布局：放置 Github 与 QQ 群按钮。
     QHBoxLayout* m_referenceLayout; // 参考项目布局：横向放置外部参考仓库按钮。
 
+    // 欢迎页专用布局控件。所有尺寸都允许压缩，避免 ADS 在 Dock 层级创建滚动条。
+    QHBoxLayout* m_performanceLayout = nullptr;
+    QLabel* m_systemInfo = nullptr;
+    QWidget* m_systemInfoPanel = nullptr;
+    QGridLayout* m_systemInfoLayout = nullptr;
+    QToolButton* m_contributorsCollapse = nullptr;
+    QToolButton* m_donorsCollapse = nullptr;
+    QScrollArea* m_contributorsScroll = nullptr;
+    QScrollArea* m_donorsScroll = nullptr;
+    QWidget* m_contributorsBody = nullptr;
+    QWidget* m_donorsBody = nullptr;
+    QVector<PerformanceNavCard*> m_performanceCards;
+
+    // WelcomeDock 复用 HardwareDock 的实时采样结果；硬件 Dock 即使尚未打开也会被主窗口启动采样。
+    HardwareDock* m_hardwareDock = nullptr;
+    double m_diskDisplayScale = 1024.0 * 1024.0;
+    double m_networkDisplayScale = 1024.0 * 1024.0;
+
 signals:
     // languageSettingsRequested 作用：通知主窗口打开设置对话框并定位到语言页签。
     void languageSettingsRequested();
@@ -50,6 +74,22 @@ private:
     void retranslateUi();
     void initializeLanguageButtonStyle();
     void updateLanguageButtonRgbBorder();
+    void initializePerformanceCards();
+    void initializeContributorCollapse();
+    void updateCollapseState(bool contributorsExpanded);
+    void updatePerformanceSnapshot(
+        double cpuUsagePercent,
+        double memoryUsagePercent,
+        double diskReadBytesPerSec,
+        double diskWriteBytesPerSec,
+        double networkRxBytesPerSec,
+        double networkTxBytesPerSec,
+        double gpuUsagePercent);
+    void updateSystemInfoFromHardwareText(const QString& overviewText);
+
+public:
+    // setHardwareDock 作用：把 WelcomeDock 接到主窗口已创建的 HardwareDock 采样源。
+    void setHardwareDock(HardwareDock* hardwareDock);
 
     int m_languageButtonHue = 0; // RGB 动效当前色相，范围为 0~359。
     QTimer* m_languageButtonColorTimer = nullptr; // 语言按钮动画计时器：仅 WelcomeDock 可见时运行。
