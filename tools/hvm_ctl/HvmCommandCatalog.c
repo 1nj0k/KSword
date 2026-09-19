@@ -160,6 +160,8 @@ static const HVM_COMMAND_SPEC g_commands[] = {
       { { "监视编号（十进制）", HvmDecimal32, NULL } } },
     { "watch-remove", "移除内存监视", "内存监视", "撤销一条监视并恢复该页权限。", HvmWatchRemove, 0, 0UL, 0UL, 1,
       { { "监视编号（十进制）", HvmDecimal32, NULL } } },
+    { "watch-selftest", "内存监视端到端自检", "内存监视", "在本进程里分配并锁住一页，装一条写监视，写它，再逐项核对命中现场：命中一次、自动解除、原写最终生效、第二次写不再命中、常驻处理器数不变。常驻没在跑或装不上时记 BLOCKED 而不是 FAIL。", HvmWatchSelfTest, 0, 0UL, 0UL, 0,
+      { { NULL, HvmDecimal32, NULL } } },
     { "msr-log", "记录指定 MSR", "寄存器策略", "添加指定 MSR 的日志策略；编号为十六进制。", HvmMsrLog, 0, 0UL, 0UL, 1,
       { { "MSR 编号（十六进制）", HvmHex32, "10" } } },
     { "msr-clear", "清空 MSR 策略", "寄存器策略", "清空已安装的 MSR 策略。", HvmMsrClear, 0, 0UL, 0UL, 0,

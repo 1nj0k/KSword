@@ -5718,6 +5718,371 @@ static int WatchTranslate(HANDLE h, unsigned long long virtualAddress,
 }
 
 /*
+ * 首次访问监视的端到端自检。
+ *
+ * 一个进程里跑完 issue #195 第二十二节第 1 项（WRITE First-touch）的全部检查，
+ * 不需要另写一个测试驱动：自己分配并锁住一页，自己写它，自己核对命中现场。
+ *
+ * 为什么必须是同一个进程：RIP 判据。要证明"记下来的 RIP 就是那条写指令"，就得
+ * 有一个已知的写指令地址可比；跨进程做这件事只能比到模块粒度，而模块粒度答不出
+ * "是不是记错了一条指令"。
+ *
+ * 判定用四态而不是布尔：
+ *   PASS     实跑通过，有执行证据
+ *   FAIL     逻辑错了
+ *   BLOCKED  这台机器上问不出来（没常驻、页拆不开、能力不够）——不是代码的问题，
+ *            但也不能记成通过
+ * "问不出来"与"跑失败"必须分开，否则 BLOCKED 会被当成 FAIL 拖着永远不绿，
+ * 或者被当成 PASS 掩盖掉一个真问题。
+ */
+
+#define KSW_WATCH_SELFTEST_CASES 12U
+
+typedef struct _KSW_WATCH_CASE
+{
+    const char* name;
+    const char* expectation;
+    const char* verdict;
+    const char* remark;
+    unsigned long long observed;
+} KSW_WATCH_CASE;
+
+static void WatchCase(KSW_WATCH_CASE* slot, const char* name,
+                      const char* expectation, int ok,
+                      unsigned long long observed, const char* remark)
+{
+    slot->name = name;
+    slot->expectation = expectation;
+    slot->verdict = ok ? "PASS" : "FAIL";
+    slot->observed = observed;
+    slot->remark = remark;
+}
+
+/* 读一次常驻处理器数。失败时回报 0xFFFFFFFF，让调用方看得出是没问到而不是零。 */
+static unsigned long WatchResidentCount(HANDLE h)
+{
+    KSWORD_ARK_QUERY_HVM_REQUEST qreq;
+    KSWORD_ARK_QUERY_HVM_RESPONSE qrsp;
+    DWORD returned = 0;
+
+    memset(&qreq, 0, sizeof(qreq));
+    memset(&qrsp, 0, sizeof(qrsp));
+    qreq.version = KSWORD_ARK_HVM_PROTOCOL_VERSION;
+    qreq.size = (unsigned long)sizeof(qreq);
+    if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_QUERY_HVM, &qreq, sizeof(qreq),
+                         &qrsp, (DWORD)sizeof(qrsp), &returned, NULL)) {
+        return 0xFFFFFFFFUL;
+    }
+    return qrsp.residentProcessorCount;
+}
+
+/* 下发一次 watch 操作，把响应原样交回调用方。返回 0 表示 IOCTL 本身成功。 */
+static int WatchIoctl(HANDLE h, unsigned long op, unsigned long watchId,
+                      unsigned long long physicalPage,
+                      unsigned long long requestedAddress,
+                      unsigned long long requestedLength,
+                      unsigned long access,
+                      KSWORD_ARK_HVM_EPT_RULE_RESPONSE* rsp)
+{
+    KSWORD_ARK_HVM_EPT_RULE_REQUEST req;
+    DWORD returned = 0;
+
+    memset(&req, 0, sizeof(req));
+    memset(rsp, 0, sizeof(*rsp));
+    req.version = KSWORD_ARK_HVM_PROTOCOL_VERSION;
+    req.size = (unsigned long)sizeof(req);
+    req.operation = op;
+    req.ruleId = watchId;
+    req.deniedAccess = access;
+    req.physicalAddress = physicalPage;
+    req.pageCount = 1ULL;
+    req.requestedAddress = requestedAddress;
+    req.requestedLength = requestedLength;
+    req.requestedAccess = access;
+    req.addressKind = KSWORD_ARK_HVM_WATCH_ADDRESS_VIRTUAL;
+    if (op == KSWORD_ARK_HVM_EPT_RULE_ADD) {
+        req.flags |= KSWORD_ARK_HVM_EPT_RULE_FLAG_WATCH_ONCE;
+    }
+    if (op != KSWORD_ARK_HVM_EPT_RULE_WATCH_QUERY) {
+        req.flags |= KSWORD_ARK_HVM_EPT_RULE_FLAG_UI_CONFIRMED;
+        req.confirmationToken = KSWORD_ARK_HVM_CONTROL_CONFIRMATION_TOKEN;
+    }
+    return DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_EPT_RULE, &req, sizeof(req),
+                           rsp, (DWORD)sizeof(*rsp), &returned, NULL) ? 0 : 1;
+}
+
+/* 在整张表里找一条 watch。找不到返回 NULL。 */
+static const KSWORD_ARK_HVM_EPT_WATCH_ROW* WatchFindRow(
+    const KSWORD_ARK_HVM_EPT_RULE_RESPONSE* rsp, unsigned long watchId)
+{
+    unsigned long i;
+
+    for (i = 0UL; i < rsp->returnedWatchRows &&
+                  i < KSWORD_ARK_HVM_MAX_EPT_WATCH_ROWS; ++i) {
+        if (rsp->watchRows[i].watchId == watchId) {
+            return &rsp->watchRows[i];
+        }
+    }
+    return NULL;
+}
+
+static int DoWatchSelfTest(HANDLE h, int asJson)
+{
+    KSW_WATCH_CASE cases[KSW_WATCH_SELFTEST_CASES];
+    KSWORD_ARK_HVM_MEMORY_REQUEST mreq;
+    KSWORD_ARK_HVM_MEMORY_RESPONSE mrsp;
+    KSWORD_ARK_HVM_EPT_RULE_RESPONSE rsp;
+    const KSWORD_ARK_HVM_EPT_WATCH_ROW* row = NULL;
+    volatile unsigned char* page = NULL;
+    unsigned long long physical = 0ULL;
+    unsigned long long physicalPage = 0ULL;
+    unsigned long residentBefore = 0UL;
+    unsigned long residentAfter = 0UL;
+    unsigned long watchId = 0UL;
+    unsigned long firstHitCount = 0UL;
+    unsigned long secondHitCount = 0UL;
+    unsigned long n = 0UL;
+    unsigned long i = 0UL;
+    int failures = 0;
+    int blocked = 0;
+    DWORD returned = 0;
+
+    memset(cases, 0, sizeof(cases));
+
+    /* --- 0. 常驻必须在跑；否则整条自检没有意义，记 BLOCKED 而不是 FAIL --- */
+    residentBefore = WatchResidentCount(h);
+    if (residentBefore == 0xFFFFFFFFUL || residentBefore == 0UL) {
+        if (asJson) {
+            printf("{\"kind\":\"watch-selftest\",\"verdict\":\"BLOCKED\","
+                   "\"reason\":\"not-resident\",\"residentBefore\":%lu,"
+                   "\"cases\":[]}\n", residentBefore);
+        } else {
+            printf("\n=== 内存监视端到端自检 ===\n");
+            printf("  BLOCKED：常驻没在跑（residentBefore=%lu）。\n", residentBefore);
+            printf("  EPT 权限只在有处理器加载了这套 EPT 指针时才产生退出，\n");
+            printf("  所以这不是失败，是这台机器此刻问不出来。先启动常驻再跑。\n");
+        }
+        return 3;
+    }
+
+    /* --- 1. 拿一页自己的内存并落地成真实物理页 --- */
+    page = (volatile unsigned char*)VirtualAlloc(
+        NULL, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (page == NULL) {
+        fprintf(stderr, "VirtualAlloc 失败：win32=%lu\n", GetLastError());
+        return 1;
+    }
+    (void)VirtualLock((LPVOID)page, 4096);
+    /* 先写一次把页真正落地，这一次**在装监视之前**，不该被记成命中。 */
+    page[0] = 0xA5U;
+
+    memset(&mreq, 0, sizeof(mreq));
+    memset(&mrsp, 0, sizeof(mrsp));
+    mreq.version = KSWORD_ARK_HVM_MEMORY_PROTOCOL_VERSION;
+    mreq.size = (unsigned long)sizeof(mreq);
+    mreq.operation = KSWORD_ARK_HVM_MEMORY_OP_TRANSLATE;
+    mreq.flags = KSWORD_ARK_HVM_MEMORY_FLAG_UI_CONFIRMED;
+    mreq.confirmationToken = KSWORD_ARK_HVM_MEMORY_CONFIRMATION_TOKEN;
+    mreq.address = (unsigned long long)(ULONG_PTR)page;
+    mreq.length = 1UL;
+    if (!DeviceIoControl(h, IOCTL_KSWORD_ARK_HVM_MEMORY, &mreq, sizeof(mreq),
+                         &mrsp, (DWORD)sizeof(mrsp), &returned, NULL) ||
+        mrsp.status != KSWORD_ARK_HVM_MEMORY_STATUS_OK ||
+        mrsp.physicalAddress == 0ULL) {
+        fprintf(stderr, "TRANSLATE 失败：status=%lu win32=%lu\n",
+                mrsp.status, GetLastError());
+        VirtualFree((LPVOID)page, 0, MEM_RELEASE);
+        return 1;
+    }
+    physical = mrsp.physicalAddress;
+    physicalPage = physical & ~0xFFFULL;
+
+    /* --- 2. 装一条写监视 --- */
+    if (WatchIoctl(h, KSWORD_ARK_HVM_EPT_RULE_ADD, 0UL, physicalPage,
+                   (unsigned long long)(ULONG_PTR)page, 8ULL,
+                   KSWORD_ARK_HVM_EPT_ACCESS_WRITE, &rsp) != 0) {
+        fprintf(stderr, "watch ADD 下发失败：win32=%lu\n", GetLastError());
+        VirtualFree((LPVOID)page, 0, MEM_RELEASE);
+        return 1;
+    }
+    if (rsp.status != KSWORD_ARK_HVM_EPT_RULE_STATUS_OK) {
+        /*
+         * 装不上分两类：能力/占用类是 BLOCKED（这台机器上问不出来），
+         * 其余是 FAIL。把两者混成一个"失败"会让一台本来就装不上的机器
+         * 永远绿不了，或者让一个真缺陷被当成环境问题放过去。
+         */
+        blocked = rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_RESIDENT ||
+                  rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_LEAF_CONFLICT ||
+                  rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_SPLIT_FAILED ||
+                  rsp.status == KSWORD_ARK_HVM_EPT_RULE_STATUS_NOT_PREPARED;
+        if (asJson) {
+            printf("{\"kind\":\"watch-selftest\",\"verdict\":\"%s\","
+                   "\"reason\":\"add-refused\",\"status\":%lu,"
+                   "\"statusName\":\"%s\",\"cases\":[]}\n",
+                   blocked ? "BLOCKED" : "FAIL", rsp.status,
+                   WatchRuleStatusName(rsp.status));
+        } else {
+            printf("\n=== 内存监视端到端自检 ===\n");
+            printf("  %s：装不上监视，status=%lu (%s)\n",
+                   blocked ? "BLOCKED" : "FAIL", rsp.status,
+                   WatchRuleStatusName(rsp.status));
+        }
+        VirtualFree((LPVOID)page, 0, MEM_RELEASE);
+        return blocked ? 3 : 2;
+    }
+    watchId = rsp.ruleId;
+
+    WatchCase(&cases[n++], "安装成功并分配了非零编号",
+              "status=OK 且 watchId != 0",
+              watchId != 0UL, watchId, NULL);
+    WatchCase(&cases[n++], "实际生效的访问掩码等于请求的",
+              "写监视不触发架构归一化（只有拒绝读才会）",
+              rsp.watch.effectiveAccess == KSWORD_ARK_HVM_EPT_ACCESS_WRITE,
+              rsp.watch.effectiveAccess, NULL);
+    WatchCase(&cases[n++], "武装后状态为 ARMED",
+              "state = 1 (armed)",
+              rsp.watch.state == KSWORD_ARK_HVM_EPT_WATCH_STATE_ARMED,
+              rsp.watch.state, NULL);
+    WatchCase(&cases[n++], "装监视之前的那次写没有被记成命中",
+              "hitCount = 0",
+              rsp.watch.hitCount == 0UL, rsp.watch.hitCount, NULL);
+
+    /* --- 3. 触发一次写。这条指令的地址就是 RIP 判据 --- */
+    page[0] = 0x5AU;
+
+    /* --- 4. 读回并逐项核对 --- */
+    if (WatchIoctl(h, KSWORD_ARK_HVM_EPT_RULE_WATCH_QUERY, 0UL, 0ULL, 0ULL,
+                   0ULL, 0UL, &rsp) != 0) {
+        fprintf(stderr, "watch QUERY 下发失败：win32=%lu\n", GetLastError());
+        VirtualFree((LPVOID)page, 0, MEM_RELEASE);
+        return 1;
+    }
+    row = WatchFindRow(&rsp, watchId);
+    if (row == NULL) {
+        fprintf(stderr, "读不回刚装上的监视 #%lu\n", watchId);
+        VirtualFree((LPVOID)page, 0, MEM_RELEASE);
+        return 2;
+    }
+    firstHitCount = row->hitCount;
+
+    WatchCase(&cases[n++], "写触发了一次命中",
+              "hitCount = 1",
+              row->hitCount == 1UL, row->hitCount, NULL);
+    WatchCase(&cases[n++], "命中后自动解除",
+              "state = 3 (disarmed)",
+              row->state == KSWORD_ARK_HVM_EPT_WATCH_STATE_DISARMED,
+              row->state, NULL);
+    WatchCase(&cases[n++], "命中的客户物理地址落在被监视的那一页里",
+              "gpa & ~0xFFF = 被监视页",
+              (row->lastHitGuestPhysicalAddress & ~0xFFFULL) == physicalPage,
+              row->lastHitGuestPhysicalAddress, NULL);
+    WatchCase(&cases[n++], "命中现场记下了非零的 RIP",
+              "rip != 0",
+              row->lastHitRip != 0ULL, row->lastHitRip, NULL);
+    /*
+     * GLA 判据分两态。
+     *
+     * 处理器**可以**不报告线性地址，那时既不能说它指对了，也不能说它指错了。
+     * 把"没报告"判成 FAIL，会让一台架构上就不提供该信息的机器永远绿不了；
+     * 判成 PASS 则等于凭空承认了一个没观测到的事实。所以分开记。
+     */
+    if (row->lastHitGuestLinearValid) {
+        WatchCase(&cases[n++], "有效的客户线性地址指向实际被写的地址",
+                  "gla = &page[0]",
+                  row->lastHitGuestLinearAddress ==
+                      (unsigned long long)(ULONG_PTR)page,
+                  row->lastHitGuestLinearAddress, NULL);
+    } else {
+        cases[n].name = "有效的客户线性地址指向实际被写的地址";
+        cases[n].expectation = "gla = &page[0]";
+        cases[n].verdict = "BLOCKED";
+        cases[n].observed = 0ULL;
+        cases[n].remark = "处理器这次没报告客户线性地址 —— 问不出来，不是错";
+        ++n;
+    }
+    WatchCase(&cases[n++], "事件证据没有丢",
+              "lastHitStatus = 1 (published)",
+              row->lastHitStatus == KSWORD_ARK_HVM_EPT_WATCH_HIT_PUBLISHED,
+              row->lastHitStatus,
+              "丢了说明事件环被别的退出挤爆，与监视本身是否命中无关");
+
+    /* --- 5. 第二次写不该再产生命中 --- */
+    page[0] = 0xB2U;
+    if (WatchIoctl(h, KSWORD_ARK_HVM_EPT_RULE_WATCH_QUERY, 0UL, 0ULL, 0ULL,
+                   0ULL, 0UL, &rsp) == 0) {
+        row = WatchFindRow(&rsp, watchId);
+        secondHitCount = row != NULL ? row->hitCount : 0xFFFFFFFFUL;
+    } else {
+        secondHitCount = 0xFFFFFFFFUL;
+    }
+    WatchCase(&cases[n++], "第二次写不再产生命中",
+              "hitCount 不变",
+              secondHitCount == firstHitCount, secondHitCount,
+              "一次性监视命中后已经不再拦截，再写应当完全无感");
+
+    /* --- 6. 写确实生效了，而且常驻没掉核 --- */
+    WatchCase(&cases[n++], "被监视的写最终真的完成了",
+              "page[0] = 0xB2",
+              page[0] == 0xB2U, (unsigned long long)page[0],
+              "命中不阻止访问 —— 这正是它与 ENFORCE 的分界");
+    residentAfter = WatchResidentCount(h);
+    WatchCase(&cases[n++], "命中没有让任何处理器退出虚拟化",
+              "residentAfter = residentBefore",
+              residentAfter == residentBefore, residentAfter,
+              "这是 WATCH_ONCE 与严格 tripwire 的**根本**区别");
+
+    /* --- 7. 收尾：撤掉监视，不给机器留状态 --- */
+    (void)WatchIoctl(h, KSWORD_ARK_HVM_EPT_RULE_REMOVE, watchId, 0ULL, 0ULL,
+                     0ULL, 0UL, &rsp);
+    VirtualFree((LPVOID)page, 0, MEM_RELEASE);
+
+    for (i = 0UL; i < n; ++i) {
+        if (cases[i].verdict[0] == 'F') { ++failures; }
+        if (cases[i].verdict[0] == 'B') { ++blocked; }
+    }
+    if (asJson) {
+        printf("{\"kind\":\"watch-selftest\",\"verdict\":\"%s\","
+               "\"watchId\":%lu,\"residentBefore\":%lu,\"residentAfter\":%lu,"
+               "\"physicalPage\":\"0x%016llX\",\"failures\":%d,\"blocked\":%d,"
+               "\"cases\":[",
+               failures != 0 ? "FAIL" : (blocked != 0 ? "PASS-WITH-BLOCKED" : "PASS"),
+               watchId, residentBefore, residentAfter, physicalPage,
+               failures, blocked);
+        for (i = 0UL; i < n; ++i) {
+            printf("%s{\"name\":", i != 0UL ? "," : "");
+            KswordHvmPrintJsonString(cases[i].name);
+            printf(",\"expectation\":");
+            KswordHvmPrintJsonString(cases[i].expectation);
+            printf(",\"verdict\":\"%s\",\"observed\":\"0x%016llX\"",
+                   cases[i].verdict, cases[i].observed);
+            if (cases[i].remark != NULL) {
+                printf(",\"remark\":");
+                KswordHvmPrintJsonString(cases[i].remark);
+            }
+            printf("}");
+        }
+        printf("]}\n");
+    } else {
+        printf("\n=== 内存监视端到端自检（watch #%lu，页 0x%016llX）===\n",
+               watchId, physicalPage);
+        printf("  常驻处理器：命中前 %lu，命中后 %lu\n",
+               residentBefore, residentAfter);
+        for (i = 0UL; i < n; ++i) {
+            printf("  [%-7s] %-34s  期望：%s\n", cases[i].verdict,
+                   cases[i].name, cases[i].expectation);
+            printf("            实测 0x%016llX%s%s\n", cases[i].observed,
+                   cases[i].remark != NULL ? "  — " : "",
+                   cases[i].remark != NULL ? cases[i].remark : "");
+        }
+        printf("\n  结论：%s（失败 %d，问不出来 %d，共 %lu 条）\n",
+               failures != 0 ? "FAIL" : (blocked != 0 ? "PASS（含问不出来的项）" : "PASS"),
+               failures, blocked, n);
+    }
+    /* 退出码：0 全过、2 有失败、3 有问不出来的项但没有失败。 */
+    return failures != 0 ? 2 : (blocked != 0 ? 3 : 0);
+}
+
+/*
  * R-1 进程处置。
  *
  * op 为 QUERY 时其余参数全忽略；FREEZE / TERMINATE 需要 pid 与**十六进制**的
@@ -6220,6 +6585,7 @@ int KswordHvmCommandMain(int argc, char** argv)
         rc = DoWatch(h, KSWORD_ARK_HVM_EPT_RULE_REMOVE, (unsigned long)v[0],
                      0ULL, 0ULL, 0ULL, 0UL, 0UL, asJson);
         break;
+    case HvmWatchSelfTest: rc = DoWatchSelfTest(h, asJson); break;
     default: rc = 2; break;
     }
     CloseHandle(h);

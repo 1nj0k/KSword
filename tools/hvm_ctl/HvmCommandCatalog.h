@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <stddef.h>
 
@@ -23,6 +23,7 @@ typedef enum HVM_COMMAND_HANDLER {
     HvmPageMapRegion, HvmPageMapRegionScan, HvmPageStage, HvmPageDigest,
     /* First-touch memory watch.  Appended so every existing ordinal is kept. */
     HvmWatchAddVa, HvmWatchAddPa, HvmWatchList, HvmWatchRearm, HvmWatchRemove,
+    HvmWatchSelfTest,
     HvmHelp, HvmCommands
 } HVM_COMMAND_HANDLER;
 
