@@ -32,8 +32,43 @@ Environment:
 #define KSW_HVM_ONE_GIB 0x40000000ULL
 /* Define the byte span covered by one EPT PML4 entry. */
 #define KSW_HVM_ONE_512_GIB 0x8000000000ULL
-/* Bound the identity map to a deliberate eight-TiB research window. */
-#define KSW_HVM_MAX_PML4_ENTRIES 16UL
+/*
+ * Bound the identity map to a thirty-two-TiB guest-physical window.
+ *
+ * The number is not a preference, it is CPUID.80000008H:EAX[7:0] on real
+ * hardware.  This used to be 16 (eight TiB), chosen when every machine in
+ * reach reported 39 or 42 physical-address bits.  An Intel Core Ultra 270K
+ * reports **45** - thirty-two TiB - and the builder clipped the map, set
+ * EPT_TRUNCATED, and residency refused.  The user was told "处理器不支持",
+ * by a processor that supports every single thing this backend needs.
+ * (issue #195 是另一件事；这一条是 issue #198。)
+ *
+ * Sixty-four entries covers MAXPHYADDR <= 45 exactly.  It is deliberately not
+ * larger: a machine reporting 46 bits will now say precisely what it needs
+ * (see KSWORD_ARK_HVM_CONTROL_STATUS_EPT_WINDOW_TOO_SMALL) instead of blaming
+ * the processor, and raising this number for a machine nobody has measured is
+ * how the previous value came to be wrong in the first place.
+ */
+#define KSW_HVM_MAX_PML4_ENTRIES 64UL
+/*
+ * Bound the page directories the identity map may own.
+ *
+ * A page directory is only needed where a one-GiB window must be described at
+ * two-MiB granularity, which is exactly where installed RAM lives: RAM leaves
+ * carry an MTRR-resolved cache type, and EPT rules/views/watches split a leaf
+ * down to 4 KiB, which starts from a PDE.  Windows with no installed RAM are
+ * MMIO or reserved, are uniformly UC, and are published as a single one-GiB
+ * leaf in the PDPT - no page directory at all.
+ *
+ * Kept at 8192 (the value implied by the old sixteen-entry window) rather than
+ * at KSW_HVM_MAX_PML4_ENTRIES * 512: a directory per GiB across the new window
+ * would be 32768 pages, 128 MiB of nonpaged pool, allocated at prepare on
+ * every machine.  Eight TiB of *installed RAM* is the real bound here, and no
+ * machine that has that much is short of the 32 MiB this costs.
+ *
+ * Exhausting it is reported, not silently clipped - see the builder.
+ */
+#define KSW_HVM_MAX_EPT_PD_PAGES 8192UL
 /* Bound the number of simultaneously split two-MiB EPT leaves. */
 #define KSW_HVM_MAX_EPT_SPLITS 256UL
 
@@ -50,10 +85,17 @@ Environment:
 /* Reserve ledger space for every domain root plus its private tables. */
 #define KSW_HVM_MAX_DOMAIN_PAGES \
     (KSW_HVM_MAX_EPT_DOMAINS * (1UL + KSW_HVM_MAX_DOMAIN_PRIVATE_TABLES))
-/* Reserve enough allocation-ledger entries for sparse tables and splits. */
+/*
+ * Reserve enough allocation-ledger entries for sparse tables and splits.
+ *
+ * The page-directory term is KSW_HVM_MAX_EPT_PD_PAGES, not
+ * KSW_HVM_MAX_PML4_ENTRIES * 512: directories are allocated only where a GiB
+ * needs two-MiB granularity, and the ledger must bound what is actually
+ * allocated rather than what the address space could theoretically hold.
+ */
 #define KSW_HVM_MAX_EPT_PAGES \
     (1UL + KSW_HVM_MAX_PML4_ENTRIES + \
-        (KSW_HVM_MAX_PML4_ENTRIES * 512UL) + \
+        KSW_HVM_MAX_EPT_PD_PAGES + \
         KSW_HVM_MAX_EPT_SPLITS + \
         KSW_HVM_MAX_DOMAIN_PAGES)
 /* Bound every physical address accepted by the EPT backend. */
@@ -150,6 +192,8 @@ Environment:
 #define KSW_EPT_CAP_WB (1ULL << 14)
 /* Identify two-MiB EPT leaf capability. */
 #define KSW_EPT_CAP_2MB (1ULL << 16)
+/* Identify one-GiB EPT leaf capability. */
+#define KSW_EPT_CAP_1GB (1ULL << 17)
 /* Identify INVEPT instruction capability. */
 #define KSW_EPT_CAP_INVEPT (1ULL << 20)
 /* Identify EPT accessed-and-dirty capability. */
@@ -793,7 +837,14 @@ typedef struct _KSW_HVM_RUNTIME
     ULONG EptPml4Entries;
     /* Preserve the number of populated EPT PDPT entries. */
     ULONG EptPdptEntries;
-    /* Preserve the number of populated two-MiB EPT leaves. */
+    /*
+     * Preserve the number of populated two-MiB EPT leaves.
+     *
+     * This is **not** the whole identity window: one-GiB windows with no
+     * installed RAM are published as single PDPT leaves and counted in
+     * EptPdptEntries instead.  The authoritative coverage is
+     * HighestMappedPhysicalAddress; summing leaves will not reach it.
+     */
     ULONG EptLargePageEntries;
     /* Preserve decoded protocol capability flags. */
     ULONGLONG FeatureFlags;

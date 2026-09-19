@@ -1995,8 +1995,18 @@ KswordARKHvmResidentStart(
     /* Refuse a resident mapping whose architectural address space was clipped. */
     if ((Runtime->StateFlags &
             KSWORD_ARK_HVM_STATE_EPT_TRUNCATED) != 0UL) {
-        /* Do not enter VMX with an incomplete architectural identity map. */
-        return STATUS_NOT_SUPPORTED;
+        /*
+         * Do not enter VMX with an incomplete architectural identity map.
+         *
+         * STATUS_SECTION_TOO_BIG rather than STATUS_NOT_SUPPORTED: this is the
+         * one refusal on this path that is not about the processor, and
+         * NOT_SUPPORTED is translated to UNSUPPORTED_CPU one layer up.  A
+         * machine that supports everything here was being told its processor
+         * could not do this, permanently, because its address space was wider
+         * than our window (issue #198).  The status name is literal - the
+         * region we had to map was bigger than we can map.
+         */
+        return STATUS_SECTION_TOO_BIG;
     }
     /* Never reuse a lifecycle whose prior devirtualization is uncertain. */
     if ((Runtime->StateFlags &

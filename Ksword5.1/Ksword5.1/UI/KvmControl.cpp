@@ -6,11 +6,36 @@
 #include <QStringList>
 
 #include <atomic>
+// __cpuid：EPT 窗口不够时，本机的物理地址宽度要在用户态自己读。
+#include <intrin.h>
 
 namespace ksword::kvm
 {
     namespace
     {
+        // 一个 PML4 项覆盖的客户物理空间。
+        constexpr quint64 kBytesPerPml4Entry = 512ULL * 1024ULL * 1024ULL * 1024ULL;
+
+        // 本机 CPUID.80000008H:EAX[7:0] 报告的物理地址宽度；问不出来返回 0。
+        //
+        // 在用户态读：MAXPHYADDR 是一条 CPL3 就能执行的 CPUID 给出的，不需要
+        // 驱动帮忙。这一点正好是这条消息能说得准的原因——它在**驱动拒绝之后**
+        // 才需要，而那时驱动能不能配合已经不一定了。
+        unsigned long hostPhysicalAddressBits()
+        {
+            int leaves[4] = { 0, 0, 0, 0 };
+            __cpuid(leaves, static_cast<int>(0x80000000));
+            if (static_cast<unsigned int>(leaves[0]) < 0x80000008U)
+            {
+                return 0UL;
+            }
+            __cpuid(leaves, static_cast<int>(0x80000008));
+            const unsigned long bits =
+                static_cast<unsigned long>(leaves[0]) & 0xFFUL;
+            // 32 位以下和 52 位以上都不是架构上有意义的宽度，当作问不出来。
+            return (bits >= 32UL && bits <= 52UL) ? bits : 0UL;
+        }
+
         // 写权限开关的持久化键。放在 Safety/ 下与其它安全门保持一致。
         const QString kWriteAccessSettingKey =
             QStringLiteral("Safety/Kvm/WriteAccessEnabled");
@@ -321,6 +346,49 @@ namespace ksword::kvm
             case KSWORD_ARK_HVM_CONTROL_STATUS_LOCAL_EPT_CONFLICTS_WITH_NESTED:
                 reason = ks::i18n::sourceText(QStringLiteral("私有 EPT 与嵌套 VMX 互斥。请关掉其中一个"));
                 break;
+            case KSWORD_ARK_HVM_CONTROL_STATUS_EPT_WINDOW_TOO_SMALL:
+            {
+                /*
+                 * 这一条要把话说反过来：**不是处理器不支持**。
+                 *
+                 * 这个码存在之前，同一情形走的是 UNSUPPORTED_CPU，于是一台
+                 * 每项能力都齐备的 Intel Core Ultra 被告知"处理器不支持"，
+                 * 用户只能去查 CPU 和 BIOS，而那两处都没有问题。
+                 *
+                 * 三个数缺一不可：本机需要多少（CPUID，用户态自己读）、这一版
+                 * 有多少（驱动回报的 eptPml4EntryBudget，**不能**用界面自己
+                 * 编译时的常量——版本不齐时那个值恰好是错的）、以及换算成的
+                 * 地址空间大小，否则前两个数对普通用户没有意义。
+                 */
+                const unsigned long bits = hostPhysicalAddressBits();
+                const unsigned long budget =
+                    result.response.eptPml4EntryBudget;
+                const QString budgetText = budget != 0UL
+                    ? ks::i18n::sourceText(QStringLiteral("%1 项（%2 TiB）"))
+                        .arg(budget)
+                        .arg((static_cast<quint64>(budget) * kBytesPerPml4Entry)
+                                 / (1024ULL * 1024ULL * 1024ULL * 1024ULL))
+                    : ks::i18n::sourceText(QStringLiteral("未知（这个驱动版本没有回报窗口大小）"));
+                if (bits != 0UL)
+                {
+                    const quint64 needBytes = 1ULL << bits;
+                    const unsigned long needEntries = static_cast<unsigned long>(
+                        (needBytes + kBytesPerPml4Entry - 1ULL) / kBytesPerPml4Entry);
+                    reason = ks::i18n::sourceText(QStringLiteral(
+                        "本机的客户物理地址空间比这一版驱动能建的 EPT 恒等映射窗口大：CPUID 报告 %1 位物理地址（%2 TiB），需要 %3 个 512 GiB 的 PML4 项，而这个驱动的窗口是 %4。**这不是处理器不支持** —— 它每一项能力都齐备，换一个窗口更大的驱动版本即可。"))
+                        .arg(bits)
+                        .arg(needBytes / (1024ULL * 1024ULL * 1024ULL * 1024ULL))
+                        .arg(needEntries)
+                        .arg(budgetText);
+                }
+                else
+                {
+                    reason = ks::i18n::sourceText(QStringLiteral(
+                        "本机的客户物理地址空间比这一版驱动能建的 EPT 恒等映射窗口大（这个驱动的窗口是 %1；本机需要多少问不出来，CPUID 没有提供物理地址宽度叶）。**这不是处理器不支持。**"))
+                        .arg(budgetText);
+                }
+                break;
+            }
             case KSWORD_ARK_HVM_CONTROL_STATUS_SELF_TEST_FAILED:
                 reason = ks::i18n::sourceText(QStringLiteral("自检未通过"));
                 break;

@@ -558,6 +558,22 @@
 #define KSWORD_ARK_HVM_CONTROL_STATUS_LOCAL_EPT_CONFLICTS_WITH_VMFUNC 26UL
 /* Nested VMX composes its own EPT pointer and cannot share this mechanism. */
 #define KSWORD_ARK_HVM_CONTROL_STATUS_LOCAL_EPT_CONFLICTS_WITH_NESTED 27UL
+/*
+ * 这台机器的客户物理地址空间比这一版能建的身份映射窗口大。
+ *
+ * 与 UNSUPPORTED_CPU 分家，因为它们要人做的事**相反**：那个说"换一台机器"，
+ * 这个说"这台机器什么都支持，是我们的窗口太小"。
+ *
+ * 两者混在一起的代价是实测过的：一台 Intel Core Ultra 报 CPUID.80000008H:EAX
+ * 的物理地址宽度是 45 位（32 TiB），而当时的窗口是 8 TiB，于是构建器截断、
+ * 置 EPT_TRUNCATED、常驻拒绝，一路翻译成"处理器不支持"——由一台每一项能力
+ * 都齐备的处理器说出来。用户只能去查 CPU 和 BIOS，而那两处都没有问题。
+ *
+ * 界面看到这个码时要说出三个数：本机的物理地址宽度（用户态一条 CPUID 就读得
+ * 到）、这一版实际映射到哪里（查询响应里的 highestMappedPhysicalAddress）、
+ * 以及需要多少个 PML4 项。
+ */
+#define KSWORD_ARK_HVM_CONTROL_STATUS_EPT_WINDOW_TOO_SMALL 28UL
 
 #define KSWORD_ARK_HVM_EXIT_REASON_NONE   0xFFFFFFFFUL
 #define KSWORD_ARK_HVM_EXIT_REASON_VMCALL 18UL
@@ -1084,7 +1100,20 @@ typedef struct _KSWORD_ARK_CONTROL_HVM_RESPONSE
     unsigned char launchProcessorNumber;
     unsigned char launchWasNested;
     long lastStatus;
-    unsigned long reserved2;
+    /*
+     * 本驱动的身份映射窗口有多少个 PML4 项，每项 512 GiB。
+     *
+     * 占用原先的 reserved2 槽位（没有任何读写方），结构大小不变，协议版本不动。
+     *
+     * 存在的理由只有一个：配 EPT_WINDOW_TOO_SMALL 时，界面要说得出"本机需要多少
+     * 项、这一版有多少项"。前者界面自己用一条 CPUID 就算得出来，后者算不出——
+     * 它是**这个驱动**编译时的常量，而一个从旧头文件构建的界面手里的那个值正好
+     * 是错的。恰恰在版本不齐时这条消息最需要准确。
+     *
+     * 每次控制调用都填，不只在失败时填：一个只在出事时才有值的字段，没出事的
+     * 时候没有任何地方能确认它是对的。
+     */
+    unsigned long eptPml4EntryBudget;
     /* Milliseconds residency actually held during the last soak. */
     unsigned long soakElapsedMilliseconds;
     /*

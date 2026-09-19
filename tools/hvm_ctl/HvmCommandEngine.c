@@ -113,6 +113,8 @@ static const char* ControlStatusName(unsigned long s)
         return "LOCAL_EPT_CONFLICTS_WITH_VMFUNC";
     case KSWORD_ARK_HVM_CONTROL_STATUS_LOCAL_EPT_CONFLICTS_WITH_NESTED:
         return "LOCAL_EPT_CONFLICTS_WITH_NESTED";
+    case KSWORD_ARK_HVM_CONTROL_STATUS_EPT_WINDOW_TOO_SMALL:
+        return "EPT_WINDOW_TOO_SMALL";
     default: return "UNKNOWN";
     }
 }
@@ -999,6 +1001,15 @@ static int DoQuery(HANDLE h, int asJson)
                "\"vmxEptVpidCapabilities\":\"0x%016llX\","
                "\"eptExecuteOnly\":%s,"
                "\"eptPointer\":\"0x%016llX\","
+               /*
+                * 身份映射的形状：窗口覆盖到哪里、各级各有多少项。
+                *
+                * 界面一直显示这几个数，命令行却没有——于是"这台机器的映射建成
+                * 什么样"只能靠界面回答，而排查这件事的时候恰恰常常没有界面。
+                */
+               "\"highestMappedPhysicalAddress\":\"0x%016llX\","
+               "\"eptPml4Entries\":%lu,\"eptPdptEntries\":%lu,"
+               "\"eptLargePageEntries\":%lu,"
                "\"eptPageCount\":%lu,\"mappedRamMiB\":%llu,\"vmExitCount\":%llu,"
                "\"lastExitReason\":%lu,\"lastExitQualification\":\"0x%016llX\","
                "\"lastGuestRip\":\"0x%016llX\",\"lastGuestRsp\":\"0x%016llX\","
@@ -1028,6 +1039,9 @@ static int DoQuery(HANDLE h, int asJson)
                rsp.vmxEptVpidCapabilities,
                ((rsp.vmxEptVpidCapabilities & 1ULL) != 0ULL) ? "true" : "false",
                rsp.eptPointer,
+               rsp.highestMappedPhysicalAddress,
+               rsp.eptPml4Entries, rsp.eptPdptEntries,
+               rsp.eptLargePageEntries,
                rsp.eptPageCount, rsp.mappedRamBytes / (1024ULL * 1024ULL),
                rsp.vmExitCount,
                rsp.lastExitReason, rsp.lastExitQualification,
@@ -1244,6 +1258,7 @@ static int DoControl(HANDLE h, const HVM_CTL_VERB* verb,
                "\"residentImplementation\":\"%s\",\"eptImplementation\":\"%s\","
                "\"nestedImplementation\":\"%s\",\"evmcsImplementation\":\"%s\","
                "\"eptPointer\":\"0x%016llX\",\"eptPageCount\":%lu,"
+               "\"eptPml4EntryBudget\":%lu,"
                "\"eptRuleCount\":%lu,\"mappedRamMiB\":%llu,"
                "\"vmExitCount\":%llu,\"lastExitReason\":%lu,"
                "\"lastExitQualification\":\"0x%016llX\","
@@ -1259,7 +1274,8 @@ static int DoControl(HANDLE h, const HVM_CTL_VERB* verb,
                ImplementationName(rsp.eptImplementation),
                ImplementationName(rsp.nestedImplementation),
                ImplementationName(rsp.evmcsImplementation),
-               rsp.eptPointer, rsp.eptPageCount, rsp.eptRuleCount,
+               rsp.eptPointer, rsp.eptPageCount, rsp.eptPml4EntryBudget,
+               rsp.eptRuleCount,
                rsp.mappedRamBytes / (1024ULL * 1024ULL),
                rsp.vmExitCount, rsp.lastExitReason,
                rsp.lastExitQualification, rsp.lastGuestRip,
@@ -1297,6 +1313,13 @@ static int DoControl(HANDLE h, const HVM_CTL_VERB* verb,
     printf("  EPT          : pointer=0x%016llX pages=%lu rules=%lu mappedRam=%llu MiB\n",
            rsp.eptPointer, rsp.eptPageCount, rsp.eptRuleCount,
            rsp.mappedRamBytes / (1024ULL * 1024ULL));
+    /*
+     * 窗口大小是这个驱动编译时的常量，本工具自己的头文件里那份在版本不齐时
+     * 正好是错的 —— 而恰恰是版本不齐时最需要知道它。
+     */
+    printf("               （身份映射窗口 = %lu 个 PML4 项 = %llu TiB）\n",
+           rsp.eptPml4EntryBudget,
+           ((unsigned long long)rsp.eptPml4EntryBudget * 512ULL) / 1024ULL);
     PrintExitTelemetry("  ", rsp.vmExitCount, rsp.lastExitReason,
                        rsp.lastExitQualification, rsp.lastGuestRip,
                        rsp.lastGuestRsp, rsp.lastExitInstructionLength);

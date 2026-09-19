@@ -2217,6 +2217,19 @@ KswordARKHvmControlStatusFromNtStatus(
     if (Status == STATUS_HV_FEATURE_UNAVAILABLE) {
         return KSWORD_ARK_HVM_CONTROL_STATUS_HYPERVISOR_CONFLICT;
     }
+    /*
+     * The identity window is too small for this machine's address space.
+     *
+     * Mapped before the NOT_SUPPORTED case on purpose, and carried by its own
+     * NTSTATUS for the same reason: every other refusal on the residency path
+     * collapses into UNSUPPORTED_CPU, and this one is the opposite statement -
+     * the processor is fine, our window is not.  Falling through to the
+     * command catch-all below would be worse still: START_RESIDENT would
+     * report RENDEZVOUS_FAILED for something that never reached a rendezvous.
+     */
+    if (Status == STATUS_SECTION_TOO_BIG) {
+        return KSWORD_ARK_HVM_CONTROL_STATUS_EPT_WINDOW_TOO_SMALL;
+    }
     if (Status == STATUS_NOT_SUPPORTED) {
         if (Command ==
             KSWORD_ARK_HVM_CONTROL_VALIDATE_NESTED) {
@@ -3428,6 +3441,13 @@ Complete:
     UNREFERENCED_PARAMETER(overwrittenEventCount);
     UNREFERENCED_PARAMETER(publishedEventCount);
     Response->eptPageCount = g_KswordHvm.EptPageCount;
+    /*
+     * Published on every control call, not only on the refusal that needs it.
+     *
+     * A field that only carries a value when something went wrong has no
+     * occasion on which it can be shown to be right.
+     */
+    Response->eptPml4EntryBudget = KSW_HVM_MAX_PML4_ENTRIES;
     Response->eptPointer = g_KswordHvm.EptPointer;
     Response->mappedRamBytes = g_KswordHvm.MappedRamBytes;
     Response->vmExitCount = KswordARKHvmTotalVmExitCountLocked();
