@@ -25,6 +25,8 @@ Environment:
 #include "hvm_event.h"
 /* The multicore start gate asks the view records whether any would flip a leaf. */
 #include "hvm_ept_view.h"
+/* Stopping residency has to retire every armed first-touch watch. */
+#include "hvm_ept.h"
 #include "hvm_vmcs.h"
 #include "hvm_descriptor.h"
 #include "../../platform/pool_compat.h"
@@ -2590,6 +2592,18 @@ KswordARKHvmResidentStop(
     if (!NT_SUCCESS(status)) {
         return status;
     }
+    /*
+     * Retire every armed first-touch watch before residency ends.
+     *
+     * A watch is a claim about a window in which something was watching.  Once
+     * this returns, nothing is, so a watch that stayed armed across the gap
+     * would answer "never touched" for a period it did not observe - a
+     * fabricated negative, and the most damaging kind of wrong answer this
+     * feature can give.  Done here rather than after the rendezvous because
+     * the permissions have to be restored while the processors can still be
+     * invalidated, and because an idempotent stop must clear them too.
+     */
+    KswordARKHvmEptInvalidateWatchesLocked(Runtime);
     /* Treat a fully stopped lifecycle as idempotent success. */
     if (InterlockedCompareExchange(
             &Runtime->ResidentProcessorCount,

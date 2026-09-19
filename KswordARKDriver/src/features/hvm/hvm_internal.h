@@ -371,6 +371,52 @@ typedef struct _KSW_HVM_EPT_RULE_SLOT
     ULONGLONG PhysicalAddress;
     /* Retain the number of covered four-KiB pages. */
     ULONGLONG PageCount;
+    /*
+     * ——— 以下字段只在带 WATCH_ONCE 的规则上有意义 ———
+     *
+     * Watch 与其它三种处置共用这张表，是因为它们共用同一套机制：4 KiB 叶、
+     * 同一个权限重算函数、同一条 EPT violation 路径。再建一套平行的 page-rule
+     * 子系统，等于让两套代码去写同一个叶项——谁后写谁赢，而赢的一方会在对方
+     * 毫不知情的情况下把对方的功能改掉。
+     *
+     * WatchState 是 volatile LONG 而不是 BOOLEAN：多核第一次命中要靠
+     * InterlockedCompareExchange 决出唯一的 owner，而那要求一个对齐的 32 位
+     * 可互锁量。用一个布尔位做同样的事会让两个 CPU 都认为自己是第一次。
+     */
+    volatile LONG WatchState;
+    /* 用户勾的访问类型，未经架构归一化，仅用于回报。 */
+    ULONG WatchRequestedAccess;
+    /*
+     * 实际装到 EPT 上的访问类型。
+     *
+     * 命中之后 DeniedAccess 会被清零（那就是"不再拦截"的表示法，重算函数和
+     * 违规扫描都以它为准），所以原来的掩码必须另存一份，否则命中之后界面就
+     * 再也答不出"这条 watch 当初监视的是什么"。
+     */
+    ULONG WatchEffectiveAccess;
+    /* 见协议里的 KSWORD_ARK_HVM_WATCH_ADDRESS_*。 */
+    ULONG WatchAddressKind;
+    /* 累计命中次数，REARM 之后继续累加。 */
+    ULONG WatchHitCount;
+    /* 见协议里的 KSWORD_ARK_HVM_EPT_WATCH_HIT_*。 */
+    ULONG WatchLastHitStatus;
+    /* 武装这一轮时的代次，用来判断这条 watch 有没有跨过一次空档。 */
+    ULONG WatchArmedGeneration;
+    /* 用户请求的地址与长度，原样保存。 */
+    ULONGLONG WatchRequestedAddress;
+    ULONGLONG WatchRequestedLength;
+    /* 最近一次命中的现场，在 VM-exit 现场填入。 */
+    ULONGLONG WatchLastHitSequence;
+    ULONGLONG WatchLastHitRip;
+    ULONGLONG WatchLastHitGuestLinearAddress;
+    ULONGLONG WatchLastHitGuestPhysicalAddress;
+    ULONGLONG WatchLastHitCr3;
+    ULONGLONG WatchLastHitRsp;
+    ULONGLONG WatchLastHitTimestamp;
+    USHORT WatchLastHitProcessorGroup;
+    UCHAR WatchLastHitProcessorNumber;
+    UCHAR WatchLastHitGuestLinearValid;
+    ULONG WatchLastHitRangeMatch;
 } KSW_HVM_EPT_RULE_SLOT;
 
 /* Track one two-MiB EPT leaf that was split into four-KiB entries. */
