@@ -600,6 +600,17 @@ namespace ksword::ark
             unsigned long processId,
             std::uint64_t guestLinearAddress,
             bool uiConfirmed) const;
+        // resolveHvmDirectoryBase：把一个观测到的 CR3 归到一个 PID 上。
+        // - 唯一的来源是内存监视命中现场里的 guestCr3，界面靠它把"哪个地址
+        //   空间"翻译成"哪个进程"；
+        // - 判据是驱动 attach 进去读回来的那个寄存器值，用户态问不出来，所以
+        //   这件事只能在 R0 做；
+        // - 结果必然是 best-effort：PID 会被回收、地址空间会在命中与查询之间
+        //   消失、内核工作线程借别人的地址空间跑、KVA Shadow 下用户态与内核态
+        //   用的不是同一个 CR3。响应里的 resolvedScannedProcesses 把"扫过都不是
+        //   它"与"一个都没扫成"分开，界面必须照着这两种分别措辞。
+        HvmProcessResult resolveHvmDirectoryBase(
+            std::uint64_t directoryBase) const;
         // controlHvmInject：R-1 层的进程注入——分离视图 + 线程劫持。
         // - 与 R0 注入（ZwAllocateVirtualMemory + ZwCreateThreadEx）是两条不同的
         //   通路：这一条一个内核 API 都不调，目标里也不会多出线程或内存区域；

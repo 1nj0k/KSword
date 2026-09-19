@@ -186,9 +186,31 @@ CR3 原值上报，**不**反解 PID：KVA shadow、系统地址空间、内核�
 .\tools\hvm_ctl\hvm_ctl.exe --json watch-selftest
 ```
 
-在**同一个进程**里跑完 issue 第二十二节第 1 项（WRITE First-touch）的十二条
+在**同一个进程**里跑完 issue 第二十二节第 1 项（WRITE First-touch）的十三条
 检查：分配并锁住一页 → 装一条写监视 → 写它 → 逐项核对命中现场 → 再写一次 →
 撤掉监视。
+
+同一条流程换一个访问类型就是第 2、3 项，所以三者共用一份实现而不是抄三遍：
+
+```powershell
+.\tools\hvm_ctl\hvm_ctl.exe --json watch-selftest-read   # 第 2 项
+.\tools\hvm_ctl\hvm_ctl.exe --json watch-selftest-exec   # 第 3 项
+```
+
+抄三遍的结果是三份会各自演化，而它们本该逐条对齐——尤其是"命中不阻止访问"与
+"命中不结束常驻"这两条分界判据，三种访问类型下必须完全一样。JSON 里带 `access`
+字段，否则三份结果并排贴出来完全一样，等于没有证据。
+
+其余五条各自对应一个验收项，判定语义与退出码相同：
+
+```powershell
+.\tools\hvm_ctl\hvm_ctl.exe --json watch-selftest-smp       # 第 5 项：多核同时命中
+.\tools\hvm_ctl\hvm_ctl.exe --json watch-selftest-conflict  # 第 6 项：视图冲突（会先 teardown）
+.\tools\hvm_ctl\hvm_ctl.exe --json watch-selftest-remap     # 第 7 项：VA 重映射
+.\tools\hvm_ctl\hvm_ctl.exe --json watch-selftest-restart   # 第 8 项：常驻重启
+.\tools\hvm_ctl\hvm_ctl.exe --json watch-selftest-evidence  # 第 9 项：事件丢失
+.\tools\hvm_ctl\hvm_ctl.exe --json watch-selftest-process   # P1：CR3 → 进程归因
+```
 
 同进程是 RIP 判据的前提：要证明"记下来的 RIP 就是那条写指令"，就得有一个已知的
 写指令地址可比；跨进程只能比到模块粒度，而模块粒度答不出"是不是记错了一条指令"。
@@ -198,7 +220,7 @@ CR3 原值上报，**不**反解 PID：KVA shadow、系统地址空间、内核�
 
 | 退出码 | 含义 |
 | --- | --- |
-| `0` | PASS，全部十二条通过 |
+| `0` | PASS，全部检查通过 |
 | `2` | FAIL，有逻辑失败 |
 | `3` | 有"这台机器上问不出来"的项但没有失败（常驻没跑、页拆不开、叶被占、处理器没报告 GLA） |
 
@@ -226,14 +248,36 @@ PASS，则等于凭空承认了一个没观测到的事实。两条检查因此�
 - 驱动 `/t:Rebuild` 干净重建，零错误零警告；GUI、`hvm_ctl`、i18n 审计、目录门禁、
   参数回归全部通过。
 
-**尚未进行**：issue 第二十二节的 1–9 项实机验收，其中 **4. Nested Hyper-V**
-（2-vCPU 靶机、不依赖 MTF、`residentBefore = residentAfter = 2`、不触发全局
-fail-closed）是 P0 的关键验收项。这些都需要把驱动与 GUI 同批部署到靶机才能做，
-本轮没有做。
+**已在 2-vCPU 嵌套 Hyper-V 靶机上实测**：issue 第二十二节 **1–9 项全部 PASS**，
+外加 P1 的 CR3 → 进程归因。逐条读数见
+`docs/next/logs/hvm-memory-watch-nested-20260919.md`。每一项都做成了 `hvm_ctl`
+的一条命令，可重复跑：
+
+| # | 验收项 | 命令 | 判定 |
+| --- | --- | --- | --- |
+| 1 | WRITE First-touch | `watch-selftest` | PASS 13/13 |
+| 2 | READ First-touch | `watch-selftest-read` | PASS 13/13 |
+| 3 | EXECUTE First-touch | `watch-selftest-exec` | PASS 13/13 |
+| 4 | Nested Hyper-V（P0 关键） | 以上全部跑在该靶机上 | PASS |
+| 5 | SMP 同时命中 | `watch-selftest-smp` | PASS 7/7 |
+| 6 | View 冲突 | `watch-selftest-conflict` | PASS 6/6 |
+| 7 | VA 映射变化 | `watch-selftest-remap` | PASS 5/5 |
+| 8 | HVM restart | `watch-selftest-restart` | PASS 5/5 |
+| 9 | Event loss | `watch-selftest-evidence` | PASS 6/6 |
+| P1 | CR3 → 进程归因 | `watch-selftest-process` | PASS 4/4 |
+
+靶机 `featureNames` 里没有 `MONITOR_TRAP_FLAG`——这是"本机不给 MTF"的直接读数，
+也是 `WATCH_ONCE` 这套语义存在的前提。
 
 **明确不在本轮范围**（issue 第二十节）：eVMCS、VPID、Nested VMX、VMFUNC 新功能、
 性能调优、完整 x86 指令模拟器、无限制 Continuous Watch、精确 post-instruction
 `New Value`、全量内核栈回溯、强制阻止目标访问、把 watch 做成安全边界。
 
-**P1 未做**：Memory / Kernel Disassembly / SSDT / DriverObject 等页面的右键接入
-（`openHvmWatch(target)` 统一入口）、符号解析、CR3 → 进程的 best-effort 归因。
+**P1 已做**：Memory / Kernel Disassembly / SSDT / DriverObject / Callback 五个
+页面的右键接入（`ks::ui::openHvmWatch(target)` 统一入口）、导出表符号解析、
+CR3 → 进程的 best-effort 归因（四态：Resolved / NotFound / Failed / Unavailable）、
+证据详情与复制/导出、"查看目标内存"与"查看模块"。
+
+**P2 已评估、结论是不做**：见 `docs/next/hvm-continuous-watch-feasibility.md`。
+四条候选路径里没有一条同时过 issue 给的四条准入门槛；唯一四关全过的 EPT 执行视图
+翻转只覆盖执行、不覆盖读写。因此不增加 `Mode = CONTINUOUS`。

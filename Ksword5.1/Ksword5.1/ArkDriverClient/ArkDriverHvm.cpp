@@ -578,6 +578,42 @@ namespace ksword::ark
         return result;
     }
 
+    HvmProcessResult DriverClient::resolveHvmDirectoryBase(
+        const std::uint64_t directoryBase) const
+    {
+        HvmProcessResult result{};
+        KSWORD_ARK_HVM_PROCESS_REQUEST request{};
+        // 这个 IOCTL 有**自己的**协议版本号，不是通用的那个。
+        request.version = KSWORD_ARK_HVM_PROCESS_PROTOCOL_VERSION;
+        request.size = sizeof(request);
+        request.operation = KSWORD_ARK_HVM_PROCESS_OP_RESOLVE_CR3;
+        // 只填这一条操作自己的字段。驱动侧对 processId 与 gla 有"必须为空"的
+        // 契约：带了值就说明调用方把它当成了处置请求，整条被判参数非法。
+        request.directoryBase = directoryBase;
+
+        result.io = deviceIoControl(
+            IOCTL_KSWORD_ARK_HVM_PROCESS,
+            &request,
+            sizeof(request),
+            &result.response,
+            sizeof(result.response));
+        result.unsupported = !result.io.ok &&
+            isUnsupportedHvmError(result.io.win32Error);
+        result.io.ntStatus = result.response.lastStatus;
+
+        std::ostringstream stream;
+        stream << "HVM resolve cr3=0x" << std::hex << directoryBase << std::dec
+            << ", status=" << result.response.status
+            << ", pid=" << result.response.resolvedProcessId
+            << ", scanned=" << result.response.resolvedScannedProcesses;
+        if (result.unsupported)
+        {
+            stream << ", unsupported=true";
+        }
+        result.io.message = stream.str();
+        return result;
+    }
+
     HvmInjectResult DriverClient::controlHvmInject(
         const unsigned long operation,
         const unsigned long processId,

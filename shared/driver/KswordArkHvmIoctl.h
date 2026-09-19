@@ -1898,7 +1898,14 @@ typedef struct _KSWORD_ARK_HVM_DOMAIN_RESPONSE
 #define IOCTL_KSWORD_ARK_HVM_PROCESS \
     CTL_CODE(KSWORD_ARK_IOCTL_DEVICE_TYPE, KSWORD_ARK_IOCTL_FUNCTION_HVM_PROCESS, METHOD_BUFFERED, FILE_WRITE_ACCESS)
 
-#define KSWORD_ARK_HVM_PROCESS_PROTOCOL_VERSION 1UL
+/*
+ * 版本 2 加入 CR3 归因（OP_RESOLVE_CR3）。
+ *
+ * 请求与响应都长了，所以版本必须跟着动：旧界面配新驱动会因为 size 对不上被
+ * 当场拒掉，而那正是想要的结果 —— 这两个结构里装的是进程身份，一次"谁多谁少
+ * 几个字节"的静默误读，换来的是把一次访问归到另一个进程头上。
+ */
+#define KSWORD_ARK_HVM_PROCESS_PROTOCOL_VERSION 2UL
 
 /* 只读当前处置表。 */
 #define KSWORD_ARK_HVM_PROCESS_OP_QUERY     0UL
@@ -1927,6 +1934,23 @@ typedef struct _KSWORD_ARK_HVM_DOMAIN_RESPONSE
 #define KSWORD_ARK_HVM_PROCESS_DISPOSITION_RELEASED 3UL
 /* 清空整张表。 */
 #define KSWORD_ARK_HVM_PROCESS_OP_RELEASE_ALL 4UL
+/*
+ * 把一个观测到的 CR3 归到一个进程头上。只读，不碰任何 HVM 状态。
+ *
+ * 存在的理由是内存监视：命中现场记下来的是 CR3，而 CR3 本身对用户没有意义。
+ * 但这件事**只能在驱动里做**——判据是"attach 进去读回来的那个寄存器值"，
+ * 用户态既读不到别的进程的 CR3，也没有别的办法得到同一个判据。
+ *
+ * 这条通路不回报任何进程的 CR3，只回报"哪个 PID 的 CR3 等于你给的这个"。
+ * 方向是单向的：调用方必须先有一个 CR3 才问得出东西来，而 CR3 的唯一来源是
+ * 一次它自己装的监视命中。
+ *
+ * 结果一定是 best-effort，§十一列的每一条都成立：PID 会被回收、地址空间会在
+ * 事件与解析之间消失、内核工作线程借用别人的地址空间跑、KVA Shadow 下用户态
+ * 与内核态用的根本不是同一个 CR3。所以协议只回报"扫了多少个"与"匹配到谁"，
+ * 由界面把它标成推断而不是事实。
+ */
+#define KSWORD_ARK_HVM_PROCESS_OP_RESOLVE_CR3 5UL
 
 #define KSWORD_ARK_HVM_PROCESS_STATUS_OK                    0UL
 #define KSWORD_ARK_HVM_PROCESS_STATUS_INVALID_REQUEST       1UL
@@ -2002,6 +2026,14 @@ typedef struct _KSWORD_ARK_HVM_PROCESS_REQUEST
      * 拒绝等于什么都没做。
      */
     unsigned long long guestLinearAddress;
+    /*
+     * OP_RESOLVE_CR3 要归因的那个 CR3。其余操作必须留零。
+     *
+     * 单独一个字段而不是借 guestLinearAddress：那个字段在别的操作里是线性
+     * 地址，两者都是 64 位、都像地址、互相传错了谁也不会报错——一个指望拿
+     * 页目录基址的比较会安静地永远不匹配，看起来就像"这个进程已经退出了"。
+     */
+    unsigned long long directoryBase;
 } KSWORD_ARK_HVM_PROCESS_REQUEST;
 
 typedef struct _KSWORD_ARK_HVM_PROCESS_RESPONSE
@@ -2016,6 +2048,20 @@ typedef struct _KSWORD_ARK_HVM_PROCESS_RESPONSE
     unsigned long reserved;
     unsigned long long stateFlags;
     KSWORD_ARK_HVM_PROCESS_ROW rows[KSWORD_ARK_HVM_MAX_PROCESS_DISPOSITIONS];
+    /*
+     * OP_RESOLVE_CR3 的结果。放在 rows 后面，所以前面每个字段的偏移都没动。
+     *
+     * resolvedProcessId 为 0 表示没有匹配上（0 是 Idle 进程，永远不会是答案）。
+     */
+    unsigned long resolvedProcessId;
+    /*
+     * 这次实际问过 CR3 的进程数。
+     *
+     * 必须和"匹配到谁"分开回报，否则"扫了 180 个都不是它"与"一个都没扫成"
+     * 在界面上长得一模一样，而这两者要人做的事相反：前者说明那个地址空间已经
+     * 不在了，后者说明这次归因根本没跑起来。
+     */
+    unsigned long resolvedScannedProcesses;
 } KSWORD_ARK_HVM_PROCESS_RESPONSE;
 
 /*

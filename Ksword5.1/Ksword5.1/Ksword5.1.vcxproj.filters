@@ -63,6 +63,9 @@
     <QtMoc Include="UI\KvmProcessDialog.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <QtMoc Include="UI\KvmWatchDialog.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
     <QtMoc Include="UI\KvmEventDialog.h">
       <Filter>Header Files</Filter>
     </QtMoc>
@@ -916,6 +919,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="UI\KvmWatchPanel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\KvmWatchDialog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="UI\KvmEventDialog.cpp">

@@ -461,6 +461,7 @@
     <ClCompile Include="UI\KvmProcessDialog.cpp" />
     <ClCompile Include="UI\KvmWatch.cpp" />
     <ClCompile Include="UI\KvmWatchPanel.cpp" />
+    <ClCompile Include="UI\KvmWatchDialog.cpp" />
     <ClCompile Include="UI\KvmEventDialog.cpp" />
     <ClCompile Include="UI\KvmCrPolicyDialog.cpp" />
     <ClCompile Include="UI\CommandExecutionPopup.cpp" />
@@ -823,6 +824,7 @@
     <QtMoc Include="UI\KvmDomainDialog.h" />
     <QtMoc Include="UI\KvmMsrPolicyDialog.h" />
     <QtMoc Include="UI\KvmProcessDialog.h" />
+    <QtMoc Include="UI\KvmWatchDialog.h" />
     <QtMoc Include="UI\KvmEventDialog.h" />
     <QtMoc Include="UI\KvmCrPolicyDialog.h" />
     <QtMoc Include="UI\CommandExecutionPopup.h" />

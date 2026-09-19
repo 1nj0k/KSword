@@ -2,6 +2,9 @@
 
 #include "KernelDisassemblyDialog.h"
 #include "KvmControl.h"
+// 安装表单与四个 ARK 页面共用同一份：两份表单会在"页粒度"和"请求访问与实际
+// 访问"这两段说明上慢慢漂开，而那两段恰恰是这功能最容易被误解的地方。
+#include "KvmWatchDialog.h"
 #include "../Framework/DestructiveActionConfirmation.h"
 #include "../Internationalization/LanguageManager.h"
 #include "../theme.h"
@@ -9,6 +12,13 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QClipboard>
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QProcess>
+#include <QTextStream>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -56,161 +66,7 @@ namespace
         return ks::i18n::sourceText(source);
     }
 
-    /* 解析可带 0x 前缀的十六进制。 */
-    bool parseHex(const QString& input, unsigned long long* valueOut)
-    {
-        QString compact = input.trimmed();
-        if (compact.startsWith(QStringLiteral("0x"), Qt::CaseInsensitive))
-        {
-            compact = compact.mid(2);
-        }
-        // 允许分隔用的反引号：调试器和本程序自己都用它显示 64 位地址，
-        // 用户从别处复制过来的地址十有八九带着它。
-        compact.remove(QLatin1Char('`'));
-        if (compact.isEmpty())
-        {
-            return false;
-        }
-        bool converted = false;
-        const unsigned long long value = compact.toULongLong(&converted, 16);
-        if (!converted)
-        {
-            return false;
-        }
-        *valueOut = value;
-        return true;
-    }
 
-    /*
-     * 安装对话框。
-     *
-     * 下方那三行说明不是装饰：它把"你要求的"与"硬件实际会监视的"两件事并排写出来，
-     * 并随输入实时更新。没有它，同一个界面就会让用户以为自己建了一个 8 字节断点。
-     */
-    class KvmWatchAddDialog final : public QDialog
-    {
-    public:
-        explicit KvmWatchAddDialog(QWidget* const parent)
-            : QDialog(parent)
-        {
-            setWindowTitle(text(QStringLiteral("添加内存监视")));
-            setObjectName(QStringLiteral("KvmWatchAddDialog"));
-            auto* const rootLayout = new QVBoxLayout(this);
-            auto* const form = new QFormLayout();
-
-            m_addressKind = new QComboBox(this);
-            m_addressKind->addItem(
-                text(QStringLiteral("内核虚拟地址")), true);
-            m_addressKind->addItem(
-                text(QStringLiteral("物理地址")), false);
-            form->addRow(text(QStringLiteral("地址类型")), m_addressKind);
-
-            m_address = new QLineEdit(this);
-            m_address->setPlaceholderText(QStringLiteral("FFFFF80112345678"));
-            form->addRow(
-                text(QStringLiteral("地址（十六进制）")), m_address);
-
-            m_length = new QLineEdit(this);
-            m_length->setPlaceholderText(QStringLiteral("8"));
-            m_length->setToolTip(text(QStringLiteral("你真正关心的字节数。它不改变硬件监视的范围（那永远是整页），只决定命中后能不能判断这次访问落在你关心的那几个字节上。留空表示整页。")));
-            form->addRow(
-                text(QStringLiteral("关心的长度（十进制字节）")), m_length);
-            rootLayout->addLayout(form);
-
-            auto* const accessRow = new QGridLayout();
-            m_read = new QCheckBox(text(QStringLiteral("读")), this);
-            m_write = new QCheckBox(text(QStringLiteral("写")), this);
-            m_execute = new QCheckBox(text(QStringLiteral("执行")), this);
-            m_write->setChecked(true);
-            accessRow->addWidget(
-                new QLabel(text(QStringLiteral("监视的访问类型")), this), 0, 0);
-            accessRow->addWidget(m_read, 0, 1);
-            accessRow->addWidget(m_write, 0, 2);
-            accessRow->addWidget(m_execute, 0, 3);
-            rootLayout->addLayout(accessRow);
-
-            auto* const modeLabel = new QLabel(
-                text(QStringLiteral("模式：首次访问（当前唯一支持）")), this);
-            rootLayout->addWidget(modeLabel);
-
-            m_granularity = new QLabel(this);
-            m_granularity->setWordWrap(true);
-            m_granularity->setStyleSheet(
-                QStringLiteral("color:%1;")
-                    .arg(KswordTheme::TextSecondaryHex()));
-            rootLayout->addWidget(m_granularity);
-
-            auto* const buttons = new QDialogButtonBox(
-                QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-            buttons->button(QDialogButtonBox::Ok)->setText(
-                text(QStringLiteral("武装")));
-            rootLayout->addWidget(buttons);
-            connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
-            connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-            connect(m_length, &QLineEdit::textChanged, this, [this](const QString&) {
-                updateGranularity();
-            });
-            connect(m_read, &QCheckBox::toggled, this, [this](bool) {
-                updateGranularity();
-            });
-            updateGranularity();
-            resize(520, 320);
-        }
-
-        ksword::kvm::KvmWatchTarget target() const
-        {
-            ksword::kvm::KvmWatchTarget result;
-            result.virtualAddress = m_addressKind->currentData().toBool();
-            unsigned long long address = 0;
-            if (parseHex(m_address->text(), &address))
-            {
-                result.address = address;
-            }
-            bool converted = false;
-            const unsigned long long length =
-                m_length->text().trimmed().toULongLong(&converted, 10);
-            result.length = converted ? length : 0ULL;
-            result.access =
-                (m_read->isChecked() ? KSWORD_ARK_HVM_EPT_ACCESS_READ : 0UL) |
-                (m_write->isChecked() ? KSWORD_ARK_HVM_EPT_ACCESS_WRITE : 0UL) |
-                (m_execute->isChecked() ? KSWORD_ARK_HVM_EPT_ACCESS_EXECUTE : 0UL);
-            return result;
-        }
-
-        bool addressValid() const
-        {
-            unsigned long long address = 0;
-            return parseHex(m_address->text(), &address) && address != 0;
-        }
-
-    private:
-        void updateGranularity()
-        {
-            bool converted = false;
-            const unsigned long long length =
-                m_length->text().trimmed().toULongLong(&converted, 10);
-            const unsigned long long requested =
-                converted && length != 0ULL ? length : 4096ULL;
-            QString note = text(QStringLiteral("EPT 的监视单位是页：你请求 %1 字节，实际装到硬件上的是它所在的整个 4096 字节页。命中后如果 CPU 报告了有效的客户线性地址，界面会另外告诉你这次访问是否落在你请求的那一段里。"))
-                .arg(requested);
-            if (m_read->isChecked())
-            {
-                // 这句必须在勾"读"的时候就出现，而不是等安装完才在表里被发现：
-                // 用户是在这一刻决定要不要接受"连写也会被监视"的。
-                note += QLatin1Char('\n');
-                note += text(QStringLiteral("已勾选“读”：EPT 不允许可写而不可读，所以实际生效的监视一定同时包含写；处理器不支持仅执行叶项时还会连带包含执行。表格里的“实际访问”一栏显示归一化后的结果。"));
-            }
-            m_granularity->setText(note);
-        }
-
-        QComboBox* m_addressKind = nullptr;
-        QLineEdit* m_address = nullptr;
-        QLineEdit* m_length = nullptr;
-        QCheckBox* m_read = nullptr;
-        QCheckBox* m_write = nullptr;
-        QCheckBox* m_execute = nullptr;
-        QLabel* m_granularity = nullptr;
-    };
 }
 
 KvmWatchPanel::KvmWatchPanel(QWidget* const parent)
@@ -266,14 +122,30 @@ void KvmWatchPanel::buildUi()
         text(QStringLiteral("刷新")), this);
     m_disassembleButton = new QPushButton(
         text(QStringLiteral("查看写入者反汇编")), this);
+    m_memoryButton = new QPushButton(
+        text(QStringLiteral("查看目标内存")), this);
+    m_memoryButton->setToolTip(text(QStringLiteral("按被监视的那一页读一段内存。这是**命中之后**的采样，不是命中那一刻的值——EPT violation 发生在写指令退休之前，所以这里读到的可能已经包含那次写入，也可能还包含之后的更多次修改。")));
+    m_moduleButton = new QPushButton(
+        text(QStringLiteral("查看模块")), this);
+    m_moduleButton->setToolTip(text(QStringLiteral("在资源管理器里定位命中 RIP 所属的内核模块文件。RIP 不落在任何已加载模块里时这个按钮不可用。")));
+    m_processButton = new QPushButton(
+        text(QStringLiteral("解析命中进程")), this);
+    m_processButton->setToolTip(text(QStringLiteral("把命中现场记下的 CR3 归到一个进程上。它要逐个进程读回页目录基址，所以是一次显式操作而不是随选中行自动跑。结果是后处理推断：进程可能已经退出、PID 可能已经被回收。")));
     m_copyButton = new QPushButton(
         text(QStringLiteral("复制证据")), this);
+    m_exportButton = new QPushButton(
+        text(QStringLiteral("导出全部证据...")), this);
+    m_exportButton->setToolTip(text(QStringLiteral("把当前监视表里每一条的目标、命中现场与归因写成一个文本文件。已命中但事件环没接住证据的那几条同样会写进去，并标注出来。")));
     buttons->addWidget(m_addButton, 0, 0);
     buttons->addWidget(m_rearmButton, 0, 1);
     buttons->addWidget(m_removeButton, 0, 2);
     buttons->addWidget(m_refreshButton, 0, 3);
-    buttons->addWidget(m_disassembleButton, 0, 4);
-    buttons->addWidget(m_copyButton, 0, 5);
+    buttons->addWidget(m_disassembleButton, 1, 0);
+    buttons->addWidget(m_memoryButton, 1, 1);
+    buttons->addWidget(m_moduleButton, 1, 2);
+    buttons->addWidget(m_processButton, 1, 3);
+    buttons->addWidget(m_copyButton, 0, 4);
+    buttons->addWidget(m_exportButton, 1, 4);
     rootLayout->addLayout(buttons);
 
     m_detail = new QTextEdit(this);
@@ -294,7 +166,17 @@ void KvmWatchPanel::buildUi()
     connect(m_disassembleButton, &QPushButton::clicked, this, [this]() {
         openWriterDisassembly();
     });
+    connect(m_memoryButton, &QPushButton::clicked, this, [this]() {
+        openTargetMemory();
+    });
+    connect(m_moduleButton, &QPushButton::clicked, this, [this]() {
+        openWriterModule();
+    });
+    connect(m_processButton, &QPushButton::clicked, this, [this]() {
+        resolveHitProcess();
+    });
     connect(m_copyButton, &QPushButton::clicked, this, [this]() { copyEvidence(); });
+    connect(m_exportButton, &QPushButton::clicked, this, [this]() { exportEvidence(); });
     connect(m_table, &QTableWidget::itemSelectionChanged, this, [this]() {
         ksword::kvm::KvmWatchEntry entry;
         if (selectedWatch(&entry))
@@ -355,9 +237,31 @@ void KvmWatchPanel::updateEnabledState()
     {
         m_disassembleButton->setEnabled(!m_busy && hasHit && entry.lastHitRip != 0ULL);
     }
+    if (m_memoryButton != nullptr)
+    {
+        // 目标内存不要求命中：还没命中的目标同样值得看一眼当前内容。
+        m_memoryButton->setEnabled(!m_busy && hasSelection &&
+            entry.physicalPage != 0ULL);
+    }
+    if (m_moduleButton != nullptr)
+    {
+        // 归不到模块时按钮就该是灰的，而不是点了弹一个"未知"。
+        m_moduleButton->setEnabled(!m_busy && hasHit &&
+            entry.lastHitRip != 0ULL &&
+            ksword::kvm::attributeKernelAddress(entry.lastHitRip).resolved);
+    }
+    if (m_processButton != nullptr)
+    {
+        m_processButton->setEnabled(!m_busy && hasHit && entry.lastHitCr3 != 0ULL);
+    }
     if (m_copyButton != nullptr)
     {
         m_copyButton->setEnabled(hasSelection);
+    }
+    if (m_exportButton != nullptr)
+    {
+        // 导出不需要选中任何一条：它写的是整张表。
+        m_exportButton->setEnabled(m_table != nullptr && m_table->rowCount() > 0);
     }
 }
 
@@ -466,11 +370,18 @@ void KvmWatchPanel::applyWatches(
         {
             const ksword::kvm::KvmWatchAttribution attribution =
                 ksword::kvm::attributeKernelAddress(entry.lastHitRip);
-            moduleText = attribution.resolved
-                ? QStringLiteral("%1+0x%2")
-                    .arg(attribution.moduleName)
-                    .arg(attribution.relativeAddress, 0, 16)
-                : text(QStringLiteral("未知可执行区域"));
+            // 有导出符号就用 `module!Symbol+0x..`，没有才退回 `module.sys+0xRVA`。
+            // 两种都是真话，区别只是精度；编一个最近的名字出来才是错的。
+            moduleText = !attribution.resolved
+                ? text(QStringLiteral("未知可执行区域"))
+                : attribution.symbolName.isEmpty()
+                    ? QStringLiteral("%1+0x%2")
+                        .arg(attribution.moduleName)
+                        .arg(attribution.relativeAddress, 0, 16)
+                    : QStringLiteral("%1!%2+0x%3")
+                        .arg(attribution.moduleName)
+                        .arg(attribution.symbolName)
+                        .arg(attribution.symbolOffset, 0, 16);
         }
         setCell(WatchColumnModule, moduleText);
     }
@@ -575,7 +486,15 @@ void KvmWatchPanel::showDetail(const ksword::kvm::KvmWatchEntry& entry)
                 .arg(attribution.modulePath);
             lines << text(QStringLiteral("  模块内偏移      +0x%1"))
                 .arg(attribution.relativeAddress, 0, 16);
-            lines << text(QStringLiteral("  符号            本版本不解析符号，请用“查看写入者反汇编”。"));
+            // 符号只来自导出表：它答不出静态函数，所以"没有符号"不等于"这个
+            // 地址不在函数里"，只等于"它前面没有导出符号"。这句差别要说出来，
+            // 否则空符号会被当成异常信号。
+            lines << (attribution.symbolName.isEmpty()
+                ? text(QStringLiteral("  符号            该地址之前没有导出符号（只解析导出表，不解析 PDB；静态函数本就不在其中）。"))
+                : text(QStringLiteral("  符号            %1!%2+0x%3"))
+                    .arg(attribution.moduleName)
+                    .arg(attribution.symbolName)
+                    .arg(attribution.symbolOffset, 0, 16));
         }
         else
         {
@@ -583,7 +502,24 @@ void KvmWatchPanel::showDetail(const ksword::kvm::KvmWatchEntry& entry)
             lines << text(QStringLiteral("  模块            未知可执行区域 —— 这个 RIP 不落在任何已加载内核模块的映像范围内。"));
             lines << text(QStringLiteral("                  用“查看写入者反汇编”直接看那一段代码。"));
         }
-        lines << text(QStringLiteral("  进程            本版本不从 CR3 反解进程；CR3 原值在上面，解析属于后处理。"));
+        /*
+         * 进程归因是后处理，而且是显式的一步。
+         *
+         * 没解析过时显示"还没解析"，不显示"未知"——后者把"没问"和"问过了没有"
+         * 说成同一件事，而这两句话里只有后一句是结论。
+         */
+        if (entry.lastHitCr3 == 0ULL)
+        {
+            lines << text(QStringLiteral("  进程            命中现场没有记下地址空间，无从归因。"));
+        }
+        else
+        {
+            const auto cached = m_processAttribution.constFind(entry.lastHitCr3);
+            lines << (cached != m_processAttribution.constEnd()
+                ? text(QStringLiteral("  进程            %1"))
+                    .arg(ksword::kvm::describeProcessAttribution(*cached))
+                : text(QStringLiteral("  进程            尚未解析。点“解析命中进程”按 CR3 反查——这一步要逐个进程读页目录基址，所以不随选中行自动跑。")));
+        }
     }
     lines << QString();
     lines << text(QStringLiteral("HVM"));
@@ -734,6 +670,201 @@ void KvmWatchPanel::openWriterDisassembly()
             .arg(entry.watchId)
             .arg(hex64(entry.lastHitRip)),
         0x200U);
+}
+
+void KvmWatchPanel::openTargetMemory()
+{
+    ksword::kvm::KvmWatchEntry entry;
+    if (!selectedWatch(&entry) || entry.physicalPage == 0ULL)
+    {
+        return;
+    }
+    /*
+     * 优先按虚拟地址读，读不到再退回物理页。
+     *
+     * 两者不等价：虚拟地址读的是"这个 VA 现在指向的东西"，物理页读的是"被监视
+     * 的那一页"。重映射之后这两个是不同的页，而用户要看的几乎总是后者 —— 所以
+     * 物理页读法是退路，不是降级，读数里要说清楚读的是哪一个。
+     */
+    const bool byVirtual =
+        entry.addressKind == KSWORD_ARK_HVM_WATCH_ADDRESS_VIRTUAL &&
+        entry.requestedAddress != 0ULL;
+    const unsigned long long address = byVirtual
+        ? entry.requestedAddress
+        : entry.physicalPage;
+    const ksword::kvm::KvmMemoryResult result = byVirtual
+        ? ksword::kvm::readVirtual(0, address, 256U)
+        : ksword::kvm::readPhysical(address, 256U);
+    if (!result.ok)
+    {
+        m_statusLabel->setText(
+            text(QStringLiteral("读不到目标内存：%1")).arg(result.message));
+        return;
+    }
+    QStringList lines;
+    lines << text(QStringLiteral("目标内存（命中之后的采样，不是命中那一刻的值）"));
+    lines << (byVirtual
+        ? text(QStringLiteral("  按虚拟地址 %1 读 %2 字节"))
+            .arg(hex64(address)).arg(result.data.size())
+        : text(QStringLiteral("  按被监视的物理页 %1 读 %2 字节"))
+            .arg(hex64(address)).arg(result.data.size()));
+    lines << QString();
+    for (int offset = 0; offset < result.data.size(); offset += 16)
+    {
+        const QByteArray chunk = result.data.mid(offset, 16);
+        lines << QStringLiteral("  %1  %2")
+            .arg(hex64(address + static_cast<unsigned long long>(offset)))
+            .arg(QString::fromLatin1(chunk.toHex(' ')));
+    }
+    m_detail->setPlainText(lines.join(QLatin1Char('\n')));
+    m_statusLabel->setText(text(QStringLiteral(
+        "已读出目标内存。这是命中之后的采样：EPT violation 发生在写指令退休之前，所以这里看到的可能已经包含那次写入，也可能还包含之后的更多次修改。")));
+}
+
+void KvmWatchPanel::openWriterModule()
+{
+    ksword::kvm::KvmWatchEntry entry;
+    if (!selectedWatch(&entry) || entry.lastHitRip == 0ULL)
+    {
+        return;
+    }
+    const ksword::kvm::KvmWatchAttribution attribution =
+        ksword::kvm::attributeKernelAddress(entry.lastHitRip);
+    if (!attribution.resolved || attribution.modulePath.isEmpty())
+    {
+        m_statusLabel->setText(text(QStringLiteral(
+            "这个 RIP 不落在任何已加载内核模块里，没有模块文件可打开。")));
+        return;
+    }
+    /*
+     * 内核回报的是 \SystemRoot\ 这类 NT 路径，资源管理器不认。
+     *
+     * 转换失败时不要退回"就用原串试试"：资源管理器会拿一个不存在的路径开一个
+     * 默认目录，看起来像成功了，而用户会以为自己正在看那个模块所在的目录。
+     */
+    const QString win32Path = ksword::kvm::toWin32ModulePath(attribution.modulePath);
+    if (win32Path.isEmpty() || !QFileInfo::exists(win32Path))
+    {
+        m_statusLabel->setText(
+            text(QStringLiteral("模块文件 %1 在磁盘上找不到。"))
+                .arg(attribution.modulePath));
+        return;
+    }
+    QProcess::startDetached(
+        QStringLiteral("explorer.exe"),
+        QStringList() << QStringLiteral("/select,")
+                      << QDir::toNativeSeparators(win32Path));
+    m_statusLabel->setText(
+        text(QStringLiteral("已在资源管理器里定位 %1。")).arg(win32Path));
+}
+
+void KvmWatchPanel::resolveHitProcess()
+{
+    ksword::kvm::KvmWatchEntry entry;
+    if (!selectedWatch(&entry) || entry.lastHitCr3 == 0ULL)
+    {
+        return;
+    }
+    const quint64 cr3 = entry.lastHitCr3;
+    setBusy(true);
+    m_statusLabel->setText(text(QStringLiteral(
+        "正在按 CR3 逐个进程反查地址空间...")));
+    QPointer<KvmWatchPanel> safeThis(this);
+    std::thread([safeThis, cr3]() {
+        const ksword::kvm::KvmProcessAttribution attribution =
+            ksword::kvm::attributeProcessByCr3(cr3);
+        if (safeThis == nullptr)
+        {
+            return;
+        }
+        QMetaObject::invokeMethod(
+            safeThis,
+            [safeThis, cr3, attribution]() {
+                if (safeThis == nullptr)
+                {
+                    return;
+                }
+                safeThis->m_processAttribution.insert(cr3, attribution);
+                safeThis->setBusy(false);
+                safeThis->m_statusLabel->setText(
+                    ksword::kvm::describeProcessAttribution(attribution));
+                ksword::kvm::KvmWatchEntry selected;
+                if (safeThis->selectedWatch(&selected))
+                {
+                    safeThis->showDetail(selected);
+                }
+            },
+            Qt::QueuedConnection);
+    }).detach();
+}
+
+void KvmWatchPanel::exportEvidence()
+{
+    if (m_table == nullptr || m_table->rowCount() == 0)
+    {
+        return;
+    }
+    const QString path = QFileDialog::getSaveFileName(
+        this,
+        text(QStringLiteral("导出内存监视证据")),
+        QStringLiteral("hvm-memory-watch-%1.txt")
+            .arg(QDateTime::currentDateTime().toString(
+                QStringLiteral("yyyyMMdd-HHmmss"))),
+        text(QStringLiteral("文本文件 (*.txt)")));
+    if (path.isEmpty())
+    {
+        return;
+    }
+    QStringList blocks;
+    blocks << text(QStringLiteral("KSword R-1 内存监视证据"));
+    blocks << text(QStringLiteral("导出时间：%1"))
+        .arg(QDateTime::currentDateTime().toString(Qt::ISODate));
+    // 边界写在最前面：这份文件会被单独传阅，而"这不是保护"那句话不能留在
+    // 界面上没跟出来。
+    blocks << text(QStringLiteral("这是观察与归因记录，不是保护：命中不阻止访问；硬件监视单位是 4 KiB 页而不是请求范围；DMA 改写不经过 CPU 的 EPT；虚拟地址的绑定在武装那一刻定死，之后的重映射不跟踪。"));
+    blocks << QString();
+    for (int row = 0; row < m_table->rowCount(); ++row)
+    {
+        QTableWidgetItem* const item = m_table->item(row, WatchColumnId);
+        if (item == nullptr)
+        {
+            continue;
+        }
+        const QVariant stored = item->data(Qt::UserRole);
+        if (!stored.isValid())
+        {
+            continue;
+        }
+        // 复用详情框那一份格式：屏幕上看到的和导出的必须是同一份东西，
+        // 另拼一份会让两者随时间漂开。
+        showDetail(stored.value<ksword::kvm::KvmWatchEntry>());
+        blocks << QStringLiteral("================================");
+        blocks << m_detail->toPlainText();
+        blocks << QString();
+    }
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        m_statusLabel->setText(
+            text(QStringLiteral("导出失败：无法写入 %1。")).arg(path));
+        return;
+    }
+    // 显式 UTF-8：这份文件里全是中文标签，跟着系统区域走会在别人机器上变成乱码。
+    QTextStream stream(&file);
+    stream.setEncoding(QStringConverter::Utf8);
+    stream << blocks.join(QLatin1Char('\n'));
+    file.close();
+    m_statusLabel->setText(
+        text(QStringLiteral("已导出 %1 条监视的完整证据到 %2。"))
+            .arg(m_table->rowCount())
+            .arg(path));
+    // 导出会把详情框停在最后一条上；把选中那一条重新画回去，免得屏幕上
+    // 显示的与选中行对不上。
+    ksword::kvm::KvmWatchEntry selected;
+    if (selectedWatch(&selected))
+    {
+        showDetail(selected);
+    }
 }
 
 void KvmWatchPanel::copyEvidence()

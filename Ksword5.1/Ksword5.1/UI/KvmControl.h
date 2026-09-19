@@ -724,12 +724,65 @@ namespace ksword::kvm
         unsigned long long moduleSize = 0;
         // 相对模块基址的偏移，resolved 为真时有效。
         unsigned long long relativeAddress = 0;
+        // 最近的**导出**符号，以及相对它的偏移。
+        //
+        // 只解析导出表，不解析 PDB：没有符号服务器也没有本地 PDB 时，导出表是
+        // 唯一一份随模块自带、离线可读、且不需要联网的符号来源。它答不出静态
+        // 函数，但能答出绝大多数值得怀疑的目标（dispatch、回调、SSDT 例程都是
+        // 导出的或紧邻导出的）。
+        //
+        // 空串表示这个地址前面没有任何导出符号，那时调用方应当只显示
+        // `module.sys+0xRVA`，而不是编一个最近的名字出来 —— 一个错误的函数名
+        // 比没有名字更难纠正。
+        QString symbolName;
+        unsigned long long symbolOffset = 0;
     };
 
     // attributeKernelAddress：把一个内核地址归到模块。
     // 归不到任何已加载模块时 resolved 为假——那是一条结论（"未知可执行区域"），
     // 不是失败，调用方应当据此提供打开内存/反汇编的入口而不是只显示 Unknown。
     KvmWatchAttribution attributeKernelAddress(unsigned long long address);
+
+    // KvmProcessAttribution：把命中现场的 CR3 归到一个进程上。
+    //
+    // 四态，对应 issue #195 第十一节要求的四种措辞。它们不是同一件事的四个
+    // 程度，而是四种**不同的答案**，混起来就会让"这个地址空间已经不在了"和
+    // "这次归因根本没跑起来"显示成同一句话。
+    enum class KvmProcessAttributionKind
+    {
+        // 没有 CR3 可归（命中现场没记下来，或者根本没命中过）。
+        Unavailable = 0,
+        // 扫过了，某个进程的 CR3 与它逐位相等。
+        Resolved,
+        // 扫过了，没有一个对得上。地址空间多半已经拆掉了。
+        NotFound,
+        // 一个进程都没问成：驱动没在、快照拿不到、权限不够。
+        Failed,
+    };
+
+    struct KvmProcessAttribution
+    {
+        KvmProcessAttributionKind kind = KvmProcessAttributionKind::Unavailable;
+        unsigned long processId = 0;
+        // 界面自己的进程快照解析出来的映像名。可能是空的，也可能因为 PID 被
+        // 回收而指向另一个进程——所以它永远只作为补充显示，判据始终是 PID。
+        QString imageName;
+        // 实际问过 CR3 的进程数。区分"扫过都不是它"与"一个都没扫成"。
+        unsigned long scannedProcesses = 0;
+    };
+
+    // attributeProcessByCr3：走驱动把 CR3 归到 PID，再用界面自己的进程快照补
+    // 映像名。阻塞 IOCTL，且会遍历全部进程，必须在后台线程调用。
+    KvmProcessAttribution attributeProcessByCr3(unsigned long long directoryBase);
+
+    // describeProcessAttribution：把四态翻译成一句可直接显示、且不夸大确定性
+    // 的话。永远不会返回"未知"这种把四种答案压成一种的措辞。
+    QString describeProcessAttribution(const KvmProcessAttribution& attribution);
+
+    // toWin32ModulePath：把内核视角的模块路径转成资源管理器认得的路径。
+    // 认不出来返回空串——调用方必须安静放弃，而不是拿原串去试：资源管理器
+    // 会拿一个不存在的路径开一个默认目录，看起来完全像成功了。
+    QString toWin32ModulePath(const QString& ntPath);
 
     // describeWatchState/describeWatchAccess：把协议值翻译成可直接显示的文字。
     QString describeWatchState(unsigned long state);

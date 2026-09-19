@@ -23,7 +23,9 @@ typedef enum HVM_COMMAND_HANDLER {
     HvmPageMapRegion, HvmPageMapRegionScan, HvmPageStage, HvmPageDigest,
     /* First-touch memory watch.  Appended so every existing ordinal is kept. */
     HvmWatchAddVa, HvmWatchAddPa, HvmWatchList, HvmWatchRearm, HvmWatchRemove,
-    HvmWatchSelfTest,
+    HvmWatchSelfTest, HvmWatchSelfTestRead, HvmWatchSelfTestExec,
+    HvmWatchSelfTestSmp, HvmWatchSelfTestRemap, HvmWatchSelfTestEvidence,
+    HvmWatchSelfTestConflict, HvmWatchSelfTestRestart, HvmWatchSelfTestProcess,
     HvmHelp, HvmCommands
 } HVM_COMMAND_HANDLER;
 

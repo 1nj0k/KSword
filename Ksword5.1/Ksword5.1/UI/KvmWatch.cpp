@@ -9,9 +9,16 @@
 
 #include "../Internationalization/LanguageManager.h"
 
+#include <QDir>
+#include <QFile>
+#include <QHash>
 #include <QLibrary>
+#include <QMutex>
+#include <QMutexLocker>
+#include <QPair>
 
 #include <algorithm>
+#include <iterator>
 #include <vector>
 
 namespace ksword::kvm
@@ -50,6 +57,44 @@ namespace ksword::kvm
 
         using NtQuerySystemInformationFunction =
             long(__stdcall*)(unsigned long, void*, unsigned long, unsigned long*);
+
+        /*
+         * 把一个 PID 翻译成映像名。
+         *
+         * 只做补充显示，判据始终是 PID 本身：驱动归因发生在一个时刻，这次查询
+         * 发生在另一个时刻，而 PID 会被回收。名字取不到时返回空串，让调用方
+         * 只显示 PID —— 一个错误的进程名比没有名字更误导。
+         *
+         * 用 QueryFullProcessImageNameW 而不是 GetModuleFileNameEx：它只要
+         * PROCESS_QUERY_LIMITED_INFORMATION，因此对受保护进程也问得出名字，而
+         * 恰恰是那一类进程最值得出现在归因结果里。
+         */
+        QString processImageNameForPid(const unsigned long processId)
+        {
+            if (processId == 0UL)
+            {
+                return QString();
+            }
+            const HANDLE process = ::OpenProcess(
+                PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+            if (process == nullptr)
+            {
+                return QString();
+            }
+            wchar_t buffer[MAX_PATH] = {};
+            DWORD length = static_cast<DWORD>(std::size(buffer));
+            const BOOL ok = ::QueryFullProcessImageNameW(
+                process, 0, buffer, &length);
+            ::CloseHandle(process);
+            if (ok == FALSE || length == 0UL)
+            {
+                return QString();
+            }
+            const QString fullPath = QString::fromWCharArray(
+                buffer, static_cast<int>(length));
+            const int separator = fullPath.lastIndexOf(QLatin1Char('\\'));
+            return separator >= 0 ? fullPath.mid(separator + 1) : fullPath;
+        }
 
         QString ruleStatusText(const unsigned long status)
         {
@@ -178,6 +223,193 @@ namespace ksword::kvm
                 .arg(actionName)
                 .arg(ruleStatusText(result.response.status));
             return watch;
+        }
+
+        /*
+         * 把 NT 路径转成能直接打开的 Win32 路径。
+         *
+         * SystemModuleInformation 回的是内核视角的路径：ntoskrnl 是
+         * `\SystemRoot\system32\ntoskrnl.exe`，第三方驱动多半是
+         * `\??\C:\...`，少数直接就是 `\Windows\...`。三种都要认，认不出就
+         * 返回空串让调用方安静放弃 —— 拿一个猜出来的路径去打开另一个文件，
+         * 解析出的符号会是另一个模块的。
+         */
+        QString toWin32Path(const QString& ntPath)
+        {
+            QString path = ntPath;
+            if (path.startsWith(QStringLiteral("\\??\\"), Qt::CaseInsensitive))
+            {
+                return path.mid(4);
+            }
+            if (path.startsWith(QStringLiteral("\\SystemRoot\\"), Qt::CaseInsensitive))
+            {
+                return QDir::toNativeSeparators(
+                    QString::fromLocal8Bit(qgetenv("SystemRoot")) +
+                    path.mid(11));
+            }
+            if (path.startsWith(QStringLiteral("\\Windows\\"), Qt::CaseInsensitive))
+            {
+                return QDir::toNativeSeparators(
+                    QString::fromLocal8Bit(qgetenv("SystemDrive")) + path);
+            }
+            // 已经是 `C:\...` 形式的直接用。
+            if (path.size() > 2 && path[1] == QLatin1Char(':'))
+            {
+                return path;
+            }
+            return QString();
+        }
+
+        /* 一个模块的导出表：RVA 升序，供二分查找最近的前驱。 */
+        struct ExportTable
+        {
+            bool valid = false;
+            QVector<QPair<quint32, QString>> entries;
+        };
+
+        /*
+         * 从**磁盘映像**解析导出表。
+         *
+         * 不去读内存里的那一份：读内存要走 R-1 内存接口、要写权限门、而且正在
+         * 排查的场景里内存那一份恰恰是可能被改过的。磁盘映像回答的是"这个函数
+         * 本来叫什么"，那才是归因需要的。
+         */
+        ExportTable loadExportTable(const QString& ntPath)
+        {
+            ExportTable table;
+            const QString win32Path = toWin32Path(ntPath);
+            if (win32Path.isEmpty())
+            {
+                return table;
+            }
+            QFile file(win32Path);
+            if (!file.open(QIODevice::ReadOnly))
+            {
+                return table;
+            }
+            const QByteArray image = file.readAll();
+            file.close();
+            const auto* const base =
+                reinterpret_cast<const unsigned char*>(image.constData());
+            const qsizetype size = image.size();
+            if (size < static_cast<qsizetype>(sizeof(IMAGE_DOS_HEADER)))
+            {
+                return table;
+            }
+            const auto* const dos =
+                reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+            if (dos->e_magic != IMAGE_DOS_SIGNATURE ||
+                dos->e_lfanew <= 0 ||
+                dos->e_lfanew + static_cast<LONG>(sizeof(IMAGE_NT_HEADERS64)) >
+                    static_cast<LONG>(size))
+            {
+                return table;
+            }
+            const auto* const nt =
+                reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
+            if (nt->Signature != IMAGE_NT_SIGNATURE ||
+                nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+            {
+                return table;
+            }
+            const IMAGE_DATA_DIRECTORY& directory =
+                nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+            if (directory.VirtualAddress == 0 || directory.Size == 0)
+            {
+                return table;
+            }
+            // 磁盘映像按 FileAlignment 排布，RVA 必须逐节翻成文件偏移。
+            const auto* const sections = IMAGE_FIRST_SECTION(nt);
+            const auto rvaToOffset = [&](const quint32 rva) -> qsizetype {
+                for (unsigned index = 0; index < nt->FileHeader.NumberOfSections; ++index)
+                {
+                    const IMAGE_SECTION_HEADER& section = sections[index];
+                    if (rva >= section.VirtualAddress &&
+                        rva < section.VirtualAddress + section.SizeOfRawData)
+                    {
+                        return static_cast<qsizetype>(
+                            section.PointerToRawData + (rva - section.VirtualAddress));
+                    }
+                }
+                return -1;
+            };
+            const qsizetype directoryOffset = rvaToOffset(directory.VirtualAddress);
+            if (directoryOffset < 0 ||
+                directoryOffset + static_cast<qsizetype>(sizeof(IMAGE_EXPORT_DIRECTORY)) > size)
+            {
+                return table;
+            }
+            const auto* const exports =
+                reinterpret_cast<const IMAGE_EXPORT_DIRECTORY*>(base + directoryOffset);
+            const qsizetype namesOffset = rvaToOffset(exports->AddressOfNames);
+            const qsizetype ordinalsOffset = rvaToOffset(exports->AddressOfNameOrdinals);
+            const qsizetype functionsOffset = rvaToOffset(exports->AddressOfFunctions);
+            if (namesOffset < 0 || ordinalsOffset < 0 || functionsOffset < 0)
+            {
+                return table;
+            }
+            const auto* const nameRvas =
+                reinterpret_cast<const quint32*>(base + namesOffset);
+            const auto* const ordinals =
+                reinterpret_cast<const quint16*>(base + ordinalsOffset);
+            const auto* const functionRvas =
+                reinterpret_cast<const quint32*>(base + functionsOffset);
+            table.entries.reserve(static_cast<int>(exports->NumberOfNames));
+            for (quint32 index = 0; index < exports->NumberOfNames; ++index)
+            {
+                const qsizetype nameOffset = rvaToOffset(nameRvas[index]);
+                if (nameOffset < 0 || nameOffset >= size)
+                {
+                    continue;
+                }
+                const quint16 ordinal = ordinals[index];
+                if (ordinal >= exports->NumberOfFunctions)
+                {
+                    continue;
+                }
+                const quint32 functionRva = functionRvas[ordinal];
+                if (functionRva == 0)
+                {
+                    continue;
+                }
+                const char* const name =
+                    reinterpret_cast<const char*>(base + nameOffset);
+                const qsizetype maximum = size - nameOffset;
+                qsizetype length = 0;
+                while (length < maximum && name[length] != '\0')
+                {
+                    ++length;
+                }
+                table.entries.append(
+                    { functionRva, QString::fromLatin1(name, static_cast<int>(length)) });
+            }
+            std::sort(table.entries.begin(), table.entries.end(),
+                [](const QPair<quint32, QString>& left,
+                   const QPair<quint32, QString>& right) {
+                    return left.first < right.first;
+                });
+            table.valid = !table.entries.isEmpty();
+            return table;
+        }
+
+        /*
+         * 按模块路径缓存导出表。
+         *
+         * 监视表每刷新一次就会对每一条命中做一次归因，而内核映像动辄几 MB；
+         * 不缓存的话一次刷新要重读、重解析同一份 ntoskrnl 十几遍。模块的磁盘
+         * 映像在一次会话内不会变，缓存是安全的。
+         */
+        const ExportTable& cachedExportTable(const QString& ntPath)
+        {
+            static QHash<QString, ExportTable> cache;
+            static QMutex mutex;
+            QMutexLocker locker(&mutex);
+            auto found = cache.find(ntPath);
+            if (found == cache.end())
+            {
+                found = cache.insert(ntPath, loadExportTable(ntPath));
+            }
+            return found.value();
         }
 
         /* 写权限关闭时统一拒绝，且不发起任何 IOCTL。 */
@@ -374,9 +606,115 @@ namespace ksword::kvm
                     path + row.fileNameOffset,
                     static_cast<int>(length - row.fileNameOffset))
                 : attribution.modulePath;
+            /*
+             * 再往下一层：找这个 RVA 前面最近的导出符号。
+             *
+             * 找不到就留空，调用方只显示 `module.sys+0xRVA` —— 一个错误的函数名
+             * 比没有名字更难纠正，因为它会让人去读一段根本不相干的代码。
+             */
+            {
+                const ExportTable& table = cachedExportTable(attribution.modulePath);
+                if (table.valid &&
+                    attribution.relativeAddress <= 0xFFFFFFFFULL)
+                {
+                    const quint32 rva =
+                        static_cast<quint32>(attribution.relativeAddress);
+                    // 第一个 > rva 的位置，它前面那个就是最近的前驱。
+                    const auto upper = std::upper_bound(
+                        table.entries.cbegin(), table.entries.cend(), rva,
+                        [](const quint32 value, const QPair<quint32, QString>& entry) {
+                            return value < entry.first;
+                        });
+                    if (upper != table.entries.cbegin())
+                    {
+                        const auto& entry = *(upper - 1);
+                        attribution.symbolName = entry.second;
+                        attribution.symbolOffset = rva - entry.first;
+                    }
+                }
+            }
             break;
         }
         return attribution;
+    }
+
+    QString toWin32ModulePath(const QString& ntPath)
+    {
+        return toWin32Path(ntPath);
+    }
+
+    KvmProcessAttribution attributeProcessByCr3(
+        const unsigned long long directoryBase)
+    {
+        KvmProcessAttribution attribution;
+        if (directoryBase == 0ULL)
+        {
+            // 没有 CR3 可归。这与"归不到"是两件事：前者是没问，后者是问过了。
+            return attribution;
+        }
+
+        ksword::ark::DriverClient client;
+        const auto result = client.resolveHvmDirectoryBase(directoryBase);
+        attribution.scannedProcesses = result.response.resolvedScannedProcesses;
+        if (!result.io.ok)
+        {
+            // IOCTL 本身没通：驱动不在、句柄开不出来、协议版本对不上。
+            attribution.kind = KvmProcessAttributionKind::Failed;
+            return attribution;
+        }
+        if (result.response.status == KSWORD_ARK_HVM_PROCESS_STATUS_OK &&
+            result.response.resolvedProcessId != 0UL)
+        {
+            attribution.kind = KvmProcessAttributionKind::Resolved;
+            attribution.processId = result.response.resolvedProcessId;
+            attribution.imageName = processImageNameForPid(
+                result.response.resolvedProcessId);
+            return attribution;
+        }
+        if (result.response.status ==
+            KSWORD_ARK_HVM_PROCESS_STATUS_NOT_FOUND)
+        {
+            /*
+             * 扫过了没匹配上。
+             *
+             * 这里**必须**看扫描数而不是只看状态码：一个都没扫成时驱动回的是
+             * PROCESS_LOOKUP_FAILED，但一个"扫了 0 个所以没找到"的实现同样会
+             * 回 NOT_FOUND，而那两句话要人做的事相反。多核一道判据，让这条
+             * 分支自己站得住。
+             */
+            attribution.kind = attribution.scannedProcesses != 0UL
+                ? KvmProcessAttributionKind::NotFound
+                : KvmProcessAttributionKind::Failed;
+            return attribution;
+        }
+        attribution.kind = KvmProcessAttributionKind::Failed;
+        return attribution;
+    }
+
+    QString describeProcessAttribution(const KvmProcessAttribution& attribution)
+    {
+        switch (attribution.kind)
+        {
+        case KvmProcessAttributionKind::Resolved:
+            return attribution.imageName.isEmpty()
+                ? ks::i18n::sourceText(
+                      QStringLiteral("PID %1（由当前进程快照解析，不是命中那一刻的事实）"))
+                      .arg(attribution.processId)
+                : ks::i18n::sourceText(
+                      QStringLiteral("%1 (PID %2)（由当前进程快照解析，不是命中那一刻的事实）"))
+                      .arg(attribution.imageName)
+                      .arg(attribution.processId);
+        case KvmProcessAttributionKind::NotFound:
+            return ks::i18n::sourceText(
+                QStringLiteral("扫过 %1 个进程都没有这个地址空间——它多半已经退出了"))
+                .arg(attribution.scannedProcesses);
+        case KvmProcessAttributionKind::Failed:
+            return ks::i18n::sourceText(
+                QStringLiteral("这次归因没跑起来，一个进程都没问成"));
+        default:
+            break;
+        }
+        return ks::i18n::sourceText(QStringLiteral("命中现场没有记下地址空间"));
     }
 
     QString describeWatchState(const unsigned long state)
