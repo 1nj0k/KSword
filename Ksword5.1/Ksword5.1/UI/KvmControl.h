@@ -39,6 +39,17 @@ namespace ksword::kvm
     struct KvmState
     {
         KvmAvailability availability = KvmAvailability::DriverNotRunning;
+        // backend：驱动当前选定的虚拟化后端，取 KSWORD_ARK_HVM_BACKEND_*。
+        //
+        // 抬到这一层是因为界面上有一整组入口只对 Intel 成立（EPT 分离视图、
+        // 执行域、MSR / CR 策略、隐蔽 Hook），而"这台机器是不是 AMD"以前只能
+        // 由各调用点各自去翻 QUERY 响应。不抬上来的代价不是麻烦，是不一致：
+        // 标题栏菜单、KVM 页、硬件虚拟化证据页三处会各判各的。
+        //
+        // 注意它与 availability 不是一回事：AMD 机器上后端为 SVM 且完全可用，
+        // availability 仍然是 Available——BackendNotImplemented 说的是"驱动
+        // 没有这个处理器的后端"，那是另一件事。
+        unsigned long backend = KSWORD_ARK_HVM_BACKEND_NONE;
         bool residentActive = false;   // 至少一个逻辑处理器处于 VMX non-root。
         bool residentComplete = false; // 全部逻辑处理器都在 non-root。
         bool sustainedProven = false;  // 通过过 SOAK，证明常驻能长期存活。
@@ -491,4 +502,111 @@ namespace ksword::kvm
 
     // clearCrPolicy：清除全部配置与计数。受写权限门约束。
     KvmCrPolicyResult clearCrPolicy();
+
+    // ——— R-1 进程处置与注入 ———
+    //
+    // 这两组此前在 GUI 里唯一的入口是「完整命令面板」，而那条路是拿主程序当
+    // hvm_ctl 子进程拉起来的——探针的调用方式，不是产品的。探针从主程序摘掉
+    // 之后，这两组能力本身并不跟着走：它们各自有专属 IOCTL，驱动侧是实现完整
+    // 的生产路径。所以在这里补上直连门面，与视图 / MSR / CR 三组同一个形状：
+    // 同一道写权限门、同一套状态码翻译、同样返回整张表。
+
+    // KvmProcessDispositionEntry：一条已安装的 R-1 进程处置。
+    struct KvmProcessDispositionEntry
+    {
+        unsigned long processId = 0;
+        // disposition 取 KSWORD_ARK_HVM_PROCESS_OP_FREEZE / _TERMINATE，
+        // 以及 _DISPOSITION_RELEASED（常驻期间被撤销、层次尚未回收）。
+        unsigned long disposition = 0;
+        unsigned long hierarchyIndex = 0;
+        // directoryBase 才是这条记录的判据：PID 会被回收，地址空间不会。
+        unsigned long long directoryBase = 0;
+        unsigned long long guestPhysicalAddress = 0;
+        unsigned long long guestLinearAddress = 0;
+        // interceptCount 在冻结下持续增长，那正是目标线程还在自旋的证据。
+        unsigned long long interceptCount = 0;
+    };
+
+    // KvmProcessResult：一次进程处置操作的结果。每种操作都回填整张表。
+    struct KvmProcessResult
+    {
+        bool ok = false;
+        // protocolStatus 取 KSWORD_ARK_HVM_PROCESS_STATUS_*。只在 ok 为假时读，
+        // 与 KvmViewResult 上那条注释同理：客户端就地拒绝的路径没发过 IOCTL。
+        unsigned long protocolStatus = 0;
+        long lastStatus = 0;
+        unsigned long rowCount = 0;
+        QVector<KvmProcessDispositionEntry> dispositions;
+        QString message;
+    };
+
+    // listProcessDispositions：读取处置表。只读，不需要写权限。
+    KvmProcessResult listProcessDispositions();
+
+    // freezeProcess/terminateProcess：安装一条处置。受写权限门约束。
+    //
+    // guestLinearAddress 给 0 表示由驱动取主映像入口页。允许指定是因为"哪一页
+    // 代表这个进程"没有普适答案：入口页对刚起来的进程有效，对已经跑进消息循环
+    // 的进程未必会再被执行到，而没被执行到的拒绝等于什么都没做。
+    KvmProcessResult freezeProcess(
+        unsigned long processId,
+        unsigned long long guestLinearAddress);
+    KvmProcessResult terminateProcess(
+        unsigned long processId,
+        unsigned long long guestLinearAddress);
+
+    // releaseProcessDisposition/releaseAllProcessDispositions：撤销。
+    // 常驻期间是「解除」而不是完整撤销，驱动侧语义见协议头注释。
+    KvmProcessResult releaseProcessDisposition(unsigned long processId);
+    KvmProcessResult releaseAllProcessDispositions();
+
+    // KvmInjectionEntry：一条已安装的 R-1 注入。
+    struct KvmInjectionEntry
+    {
+        unsigned long processId = 0;
+        unsigned long payloadBytes = 0;
+        unsigned long long directoryBase = 0;
+        unsigned long long guestLinearAddress = 0;
+        unsigned long long guestPhysicalAddress = 0;
+        // caveOffset：外壳在页内的偏移，也就是 RIP 会被指向的位置。
+        unsigned long caveOffset = 0;
+        unsigned long caveBytes = 0;
+        // executionCount：载荷被执行的次数。一次性注入完成后应为 1。
+        unsigned long long executionCount = 0;
+        unsigned long viewId = 0;
+        // caveFiller：空隙原本的填充字节（0x00 / 0xCC / 0x90），排查时用来归因。
+        unsigned long caveFiller = 0;
+    };
+
+    // KvmInjectResult：一次注入操作的结果。
+    struct KvmInjectResult
+    {
+        bool ok = false;
+        unsigned long protocolStatus = 0; // KSWORD_ARK_HVM_INJECT_STATUS_*。
+        long lastStatus = 0;
+        unsigned long rowCount = 0;
+        QVector<KvmInjectionEntry> injections;
+        QString message;
+    };
+
+    // listInjections：读取注入表。只读，不需要写权限。
+    KvmInjectResult listInjections();
+
+    // injectDll：在目标进程里通过分离视图 + 线程劫持加载一个 DLL。
+    //
+    // guestLinearAddress **必填**：要劫持的那一页里的任意地址。驱动不猜这一页，
+    // 猜错的表现是载荷装上了却永远不执行——从外面看和成功完全一样。取目标某个
+    // 线程此刻正在执行的位置，那一页按定义会被执行到。
+    //
+    // loadLibraryAddress 给 0 表示由客户端就地解析：kernel32 在同一次启动内对
+    // 所有进程是同一个基址，所以本进程解析出来的 LoadLibraryW 对靶子同样成立。
+    KvmInjectResult injectDll(
+        unsigned long processId,
+        unsigned long long guestLinearAddress,
+        unsigned long long loadLibraryAddress,
+        const QString& dllPath);
+
+    // releaseInjection/releaseAllInjections：撤销注入。受写权限门约束。
+    KvmInjectResult releaseInjection(unsigned long processId);
+    KvmInjectResult releaseAllInjections();
 }

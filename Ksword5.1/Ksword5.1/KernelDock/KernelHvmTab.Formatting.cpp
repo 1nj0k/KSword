@@ -323,6 +323,35 @@ QString KernelHvmTab::nestedStateText(const std::uint32_t state)
     }
 }
 
+QString KernelHvmTab::executionStageText(const std::uint32_t stage)
+{
+    switch (stage)
+    {
+    case KSWORD_ARK_HVM_STAGE_NONE:
+        return kernelText("kernel.hvm.stage.none", QStringLiteral("未执行"));
+    case KSWORD_ARK_HVM_STAGE_PREPARED:
+        return kernelText("kernel.hvm.stage.prepared", QStringLiteral("已准备"));
+    case KSWORD_ARK_HVM_STAGE_TESTED:
+        return kernelText("kernel.hvm.stage.tested", QStringLiteral("自检完成"));
+    case KSWORD_ARK_HVM_STAGE_ENTERING:
+        return kernelText("kernel.hvm.stage.entering", QStringLiteral("正在进入"));
+    case KSWORD_ARK_HVM_STAGE_ENTERED:
+        return kernelText("kernel.hvm.stage.entered", QStringLiteral("已进入来宾"));
+    case KSWORD_ARK_HVM_STAGE_EXIT:
+        return kernelText("kernel.hvm.stage.exit", QStringLiteral("已从来宾退出"));
+    case KSWORD_ARK_HVM_STAGE_STOPPED:
+        return kernelText("kernel.hvm.stage.stopped", QStringLiteral("已停止"));
+    case KSWORD_ARK_HVM_STAGE_FAILED:
+        return kernelText("kernel.hvm.stage.failed", QStringLiteral("失败"));
+    default:
+        break;
+    }
+    // 不把未知序号折成"未知"：新驱动加了阶段而界面还没跟上时，那个数字是
+    // 唯一能把现象对回驱动改动的线索，折掉它等于把排查起点删了。
+    return kernelText("kernel.hvm.stage.unknown", QStringLiteral("未知阶段（%1）"))
+        .arg(stage);
+}
+
 QString KernelHvmTab::ntStatusText(const long status)
 {
     return QStringLiteral("0x%1")

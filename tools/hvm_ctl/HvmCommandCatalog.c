@@ -8,7 +8,7 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
-#include "../../../shared/driver/KswordArkHvmIoctl.h"
+#include "../../shared/driver/KswordArkHvmIoctl.h"
 
 static const HVM_COMMAND_SPEC g_commands[] = {
     { "prepare-svm-probe", "准备 AMD 嵌套探针", "生命周期", "预分配 AMD 有界嵌套自检资源；不开放内层虚拟机运行。", HvmControl, 0, KSWORD_ARK_HVM_CONTROL_PREPARE,

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * hvm_ctl —— KSword HVM 控制与状态的最小命令行工具（无 Qt 依赖）。
  *
  * 存在的理由：KswordCLI 只提供只读的 hvm-status / hvm-events，启动 HVM 要走
@@ -50,20 +50,20 @@
 #include <intrin.h>
 
 /* 协议的唯一真值来源。手抄一份就等于给自己埋一个静默的漂移。 */
-#include "../../../shared/driver/KswordArkHvmIoctl.h"
-#include "../../../shared/driver/KswordArkHvmMetricsIoctl.h"
+#include "../../shared/driver/KswordArkHvmIoctl.h"
+#include "../../shared/driver/KswordArkHvmMetricsIoctl.h"
 /* 能力过滤的白名单常量，判据与驱动引用同一份。 */
-#include "../../../shared/driver/KswordArkHvmControls.h"
+#include "../../shared/driver/KswordArkHvmControls.h"
 /* acl-probe 要对这两条破坏性 IOCTL 验访问位闸门，取它们的控制码。 */
-#include "../../../shared/driver/KswordArkProcessIoctl.h"
-#include "../../../shared/driver/KswordArkMemoryIoctl.h"
+#include "../../shared/driver/KswordArkProcessIoctl.h"
+#include "../../shared/driver/KswordArkMemoryIoctl.h"
 /* Reuse the main program's R0 descriptor protocol for gdt-dump. */
-#include "../../../shared/driver/KswordArkKernelIoctl.h"
+#include "../../shared/driver/KswordArkKernelIoctl.h"
 
 #define KSW_DEVICE_PATH L"\\\\.\\KswordARKLog"
 
 #include "HvmCommandCatalog.h"
-#include "../../../shared/driver/KswordArkHvmRequest.h"
+#include "../../shared/driver/KswordArkHvmRequest.h"
 typedef HVM_COMMAND_SPEC HVM_CTL_VERB;
 
 static const char* ControlStatusName(unsigned long s)
