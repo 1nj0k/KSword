@@ -5,30 +5,45 @@
 
 <div align="center">
 
-  <img
-    src="./Ksword5.1/Ksword5.1/Resource/Logo/KswordHome-En.png"
-    alt="KSword ARK Logo"
-    width="520"
-  />
+<img
+  src="./Ksword5.1/Ksword5.1/Resource/Logo/KswordHome-En.png"
+  alt="KSword ARK Logo"
+  width="520"
+/>
 
-  <a href="https://github.com/user-attachments/assets/02085a90-af21-4880-b956-d059a655a4da">
-    <img
-      src="https://github.com/user-attachments/assets/02085a90-af21-4880-b956-d059a655a4da"
-      alt="KSword ARK dark interface"
-      width="49%"
-    />
-  </a>
-  <a href="https://github.com/user-attachments/assets/aeda0d71-c2c0-4317-abac-0fac811c153d">
-    <img
-      src="https://github.com/user-attachments/assets/aeda0d71-c2c0-4317-abac-0fac811c153d"
-      alt="KSword ARK light interface"
-      width="49%"
-    />
-  </a>
+<a href="https://github.com/user-attachments/assets/02085a90-af21-4880-b956-d059a655a4da">
+<img
+  src="https://github.com/user-attachments/assets/02085a90-af21-4880-b956-d059a655a4da"
+  alt="KSword ARK dark interface"
+  width="49%"
+/>
+</a>
+<a href="https://github.com/user-attachments/assets/aeda0d71-c2c0-4317-abac-0fac811c153d">
+<img
+  src="https://github.com/user-attachments/assets/aeda0d71-c2c0-4317-abac-0fac811c153d"
+  alt="KSword ARK light interface"
+  width="49%"
+/>
+</a>
 
-  <br>
+<br>
 
-  <sub>Dark Mode　|　Light Mode</sub>
+<sub>Dark Mode　|　Light Mode</sub>
+
+<details>
+<summary><b>Nested Virtualization Preview</b></summary>
+
+<br>
+
+<a href="https://github.com/user-attachments/assets/fa80eeca-e7a8-4176-bbd9-d94aca8ca36e">
+<img
+  src="https://github.com/user-attachments/assets/fa80eeca-e7a8-4176-bbd9-d94aca8ca36e"
+  alt="Nested Virtualization Preview"
+  width="100%"
+/>
+</a>
+
+</details>
 
 </div>
 
