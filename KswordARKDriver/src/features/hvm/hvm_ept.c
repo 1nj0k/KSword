@@ -17,6 +17,30 @@ Environment:
 
 #include "hvm_ept.h"
 #include "hvm_resident.h"
+/* 首次访问监视里没有诊断面的那几件事，与离线测试共用同一份实现。 */
+#include "../../../../shared/driver/KswordArkHvmWatch.h"
+
+/*
+ * 位布局必须与共享头逐位一致，否则离线测试证明的是另一套算术。
+ *
+ * 钉在编译期而不是靠约定：这两组常量分属三个头文件（协议、驱动内部、共享纯
+ * 模块），任何一边改一位都不会产生编译错误，只会让测试和内核开始各算各的。
+ */
+C_ASSERT(KSW_HVM_WATCH_ACCESS_READ == KSWORD_ARK_HVM_EPT_ACCESS_READ);
+C_ASSERT(KSW_HVM_WATCH_ACCESS_WRITE == KSWORD_ARK_HVM_EPT_ACCESS_WRITE);
+C_ASSERT(KSW_HVM_WATCH_ACCESS_EXECUTE == KSWORD_ARK_HVM_EPT_ACCESS_EXECUTE);
+C_ASSERT(KSW_HVM_WATCH_LEAF_READ == KSW_EPT_READ);
+C_ASSERT(KSW_HVM_WATCH_LEAF_WRITE == KSW_EPT_WRITE);
+C_ASSERT(KSW_HVM_WATCH_LEAF_EXECUTE == KSW_EPT_EXECUTE);
+C_ASSERT(KSW_HVM_WATCH_STATE_ARMED == KSWORD_ARK_HVM_EPT_WATCH_STATE_ARMED);
+C_ASSERT(KSW_HVM_WATCH_STATE_TRIGGERED ==
+    KSWORD_ARK_HVM_EPT_WATCH_STATE_TRIGGERED);
+C_ASSERT(KSW_HVM_WATCH_STATE_DISARMED ==
+    KSWORD_ARK_HVM_EPT_WATCH_STATE_DISARMED);
+C_ASSERT(KSW_HVM_WATCH_STATE_INVALIDATED ==
+    KSWORD_ARK_HVM_EPT_WATCH_STATE_INVALIDATED);
+C_ASSERT(KSW_HVM_WATCH_STATE_FAULTED ==
+    KSWORD_ARK_HVM_EPT_WATCH_STATE_FAULTED);
 
 /* Return the active split that owns one two-MiB physical range. */
 static KSW_HVM_EPT_SPLIT*
@@ -367,11 +391,7 @@ KswordARKHvmEptComputeLeafExcluding(
     _In_ const KSW_HVM_EPT_RULE_SLOT* Excluded
     )
 {
-    ULONGLONG value =
-        CurrentValue |
-        KSW_EPT_READ |
-        KSW_EPT_WRITE |
-        KSW_EPT_EXECUTE;
+    ULONGLONG value = KswordArkHvmWatchRestoreLeaf(CurrentValue);
     ULONG ruleIndex = 0UL;
 
     /* Apply each bounded active rule that still contains the physical page. */
@@ -403,24 +423,10 @@ KswordARKHvmEptComputeLeafExcluding(
             /* Continue to the next bounded rule record. */
             continue;
         }
-        /* Remove read permission requested by the overlapping rule. */
-        if ((rule->DeniedAccess &
-                KSWORD_ARK_HVM_EPT_ACCESS_READ) != 0UL) {
-            /* Clear the EPT read permission. */
-            value &= ~KSW_EPT_READ;
-        }
-        /* Remove write permission requested by the overlapping rule. */
-        if ((rule->DeniedAccess &
-                KSWORD_ARK_HVM_EPT_ACCESS_WRITE) != 0UL) {
-            /* Clear the EPT write permission. */
-            value &= ~KSW_EPT_WRITE;
-        }
-        /* Remove execute permission requested by the overlapping rule. */
-        if ((rule->DeniedAccess &
-                KSWORD_ARK_HVM_EPT_ACCESS_EXECUTE) != 0UL) {
-            /* Clear the EPT execute permission. */
-            value &= ~KSW_EPT_EXECUTE;
-        }
+        /* Remove exactly the permissions this overlapping rule denies. */
+        value = KswordArkHvmWatchApplyDenial(
+            value,
+            rule->DeniedAccess);
     }
     /* Return the permission value the page settles on. */
     return value;
@@ -1084,21 +1090,17 @@ KswordARKHvmEptRuleControlLocked(
          * also removes WRITE.  When execute-only EPT is unavailable, remove
          * EXECUTE as well rather than publishing an illegal R=0/W=0/X=1 leaf.
          */
-        effectiveDeniedAccess = Request->deniedAccess;
-        /* Normalize every read tripwire to a legal EPT permission tuple. */
-        if ((effectiveDeniedAccess &
-                KSWORD_ARK_HVM_EPT_ACCESS_READ) != 0UL) {
-            /* Prevent the architecturally invalid write-without-read state. */
-            effectiveDeniedAccess |=
-                KSWORD_ARK_HVM_EPT_ACCESS_WRITE;
-            /* Prevent execute-only leaves when the CPU does not support them. */
-            if ((Runtime->VmxEptVpidCapabilities &
-                    KSW_EPT_CAP_EXECUTE_ONLY) == 0ULL) {
-                /* Fall back to a no-access tripwire on this processor. */
-                effectiveDeniedAccess |=
-                    KSWORD_ARK_HVM_EPT_ACCESS_EXECUTE;
-            }
-        }
+        /*
+         * Normalization lives in the shared pure header so the offline suite
+         * proves the same code the exit path runs.  Getting it wrong has no
+         * diagnostic surface in either direction: too little and the leaf is
+         * architecturally illegal (one anonymous exit reason 49), too much and
+         * the watch silently covers more than the user asked for.
+         */
+        effectiveDeniedAccess = KswordArkHvmWatchNormalizeAccess(
+            Request->deniedAccess,
+            (Runtime->VmxEptVpidCapabilities &
+                KSW_EPT_CAP_EXECUTE_ONLY) != 0ULL);
         /* Validate everything that is specific to a first-touch watch. */
         if ((Request->flags &
                 KSWORD_ARK_HVM_EPT_RULE_FLAG_WATCH_ONCE) != 0UL) {
@@ -1612,6 +1614,7 @@ KswordARKHvmEptHandleViolation(
     if (watchSlot != NULL &&
         !otherMatched) {
         LONG previousState = 0L;
+        KSW_HVM_WATCH_HIT_PLAN plan = { 0 };
         volatile ULONGLONG* watchEntry = NULL;
         ULONGLONG restoredValue = 0ULL;
         ULONGLONG invalidatePointer = 0ULL;
@@ -1632,19 +1635,22 @@ KswordARKHvmEptHandleViolation(
             &watchSlot->WatchState,
             (LONG)KSWORD_ARK_HVM_EPT_WATCH_STATE_TRIGGERED,
             (LONG)KSWORD_ARK_HVM_EPT_WATCH_STATE_ARMED);
+        /*
+         * The decision itself lives in the shared pure header, exhaustively
+         * tested offline.  Both ways of getting it wrong are silent: two
+         * processors each believing they are the first touch produces two
+         * contradictory "first" records, and a loser that resumes without
+         * repairing its own view re-faults on the same instruction until the
+         * winner's store reaches it - a livelock with no error code at all.
+         */
+        plan = KswordArkHvmWatchPlanHit((ULONG)previousState);
         /* Refuse to continue from a lifecycle state this path cannot explain. */
-        if (previousState !=
-                (LONG)KSWORD_ARK_HVM_EPT_WATCH_STATE_ARMED &&
-            previousState !=
-                (LONG)KSWORD_ARK_HVM_EPT_WATCH_STATE_TRIGGERED &&
-            previousState !=
-                (LONG)KSWORD_ARK_HVM_EPT_WATCH_STATE_DISARMED) {
+        if (!plan.Accepted) {
             /* Report that the dispatcher must leave EPT enforcement. */
             return FALSE;
         }
         /* Record which processor owns the one logical first touch. */
-        WatchHit->FirstHit = previousState ==
-            (LONG)KSWORD_ARK_HVM_EPT_WATCH_STATE_ARMED;
+        WatchHit->FirstHit = plan.OwnsFirstHit != 0U;
         /* Stop denying before anything recomputes the page from the table. */
         if (WatchHit->FirstHit) {
             /*
@@ -1708,15 +1714,11 @@ KswordARKHvmEptHandleViolation(
              * hit is reported either way, because the hardware watched the
              * whole page and saying otherwise would misdescribe what happened.
              */
-            if (GuestLinearAddressValid &&
-                watchSlot->WatchRequestedLength != 0ULL &&
-                GuestLinearAddress >= watchSlot->WatchRequestedAddress &&
-                GuestLinearAddress <
-                    watchSlot->WatchRequestedAddress +
-                        watchSlot->WatchRequestedLength) {
-                /* Publish that the access landed inside the requested bytes. */
-                WatchHit->RangeMatch = TRUE;
-            }
+            WatchHit->RangeMatch = KswordArkHvmWatchRangeMatch(
+                GuestLinearAddressValid ? 1 : 0,
+                GuestLinearAddress,
+                watchSlot->WatchRequestedAddress,
+                watchSlot->WatchRequestedLength) != 0;
             /* Preserve the scene the dispatcher will publish as evidence. */
             watchSlot->WatchLastHitGuestPhysicalAddress = GuestPhysicalAddress;
             watchSlot->WatchLastHitGuestLinearAddress = GuestLinearAddress;
