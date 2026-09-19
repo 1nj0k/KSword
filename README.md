@@ -5,30 +5,45 @@
 
 <div align="center">
 
-  <img
-    src="./Ksword5.1/Ksword5.1/Resource/Logo/KswordHome-En.png"
-    alt="KSword ARK Logo"
-    width="520"
-  />
+<img
+  src="./Ksword5.1/Ksword5.1/Resource/Logo/KswordHome-En.png"
+  alt="KSword ARK Logo"
+  width="520"
+/>
 
-  <a href="https://github.com/user-attachments/assets/02085a90-af21-4880-b956-d059a655a4da">
-    <img
-      src="https://github.com/user-attachments/assets/02085a90-af21-4880-b956-d059a655a4da"
-      alt="KSword ARK dark interface"
-      width="49%"
-    />
-  </a>
-  <a href="https://github.com/user-attachments/assets/aeda0d71-c2c0-4317-abac-0fac811c153d">
-    <img
-      src="https://github.com/user-attachments/assets/aeda0d71-c2c0-4317-abac-0fac811c153d"
-      alt="KSword ARK light interface"
-      width="49%"
-    />
-  </a>
+<a href="https://github.com/user-attachments/assets/02085a90-af21-4880-b956-d059a655a4da">
+<img
+  src="https://github.com/user-attachments/assets/02085a90-af21-4880-b956-d059a655a4da"
+  alt="KSword ARK dark interface"
+  width="49%"
+/>
+</a>
+<a href="https://github.com/user-attachments/assets/aeda0d71-c2c0-4317-abac-0fac811c153d">
+<img
+  src="https://github.com/user-attachments/assets/aeda0d71-c2c0-4317-abac-0fac811c153d"
+  alt="KSword ARK light interface"
+  width="49%"
+/>
+</a>
 
-  <br>
+<br>
 
-  <sub>Dark Mode　|　Light Mode</sub>
+<sub>Dark Mode　|　Light Mode</sub>
+
+<details>
+<summary><b>Nested Virtualization Preview</b></summary>
+
+<br>
+
+<a href="https://github.com/user-attachments/assets/fa80eeca-e7a8-4176-bbd9-d94aca8ca36e">
+<img
+  src="https://github.com/user-attachments/assets/fa80eeca-e7a8-4176-bbd9-d94aca8ca36e"
+  alt="Nested Virtualization Preview"
+  width="100%"
+/>
+</a>
+
+</details>
 
 </div>
 
@@ -114,16 +129,75 @@ its VM exits from VMX root. Nothing restarts; nothing visibly happens.
 
 ```text
 CPU
-└─ Intel VT-x / EPT
-   └─ Hyper-V (L0)              ← owns the physical virtualization layer
-      ├─ Root Partition
-      │  ├─ Windows Host
-      │  └─ VBS / HVCI          ← may stay on; it belongs to L0
-      │
-      └─ Child Partition
-         └─ KSword HVM (L1, VMX root)
+├─ Intel VT-x / EPT
+│  └─ Hyper-V (L0)              ← owns the physical virtualization layer
+│     ├─ Root Partition
+│     │  ├─ Windows Host
+│     │  └─ VBS / HVCI          ← remains active in the measured outer root
+│     │
+│     └─ Child Partition: Windows 1
+│        │  ├─ 4 vCPUs · 8 GiB in the 4×2 experiments
+│        │  └─ Pro 22621.4317 in the follow-up experiments
+│        │
+│        ├─ Inner Hyper-V (L1)  ← separate Pro boot
+│        │  ├─ Root Partition: the same Windows 1
+│        │  │  └─ KSword driver: loaded; VMX admission refused
+│        │  │     CPUID.VMX=0 · STATUS_NOT_SUPPORTED
+│        │  └─ Child Partition
+│        │     └─ TinyCore 17.1
+│        │        2 vCPUs · 768 MiB · normal /init · CPU_ONLINE=0-1
+│        │
+│        └─ KSword HVM (L1, VMX root) ← separate boot, Inner Hyper-V off
+│           └─ the same guest Windows
+│              (L2, VMX non-root)
+│              └─ nested VMX dispatch
+│                 └─ VMware Workstation 17.6.4
+│                    └─ TinyCore 17.1
+│                       (L3, VMX non-root; 2 vCPUs · normal /init)
+│                       ├─ 4×2 verified chain:
+│                       │  20/20 page remap/restore cycles
+│                       │  15/15 fault-control trials
+│                       │  3/3 invalid requests rejected
+│                       │  3/3 HTTP EPT fault/recovery trials; 90 responses
+│                       ├─ Pro follow-up binary:
+│                       │  3 two-CPU remap/restore cycles
+│                       │  15 injected-control trials
+│                       │  3 invalid-request rejections
+│                       │  3 complete HTTP EPT trials / 4 attempts
+│                       │  3 complete guest direct-write comparator trials
+│                       └─ Same-binary measured follow-up:
+│                          72 attribution runs
+│                          24 TCP observations / 74,145 valid responses
+│                          insertion body median 2.5953 ms
+│                          rendezvous median 111.6 us
+│                          CPUID 8.76× residency-off baseline
+│                          loopback RTT +30.7%
+│
+│        Historical 2×2 evidence, not pooled with newer binaries:
+│        599.43 s / 21-sample dual-vCPU observation
+│        94,876,125 VM exits; 794,960 INVEPT calls; no failure delta
+│
+└─ AMD-V / SVM / NPT
+   ├─ Bare Metal
+   │  └─ KSword HVM (L0, SVM root)
+   │     └─ the same host Windows
+   │        (L1, SVM non-root)
+   │        └─ nested SVM dispatch
+   │           └─ newly created child VM
+   │              (L2, SVM non-root) ← verified
+   │
+   │  32 logical processors: resident for about 5 seconds,
+   │  full-core stop, teardown and clean service unload verified.
+   │
+   └─ VMware (L0)
+      └─ Windows 10 guest (L1)
+         └─ KSword HVM (L1, SVM root)
             └─ the same guest Windows
-               (L2, VMX non-root)
+               (L2, SVM non-root)
+               └─ newly created child VM
+                  (L3, SVM non-root)
+                  1 / 2 / 4 / 8 vCPU nested-SVM paths verified;
+                  8 vCPUs completed 100 cycles.
 ```
 
 On bare metal the `Hyper-V (L0)` layer is simply absent and KSword HVM is L0
