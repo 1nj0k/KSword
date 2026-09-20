@@ -1180,6 +1180,9 @@
     <ClCompile Include="..\..\shared\evidence\MemoryRegionEvidence.cpp">
       <Filter>Source Files\SharedEvidence</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\shared\evidence\DdmaScratchPlan.cpp">
+      <Filter>Source Files\SharedEvidence</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\shared\evidence\InjectionSurvey.cpp">
       <Filter>Source Files\SharedEvidence</Filter>
     </ClCompile>

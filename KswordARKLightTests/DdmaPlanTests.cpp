@@ -21,8 +21,10 @@
 #include "TestSupport.h"
 
 #include "../shared/driver/KswordArkDdmaPlan.h"
+#include "../shared/evidence/DdmaScratchPlan.h"
 
 #include <cstdint>
+#include <vector>
 
 namespace {
 
@@ -424,11 +426,164 @@ void TestFlagLayout(KswordTests::Suite& suite) {
         L"ddma status: write force-required and LBA-required are distinct");
 }
 
+// ---------------------------------------------------------------------------
+// 暂存扇区候选选择
+// ---------------------------------------------------------------------------
+//
+// 这段逻辑决定"哪几个扇区会被覆盖"。选错的后果不是报错，是用户的引导器或分区表
+// 备份被写坏，而且要等下次开机才发现。所以判据必须穷举到边界两侧。
+//
+// 三条不变式：
+//   * 与磁盘头部保留区相交的候选永远不能被自动选中——MBR 盘上 GRUB 的 core
+//     image 就嵌在 LBA 1..2047，分区表里没有任何表项；
+//   * 与 GPT 备份分区表相交的候选一律不可用；
+//   * 对齐会吃掉间隙开头几个扇区，可用性必须在对齐之后再判一次。
+void TestScratchPlan(KswordTests::Suite& suite) {
+    using ksword::evidence::DdmaScratchOccupiedRange;
+    using ksword::evidence::DdmaScratchRisk;
+    using ksword::evidence::ddmaScratchRiskIsSelectable;
+    using ksword::evidence::planDdmaScratchCandidates;
+
+    constexpr std::uint32_t kNeed = 8U;  // 一次传输 = 8 个 512 字节扇区。
+
+    // 真机布局（本仓库开发机磁盘 0，GPT 1863 GB）：头部间隙 34..2047 被
+    // 分区 1 起点 2048 挡住，分区 3 与分区 4 之间留了 1872 个扇区。
+    {
+        const std::vector<DdmaScratchOccupiedRange> occupied{
+            { 2048ULL, 204800ULL },
+            { 206848ULL, 32768ULL },
+            { 239616ULL, 3904846000ULL },
+            { 3905087488ULL, 1941647ULL },
+        };
+        const auto candidates = planDdmaScratchCandidates(3907029168ULL, occupied, kNeed);
+        suite.expect(!candidates.empty(), L"ddma scratch: a real GPT layout yields candidates");
+        const auto& best = candidates.front();
+        suite.expect(best.usable, L"ddma scratch: the top candidate on a real layout is usable");
+        suite.expect(best.risk == DdmaScratchRisk::InteriorGap,
+            L"ddma scratch: the inter-partition gap outranks the head gap");
+        // 间隙 3905085616..3905087487；向上对齐到 8 的倍数是 3905085616 本身
+        // （3905085616 / 8 = 488135702，整除）。
+        suite.expect(best.startSector == 3905085616ULL,
+            L"ddma scratch: the top candidate starts at the aligned inter-partition gap");
+        suite.expect(best.gapSectorCount == 1872ULL,
+            L"ddma scratch: the inter-partition gap length is reported as evidence");
+
+        // 头部间隙必须仍然出现在列表里（用户要能看到它为什么没被选），
+        // 但绝不能排在第一位。
+        bool sawHead = false;
+        for (std::size_t i = 0; i < candidates.size(); ++i) {
+            if (candidates[i].risk == DdmaScratchRisk::HeadReserved) {
+                sawHead = true;
+                suite.expect(i != 0, L"ddma scratch: a head-reserved gap is never ranked first");
+            }
+        }
+        suite.expect(sawHead, L"ddma scratch: the head gap is still listed, not silently dropped");
+    }
+
+    // 只有头部间隙可用时：仍然列出，但不可被自动选中。
+    {
+        const std::vector<DdmaScratchOccupiedRange> occupied{
+            { 2048ULL, 1000000ULL - 2048ULL },
+        };
+        const auto candidates = planDdmaScratchCandidates(1000000ULL, occupied, kNeed);
+        suite.expect(!candidates.empty(), L"ddma scratch: a head-only layout still yields a listing");
+        suite.expect(candidates.front().risk == DdmaScratchRisk::HeadReserved,
+            L"ddma scratch: the head gap is the only candidate here");
+        suite.expect(!ddmaScratchRiskIsSelectable(candidates.front().risk),
+            L"ddma scratch: a head-reserved candidate is not auto-selectable");
+    }
+
+    // 分级本身：只有两种间隙允许被自动选中。
+    suite.expect(ddmaScratchRiskIsSelectable(DdmaScratchRisk::InteriorGap),
+        L"ddma scratch: an interior gap is selectable");
+    suite.expect(ddmaScratchRiskIsSelectable(DdmaScratchRisk::TailGap),
+        L"ddma scratch: a tail gap is selectable");
+    suite.expect(!ddmaScratchRiskIsSelectable(DdmaScratchRisk::HeadReserved),
+        L"ddma scratch: a head-reserved region is not selectable");
+    suite.expect(!ddmaScratchRiskIsSelectable(DdmaScratchRisk::TailReserved),
+        L"ddma scratch: a tail-reserved region is not selectable");
+
+    // 尾部保留区：紧贴备份分区表的空间必须判成不可用。磁盘 10000 扇区，
+    // 尾部保留 64 ⇒ 9936 之后不可用。分区占 2048..9930，剩 9930..10000。
+    {
+        const std::vector<DdmaScratchOccupiedRange> occupied{
+            { 2048ULL, 9930ULL - 2048ULL },
+        };
+        const auto candidates = planDdmaScratchCandidates(10000ULL, occupied, kNeed);
+        bool tailRejected = false;
+        for (const auto& candidate : candidates) {
+            if (candidate.gapStartSector == 9930ULL) {
+                // 对齐后起点 9936，9936+8=9944 > 9936(=10000-64)，放不下。
+                suite.expect(!candidate.usable,
+                    L"ddma scratch: a gap running into the backup GPT is rejected");
+                tailRejected = true;
+            }
+        }
+        suite.expect(tailRejected, L"ddma scratch: the tail gap was evaluated at all");
+    }
+
+    // 对齐吃掉开头：间隙 2049..2059（11 个扇区）看着够放 8 个，但对齐到 2056
+    // 之后只剩 4 个。拿原始长度去比就会给出一个越界的建议。
+    {
+        const std::vector<DdmaScratchOccupiedRange> occupied{
+            { 0ULL, 2049ULL },
+            { 2060ULL, 100000ULL - 2060ULL },
+        };
+        const auto candidates = planDdmaScratchCandidates(100000ULL, occupied, kNeed);
+        bool found = false;
+        for (const auto& candidate : candidates) {
+            if (candidate.gapStartSector == 2049ULL) {
+                found = true;
+                suite.expect(candidate.startSector == 2056ULL,
+                    L"ddma scratch: the candidate start is aligned up to the transfer granularity");
+                suite.expect(!candidate.usable,
+                    L"ddma scratch: alignment shrinking a gap below one transfer makes it unusable");
+            }
+        }
+        suite.expect(found, L"ddma scratch: the alignment-shrunk gap is still reported");
+    }
+
+    // 重叠/乱序的已占用区间必须先合并：不合并会算出假间隙，
+    // 而假间隙意味着建议用户去覆盖一段其实有分区的扇区。
+    {
+        const std::vector<DdmaScratchOccupiedRange> occupied{
+            { 50000ULL, 10000ULL },
+            { 2048ULL, 50000ULL },   // 与上一条重叠，且顺序颠倒
+        };
+        const auto candidates = planDdmaScratchCandidates(100000ULL, occupied, kNeed);
+        for (const auto& candidate : candidates) {
+            const std::uint64_t end = candidate.gapStartSector + candidate.gapSectorCount;
+            const bool overlapsOccupied =
+                (candidate.gapStartSector < 60000ULL) && (end > 2048ULL);
+            suite.expect(!overlapsOccupied,
+                L"ddma scratch: overlapping and unsorted ranges are merged before gaps are computed");
+        }
+    }
+
+    // 退化输入必须安全返回，而不是算出一个"整块盘都可用"的候选。
+    suite.expect(planDdmaScratchCandidates(0ULL, {}, kNeed).empty(),
+        L"ddma scratch: a zero-sector disk yields no candidates");
+    suite.expect(planDdmaScratchCandidates(100000ULL, {}, 0U).empty(),
+        L"ddma scratch: a zero-sector requirement yields no candidates");
+
+    // 完全没有分区的盘：整块都是间隙，但头部保留区依然要挡住首选。
+    {
+        const auto candidates = planDdmaScratchCandidates(100000ULL, {}, kNeed);
+        suite.expect(candidates.size() == 1U,
+            L"ddma scratch: an unpartitioned disk is one single gap");
+        suite.expect(candidates.front().risk == DdmaScratchRisk::HeadReserved,
+            L"ddma scratch: an unpartitioned disk's gap still starts inside the head reserve");
+        suite.expect(!ddmaScratchRiskIsSelectable(candidates.front().risk),
+            L"ddma scratch: an unpartitioned disk offers nothing auto-selectable");
+    }
+}
+
 } // namespace
 
 int RunDdmaPlanTests() {
     KswordTests::Suite suite(L"DDMA plan");
     TestFlagLayout(suite);
+    TestScratchPlan(suite);
     TestLba28Encoding(suite);
     TestLbaModeBoundary(suite);
     TestLba48Encoding(suite);

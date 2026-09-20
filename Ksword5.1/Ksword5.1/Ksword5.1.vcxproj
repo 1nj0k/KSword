@@ -542,6 +542,7 @@
     <ClCompile Include="..\..\shared\evidence\PeImageMap.cpp" />
     <ClCompile Include="..\..\shared\evidence\ImageDiff.cpp" />
     <ClCompile Include="..\..\shared\evidence\MemoryRegionEvidence.cpp" />
+    <ClCompile Include="..\..\shared\evidence\DdmaScratchPlan.cpp" />
     <ClCompile Include="..\..\shared\evidence\InjectionSurvey.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverCapability.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverDynData.cpp" />

@@ -22,6 +22,8 @@
 #include "MemoryAccessBackend.h"
 // DdmaDiskEntry 按值存进 std::vector，必须拿到完整类型，不能前置声明。
 #include "../ArkDriverClient/ArkDriverClient.h"
+// 暂存扇区候选的纯算术在 shared/evidence 里，Qt-free / Win32-free，单测覆盖同一份。
+#include "../../../shared/evidence/DdmaScratchPlan.h"
 
 #include <QByteArray>
 #include <QString>
@@ -41,6 +43,7 @@ class QPushButton;
 class QSpinBox;
 class QTableWidget;
 class HexEditorWidget;
+class CodeEditorWidget;
 
 namespace ks::ui
 {
@@ -110,6 +113,72 @@ private:
     // - 处理：结果写入磁盘表，同时刷新能力标志与会话可用性。
     void probeChannels();
 
+    // ScratchDetection：一次候选侦测的完整结果，含可直接展示的证据文本。
+    struct ScratchDetection
+    {
+        bool ok = false;                // 是否算出了可用候选。
+        std::uint64_t suggestedLba = 0; // 建议填入的 LBA。
+        QString sourceText;             // 候选来源：专属暂存文件 / 未分配间隙。
+        QString summaryText;            // 面向用户的结论与证据。
+        QString contextText;            // 扇区上下文：归属、偏移、内容预览。
+        QString scratchFilePath;        // 走文件路线时的暂存文件路径，否则为空。
+        bool contentAllZero = false;    // 建议区间当前是否全零。
+    };
+
+    // detectScratchByOwnedFile：
+    // - 作用：在选中磁盘上的某个卷里建一个专属暂存文件，用它自己的簇当暂存区；
+    // - 为什么不是"挑一个空闲簇"：从读到卷位图到 DMA 真正发生之间，系统随时可能
+    //   把那个簇分配给新文件并写入，我们的"还原"就会把刚写进去的文件数据覆盖回
+    //   旧内容。先把簇占为己有，这个竞态就不存在了——那块扇区归我们，写坏也只
+    //   坏我们自己的文件。
+    // - 处理：枚举卷 → 找出落在本磁盘上的 → 建文件并落盘 → 取 retrieval pointers
+    //   拿 LCN → 用卷起始偏移与簇大小换算成磁盘 LBA。
+    // - 返回：成功时 ok 为真且 scratchFilePath 非空；失败时 summaryText 说明原因。
+    ScratchDetection detectScratchByOwnedFile(
+        std::uint32_t driveIndex,
+        std::uint32_t sectorSize);
+
+    // detectScratchCandidatesForSelectedDisk：
+    // - 作用：读当前选中磁盘的分区表，算出可作暂存区的未分配间隙，并读回建议
+    //   区间的实际内容作为第二重证据；
+    // - 处理：分区表只说"未分配"，不保证那里真的空着——磁盘头部间隙正是引导器
+    //   寄居处。所以分级交给 shared/evidence 的纯算术，本函数只负责 Win32 读取
+    //   与"读回来是不是全零"这一条实测证据；
+    // - 返回：侦测结果；失败时 summaryText 说明卡在哪一步。
+    ScratchDetection detectScratchCandidatesForSelectedDisk();
+
+    // detectScratchCandidatesByGap：
+    // - 作用：退路——当专属暂存文件那条路走不通时，改从分区表的未分配间隙里挑；
+    // - 说明：分区表说"未分配"只代表没人登记，不代表那里是空的，所以分级与
+    //   内容复核两道证据缺一不可。
+    ScratchDetection detectScratchCandidatesByGap(
+        std::uint32_t driveIndex,
+        const ksword::ark::DdmaDiskEntry& entry);
+
+    // buildScratchContextText：
+    // - 作用：为一个候选起始 LBA 生成"这块扇区现在是什么"的上下文文本；
+    // - 内容：目标磁盘、覆盖范围、磁盘字节偏移、**落在哪个分区里还是分区之外**、
+    //   当前内容是否全零、以及前 128 字节的十六进制预览；
+    // - 说明：一律现读现算，不复用侦测过程里的中间值——这段是给用户"再确认一次"
+    //   用的，必须反映点下按钮那一刻磁盘上的真实状态。
+    QString buildScratchContextText(
+        std::uint32_t driveIndex,
+        std::uint64_t startLba,
+        std::uint32_t sectorSize,
+        bool& allZeroOut);
+
+    // detectScratchFromUi：把侦测结果落到 LBA 输入框并展示证据。
+    // 刻意**不**替用户勾上确认框：自动算出候选是为了省掉手算，不是替他承担责任。
+    void detectScratchFromUi();
+
+    // physicalDriveIndexFromDeviceName：
+    // - 输入：\Device\Harddisk0\DR0 这类设备对象名；
+    // - 输出：磁盘序号，用于拼出 \\.\PhysicalDriveN；
+    // - 返回：解析成功与否。名字拿不到时不能猜，只能让侦测失败。
+    static bool physicalDriveIndexFromDeviceName(
+        const std::wstring& deviceName,
+        std::uint32_t& indexOut);
+
     // activateSelectedDisk：
     // - 作用：把磁盘表当前选中行设为 DDMA 通道，落地成会话配置。
     void activateSelectedDisk();
@@ -171,6 +240,11 @@ private:
     QCheckBox* m_scratchAckCheck = nullptr;         // 覆盖确认勾选。
     QLabel* m_scratchImpactLabel = nullptr;         // 实时显示会覆盖哪几个扇区。
     QPushButton* m_probeButton = nullptr;           // 探测按钮。
+    QPushButton* m_detectScratchButton = nullptr;   // 侦测候选暂存扇区按钮。
+    QLabel* m_scratchDetectLabel = nullptr;         // 侦测结论与证据。
+    // 扇区上下文：候选定下来之后，把"这块扇区现在是什么"摊开给用户再确认一次。
+    CodeEditorWidget* m_scratchContextView = nullptr;
+    QString m_scratchFilePath;                      // 当前专属暂存文件路径，可为空。
     QPushButton* m_activateButton = nullptr;        // 启用为通道按钮。
     QPushButton* m_clearButton = nullptr;           // 清除会话按钮。
     ks::ui::VisibleTableWidget* m_diskTable = nullptr; // 磁盘表。

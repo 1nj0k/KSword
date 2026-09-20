@@ -1,6 +1,7 @@
 #include "DdmaPage.h"
 
 #include "../theme.h"
+#include "../UI/CodeEditorWidget.h"
 #include "../UI/HexEditorWidget.h"
 #include "../UI/VisibleTableWidget.h"
 
@@ -22,6 +23,13 @@
 
 #include <algorithm>
 #include <limits>
+#include <vector>
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#include <winioctl.h>
 
 // ============================================================
 // DdmaPage.cpp
@@ -154,6 +162,24 @@ QGroupBox* DdmaPage::buildChannelGroup()
         "枚举 \\Driver\\Disk 上的磁盘设备。已填写暂存 LBA 时，"
         "会对每块盘真的发一次 ATA DMA 读命令来判定通道是否可用（只读，不写盘）。");
 
+    m_detectScratchButton = new QPushButton(
+        QIcon(QStringLiteral(":/Icon/file_find.svg")), "侦测候选扇区", group);
+    m_detectScratchButton->setEnabled(false);
+    // 整串写在一行：跨行拼接会被 i18n 审计当成多个独立源串，逐段都要词条。
+    m_detectScratchButton->setToolTip("读取选中磁盘的分区表，找出未分配间隙并把建议的 LBA 填进左侧输入框。只读不写。磁盘头部的间隙正是引导器寄居处，永远不会被选为建议值。填好之后仍然需要你自己勾选确认。");
+
+    m_scratchDetectLabel = new QLabel(group);
+    m_scratchDetectLabel->setWordWrap(true);
+    m_scratchDetectLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+
+    // 扇区上下文：候选定下来之后把"这块扇区现在是什么"摊开，供再确认一次。
+    // 用 setRawText 写入，磁盘上的字节不参与语言包翻译。
+    m_scratchContextView = new CodeEditorWidget(group);
+    m_scratchContextView->setReadOnly(true);
+    m_scratchContextView->setMinimumHeight(150);
+    m_scratchContextView->setRawText(
+        QStringLiteral("尚未侦测。选中一块磁盘后点击“侦测候选扇区”。"));
+
     m_activateButton = new QPushButton(
         QIcon(QStringLiteral(":/Icon/disk_save.svg")), "启用选中磁盘为 DDMA 通道", group);
     m_activateButton->setEnabled(false);
@@ -167,9 +193,12 @@ QGroupBox* DdmaPage::buildChannelGroup()
 
     formLayout->addWidget(new QLabel("暂存扇区 LBA", group), 0, 0);
     formLayout->addWidget(m_scratchLbaEdit, 0, 1);
-    formLayout->addWidget(m_probeButton, 0, 2);
-    formLayout->addWidget(m_scratchImpactLabel, 1, 0, 1, 3);
-    formLayout->addWidget(m_scratchAckCheck, 2, 0, 1, 3);
+    formLayout->addWidget(m_detectScratchButton, 0, 2);
+    formLayout->addWidget(m_probeButton, 0, 3);
+    formLayout->addWidget(m_scratchDetectLabel, 1, 0, 1, 4);
+    formLayout->addWidget(m_scratchContextView, 2, 0, 1, 4);
+    formLayout->addWidget(m_scratchImpactLabel, 3, 0, 1, 4);
+    formLayout->addWidget(m_scratchAckCheck, 4, 0, 1, 4);
     formLayout->setColumnStretch(1, 1);
     outerLayout->addLayout(formLayout);
 
@@ -216,10 +245,17 @@ QGroupBox* DdmaPage::buildChannelGroup()
         refreshSessionState();
         });
     connect(m_scratchAckCheck, &QCheckBox::toggled, this, [this](bool) { refreshSessionState(); });
+    connect(m_detectScratchButton, &QPushButton::clicked, this, [this]() { detectScratchFromUi(); });
     connect(m_diskTable, &QTableWidget::itemSelectionChanged, this, [this]() {
+        const bool hasRow = (m_diskTable->currentRow() >= 0);
         if (m_activateButton != nullptr)
         {
-            m_activateButton->setEnabled(m_diskTable->currentRow() >= 0);
+            m_activateButton->setEnabled(hasRow);
+        }
+        // 侦测要读具体某一块盘的分区表，所以同样以选中行为前提。
+        if (m_detectScratchButton != nullptr)
+        {
+            m_detectScratchButton->setEnabled(hasRow);
         }
         });
 
@@ -508,6 +544,741 @@ void DdmaPage::probeChannels()
         m_capabilityLabel->setText(capabilityText);
     }
 
+    refreshSessionState();
+}
+
+bool DdmaPage::physicalDriveIndexFromDeviceName(
+    const std::wstring& deviceName,
+    std::uint32_t& indexOut)
+{
+    indexOut = 0U;
+    // 设备名形如 \Device\Harddisk0\DR0。序号紧跟在 "Harddisk" 之后，
+    // 与 \\.\PhysicalDriveN 的 N 是同一个数字。拿不到名字时不能猜——猜错就是
+    // 去读另一块盘的分区表，然后建议用户覆盖那块盘上的扇区。
+    const std::wstring marker = L"Harddisk";
+    const std::size_t position = deviceName.find(marker);
+    if (position == std::wstring::npos)
+    {
+        return false;
+    }
+    std::size_t cursor = position + marker.size();
+    if (cursor >= deviceName.size() || deviceName[cursor] < L'0' || deviceName[cursor] > L'9')
+    {
+        return false;
+    }
+    std::uint64_t value = 0ULL;
+    while (cursor < deviceName.size() && deviceName[cursor] >= L'0' && deviceName[cursor] <= L'9')
+    {
+        value = (value * 10ULL) + static_cast<std::uint64_t>(deviceName[cursor] - L'0');
+        if (value > 0xFFFFULL)
+        {
+            return false;
+        }
+        ++cursor;
+    }
+    indexOut = static_cast<std::uint32_t>(value);
+    return true;
+}
+
+DdmaPage::ScratchDetection DdmaPage::detectScratchByOwnedFile(
+    const std::uint32_t driveIndex,
+    const std::uint32_t sectorSize)
+{
+    ScratchDetection detection;
+    detection.sourceText = QStringLiteral("专属暂存文件");
+
+    if (sectorSize == 0U)
+    {
+        detection.summaryText = QStringLiteral("扇区大小未知，无法换算 LBA。");
+        return detection;
+    }
+
+    // 第一步：找出落在这块物理磁盘上的卷。只认固定磁盘上的卷；
+    // 换算 LBA 需要"卷在磁盘上的起始偏移"，只有单 extent 的卷能可靠给出。
+    wchar_t driveStrings[512] = { 0 };
+    const DWORD driveStringsLength =
+        ::GetLogicalDriveStringsW(static_cast<DWORD>(std::size(driveStrings) - 1U), driveStrings);
+    if (driveStringsLength == 0UL)
+    {
+        detection.summaryText = QStringLiteral("枚举卷失败，Win32 错误 %1。").arg(::GetLastError());
+        return detection;
+    }
+
+    // chosenRoot 形如 "D:" 加一个反斜杠。注意：行注释绝不能以反斜杠结尾，
+    // 那是续行符，会把下一行的声明整个吞进注释里。
+    QString chosenRoot;
+    std::uint64_t volumeStartOffset = 0ULL;
+    for (const wchar_t* cursor = driveStrings; *cursor != L'\0'; cursor += wcslen(cursor) + 1U)
+    {
+        const QString root = QString::fromWCharArray(cursor);
+        if (::GetDriveTypeW(cursor) != DRIVE_FIXED)
+        {
+            continue;
+        }
+        // \\.\X: 形式打开卷设备，问它落在哪块物理磁盘的哪个偏移上。
+        const QString volumePath = QStringLiteral("\\\\.\\%1").arg(root.left(2));
+        const HANDLE volumeHandle = ::CreateFileW(
+            reinterpret_cast<LPCWSTR>(volumePath.utf16()),
+            GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            nullptr,
+            OPEN_EXISTING,
+            0,
+            nullptr);
+        if (volumeHandle == INVALID_HANDLE_VALUE)
+        {
+            continue;
+        }
+        std::vector<std::uint8_t> extentBuffer(4096U, 0U);
+        DWORD returned = 0UL;
+        const BOOL extentOk = ::DeviceIoControl(
+            volumeHandle,
+            IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+            nullptr,
+            0UL,
+            extentBuffer.data(),
+            static_cast<DWORD>(extentBuffer.size()),
+            &returned,
+            nullptr);
+        ::CloseHandle(volumeHandle);
+        if (extentOk == FALSE || returned < sizeof(VOLUME_DISK_EXTENTS))
+        {
+            continue;
+        }
+        const auto* extents =
+            reinterpret_cast<const VOLUME_DISK_EXTENTS*>(extentBuffer.data());
+        // 跨多块盘的卷（跨区/条带）拿不到单一起始偏移，换算会错，直接跳过。
+        if (extents->NumberOfDiskExtents != 1UL)
+        {
+            continue;
+        }
+        if (extents->Extents[0].DiskNumber != driveIndex)
+        {
+            continue;
+        }
+        chosenRoot = root;
+        volumeStartOffset =
+            static_cast<std::uint64_t>(extents->Extents[0].StartingOffset.QuadPart);
+        break;
+    }
+
+    if (chosenRoot.isEmpty())
+    {
+        detection.summaryText = QStringLiteral(
+            "这块磁盘上没有找到可写入的单区间固定卷，无法建立专属暂存文件。");
+        return detection;
+    }
+
+    // 第二步：簇大小。LCN 是按簇计的，换算成 LBA 必须知道一簇多少字节。
+    DWORD sectorsPerCluster = 0UL;
+    DWORD bytesPerSector = 0UL;
+    DWORD freeClusters = 0UL;
+    DWORD totalClusters = 0UL;
+    if (::GetDiskFreeSpaceW(
+            reinterpret_cast<LPCWSTR>(chosenRoot.utf16()),
+            &sectorsPerCluster,
+            &bytesPerSector,
+            &freeClusters,
+            &totalClusters) == FALSE ||
+        sectorsPerCluster == 0UL || bytesPerSector == 0UL)
+    {
+        detection.summaryText = QStringLiteral(
+            "读取 %1 的簇大小失败，Win32 错误 %2。").arg(chosenRoot).arg(::GetLastError());
+        return detection;
+    }
+    const std::uint64_t clusterBytes =
+        static_cast<std::uint64_t>(sectorsPerCluster) * bytesPerSector;
+
+    // 第三步：建暂存文件并落盘。大小取一次传输的 16 倍，确保它一定是非驻留的
+    // ——NTFS 会把很小的文件直接塞进 MFT 记录，那种文件没有任何 retrieval
+    // pointer，拿不到 LCN。
+    const std::uint64_t scratchBytes =
+        static_cast<std::uint64_t>(ksword::memory_backend::ddmaTransferBytes()) * 16ULL;
+    const QString filePath = chosenRoot + QStringLiteral("KSwordDdmaScratch.bin");
+    {
+        const HANDLE fileHandle = ::CreateFileW(
+            reinterpret_cast<LPCWSTR>(filePath.utf16()),
+            GENERIC_READ | GENERIC_WRITE,
+            0UL,
+            nullptr,
+            CREATE_ALWAYS,
+            FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_WRITE_THROUGH,
+            nullptr);
+        if (fileHandle == INVALID_HANDLE_VALUE)
+        {
+            detection.summaryText = QStringLiteral(
+                "创建暂存文件 %1 失败，Win32 错误 %2。").arg(filePath).arg(::GetLastError());
+            return detection;
+        }
+        const std::vector<std::uint8_t> filler(static_cast<std::size_t>(scratchBytes), 0U);
+        DWORD written = 0UL;
+        const BOOL writeOk = ::WriteFile(
+            fileHandle,
+            filler.data(),
+            static_cast<DWORD>(filler.size()),
+            &written,
+            nullptr);
+        ::FlushFileBuffers(fileHandle);
+        ::CloseHandle(fileHandle);
+        if (writeOk == FALSE || written != filler.size())
+        {
+            detection.summaryText = QStringLiteral(
+                "写入暂存文件失败，Win32 错误 %1。").arg(::GetLastError());
+            return detection;
+        }
+    }
+
+    // 第四步：取 retrieval pointers 拿第一个 extent 的 LCN。
+    std::uint64_t firstLcn = 0ULL;
+    std::uint64_t extentClusters = 0ULL;
+    {
+        const HANDLE fileHandle = ::CreateFileW(
+            reinterpret_cast<LPCWSTR>(filePath.utf16()),
+            GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            nullptr,
+            OPEN_EXISTING,
+            0UL,
+            nullptr);
+        if (fileHandle == INVALID_HANDLE_VALUE)
+        {
+            detection.summaryText = QStringLiteral(
+                "重新打开暂存文件失败，Win32 错误 %1。").arg(::GetLastError());
+            return detection;
+        }
+        STARTING_VCN_INPUT_BUFFER input{};
+        input.StartingVcn.QuadPart = 0;
+        std::vector<std::uint8_t> output(8192U, 0U);
+        DWORD returned = 0UL;
+        const BOOL ok = ::DeviceIoControl(
+            fileHandle,
+            FSCTL_GET_RETRIEVAL_POINTERS,
+            &input,
+            static_cast<DWORD>(sizeof(input)),
+            output.data(),
+            static_cast<DWORD>(output.size()),
+            &returned,
+            nullptr);
+        const DWORD lastError = ::GetLastError();
+        ::CloseHandle(fileHandle);
+        if (ok == FALSE && lastError != ERROR_MORE_DATA)
+        {
+            detection.summaryText = QStringLiteral(
+                "读取暂存文件簇映射失败，Win32 错误 %1。文件可能是驻留在 MFT 里的小文件。")
+                .arg(lastError);
+            return detection;
+        }
+        const auto* pointers =
+            reinterpret_cast<const RETRIEVAL_POINTERS_BUFFER*>(output.data());
+        if (pointers->ExtentCount == 0UL)
+        {
+            detection.summaryText = QStringLiteral(
+                "暂存文件没有任何簇映射（可能是驻留文件或稀疏文件），无法换算 LBA。");
+            return detection;
+        }
+        if (pointers->Extents[0].Lcn.QuadPart < 0)
+        {
+            detection.summaryText = QStringLiteral("暂存文件第一段没有实际分配的簇。");
+            return detection;
+        }
+        firstLcn = static_cast<std::uint64_t>(pointers->Extents[0].Lcn.QuadPart);
+        extentClusters =
+            static_cast<std::uint64_t>(pointers->Extents[0].NextVcn.QuadPart) -
+            static_cast<std::uint64_t>(pointers->StartingVcn.QuadPart);
+    }
+
+    // 第五步：LCN → 卷内字节偏移 → 磁盘字节偏移 → 磁盘 LBA。
+    const std::uint64_t diskByteOffset = volumeStartOffset + (firstLcn * clusterBytes);
+    if ((diskByteOffset % sectorSize) != 0ULL)
+    {
+        detection.summaryText = QStringLiteral(
+            "换算出的磁盘偏移没有落在扇区边界上，放弃这条路线。");
+        return detection;
+    }
+
+    detection.ok = true;
+    detection.suggestedLba = diskByteOffset / sectorSize;
+    detection.scratchFilePath = filePath;
+    detection.summaryText = QStringLiteral(
+        "已在 %1 上建立专属暂存文件并占用它自己的簇：LCN %2，连续 %3 簇（每簇 %4 字节）。这块扇区归这个文件所有，不会有别的文件住在这里，也不会被系统分配给别人。通道使用期间不要删除这个文件——删掉它会把这些簇交还系统，可能立刻被分配给别的文件，而暂存 LBA 还指着原处。")
+        .arg(filePath)
+        .arg(firstLcn)
+        .arg(extentClusters)
+        .arg(clusterBytes);
+    return detection;
+}
+
+DdmaPage::ScratchDetection DdmaPage::detectScratchCandidatesForSelectedDisk()
+{
+    ScratchDetection detection;
+
+    if (m_diskTable == nullptr)
+    {
+        detection.summaryText = QStringLiteral("界面尚未初始化。");
+        return detection;
+    }
+    const int row = m_diskTable->currentRow();
+    if (row < 0 || row >= static_cast<int>(m_diskCache.size()))
+    {
+        detection.summaryText = QStringLiteral("请先在上表里选中一块磁盘。");
+        return detection;
+    }
+
+    const ksword::ark::DdmaDiskEntry& entry = m_diskCache[static_cast<std::size_t>(row)];
+    std::uint32_t driveIndex = 0U;
+    if (entry.deviceName.empty() ||
+        !physicalDriveIndexFromDeviceName(entry.deviceName, driveIndex))
+    {
+        detection.summaryText = QStringLiteral(
+            "无法从设备名推出物理磁盘序号，侦测中止。设备名=%1")
+            .arg(entry.deviceName.empty()
+                ? QStringLiteral("(不可用)")
+                : QString::fromStdWString(entry.deviceName));
+        return detection;
+    }
+
+    // 优先走"专属暂存文件"：那块扇区归我们所有，可证没有别的文件住在那里，
+    // 也不存在"读完位图到真正 DMA 之间被系统分配出去"的竞态。只有这条路线走
+    // 不通（磁盘上没有可写卷、文件驻留在 MFT 里等）时才退回未分配间隙。
+    {
+        ScratchDetection owned =
+            detectScratchByOwnedFile(driveIndex, (entry.sectorSize != 0U) ? entry.sectorSize : 512U);
+        if (owned.ok)
+        {
+            return owned;
+        }
+        // 失败原因要带到下一条路线的结论里，否则用户只会看到"用了间隙"，
+        // 不知道更安全的那条为什么没走成。
+        m_scratchFilePath.clear();
+        const QString ownedFailure = owned.summaryText;
+        ScratchDetection fallback = detectScratchCandidatesByGap(driveIndex, entry);
+        fallback.summaryText = QStringLiteral("未能使用专属暂存文件（%1）改用未分配间隙：%2")
+            .arg(ownedFailure)
+            .arg(fallback.summaryText);
+        return fallback;
+    }
+}
+
+DdmaPage::ScratchDetection DdmaPage::detectScratchCandidatesByGap(
+    const std::uint32_t driveIndex,
+    const ksword::ark::DdmaDiskEntry& entry)
+{
+    ScratchDetection detection;
+    detection.sourceText = QStringLiteral("未分配间隙");
+
+    const QString drivePath = QStringLiteral("\\\\.\\PhysicalDrive%1").arg(driveIndex);
+    const HANDLE diskHandle = ::CreateFileW(
+        reinterpret_cast<LPCWSTR>(drivePath.utf16()),
+        GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr,
+        OPEN_EXISTING,
+        0,
+        nullptr);
+    if (diskHandle == INVALID_HANDLE_VALUE)
+    {
+        detection.summaryText = QStringLiteral(
+            "打开 %1 失败，Win32 错误 %2。侦测需要管理员权限。")
+            .arg(drivePath)
+            .arg(::GetLastError());
+        return detection;
+    }
+
+    // 用 RAII 之外的简单收尾：下面每条返回路径都必须关掉句柄，所以统一在末尾关。
+    std::vector<ksword::evidence::DdmaScratchOccupiedRange> occupied;
+    std::uint64_t diskSectorCount = 0ULL;
+    std::uint32_t sectorSize = (entry.sectorSize != 0U) ? entry.sectorSize : 512U;
+
+    // 磁盘几何：拿扇区大小与总扇区数。
+    {
+        DISK_GEOMETRY_EX geometry{};
+        DWORD returned = 0UL;
+        if (::DeviceIoControl(
+                diskHandle,
+                IOCTL_DISK_GET_DRIVE_GEOMETRY_EX,
+                nullptr,
+                0UL,
+                &geometry,
+                static_cast<DWORD>(sizeof(geometry)),
+                &returned,
+                nullptr) != FALSE)
+        {
+            if (geometry.Geometry.BytesPerSector != 0UL)
+            {
+                sectorSize = geometry.Geometry.BytesPerSector;
+            }
+            if (sectorSize != 0U && geometry.DiskSize.QuadPart > 0)
+            {
+                diskSectorCount =
+                    static_cast<std::uint64_t>(geometry.DiskSize.QuadPart) / sectorSize;
+            }
+        }
+    }
+    if (diskSectorCount == 0ULL)
+    {
+        ::CloseHandle(diskHandle);
+        detection.summaryText = QStringLiteral("读取磁盘几何失败，无法计算间隙。");
+        return detection;
+    }
+
+    // 分区表：只取起止，风险分级交给纯算术模块。
+    {
+        std::vector<std::uint8_t> layoutBuffer(16384U, 0U);
+        DWORD returned = 0UL;
+        if (::DeviceIoControl(
+                diskHandle,
+                IOCTL_DISK_GET_DRIVE_LAYOUT_EX,
+                nullptr,
+                0UL,
+                layoutBuffer.data(),
+                static_cast<DWORD>(layoutBuffer.size()),
+                &returned,
+                nullptr) == FALSE ||
+            returned < sizeof(DRIVE_LAYOUT_INFORMATION_EX))
+        {
+            ::CloseHandle(diskHandle);
+            detection.summaryText = QStringLiteral(
+                "读取分区表失败，Win32 错误 %1。").arg(::GetLastError());
+            return detection;
+        }
+        const auto* layout =
+            reinterpret_cast<const DRIVE_LAYOUT_INFORMATION_EX*>(layoutBuffer.data());
+        for (DWORD index = 0UL; index < layout->PartitionCount; ++index)
+        {
+            const PARTITION_INFORMATION_EX& partition = layout->PartitionEntry[index];
+            if (partition.PartitionLength.QuadPart <= 0)
+            {
+                continue;
+            }
+            // MBR 表里未使用的槽位长度为零或类型为 0，上面那一条已经滤掉。
+            ksword::evidence::DdmaScratchOccupiedRange range;
+            range.startSector =
+                static_cast<std::uint64_t>(partition.StartingOffset.QuadPart) / sectorSize;
+            range.sectorCount =
+                static_cast<std::uint64_t>(partition.PartitionLength.QuadPart) / sectorSize;
+            occupied.push_back(range);
+        }
+    }
+
+    const std::uint32_t requiredSectors =
+        ksword::memory_backend::ddmaTransferBytes() / sectorSize;
+    const std::vector<ksword::evidence::DdmaScratchCandidate> candidates =
+        ksword::evidence::planDdmaScratchCandidates(diskSectorCount, occupied, requiredSectors);
+
+    const ksword::evidence::DdmaScratchCandidate* chosen = nullptr;
+    for (const ksword::evidence::DdmaScratchCandidate& candidate : candidates)
+    {
+        if (candidate.usable && ksword::evidence::ddmaScratchRiskIsSelectable(candidate.risk))
+        {
+            chosen = &candidate;
+            break;
+        }
+    }
+
+    if (chosen == nullptr)
+    {
+        ::CloseHandle(diskHandle);
+        // 说清楚"为什么没有"，而不是只说没有。磁盘头部间隙常常是唯一的空档，
+        // 而那正是绝不能自动推荐的一段。
+        detection.summaryText = QStringLiteral(
+            "这块磁盘上没有可自动推荐的暂存区间（共 %1 段未分配空间）。"
+            "磁盘头部的间隙是引导器寄居处，尾部是 GPT 备份分区表，两者都不会被推荐；"
+            "分区之间若没有留出至少一次传输的空档，就只能由你手工指定一个 LBA。")
+            .arg(candidates.size());
+        return detection;
+    }
+
+    // 第二重证据：分区表说"未分配"只是没人登记，真正读一遍才知道那里是不是空的。
+    // 全零基本可以断定无人使用；非零一定要显著告警，因为那多半是没有分区表项的
+    // 引导器或厂商数据。
+    bool allZero = false;
+    bool contentRead = false;
+    {
+        std::vector<std::uint8_t> sample(ksword::memory_backend::ddmaTransferBytes(), 0U);
+        LARGE_INTEGER offset{};
+        offset.QuadPart =
+            static_cast<LONGLONG>(chosen->startSector * static_cast<std::uint64_t>(sectorSize));
+        if (::SetFilePointerEx(diskHandle, offset, nullptr, FILE_BEGIN) != FALSE)
+        {
+            DWORD readBytes = 0UL;
+            if (::ReadFile(
+                    diskHandle,
+                    sample.data(),
+                    static_cast<DWORD>(sample.size()),
+                    &readBytes,
+                    nullptr) != FALSE &&
+                readBytes == sample.size())
+            {
+                contentRead = true;
+                allZero = std::all_of(
+                    sample.begin(),
+                    sample.end(),
+                    [](const std::uint8_t value) { return value == 0U; });
+            }
+        }
+    }
+    ::CloseHandle(diskHandle);
+
+    detection.ok = true;
+    detection.suggestedLba = chosen->startSector;
+    detection.contentAllZero = allZero;
+
+    const QString riskText =
+        (chosen->risk == ksword::evidence::DdmaScratchRisk::InteriorGap)
+            ? QStringLiteral("分区之间的未分配间隙")
+            : QStringLiteral("最后一个分区之后的未分配空间");
+    QString summary = QStringLiteral(
+        "建议 LBA %1（%2）。所在间隙 %3 - %4，共 %5 个扇区；一次传输占 %6 个。")
+        .arg(chosen->startSector)
+        .arg(riskText)
+        .arg(chosen->gapStartSector)
+        .arg(chosen->gapStartSector + chosen->gapSectorCount - 1ULL)
+        .arg(chosen->gapSectorCount)
+        .arg(requiredSectors);
+    if (!contentRead)
+    {
+        summary += QStringLiteral(
+            " 未能读回该区间内容做复核，无法确认它当前是否空闲，请自行判断。");
+    }
+    else if (allZero)
+    {
+        summary += QStringLiteral(" 已读回复核：该区间当前全为 0，没有观察到使用痕迹。");
+    }
+    else
+    {
+        summary += QStringLiteral(
+            " 警告：已读回复核发现该区间**不是全零**。分区表说它未分配，但那里确实有数据——"
+            "可能是没有分区表项的引导器或厂商保留数据。除非你清楚那是什么，否则不要用它。");
+    }
+    detection.summaryText = summary;
+    return detection;
+}
+
+QString DdmaPage::buildScratchContextText(
+    const std::uint32_t driveIndex,
+    const std::uint64_t startLba,
+    const std::uint32_t sectorSize,
+    bool& allZeroOut)
+{
+    allZeroOut = false;
+    QStringList lines;
+
+    const std::uint32_t transferBytes = ksword::memory_backend::ddmaTransferBytes();
+    const std::uint32_t sectorCount =
+        (sectorSize != 0U) ? (transferBytes / sectorSize) : 0U;
+    const std::uint64_t byteOffset =
+        startLba * static_cast<std::uint64_t>(sectorSize);
+
+    lines << QStringLiteral("目标磁盘      : \\\\.\\PhysicalDrive%1").arg(driveIndex);
+    lines << QStringLiteral("扇区大小      : %1 字节").arg(sectorSize);
+    lines << QStringLiteral("起始 LBA      : %1  (0x%2)")
+                 .arg(startLba)
+                 .arg(startLba, 0, 16);
+    lines << QStringLiteral("覆盖范围      : LBA %1 - %2，共 %3 个扇区")
+                 .arg(startLba)
+                 .arg(startLba + sectorCount - 1ULL)
+                 .arg(sectorCount);
+    lines << QStringLiteral("磁盘字节偏移  : %1  (0x%2)")
+                 .arg(byteOffset)
+                 .arg(byteOffset, 0, 16);
+
+    // 归属：这段偏移落在哪个分区里，还是落在分区之外。这一条最能让人一眼看出
+    // "我是不是要去覆盖一个正在用的分区"。
+    const QString drivePath = QStringLiteral("\\\\.\\PhysicalDrive%1").arg(driveIndex);
+    const HANDLE diskHandle = ::CreateFileW(
+        reinterpret_cast<LPCWSTR>(drivePath.utf16()),
+        GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr,
+        OPEN_EXISTING,
+        0,
+        nullptr);
+    if (diskHandle == INVALID_HANDLE_VALUE)
+    {
+        lines << QStringLiteral("归属          : 打不开磁盘，无法核对（Win32 %1）")
+                     .arg(::GetLastError());
+        return lines.join(QLatin1Char('\n'));
+    }
+
+    {
+        std::vector<std::uint8_t> layoutBuffer(16384U, 0U);
+        DWORD returned = 0UL;
+        QString ownerText = QStringLiteral("未落在任何分区内（未分配空间）");
+        if (::DeviceIoControl(
+                diskHandle,
+                IOCTL_DISK_GET_DRIVE_LAYOUT_EX,
+                nullptr,
+                0UL,
+                layoutBuffer.data(),
+                static_cast<DWORD>(layoutBuffer.size()),
+                &returned,
+                nullptr) != FALSE &&
+            returned >= sizeof(DRIVE_LAYOUT_INFORMATION_EX))
+        {
+            const auto* layout =
+                reinterpret_cast<const DRIVE_LAYOUT_INFORMATION_EX*>(layoutBuffer.data());
+            for (DWORD index = 0UL; index < layout->PartitionCount; ++index)
+            {
+                const PARTITION_INFORMATION_EX& partition = layout->PartitionEntry[index];
+                if (partition.PartitionLength.QuadPart <= 0)
+                {
+                    continue;
+                }
+                const std::uint64_t start =
+                    static_cast<std::uint64_t>(partition.StartingOffset.QuadPart);
+                const std::uint64_t end =
+                    start + static_cast<std::uint64_t>(partition.PartitionLength.QuadPart);
+                if (byteOffset >= start && byteOffset < end)
+                {
+                    ownerText = QStringLiteral("分区 %1（起始字节 %2，长度 %3）")
+                                    .arg(partition.PartitionNumber)
+                                    .arg(start)
+                                    .arg(end - start);
+                    break;
+                }
+            }
+        }
+        lines << QStringLiteral("归属          : %1").arg(ownerText);
+    }
+
+    // 内容预览：真读一遍。分区表说"未分配"只是没人登记，读回来才知道是不是空的。
+    std::vector<std::uint8_t> sample(transferBytes, 0U);
+    bool contentRead = false;
+    LARGE_INTEGER offset{};
+    offset.QuadPart = static_cast<LONGLONG>(byteOffset);
+    if (::SetFilePointerEx(diskHandle, offset, nullptr, FILE_BEGIN) != FALSE)
+    {
+        DWORD readBytes = 0UL;
+        if (::ReadFile(
+                diskHandle,
+                sample.data(),
+                static_cast<DWORD>(sample.size()),
+                &readBytes,
+                nullptr) != FALSE &&
+            readBytes == sample.size())
+        {
+            contentRead = true;
+        }
+    }
+    ::CloseHandle(diskHandle);
+
+    if (!contentRead)
+    {
+        lines << QStringLiteral("当前内容      : 读取失败，无法复核");
+        return lines.join(QLatin1Char('\n'));
+    }
+
+    allZeroOut = std::all_of(
+        sample.begin(), sample.end(), [](const std::uint8_t value) { return value == 0U; });
+    lines << QStringLiteral("当前内容      : %1")
+                 .arg(allZeroOut
+                          ? QStringLiteral("全部为 0，没有观察到使用痕迹")
+                          : QStringLiteral("非全零 —— 那里确实有数据，用之前请弄清是什么"));
+    lines << QString();
+    lines << QStringLiteral("前 128 字节十六进制预览：");
+
+    // 逐行 16 字节，带偏移与 ASCII 侧栏。
+    const std::size_t previewBytes = std::min<std::size_t>(sample.size(), 128U);
+    for (std::size_t base = 0U; base < previewBytes; base += 16U)
+    {
+        QString hexPart;
+        QString asciiPart;
+        for (std::size_t column = 0U; column < 16U; ++column)
+        {
+            if (base + column >= previewBytes)
+            {
+                hexPart += QStringLiteral("   ");
+                continue;
+            }
+            const std::uint8_t value = sample[base + column];
+            hexPart += QStringLiteral("%1 ").arg(value, 2, 16, QChar('0')).toUpper();
+            asciiPart += (value >= 0x20U && value < 0x7FU)
+                ? QChar(static_cast<char16_t>(value))
+                : QChar(QLatin1Char('.'));
+        }
+        lines << QStringLiteral("  +%1  %2 |%3|")
+                     .arg(base, 4, 16, QChar('0'))
+                     .arg(hexPart)
+                     .arg(asciiPart);
+    }
+
+    return lines.join(QLatin1Char('\n'));
+}
+
+void DdmaPage::detectScratchFromUi()
+{
+    if (m_scratchDetectLabel != nullptr)
+    {
+        m_scratchDetectLabel->setText(QStringLiteral("正在侦测候选扇区..."));
+    }
+
+    const ScratchDetection detection = detectScratchCandidatesForSelectedDisk();
+
+    if (!detection.ok)
+    {
+        if (m_scratchDetectLabel != nullptr)
+        {
+            m_scratchDetectLabel->setText(detection.summaryText);
+            m_scratchDetectLabel->setStyleSheet(
+                QStringLiteral("color:%1;").arg(KswordTheme::WarningHex()));
+        }
+        if (m_scratchContextView != nullptr)
+        {
+            m_scratchContextView->setRawText(QStringLiteral("侦测未得出候选。"));
+        }
+        return;
+    }
+
+    // 上下文一律现读现算，不复用侦测过程中的中间值：这一段是给用户"再确认一次"
+    // 用的，必须反映点下按钮那一刻磁盘上的真实状态。
+    std::uint32_t driveIndex = 0U;
+    std::uint32_t sectorSize = 512U;
+    if (m_diskTable != nullptr)
+    {
+        const int row = m_diskTable->currentRow();
+        if (row >= 0 && row < static_cast<int>(m_diskCache.size()))
+        {
+            const ksword::ark::DdmaDiskEntry& entry = m_diskCache[static_cast<std::size_t>(row)];
+            physicalDriveIndexFromDeviceName(entry.deviceName, driveIndex);
+            if (entry.sectorSize != 0U)
+            {
+                sectorSize = entry.sectorSize;
+            }
+        }
+    }
+
+    bool allZero = false;
+    QString contextText =
+        buildScratchContextText(driveIndex, detection.suggestedLba, sectorSize, allZero);
+    if (!detection.scratchFilePath.isEmpty())
+    {
+        contextText = QStringLiteral("来源          : 专属暂存文件 %1\n")
+                          .arg(detection.scratchFilePath) + contextText;
+    }
+    else
+    {
+        contextText = QStringLiteral("来源          : %1\n").arg(detection.sourceText) + contextText;
+    }
+
+    m_scratchFilePath = detection.scratchFilePath;
+    if (m_scratchContextView != nullptr)
+    {
+        m_scratchContextView->setRawText(contextText);
+    }
+    if (m_scratchDetectLabel != nullptr)
+    {
+        m_scratchDetectLabel->setText(detection.summaryText);
+        m_scratchDetectLabel->setStyleSheet(
+            QStringLiteral("color:%1;")
+                .arg(allZero ? KswordTheme::SuccessHex() : KswordTheme::WarningHex()));
+    }
+
+    // 只填 LBA。确认框保持不动——自动算出候选是为了省掉手算，
+    // 不是替用户承担"这块扇区可以被覆盖"这个判断。
+    if (m_scratchLbaEdit != nullptr)
+    {
+        m_scratchLbaEdit->setText(QString::number(detection.suggestedLba));
+    }
     refreshSessionState();
 }
 
