@@ -34007,6 +34007,16 @@
     "R0恢复进程": "R0 resume process",
     "走驱动的 PsSuspendProcess，取不到则退到 Zw/NtSuspendProcess。": "Uses the driver's PsSuspendProcess, falling back to Zw/NtSuspendProcess when it cannot be resolved.",
     "走驱动的 PsResumeProcess，取不到则退到 Zw/NtResumeProcess。与 R0 挂起成对：R3 的恢复在 R0 挂得动的那些目标上往往也恢复不了。": "Uses the driver's PsResumeProcess, falling back to Zw/NtResumeProcess when it cannot be resolved. It pairs with R0 suspend: the R3 resume usually cannot revive the targets that only R0 could suspend.",
-    "[ProcessDock] executeR0ResumeProcessAction 被忽略：当前没有选中进程。": "[ProcessDock] executeR0ResumeProcessAction ignored: no process is selected."
+    "[ProcessDock] executeR0ResumeProcessAction 被忽略：当前没有选中进程。": "[ProcessDock] executeR0ResumeProcessAction ignored: no process is selected.",
+    "%1 / DMA 结束操作": "%1 / DMA termination",
+    "%1 解除（冻结/结束）": "%1 release (freeze / terminate)",
+    "进程级结束 API": "Process-level terminate APIs",
+    "会话 / 终端服务": "Session / terminal services",
+    "作业对象（连坐）": "Job object (takes the whole job)",
+    "重启管理器": "Restart Manager",
+    "句柄取巧": "Handle tricks",
+    "线程级（逐线程）": "Thread level (one thread at a time)",
+    "调试器路径": "Debugger path",
+    "破坏性（不是请求退出）": "Destructive (does not ask the process to exit)"
   }
 }

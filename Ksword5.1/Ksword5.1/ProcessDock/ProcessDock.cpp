@@ -3636,6 +3636,14 @@ namespace
     // 用户以为自己点的是 A，跑的是 B，失败原因还落在 A 头上。
     struct TerminateMethodEntry
     {
+        // groupName：菜单里的分节标题，中文原文。翻译走的是整串词条
+        // （languages/*.json 的 source_translations）加运行期扫描，与本文件其它
+        // 菜单文案同一条路，所以这里不需要再配一个上下文键。
+        //
+        // 分组按**它请谁去结束**来分，不按名字长相分：同一组里的方法失败原因
+        // 往往相同（比如作业对象那两条，目标不在任何 Job 里时两条一起失败），
+        // 知道这一点就不必把同组的另一条再试一遍。
+        const char* groupName = nullptr;
         const char* methodName = nullptr;
         std::function<bool(std::uint32_t, std::string*)> invokeMethod;
     };
@@ -3644,33 +3652,55 @@ namespace
     {
         static const std::vector<TerminateMethodEntry> table =
         {
-            { "TerminateProcess(Kernel32)", [](std::uint32_t pid, std::string* d)
+            // 直接请内核结束这个进程。最常规，也最容易被内核回调挡下来。
+            { "进程级结束 API", "TerminateProcess(Kernel32)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByWin32(pid, d); } },
-            { "NtTerminateProcess/ZwTerminateProcess", [](std::uint32_t pid, std::string* d)
+            { "进程级结束 API", "NtTerminateProcess/ZwTerminateProcess", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByNtNative(pid, d); } },
-            { "WTSTerminateProcess(WTS API)", [](std::uint32_t pid, std::string* d)
+
+            // 请会话/终端服务去结束。走的是另一个服务进程，因此不吃调用方自己
+            // 的句柄权限，但目标必须属于某个会话。
+            { "会话 / 终端服务", "WTSTerminateProcess(WTS API)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByWtsApi(pid, d); } },
-            { "WinStationTerminateProcess(winsta)", [](std::uint32_t pid, std::string* d)
+            { "会话 / 终端服务", "WinStationTerminateProcess(winsta)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByWinStationApi(pid, d); } },
-            { "TerminateJobObject(Job)", [](std::uint32_t pid, std::string* d)
+
+            // 请作业对象连坐。目标不在任何 Job 里时这一组会一起失败——知道这点
+            // 就不必把组里另一条再试一遍。
+            { "作业对象（连坐）", "TerminateJobObject(Job)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByJobObject(pid, d); } },
-            { "NtTerminateJobObject/ZwTerminateJobObject", [](std::uint32_t pid, std::string* d)
+            { "作业对象（连坐）", "NtTerminateJobObject/ZwTerminateJobObject", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByNtJobObject(pid, d); } },
-            { "RmShutdown(Restart Manager)", [](std::uint32_t pid, std::string* d)
+
+            // 请重启管理器出面。它会先让目标自己优雅退出，force 那条才强制。
+            { "重启管理器", "RmShutdown(Restart Manager)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByRestartManager(pid, false, d); } },
-            { "RmShutdown(Restart Manager, force)", [](std::uint32_t pid, std::string* d)
+            { "重启管理器", "RmShutdown(Restart Manager, force)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByRestartManager(pid, true, d); } },
-            { "DuplicateHandle(-1)+TerminateProcess", [](std::uint32_t pid, std::string* d)
+
+            // 绕开"拿不到有效句柄"这一类失败。
+            { "句柄取巧", "DuplicateHandle(-1)+TerminateProcess", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByDuplicateHandlePseudo(pid, d); } },
-            { "TerminateThread(全部线程)", [](std::uint32_t pid, std::string* d)
+
+            // 不结束进程本身，而是把它的线程逐个干掉。进程对象会留到最后一条
+            // 线程退出，所以"成功"之后目标可能还在列表里待一会儿。
+            { "线程级（逐线程）", "TerminateThread(全部线程)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateAllThreadsByPid(pid, d); } },
-            { "NtTerminateThread/ZwTerminateThread(全部线程)", [](std::uint32_t pid, std::string* d)
+            { "线程级（逐线程）", "NtTerminateThread/ZwTerminateThread(全部线程)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateAllThreadsByPidNtNative(pid, d); } },
-            { "DebugActiveProcess 调试附加", [](std::uint32_t pid, std::string* d)
+
+            // 借调试器身份。附加成功后脱离即杀，对拒绝常规结束的目标常常有效，
+            // 但目标已被别的调试器附加时整组都用不了。
+            { "调试器路径", "DebugActiveProcess 调试附加", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByDebugAttach(pid, d); } },
-            { "ntsd -c q -p <pid>", [](std::uint32_t pid, std::string* d)
+            { "调试器路径", "ntsd -c q -p <pid>", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByNtsdCommand(pid, d); } },
-            { "NtUnmapViewOfSection 卸载 ntdll.dll", [](std::uint32_t pid, std::string* d)
+
+            // 这一条与上面所有方法都不同类：它**不请任何人结束这个进程**，
+            // 而是把目标必需的映射拆掉让它自己崩。因此没有"优雅退出"可言，
+            // 也可能只是让目标变成一个半死不活的状态。单独成组就是为了让人
+            // 在点之前看见这个区别。
+            { "破坏性（不是请求退出）", "NtUnmapViewOfSection 卸载 ntdll.dll", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByNtUnmapNtdll(pid, d); } }
         };
         return table;
@@ -11119,7 +11149,7 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
      */
     QMenu* ringMinusOneSubMenu = contextMenu.addMenu(
         buildR0ActionIcon(":/Icon/process_terminate.svg"),
-        processContextText("process.menu.ring_minus_one_group", QStringLiteral("%1 / DMA 处置"))
+        processContextText("process.menu.ring_minus_one_group", QStringLiteral("%1 / DMA 结束操作"))
             .arg(hvmName));
     QAction* hvmFreezeAction = ringMinusOneSubMenu->addAction(
         buildR0ActionIcon(":/Icon/process_suspend.svg"),
@@ -11134,7 +11164,7 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
         QStringLiteral("靠 EPT 拒绝执行并注入 #UD，RIP 不动。我们不杀进程，是客户机自己把这个未处理异常变成了进程终止。")));
     QAction* hvmReleaseAction = ringMinusOneSubMenu->addAction(
         buildR0ActionIcon(":/Icon/process_refresh.svg"),
-        processContextText("process.menu.hvm_release", QStringLiteral("%1 解除处置"))
+        processContextText("process.menu.hvm_release", QStringLiteral("%1 解除（冻结/结束）"))
             .arg(hvmName));
     QAction* hvmInjectAction = ringMinusOneSubMenu->addAction(
         buildR0ActionIcon(":/Icon/process_terminate.svg"),
@@ -11168,9 +11198,20 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
     advancedTerminateSubMenu->setToolTipsVisible(true);
     std::vector<QAction*> advancedTerminateActions;
     advancedTerminateActions.reserve(terminateMethodTable().size());
+    QString lastGroupTitle;
     for (std::size_t methodIndex = 0; methodIndex < terminateMethodTable().size(); ++methodIndex)
     {
         const TerminateMethodEntry& entry = terminateMethodTable()[methodIndex];
+        // 换组时插一条分节标题。比的是**内容**不是指针：字面量会不会被合并成
+        // 同一个地址由编译器决定（MSVC 的 /GF 在 Release 开、Debug 关），按指针
+        // 比会在不合并的构建里让每一条都自成一组——14 条方法配 14 条分节线。
+        const QString groupTitle =
+            (entry.groupName != nullptr) ? QString::fromUtf8(entry.groupName) : QString();
+        if (!groupTitle.isEmpty() && groupTitle != lastGroupTitle)
+        {
+            advancedTerminateSubMenu->addSection(groupTitle);
+            lastGroupTitle = groupTitle;
+        }
         QAction* const methodAction = advancedTerminateSubMenu->addAction(
             QString::fromUtf8(entry.methodName));
         methodAction->setToolTip(processContextText(
@@ -15078,7 +15119,7 @@ void ProcessDock::executeHvmProcessDispositionAction(
                 0ULL,
                 true);
         showHvmDispositionResult(
-            ks::i18n::sourceText(QStringLiteral("%1 解除处置")).arg(hvmName),
+            ks::i18n::sourceText(QStringLiteral("%1 解除（冻结/结束）")).arg(hvmName),
             releaseResult.io.ok &&
                 releaseResult.response.status ==
                     KSWORD_ARK_HVM_PROCESS_STATUS_OK,
