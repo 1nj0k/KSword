@@ -11358,10 +11358,13 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
      * 所以受保护进程上也是已知的，勾选框不会显示一个编出来的状态。
      * 只有缓冲区越界那种病态情况才是未知，那时按未勾显示（即点了就是挂起）。
      *
-     * 这三项**不设图标**。Qt 的菜单项里图标和勾选标记共用同一列：带图标时
-     * 勾选态靠图标底下的选中框表示，而本菜单的样式表接管了 QMenu::item，那个
-     * 框很可能根本画不出来——那样就又是一个"代码对了但界面上看不见"的东西。
-     * 不给图标，Qt 就在那一列画勾。
+     * 图标**只在未勾选时给**。Qt 的菜单项里图标和勾选标记共用同一列：设了图标
+     * 就画图标，勾选态改用图标底下的选中框表示，而本菜单的样式表接管了
+     * QMenu::item，那个框很可能根本画不出来——勾就等于没有了。所以已勾的那一项
+     * 不设图标，把那一列让给对勾；未勾的项照常显示原来的图标。
+     *
+     * 菜单每次右键都重建，勾选态在建的时候就定了，所以这里一次性判掉即可，
+     * 不需要在点击后换图标——点完菜单就关了。
      */
     const bool contextProcessSuspended =
         contextProcessRecord != nullptr
@@ -11371,6 +11374,10 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
         processContextText("process.menu.suspend", QStringLiteral("挂起进程")));
     suspendToggleAction->setCheckable(true);
     suspendToggleAction->setChecked(contextProcessSuspended);
+    if (!contextProcessSuspended)
+    {
+        suspendToggleAction->setIcon(blueTintedIcon(":/Icon/process_suspend.svg"));
+    }
     /*
      * R0 挂起跟 R3 的挂起/恢复放在一起，而不是跟结束那一组。
      *
@@ -11382,16 +11389,25 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
         processContextText("process.menu.r0_suspend", QStringLiteral("R0挂起进程")));
     r0SuspendToggleAction->setCheckable(true);
     r0SuspendToggleAction->setChecked(contextProcessSuspended);
+    if (!contextProcessSuspended)
+    {
+        r0SuspendToggleAction->setIcon(buildR0ActionIcon(":/Icon/process_suspend.svg"));
+    }
     r0SuspendToggleAction->setToolTip(processContextText(
         "process.menu.r0_suspend.tooltip",
         QStringLiteral("走驱动的 PsSuspendProcess，取不到则退到 Zw/NtSuspendProcess。取消勾选走 PsResumeProcess。勾选态与上面那条共用同一个读数——它反映的是进程当前是否挂起，不表示是谁挂的。")));
+    const bool contextEfficiencyModeEnabled =
+        contextProcessRecord != nullptr
+        && contextProcessRecord->efficiencyModeSupported
+        && contextProcessRecord->efficiencyModeEnabled;
     QAction* efficiencyToggleAction = contextMenu.addAction(
         processContextText("process.menu.efficiency", QStringLiteral("效率模式（绿叶）")));
     efficiencyToggleAction->setCheckable(true);
-    efficiencyToggleAction->setChecked(
-        contextProcessRecord != nullptr
-        && contextProcessRecord->efficiencyModeSupported
-        && contextProcessRecord->efficiencyModeEnabled);
+    efficiencyToggleAction->setChecked(contextEfficiencyModeEnabled);
+    if (!contextEfficiencyModeEnabled)
+    {
+        efficiencyToggleAction->setIcon(blueTintedIcon(":/Icon/process_resume.svg"));
+    }
     QAction* openFolderAction = contextMenu.addAction(
         blueTintedIcon(":/Icon/process_open_folder.svg"),
         processContextText("process.menu.open_folder", QStringLiteral("打开所在目录")));
