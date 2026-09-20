@@ -398,7 +398,6 @@ void MemoryDock::initializeTabs()
     initializeProcessMemoryEvidenceTab();
     initializeSystemMemoryAuditTab();
     initializeTamperDetectionTab();
-    initializeDmaProcessOpTab();
     initializeDdmaTab();
 
     // 12 个页签的图标集中在这里设置：分散到各构建函数里会漏，也不好统一调整语义。
@@ -474,17 +473,6 @@ void MemoryDock::initializeTamperDetectionTab()
         m_tamperDetectionPage,
         QStringLiteral("memory.tab.tamper_detection"),
         QStringLiteral("篡改检测"));
-}
-
-void MemoryDock::initializeDmaProcessOpTab()
-{
-    m_dmaProcessOpPage = new ksword::memory_dock::DmaProcessOpPage(m_tabWidget);
-    m_tabWidget->addTab(m_dmaProcessOpPage, QStringLiteral("DMA 进程操作"));
-    ks::i18n::LanguageManager::instance().bindTab(
-        m_tabWidget,
-        m_dmaProcessOpPage,
-        QStringLiteral("memory.tab.dma_process_op"),
-        QStringLiteral("DMA 进程操作"));
 }
 
 void MemoryDock::initializeDdmaTab()
@@ -624,10 +612,6 @@ void MemoryDock::refreshBackendSelectors()
     if (m_tamperDetectionPage != nullptr)
     {
         m_tamperDetectionPage->refreshChannelAvailability();
-    }
-    if (m_dmaProcessOpPage != nullptr)
-    {
-        m_dmaProcessOpPage->refreshChannelAvailability();
     }
 }
 

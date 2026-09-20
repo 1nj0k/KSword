@@ -891,6 +891,38 @@ KswordARKDriverResolveZwOrNtSuspendProcess(
     return (KSWORD_ZW_OR_NT_SUSPEND_PROCESS_FN)MmGetSystemRoutineAddress(&routineName);
 }
 
+// Resolve PsResumeProcess first, mirroring the suspend path exactly.
+KSWORD_PS_RESUME_PROCESS_FN
+KswordARKDriverResolvePsResumeProcess(
+    VOID
+    )
+{
+    UNICODE_STRING routineName;
+    RtlInitUnicodeString(&routineName, L"PsResumeProcess");
+    return (KSWORD_PS_RESUME_PROCESS_FN)MmGetSystemRoutineAddress(&routineName);
+}
+
+// Fallback resolver for Zw/Nt resume APIs that use process handle input.
+KSWORD_ZW_OR_NT_RESUME_PROCESS_FN
+KswordARKDriverResolveZwOrNtResumeProcess(
+    VOID
+    )
+{
+    UNICODE_STRING routineName;
+
+    RtlInitUnicodeString(&routineName, L"ZwResumeProcess");
+    {
+        KSWORD_ZW_OR_NT_RESUME_PROCESS_FN routineAddress =
+            (KSWORD_ZW_OR_NT_RESUME_PROCESS_FN)MmGetSystemRoutineAddress(&routineName);
+        if (routineAddress != NULL) {
+            return routineAddress;
+        }
+    }
+
+    RtlInitUnicodeString(&routineName, L"NtResumeProcess");
+    return (KSWORD_ZW_OR_NT_RESUME_PROCESS_FN)MmGetSystemRoutineAddress(&routineName);
+}
+
 KSWORD_PS_IS_PROTECTED_PROCESS_FN
 KswordARKDriverResolvePsIsProtectedProcess(
     VOID

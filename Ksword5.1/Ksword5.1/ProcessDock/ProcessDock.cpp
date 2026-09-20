@@ -55,6 +55,7 @@
 #include <QItemSelectionModel>
 #include <QInputDialog>
 #include <QDialog>
+#include <algorithm>
 #include <QDialogButtonBox>
 #include <QLabel>
 #include <QLineEdit>
@@ -2858,6 +2859,34 @@ namespace
         return result.ok;
     }
 
+    // resumeProcessByR0Driver 作用：
+    // - 通过 ArkDriverClient 发送“恢复进程”IOCTL；
+    // - 与 suspendProcessByR0Driver 逐行对称，包括 PID 下界与 detailText 格式。
+    bool resumeProcessByR0Driver(const std::uint32_t targetPid, std::string* const detailTextOut)
+    {
+        if (detailTextOut != nullptr)
+        {
+            detailTextOut->clear();
+        }
+
+        if (targetPid == 0U || targetPid <= 4U)
+        {
+            if (detailTextOut != nullptr)
+            {
+                *detailTextOut = "invalid target pid";
+            }
+            return false;
+        }
+
+        const ksword::ark::DriverClient driverClient;
+        const ksword::ark::IoResult result = driverClient.resumeProcess(targetPid);
+        if (detailTextOut != nullptr)
+        {
+            *detailTextOut = processDockIoMessageStdString(result.message);
+        }
+        return result.ok;
+    }
+
     // setPplProtectionLevelByR0Driver 作用：
     // - 通过 ArkDriverClient 发送“设置 PPL 保护层级”IOCTL；
     // - protectionLevel 与 ProcessProtectionInformation 的单字节层级编码保持一致。
@@ -3598,6 +3627,53 @@ namespace
             *detailTextOut = "target pid not returned by R0 process enumeration";
         }
         return false;
+    }
+
+    // TerminateMethodEntry 作用：描述一条"结束进程原理方法"。
+    //
+    // 这张表是**唯一来源**：组合链按顺序跑它，"高级结束进程"菜单按它逐条建项。
+    // 分两份写的话，菜单上的名字和实际执行的方法迟早会对不上，而那种错不会报错——
+    // 用户以为自己点的是 A，跑的是 B，失败原因还落在 A 头上。
+    struct TerminateMethodEntry
+    {
+        const char* methodName = nullptr;
+        std::function<bool(std::uint32_t, std::string*)> invokeMethod;
+    };
+
+    const std::vector<TerminateMethodEntry>& terminateMethodTable()
+    {
+        static const std::vector<TerminateMethodEntry> table =
+        {
+            { "TerminateProcess(Kernel32)", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateProcessByWin32(pid, d); } },
+            { "NtTerminateProcess/ZwTerminateProcess", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateProcessByNtNative(pid, d); } },
+            { "WTSTerminateProcess(WTS API)", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateProcessByWtsApi(pid, d); } },
+            { "WinStationTerminateProcess(winsta)", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateProcessByWinStationApi(pid, d); } },
+            { "TerminateJobObject(Job)", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateProcessByJobObject(pid, d); } },
+            { "NtTerminateJobObject/ZwTerminateJobObject", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateProcessByNtJobObject(pid, d); } },
+            { "RmShutdown(Restart Manager)", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateProcessByRestartManager(pid, false, d); } },
+            { "RmShutdown(Restart Manager, force)", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateProcessByRestartManager(pid, true, d); } },
+            { "DuplicateHandle(-1)+TerminateProcess", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateProcessByDuplicateHandlePseudo(pid, d); } },
+            { "TerminateThread(全部线程)", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateAllThreadsByPid(pid, d); } },
+            { "NtTerminateThread/ZwTerminateThread(全部线程)", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateAllThreadsByPidNtNative(pid, d); } },
+            { "DebugActiveProcess 调试附加", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateProcessByDebugAttach(pid, d); } },
+            { "ntsd -c q -p <pid>", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateProcessByNtsdCommand(pid, d); } },
+            { "NtUnmapViewOfSection 卸载 ntdll.dll", [](std::uint32_t pid, std::string* d)
+                { return ks::process::TerminateProcessByNtUnmapNtdll(pid, d); } }
+        };
+        return table;
     }
 
     // isProcessPresentBySnapshot 作用：
@@ -10985,7 +11061,10 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
     // - 结束进程及进程树都复用同一条 R3→R0 组合链。
     QAction* terminateProcessAction = contextMenu.addAction(
         blueTintedIcon(":/Icon/process_terminate.svg"),
-        processContextText("process.menu.terminate", QStringLiteral("结束进程")));
+        processContextText("process.menu.r3_terminate", QStringLiteral("R3 结束进程")));
+    terminateProcessAction->setToolTip(processContextText(
+        "process.menu.r3_terminate.tooltip",
+        QStringLiteral("只走用户态的十四种结束方法（两轮），不调用驱动。全部失败也不会自动退到 R0——要用驱动请选下面那两项。")));
     QAction* terminateAndDeleteImageAction = contextMenu.addAction(
         blueTintedIcon(":/Icon/process_terminate.svg"),
         processContextText(
@@ -11006,10 +11085,21 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
                 QStringLiteral("仅支持单选且必须具有可验证的 PID 创建时间与映像路径")));
     QAction* terminateProcessTreeAction = contextMenu.addAction(
         blueTintedIcon(":/Icon/process_terminate.svg"),
-        processContextText("process.menu.terminate_tree", QStringLiteral("结束进程树")));
-    QAction* r0SuspendAction = contextMenu.addAction(
-        buildR0ActionIcon(":/Icon/process_suspend.svg"),
-        processContextText("process.menu.r0_suspend", QStringLiteral("R0挂起进程")));
+        processContextText("process.menu.r3_terminate_tree", QStringLiteral("R3 结束进程树")));
+    /*
+     * R0 两项在 2026-09-16 的 0dbbeaf1 里被折进了 R3 链的回退，这里按更早的实现
+     * 恢复成独立入口：R3 的任何一种方法恰好成功，折进去的那条 R0 就根本不执行，
+     * 于是"单独用 R0 结束"这件事没法发起，驱动那条通路也没法单独验证。
+     */
+    QAction* r0TerminateAction = contextMenu.addAction(
+        buildR0ActionIcon(":/Icon/process_terminate.svg"),
+        processContextText("process.menu.r0_terminate", QStringLiteral("R0结束进程")));
+    r0TerminateAction->setToolTip(processContextText(
+        "process.menu.r0_terminate.tooltip",
+        QStringLiteral("只下发驱动的结束 IOCTL，不跑任何用户态方法。驱动侧本身是四步：先清 PP/PPL 保护字节，再 ZwTerminateProcess、逐线程终止、清零可写用户内存。注意保护字节清零之后不会还原。")));
+    QAction* r0TerminateTreeAction = contextMenu.addAction(
+        buildR0ActionIcon(":/Icon/process_terminate.svg"),
+        processContextText("process.menu.r0_terminate_tree", QStringLiteral("R0结束进程树")));
     /*
      * R-1 两项跟随右上角那个显示名（KVM / HVM / R-1）。
      *
@@ -11018,26 +11108,89 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
      */
     const QString hvmName = ks::settings::hvmDisplayNameLabel(
         ks::settings::loadAppearanceSettings().hvmDisplayName);
-    QAction* hvmFreezeAction = contextMenu.addAction(
+    /*
+     * R-1 与 DMA 收进一个子菜单。
+     *
+     * 它们与上面 R3/R0 那几项的差别不是"更强"，而是**机制完全不同**，因此
+     * 失败面与副作用也不同：R-1 靠 EPT 拒绝执行再注入 #PF/#UD，进程状态一个
+     * 字节都没改，是客户机自己把未处理异常变成了进程终止；DMA 直接改真页，
+     * 没有触发点、也没有进程作用域。把它们和 R3/R0 平铺在一起，会让人以为
+     * 只是"换个更狠的按钮"。
+     */
+    QMenu* ringMinusOneSubMenu = contextMenu.addMenu(
+        buildR0ActionIcon(":/Icon/process_terminate.svg"),
+        processContextText("process.menu.ring_minus_one_group", QStringLiteral("%1 / DMA 处置"))
+            .arg(hvmName));
+    QAction* hvmFreezeAction = ringMinusOneSubMenu->addAction(
         buildR0ActionIcon(":/Icon/process_suspend.svg"),
         processContextText("process.menu.hvm_freeze", QStringLiteral("%1 冻结进程（可逆）"))
             .arg(hvmName));
-    QAction* hvmTerminateAction = contextMenu.addAction(
+    QAction* hvmTerminateAction = ringMinusOneSubMenu->addAction(
         buildR0ActionIcon(":/Icon/process_terminate.svg"),
         processContextText("process.menu.hvm_terminate", QStringLiteral("%1 结束进程"))
             .arg(hvmName));
-    QAction* hvmReleaseAction = contextMenu.addAction(
+    hvmTerminateAction->setToolTip(processContextText(
+        "process.menu.hvm_terminate.tooltip",
+        QStringLiteral("靠 EPT 拒绝执行并注入 #UD，RIP 不动。我们不杀进程，是客户机自己把这个未处理异常变成了进程终止。")));
+    QAction* hvmReleaseAction = ringMinusOneSubMenu->addAction(
         buildR0ActionIcon(":/Icon/process_refresh.svg"),
         processContextText("process.menu.hvm_release", QStringLiteral("%1 解除处置"))
             .arg(hvmName));
-    QAction* hvmInjectAction = contextMenu.addAction(
+    QAction* hvmInjectAction = ringMinusOneSubMenu->addAction(
         buildR0ActionIcon(":/Icon/process_terminate.svg"),
         processContextText("process.menu.hvm_inject", QStringLiteral("%1 注入 DLL"))
             .arg(hvmName));
-    QAction* hvmInjectReleaseAction = contextMenu.addAction(
+    QAction* hvmInjectReleaseAction = ringMinusOneSubMenu->addAction(
         buildR0ActionIcon(":/Icon/process_refresh.svg"),
         processContextText("process.menu.hvm_inject_release", QStringLiteral("%1 撤销注入"))
             .arg(hvmName));
+    ringMinusOneSubMenu->addSeparator();
+    QAction* dmaProcessOpAction = ringMinusOneSubMenu->addAction(
+        buildR0ActionIcon(":/Icon/process_terminate.svg"),
+        processContextText("process.menu.dma_process_op", QStringLiteral("DMA 注入 / 写 UD2…")));
+    dmaProcessOpAction->setToolTip(processContextText(
+        "process.menu.dma_process_op.tooltip",
+        QStringLiteral("打开 DMA 进程操作窗口。DMA 改的是真页、没有触发点、也没有进程作用域——写入前会先证明目标页不被其它进程共享，确认共享的直接拒绝。")));
+
+    /*
+     * 高级结束进程：把组合链里的每一种方法单独摆出来。
+     *
+     * 存在的理由是**定位**而不是更强：组合链一口气跑十四种方法两轮，成功时你不
+     * 知道是哪一种起的作用，失败时也不知道是哪一种最接近成功。单独跑一种，
+     * 日志里那一条就是干净的读数。
+     *
+     * 条目直接由 terminateMethodTable() 生成，不另写一份名字列表——两份必然走散，
+     * 而"菜单写着 A、实际跑了 B"这种错不会报错。
+     */
+    QMenu* advancedTerminateSubMenu = contextMenu.addMenu(
+        blueTintedIcon(":/Icon/process_terminate.svg"),
+        processContextText("process.menu.advanced_terminate", QStringLiteral("高级结束进程（逐方法）")));
+    advancedTerminateSubMenu->setToolTipsVisible(true);
+    std::vector<QAction*> advancedTerminateActions;
+    advancedTerminateActions.reserve(terminateMethodTable().size());
+    for (std::size_t methodIndex = 0; methodIndex < terminateMethodTable().size(); ++methodIndex)
+    {
+        const TerminateMethodEntry& entry = terminateMethodTable()[methodIndex];
+        QAction* const methodAction = advancedTerminateSubMenu->addAction(
+            QString::fromUtf8(entry.methodName));
+        methodAction->setToolTip(processContextText(
+            "process.menu.advanced_terminate.item_tooltip",
+            QStringLiteral("只执行这一种方法一次，不跑其余方法、也不退到 R0。结果与细节写进日志面板。")));
+        advancedTerminateActions.push_back(methodAction);
+    }
+    advancedTerminateSubMenu->addSeparator();
+    QAction* advancedR0OnlyAction = advancedTerminateSubMenu->addAction(
+        buildR0ActionIcon(":/Icon/process_terminate.svg"),
+        processContextText("process.menu.advanced_terminate_r0",
+                           QStringLiteral("R0 驱动结束（四步：清保护 → ZwTerminate → 逐线程 → 清零内存）")));
+    QAction* advancedHvmOnlyAction = advancedTerminateSubMenu->addAction(
+        buildR0ActionIcon(":/Icon/process_terminate.svg"),
+        processContextText("process.menu.advanced_terminate_hvm",
+                           QStringLiteral("%1 结束（EPT 拒绝执行 + 注入 #UD）")).arg(hvmName));
+    QAction* advancedDmaAction = advancedTerminateSubMenu->addAction(
+        buildR0ActionIcon(":/Icon/process_terminate.svg"),
+        processContextText("process.menu.advanced_terminate_dma",
+                           QStringLiteral("DMA 写 UD2（需指定地址，打开窗口）")));
     QAction* screenInjectionSurfaceAction = contextMenu.addAction(
         blueTintedIcon(":/Icon/process_details.svg"),
         processContextText("process.menu.screen_injection_surface",
@@ -11169,6 +11322,25 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
     QAction* resumeAction = contextMenu.addAction(
         blueTintedIcon(":/Icon/process_resume.svg"),
         processContextText("process.menu.resume", QStringLiteral("恢复进程")));
+    /*
+     * R0 挂起跟 R3 的挂起/恢复放在一起，而不是跟结束那一组。
+     *
+     * 菜单按**要做的事**分组，不按实现层级分组：想挂起一个进程的人会去找
+     * "挂起"，不会先想清楚自己要 R3 还是 R0。按层级堆在一起的结果是同一件事
+     * 散在菜单两头，而每一头都不完整。
+     */
+    QAction* r0SuspendAction = contextMenu.addAction(
+        buildR0ActionIcon(":/Icon/process_suspend.svg"),
+        processContextText("process.menu.r0_suspend", QStringLiteral("R0挂起进程")));
+    r0SuspendAction->setToolTip(processContextText(
+        "process.menu.r0_suspend.tooltip",
+        QStringLiteral("走驱动的 PsSuspendProcess，取不到则退到 Zw/NtSuspendProcess。")));
+    QAction* r0ResumeAction = contextMenu.addAction(
+        buildR0ActionIcon(":/Icon/process_resume.svg"),
+        processContextText("process.menu.r0_resume", QStringLiteral("R0恢复进程")));
+    r0ResumeAction->setToolTip(processContextText(
+        "process.menu.r0_resume.tooltip",
+        QStringLiteral("走驱动的 PsResumeProcess，取不到则退到 Zw/NtResumeProcess。与 R0 挂起成对：R3 的恢复在 R0 挂得动的那些目标上往往也恢复不了。")));
     QAction* enableEfficiencyAction = contextMenu.addAction(
         blueTintedIcon(":/Icon/process_resume.svg"),
         processContextText("process.menu.efficiency_on", QStringLiteral("开启效率模式（绿叶）")));
@@ -12244,7 +12416,37 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
         else if (selectedAction == terminateProcessAction) { executeTerminateProcessAction(); }
         else if (selectedAction == terminateAndDeleteImageAction) { executeTerminateAndDeleteImageAction(); }
         else if (selectedAction == terminateProcessTreeAction) { executeTerminateProcessTreeAction(); }
+        else if (selectedAction == r0TerminateAction) { executeR0TerminateProcessAction(); }
+        else if (selectedAction == r0TerminateTreeAction) { executeR0TerminateProcessTreeAction(); }
         else if (selectedAction == r0SuspendAction) { executeR0SuspendProcessAction(); }
+        else if (selectedAction == r0ResumeAction) { executeR0ResumeProcessAction(); }
+        else if (selectedAction == dmaProcessOpAction || selectedAction == advancedDmaAction)
+        {
+            openDmaProcessOpWindow();
+        }
+        else if (selectedAction == advancedR0OnlyAction) { executeR0TerminateProcessAction(); }
+        else if (selectedAction == advancedHvmOnlyAction)
+        {
+            executeHvmProcessDispositionAction(KSWORD_ARK_HVM_PROCESS_OP_TERMINATE);
+        }
+        // 成员判定而不是 !empty()：后者是个永真条件，会把它下面所有 else if
+        // 分支（HVM 那几项就在后面）全吞掉，而菜单点不动不会报任何错。
+        else if (std::find(advancedTerminateActions.begin(),
+                           advancedTerminateActions.end(),
+                           selectedAction) != advancedTerminateActions.end())
+        {
+            // 逐方法项：按下标找回它对应的那一条，只跑这一种。
+            for (std::size_t methodIndex = 0;
+                 methodIndex < advancedTerminateActions.size();
+                 ++methodIndex)
+            {
+                if (selectedAction == advancedTerminateActions[methodIndex])
+                {
+                    executeSingleTerminateMethodAction(methodIndex);
+                    break;
+                }
+            }
+        }
         else if (selectedAction == hvmFreezeAction) {
             executeHvmProcessDispositionAction(
                 KSWORD_ARK_HVM_PROCESS_OP_FREEZE);
@@ -14609,6 +14811,28 @@ void ProcessDock::executeR0SuspendProcessAction()
         true);
 }
 
+void ProcessDock::executeR0ResumeProcessAction()
+{
+    const std::vector<ProcessActionTarget> actionTargets = selectedActionTargets();
+    if (actionTargets.empty())
+    {
+        kLogEvent logEvent;
+        warn << logEvent << "[ProcessDock] executeR0ResumeProcessAction 被忽略：当前没有选中进程。" << eol;
+        return;
+    }
+
+    dispatchProcessActionTargetsInParallel(
+        processContextText("process.menu.r0_resume", QStringLiteral("R0恢复进程")),
+        actionTargets,
+        [](const ProcessActionTarget& actionTarget, std::string* detailTextOut)
+        {
+            return resumeProcessByR0Driver(actionTarget.record.pid, detailTextOut);
+        },
+        false,
+        false,
+        true);
+}
+
 QString ProcessDock::hvmDispositionStatusAdvice(const unsigned long status)
 {
     /*
@@ -15813,7 +16037,11 @@ void ProcessDock::executeTerminateProcessAction()
         return;
     }
 
-    executeTerminateProcessActions(QStringLiteral("结束进程"), actionTargets);
+    executeTerminateProcessActions(
+        processContextText("process.menu.r3_terminate", QStringLiteral("R3 结束进程")),
+        actionTargets,
+        false,
+        false);
 }
 
 void ProcessDock::executeTerminateAndDeleteImageAction()
@@ -15854,14 +16082,189 @@ void ProcessDock::executeTerminateProcessTreeAction()
     }
 
     executeTerminateProcessActions(
-        processContextText("process.menu.terminate_tree", QStringLiteral("结束进程树")),
+        processContextText("process.menu.r3_terminate_tree", QStringLiteral("R3 结束进程树")),
+        actionTargets,
+        false,
+        false);
+}
+
+/*
+ * 只跑组合链里的某一种方法，一次。
+ *
+ * 存在的理由是定位而不是更强：组合链一口气十四种方法两轮，成功时看不出是哪一种
+ * 起的作用，失败时也看不出哪一种最接近成功。这里跑完就报结果，不补其余方法、
+ * 也不退到 R0——补了就又变成一个说不清是谁干的结果。
+ */
+void ProcessDock::executeSingleTerminateMethodAction(const std::size_t methodIndex)
+{
+    if (methodIndex >= terminateMethodTable().size())
+    {
+        kLogEvent logEvent;
+        warn << logEvent
+            << "[ProcessDock] executeSingleTerminateMethodAction 被忽略：方法下标越界, index="
+            << static_cast<unsigned long long>(methodIndex)
+            << eol;
+        return;
+    }
+    const std::vector<ProcessActionTarget> actionTargets = selectedActionTargets();
+    if (actionTargets.empty())
+    {
+        kLogEvent logEvent;
+        warn << logEvent
+            << "[ProcessDock] executeSingleTerminateMethodAction 被忽略：当前没有选中进程。"
+            << eol;
+        return;
+    }
+
+    const TerminateMethodEntry& entry = terminateMethodTable()[methodIndex];
+    const QString methodTitle = QString::fromUtf8(entry.methodName);
+    dispatchProcessActionTargetsInParallel(
+        methodTitle,
+        actionTargets,
+        [methodIndex](const ProcessActionTarget& actionTarget, std::string* detailTextOut)
+        {
+            // 下标在这里重新取表，而不是捕获引用：表是静态的，但捕获一个跨线程
+            // 使用的引用没有任何好处，反而把生命周期问题引进来。
+            return terminateMethodTable()[methodIndex].invokeMethod(
+                actionTarget.record.pid, detailTextOut);
+        },
+        true,
+        false,
+        false);
+}
+
+/*
+ * 打开 DMA 进程操作窗口。
+ *
+ * 做成独立窗口而不是内存页的子 Tab：它是对**进程**的处置，和内存查看/搜索不是
+ * 一类东西，摆在内存页里会让人从"看内存"顺手滑到"改别人的进程"。
+ */
+void ProcessDock::openDmaProcessOpWindow()
+{
+    const std::vector<ProcessActionTarget> actionTargets = selectedActionTargets();
+    if (actionTargets.empty())
+    {
+        kLogEvent logEvent;
+        warn << logEvent << "[ProcessDock] openDmaProcessOpWindow 被忽略：当前没有选中进程。" << eol;
+        return;
+    }
+
+    if (m_dmaProcessOpDialog == nullptr)
+    {
+        m_dmaProcessOpDialog = new QDialog(this);
+        m_dmaProcessOpDialog->setWindowTitle(
+            processContextText("process.menu.dma_process_op.title",
+                               QStringLiteral("DMA 进程操作")));
+        m_dmaProcessOpDialog->resize(900, 640);
+        QVBoxLayout* const dialogLayout = new QVBoxLayout(m_dmaProcessOpDialog);
+        dialogLayout->setContentsMargins(0, 0, 0, 0);
+        m_dmaProcessOpPage = new ksword::memory_dock::DmaProcessOpPage(m_dmaProcessOpDialog);
+        dialogLayout->addWidget(m_dmaProcessOpPage);
+    }
+
+    const ProcessActionTarget& target = actionTargets.front();
+    m_dmaProcessOpPage->setAttachedProcess(
+        target.record.pid,
+        QString::fromStdString(target.record.processName));
+    m_dmaProcessOpPage->refreshChannelAvailability();
+    m_dmaProcessOpDialog->show();
+    m_dmaProcessOpDialog->raise();
+    m_dmaProcessOpDialog->activateWindow();
+}
+
+void ProcessDock::executeR0TerminateProcessAction()
+{
+    const std::vector<ProcessActionTarget> actionTargets = selectedActionTargets();
+    if (actionTargets.empty())
+    {
+        kLogEvent logEvent;
+        warn << logEvent << "[ProcessDock] executeR0TerminateProcessAction 被忽略：当前没有选中进程。" << eol;
+        return;
+    }
+
+    executeR0TerminateProcessActions(
+        processContextText("process.menu.r0_terminate", QStringLiteral("R0结束进程")),
         actionTargets);
+}
+
+void ProcessDock::executeR0TerminateProcessTreeAction()
+{
+    const std::vector<ProcessActionTarget> actionTargets = processTreeActionTargets();
+    if (actionTargets.empty())
+    {
+        kLogEvent logEvent;
+        warn << logEvent
+            << "[ProcessDock] executeR0TerminateProcessTreeAction 被忽略：选中进程未包含在当前 R3 快照中。"
+            << eol;
+        QMessageBox::information(
+            this,
+            processContextText("process.menu.r0_terminate_tree", QStringLiteral("R0结束进程树")),
+            processContextText(
+                "process.action.r0_terminate_tree.r3_snapshot_unavailable",
+                QStringLiteral("当前选中进程未包含在 R3 进程快照中，无法识别进程树。")));
+        return;
+    }
+
+    executeR0TerminateProcessActions(
+        processContextText("process.menu.r0_terminate_tree", QStringLiteral("R0结束进程树")),
+        actionTargets);
+}
+
+/*
+ * 只走 R0 驱动那一条，不经过任何 R3 方法。
+ *
+ * 2026-09-16 的 0dbbeaf1 把它折进了 R3 组合链的回退，于是"只用 R0"没法单独发起：
+ * R3 的十四种方法里任何一种恰好成功，R0 这条就根本不会执行。想单独验证驱动那条
+ * 通路是不是好的，那是个假读数——看起来"结束成功了"，实际上驱动一次都没被调用。
+ * 这里按更早的实现恢复成独立入口，确认框也一并留着（R0 结束的失败面与 R3 不同，
+ * 它能杀掉 R3 杀不动的东西，也就更容易在选错目标时造成不可逆后果）。
+ */
+void ProcessDock::executeR0TerminateProcessActions(
+    const QString& actionTitle,
+    const std::vector<ProcessActionTarget>& actionTargets)
+{
+    QStringList targetPidList;
+    for (const ProcessActionTarget& actionTarget : actionTargets)
+    {
+        targetPidList.push_back(QString::number(actionTarget.record.pid));
+    }
+    const QString targetDescription = ks::i18n::sourceText(
+        QStringLiteral("%1 个进程；PID：%2"))
+        .arg(actionTargets.size())
+        .arg(targetPidList.join(QStringLiteral(", ")));
+    if (!ks::ui::confirmDestructiveAction(
+            this,
+            QStringLiteral("process-termination-r0"),
+            actionTitle,
+            targetDescription,
+            ks::i18n::sourceText(QStringLiteral(
+                "R0 结束操作不可逆，可能造成数据丢失、系统不稳定或蓝屏。请确认目标无误后再继续。"))))
+    {
+        clearContextActionBinding();
+        return;
+    }
+
+    dispatchProcessActionTargetsInParallel(
+        actionTitle,
+        actionTargets,
+        [](const ProcessActionTarget& actionTarget, std::string* detailTextOut)
+        {
+            // 每个动作目标都会单独调用 ArkDriverClient，形成独立的结束进程 IOCTL。
+            return terminateProcessByR0Driver(
+                actionTarget.record.pid,
+                r0ActionExpectedCreationTime(actionTarget.record),
+                detailTextOut);
+        },
+        true,
+        false,
+        true);
 }
 
 void ProcessDock::executeTerminateProcessActions(
     const QString& actionTitle,
     const std::vector<ProcessActionTarget>& actionTargets,
-    const bool deleteImageAfterExit)
+    const bool deleteImageAfterExit,
+    const bool includeR0Fallback)
 {
     if (deleteImageAfterExit && actionTargets.size() != 1U)
     {
@@ -15872,7 +16275,7 @@ void ProcessDock::executeTerminateProcessActions(
     dispatchProcessActionTargetsInParallel(
         actionTitle,
         actionTargets,
-        [deleteImageAfterExit](const ProcessActionTarget& actionTarget, std::string* detailTextOut)
+        [deleteImageAfterExit, includeR0Fallback](const ProcessActionTarget& actionTarget, std::string* detailTextOut)
         {
             // targetPid 用途：固定本次动作的目标 PID，避免中途选中行变化影响执行对象。
             const std::uint32_t targetPid = actionTarget.record.pid;
@@ -15968,47 +16371,11 @@ void ProcessDock::executeTerminateProcessActions(
                 actionDetailStream << " | capture=" << imageCaptureDetail;
             }
 
-            // TerminateMethodEntry 作用：描述一个可执行的“结束进程原理方法”。
-            struct TerminateMethodEntry
-            {
-                const char* methodName = nullptr; // methodName：日志中显示的方法名。
-                std::function<bool(std::string*)> invokeMethod; // invokeMethod：方法调用体。
-            };
-
-            // terminateMethodList 作用：
-            // - 维护“结束进程原理”的顺序清单；
-            // - 每个进程的内部方法链保持顺序，但多个进程之间并行执行。
-            const std::vector<TerminateMethodEntry> terminateMethodList =
-            {
-                { "TerminateProcess(Kernel32)", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateProcessByWin32(targetPid, detailOut); } },
-                { "NtTerminateProcess/ZwTerminateProcess", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateProcessByNtNative(targetPid, detailOut); } },
-                { "WTSTerminateProcess(WTS API)", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateProcessByWtsApi(targetPid, detailOut); } },
-                { "WinStationTerminateProcess(winsta)", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateProcessByWinStationApi(targetPid, detailOut); } },
-                { "TerminateJobObject(Job)", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateProcessByJobObject(targetPid, detailOut); } },
-                { "NtTerminateJobObject/ZwTerminateJobObject", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateProcessByNtJobObject(targetPid, detailOut); } },
-                { "RmShutdown(Restart Manager)", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateProcessByRestartManager(targetPid, false, detailOut); } },
-                { "RmShutdown(Restart Manager, force)", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateProcessByRestartManager(targetPid, true, detailOut); } },
-                { "DuplicateHandle(-1)+TerminateProcess", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateProcessByDuplicateHandlePseudo(targetPid, detailOut); } },
-                { "TerminateThread(全部线程)", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateAllThreadsByPid(targetPid, detailOut); } },
-                { "NtTerminateThread/ZwTerminateThread(全部线程)", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateAllThreadsByPidNtNative(targetPid, detailOut); } },
-                { "DebugActiveProcess 调试附加", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateProcessByDebugAttach(targetPid, detailOut); } },
-                { "ntsd -c q -p <pid>", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateProcessByNtsdCommand(targetPid, detailOut); } },
-                { "NtUnmapViewOfSection 卸载 ntdll.dll", [targetPid](std::string* detailOut)
-                    { return ks::process::TerminateProcessByNtUnmapNtdll(targetPid, detailOut); } }
-            };
+            // 方法表取自唯一来源（terminateMethodTable），与"高级结束进程"
+            // 菜单用的是同一份。之前这里另有一份就地定义的副本，两处各改一次
+            // 就会走散，而那种不一致不会报错。
+            const std::vector<TerminateMethodEntry>& terminateMethodList =
+                terminateMethodTable();
 
             for (int roundIndex = 0; roundIndex < kTerminateRoundLimit && !processExited; ++roundIndex)
             {
@@ -16026,7 +16393,7 @@ void ProcessDock::executeTerminateProcessActions(
                     }
 
                     std::string methodDetailText;
-                    const bool methodOk = methodEntry.invokeMethod(&methodDetailText);
+                    const bool methodOk = methodEntry.invokeMethod(targetPid, &methodDetailText);
                     const std::string normalizedMethodDetailText =
                         methodDetailText.empty() ? "无附加信息" : methodDetailText;
                     (methodOk ? info : err) << actionEvent
@@ -16111,7 +16478,14 @@ void ProcessDock::executeTerminateProcessActions(
             // 所有 R3 方法均未使目标退出时，才执行一次 R0 驱动回退；不把它放进
             // 两轮 R3 方法表，避免对同一目标重复下发驱动结束请求。普通可见进程在
             // 回退前再确认一次仍存在，覆盖前一成功方法的异步退出尾段。
-            if (!processExited && !actionTarget.isKernelOnly)
+            // includeR0Fallback 为假时这一整段不执行：菜单上的"R3 结束进程"
+            // 承诺的就是"只用 R3"，一条会在背后调用驱动的动作叫这个名字就是
+            // 在骗人，而且会让"单独验证 R3 这条通路"永远得不到干净的读数。
+            if (!includeR0Fallback && !processExited)
+            {
+                actionDetailStream << " | R0 fallback=skipped (R3-only action)";
+            }
+            if (includeR0Fallback && !processExited && !actionTarget.isKernelOnly)
             {
                 bool finalPresenceQueryOk = false;
                 const bool targetStillPresentBeforeR0 = isProcessPresentBySnapshot(

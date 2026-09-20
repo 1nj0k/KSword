@@ -41,6 +41,8 @@
 class QComboBox;
 class QCheckBox;
 class QDialog;
+// DmaProcessOpPage 按值出现在成员指针里，需要完整类型。
+#include "../MemoryDock/DmaProcessOpPage.h"
 class QDoubleSpinBox;
 class QFormLayout;
 class QGroupBox;
@@ -844,10 +846,34 @@ private:
     // - 仅根据当前 R3 进程快照识别选中进程及其全部后代；
     // - 每个识别出的 PID 独立复用“结束进程组合动作”。
     void executeTerminateProcessTreeAction();
+    // executeR0TerminateProcessAction 作用：
+    // - 通过 R0 驱动 IOCTL 请求内核态结束目标进程；
+    // - 成功/失败细节统一写入日志面板。
+    //
+    // 2026-09-16 的 0dbbeaf1 把这条折进了 R3 组合链的回退，于是"只用 R0"没法单独
+    // 发起——而 R3 的十四种方法里任何一种恰好成功，都会让 R0 这条根本不执行。
+    // 想单独验证驱动那条通路时，那是个假读数。这里按更早的实现恢复成独立入口。
+    // executeSingleTerminateMethodAction 作用：
+    // - 只执行组合链里下标为 methodIndex 的那一种方法，一次；
+    // - 不补其余方法、不退到 R0——补了就又变成一个说不清是谁干的结果。
+    void executeSingleTerminateMethodAction(std::size_t methodIndex);
+    // openDmaProcessOpWindow 作用：
+    // - 以选中进程为目标打开 DMA 进程操作窗口。
+    void openDmaProcessOpWindow();
+    void executeR0TerminateProcessAction();
+    // executeR0TerminateProcessTreeAction 作用：
+    // - 仅根据当前 R3 进程快照识别选中进程树；
+    // - 对树中的每个 PID 单独提交现有结束进程 IOCTL。
+    void executeR0TerminateProcessTreeAction();
     // executeR0SuspendProcessAction 作用：
     // - 通过 R0 驱动 IOCTL 请求内核态挂起目标进程；
     // - 成功/失败细节统一写入日志面板。
     void executeR0SuspendProcessAction();
+    // executeR0ResumeProcessAction 作用：
+    // - 通过 R0 驱动 IOCTL 恢复被挂起的目标进程；
+    // - 与 executeR0SuspendProcessAction 成对：只有挂起没有恢复，用 R0 挂起过的
+    //   目标就只能靠重启退出那个状态。
+    void executeR0ResumeProcessAction();
     // executeHvmProcessDispositionAction 作用：
     // - 下达一次 R-1 进程处置（冻结 / 结束 / 解除）；
     // - 冻结与结束需要一个"会被执行到的客户线性地址"，由对话框取得，默认预填
@@ -987,10 +1013,19 @@ private:
         bool refreshWhenAnySucceeded,
         bool forceAsyncWithTimeout = false,
         bool requireVerifiedProcessIdentity = false);
+    // executeTerminateProcessActions：
+    // - includeR0Fallback 为真时，十四种 R3 方法都没让目标退出才补一次 R0；
+    //   为假时只跑 R3 那一段，R0 完全不参与。
+    // - 菜单上的"R3 结束进程"传 false：它承诺的是"只用 R3"，而一条会在背后
+    //   调用驱动的动作叫这个名字就是在骗人。
     void executeTerminateProcessActions(
         const QString& actionTitle,
         const std::vector<ProcessActionTarget>& actionTargets,
-        bool deleteImageAfterExit = false);
+        bool deleteImageAfterExit = false,
+        bool includeR0Fallback = true);
+    void executeR0TerminateProcessActions(
+        const QString& actionTitle,
+        const std::vector<ProcessActionTarget>& actionTargets);
     const ks::process::SystemThreadRecord* selectedThreadRecord() const;
     void bindContextActionToIndex(const QModelIndex& clickedIndex);
     void clearContextActionBinding();
@@ -1152,6 +1187,8 @@ private:
 
     // ======== 进程表格 ========
     QTableView* m_processTable = nullptr;     // 进程列表表格视图（支持列拖动/排序/右键）。
+    QDialog* m_dmaProcessOpDialog = nullptr;  // DMA 进程操作窗口（按需创建，复用同一个）。
+    ksword::memory_dock::DmaProcessOpPage* m_dmaProcessOpPage = nullptr; // 窗口里的页面本体。
     ProcessTableModel* m_processTableModel = nullptr; // 进程列表轻量模型，避免刷新时重建 item。
     QSortFilterProxyModel* m_processSortProxy = nullptr; // 进程列表排序代理，保持数值列排序行为。
     std::array<double, static_cast<std::size_t>(TableColumn::Count)> m_processUsageHighlightMaximums{}; // 当前进程表各占用指标列的强度上限。

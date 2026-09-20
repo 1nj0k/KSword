@@ -1320,8 +1320,15 @@
     {
       "id": "r0.hvm-metrics",
       "tier": "probe",
-      "ioctls": ["HVM_METRICS"],
-      "steps": [["r0", "hvm-metrics"]],
+      "ioctls": [
+        "HVM_METRICS"
+      ],
+      "steps": [
+        [
+          "r0",
+          "hvm-metrics"
+        ]
+      ],
       "expect": "graceful",
       "timeoutSeconds": 120,
       "notes": "Read-only timing/counter snapshot; does not enter VMX or allocate mappings."
@@ -2614,6 +2621,27 @@
         [
           "process",
           "suspend",
+          "--pid",
+          "{lifecycle.pid}"
+        ]
+      ],
+      "expect": "graceful",
+      "timeoutSeconds": 120,
+      "requires": [
+        "lifecycle.pid"
+      ],
+      "targetGuard": "harness-owned-process"
+    },
+    {
+      "id": "process.resume",
+      "tier": "probe",
+      "ioctls": [
+        "RESUME_PROCESS"
+      ],
+      "steps": [
+        [
+          "process",
+          "resume",
           "--pid",
           "{lifecycle.pid}"
         ]

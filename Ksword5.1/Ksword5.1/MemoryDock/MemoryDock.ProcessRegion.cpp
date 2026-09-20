@@ -1019,10 +1019,6 @@ void MemoryDock::syncTamperDetectionTargets()
         return;
     }
     m_tamperDetectionPage->setAttachedProcess(m_attachedPid, m_attachedProcessName);
-    if (m_dmaProcessOpPage != nullptr)
-    {
-        m_dmaProcessOpPage->setAttachedProcess(m_attachedPid, m_attachedProcessName);
-    }
 
     // 模块列表转成"可扫描目标"。只传基址和大小：篡改检测页不需要知道签名、
     // 入口点之类的东西，多传一份就会多一处需要同步的状态。

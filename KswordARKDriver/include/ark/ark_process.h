@@ -20,6 +20,11 @@ KswordARKDriverSuspendProcessByPid(
     );
 
 NTSTATUS
+KswordARKDriverResumeProcessByPid(
+    _In_ ULONG processId
+    );
+
+NTSTATUS
 KswordARKDriverSetProcessPplLevelByPid(
     _In_ ULONG processId,
     _In_ UCHAR protectionLevel

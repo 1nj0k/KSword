@@ -755,6 +755,24 @@ namespace ksword::ark
         return result;
     }
 
+    IoResult DriverClient::resumeProcess(const std::uint32_t processId) const
+    {
+        KSWORD_ARK_RESUME_PROCESS_REQUEST request{};
+        request.processId = processId;
+        IoResult result = deviceIoControl(
+            IOCTL_KSWORD_ARK_RESUME_PROCESS,
+            &request,
+            static_cast<unsigned long>(sizeof(request)),
+            nullptr,
+            0);
+
+        std::ostringstream stream;
+        stream << "pid=" << processId << ", bytesReturned=" << result.bytesReturned;
+        stream << (result.ok ? ", ioctl=ok" : ", ioctl=fail, error=" + std::to_string(result.win32Error));
+        result.message = stream.str();
+        return result;
+    }
+
     IoResult DriverClient::setProcessProtection(const std::uint32_t processId, const std::uint8_t protectionLevel) const
     {
         KSWORD_ARK_SET_PPL_LEVEL_REQUEST request{};

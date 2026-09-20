@@ -266,6 +266,89 @@ Return Value:
 }
 
 NTSTATUS
+KswordARKProcessIoctlResume(
+    _In_ WDFDEVICE Device,
+    _In_ WDFREQUEST Request,
+    _In_ size_t InputBufferLength,
+    _In_ size_t OutputBufferLength,
+    _Out_ size_t* BytesReturned
+    )
+/*++
+
+Routine Description:
+
+    Handle IOCTL_KSWORD_ARK_RESUME_PROCESS.
+    中文说明：与挂起 handler 逐行对称。安全策略刻意复用
+    KSWORD_ARK_SAFETY_OPERATION_PROCESS_SUSPEND 而不是新增一个操作码：恢复是
+    挂起的逆操作，能挂起就该能恢复；给它单独一个可以被单独关掉的开关，会造出
+    "挂得起来、恢复不了"这种只能重启才能退出的状态。
+
+Arguments:
+
+    Device - WDF device used for logging.
+    Request - Current IOCTL request.
+    InputBufferLength - Caller input length; used by WDF retrieval.
+    OutputBufferLength - Caller output length; unused for this IOCTL.
+    BytesReturned - Receives sizeof(request) on success and zero on failure.
+
+Return Value:
+
+    NTSTATUS from validation or KswordARKDriverResumeProcessByPid.
+
+--*/
+{
+    KSWORD_ARK_RESUME_PROCESS_REQUEST* resumeRequest = NULL;
+    PVOID inputBuffer = NULL;
+    size_t actualInputLength = 0;
+    NTSTATUS status = STATUS_SUCCESS;
+
+    UNREFERENCED_PARAMETER(InputBufferLength);
+    UNREFERENCED_PARAMETER(OutputBufferLength);
+
+    if (BytesReturned == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    *BytesReturned = 0;
+
+    status = KswordARKRetrieveRequiredInputBuffer(Request, sizeof(KSWORD_ARK_RESUME_PROCESS_REQUEST), &inputBuffer, &actualInputLength);
+    if (!NT_SUCCESS(status)) {
+        KswordARKProcessIoctlLog(Device, "Error", "R0 resume ioctl: input buffer invalid, status=0x%08X", (unsigned int)status);
+        return status;
+    }
+
+    resumeRequest = (KSWORD_ARK_RESUME_PROCESS_REQUEST*)inputBuffer;
+    status = KswordARKValidateUserPid((ULONG)resumeRequest->processId);
+    if (!NT_SUCCESS(status)) {
+        KswordARKProcessIoctlLog(Device, "Warn", "R0 resume ioctl: pid=%lu rejected.", (unsigned long)resumeRequest->processId);
+        return status;
+    }
+    {
+        KSWORD_ARK_SAFETY_CONTEXT safetyContext;
+        RtlZeroMemory(&safetyContext, sizeof(safetyContext));
+        safetyContext.Operation = KSWORD_ARK_SAFETY_OPERATION_PROCESS_SUSPEND;
+        safetyContext.TargetProcessId = (ULONG)resumeRequest->processId;
+        safetyContext.ContextFlags = KSWORD_ARK_SAFETY_CONTEXT_FLAG_UI_CONFIRMED;
+        status = KswordARKSafetyEvaluate(Device, &safetyContext);
+        if (!NT_SUCCESS(status)) {
+            KswordARKProcessIoctlLog(Device, "Warn", "R0 resume denied by safety policy: pid=%lu, status=0x%08X.", (unsigned long)resumeRequest->processId, (unsigned int)status);
+            return status;
+        }
+    }
+
+    KswordARKProcessIoctlLog(Device, "Info", "R0 resume ioctl: pid=%lu.", (unsigned long)resumeRequest->processId);
+    status = KswordARKDriverResumeProcessByPid((ULONG)resumeRequest->processId);
+    if (NT_SUCCESS(status)) {
+        KswordARKProcessIoctlLog(Device, "Info", "R0 resume success: pid=%lu.", (unsigned long)resumeRequest->processId);
+        *BytesReturned = sizeof(KSWORD_ARK_RESUME_PROCESS_REQUEST);
+    }
+    else {
+        KswordARKProcessIoctlLog(Device, "Error", "R0 resume failed: pid=%lu, status=0x%08X.", (unsigned long)resumeRequest->processId, (unsigned int)status);
+    }
+
+    return status;
+}
+
+NTSTATUS
 KswordARKProcessIoctlSetPplLevel(
     _In_ WDFDEVICE Device,
     _In_ WDFREQUEST Request,

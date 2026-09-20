@@ -1854,6 +1854,77 @@ Return Value:
 }
 
 NTSTATUS
+KswordARKDriverResumeProcessByPid(
+    _In_ ULONG processId
+    )
+/*++
+
+Routine Description:
+
+    Resume target process by PID (PsResumeProcess preferred, Zw/Nt fallback).
+    中文说明：逐行对称于 KswordARKDriverSuspendProcessByPid，包括 PID 下界、
+    解析顺序与回退时申请的访问权限。两条不对称会造成"挂得起来、恢复不了"，
+    而那种状态从任何一侧的返回值上都看不出来。
+
+Arguments:
+
+    processId - Target process ID.
+
+Return Value:
+
+    NTSTATUS
+
+--*/
+{
+    OBJECT_ATTRIBUTES objectAttributes;
+    CLIENT_ID clientId;
+    HANDLE processHandle = NULL;
+    PEPROCESS processObject = NULL;
+    NTSTATUS status = STATUS_SUCCESS;
+    KSWORD_PS_RESUME_PROCESS_FN psResumeProcess = NULL;
+    KSWORD_ZW_OR_NT_RESUME_PROCESS_FN zwOrNtResumeProcess = NULL;
+
+    if (processId == 0U || processId <= 4U) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    // Prefer PsResumeProcess with PEPROCESS input for wider compatibility.
+    psResumeProcess = KswordARKDriverResolvePsResumeProcess();
+    if (psResumeProcess != NULL) {
+        status = PsLookupProcessByProcessId(ULongToHandle(processId), &processObject);
+        if (!NT_SUCCESS(status)) {
+            return status;
+        }
+
+        status = psResumeProcess(processObject);
+        ObDereferenceObject(processObject);
+        return status;
+    }
+
+    // Fallback to Zw/NtResumeProcess with process-handle input.
+    zwOrNtResumeProcess = KswordARKDriverResolveZwOrNtResumeProcess();
+    if (zwOrNtResumeProcess == NULL) {
+        return STATUS_PROCEDURE_NOT_FOUND;
+    }
+
+    InitializeObjectAttributes(&objectAttributes, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+    clientId.UniqueProcess = ULongToHandle(processId);
+    clientId.UniqueThread = NULL;
+    status = ZwOpenProcess(
+        &processHandle,
+        PROCESS_SUSPEND_RESUME,
+        &objectAttributes,
+        &clientId);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
+    status = zwOrNtResumeProcess(processHandle);
+    ZwClose(processHandle);
+    return status;
+}
+
+NTSTATUS
 KswordARKDriverApplyProcessProtectionToObject(
     _In_ PEPROCESS processObject,
     _In_ UCHAR protectionLevel

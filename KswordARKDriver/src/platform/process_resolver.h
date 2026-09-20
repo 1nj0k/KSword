@@ -18,6 +18,14 @@ typedef NTSTATUS(NTAPI* KSWORD_ZW_OR_NT_SUSPEND_PROCESS_FN)(
     _In_ HANDLE ProcessHandle
     );
 
+typedef NTSTATUS(NTAPI* KSWORD_PS_RESUME_PROCESS_FN)(
+    _In_ PEPROCESS Process
+    );
+
+typedef NTSTATUS(NTAPI* KSWORD_ZW_OR_NT_RESUME_PROCESS_FN)(
+    _In_ HANDLE ProcessHandle
+    );
+
 typedef NTSTATUS(NTAPI* KSWORD_ZW_SET_INFORMATION_PROCESS_FN)(
     _In_ HANDLE ProcessHandle,
     _In_ ULONG ProcessInformationClass,
@@ -70,6 +78,16 @@ KswordARKDriverResolvePsSuspendProcess(
 
 KSWORD_ZW_OR_NT_SUSPEND_PROCESS_FN
 KswordARKDriverResolveZwOrNtSuspendProcess(
+    VOID
+    );
+
+KSWORD_PS_RESUME_PROCESS_FN
+KswordARKDriverResolvePsResumeProcess(
+    VOID
+    );
+
+KSWORD_ZW_OR_NT_RESUME_PROCESS_FN
+KswordARKDriverResolveZwOrNtResumeProcess(
     VOID
     );
 

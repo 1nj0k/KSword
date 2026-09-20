@@ -120,6 +120,10 @@ namespace ksword::ark
         IoResult controlDriverThread(DriverHandle& handle, std::uint32_t threadId, std::uint64_t expectedStartAddress, std::uint64_t expectedCreateTime100ns, unsigned long action, unsigned long terminateMethod, bool uiConfirmed) const;
         IoResult experimentalReturnToFirmware() const;
         IoResult suspendProcess(std::uint32_t processId) const;
+        // resumeProcess：挂起的逆操作，与它成对出现。
+        // 没有它的时候，R0 挂起之后只能靠 R3 恢复——而 R3 恢复在 R0 挂起能成功
+        // 的那些目标上往往也是失败的，于是目标会永久卡在挂起态。
+        IoResult resumeProcess(std::uint32_t processId) const;
         IoResult setProcessProtection(std::uint32_t processId, std::uint8_t protectionLevel) const;
         ProcessVisibilityResult setProcessVisibility(std::uint32_t processId, unsigned long action, unsigned long flags = 0UL) const;
         // setProcessIntegrity：

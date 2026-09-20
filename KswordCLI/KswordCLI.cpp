@@ -1149,6 +1149,7 @@ namespace
         { L"log", L"", L"KswordCLI.exe log [--max-frames N]", L"Read up to N log frames from the shared log device.", L"--max-frames defaults to 64.", L"No subcommand is used for the log family." },
         { L"process", L"terminate", L"KswordCLI.exe process terminate --pid PID [--exit-status NTSTATUS]", L"Terminate one process through the driver.", L"Required: --pid. Optional: --exit-status defaults to 0xC000013A.", L"" },
         { L"process", L"suspend", L"KswordCLI.exe process suspend --pid PID", L"Suspend one process.", L"Required: --pid.", L"" },
+        { L"process", L"resume", L"KswordCLI.exe process resume --pid PID", L"Resume one suspended process.", L"Required: --pid.", L"Pairs with process suspend; the driver prefers PsResumeProcess and falls back to Zw/NtResumeProcess." },
         { L"process", L"set-ppl", L"KswordCLI.exe process set-ppl --pid PID --level LEVEL", L"Set the process protection level byte.", L"Required: --pid, --level.", L"" },
         { L"process", L"set-integrity", L"KswordCLI.exe process set-integrity --pid PID (--rid RID | --level untrusted|low|medium|medium-plus|high|system) [--flags 0xN] [--confirm]", L"Set a process mandatory integrity label through R0.", L"Required: --pid and one integrity selector. Optional: --flags, --confirm adds UI-confirmed protocol bit.", L"Backed by IOCTL_KSWORD_ARK_SET_PROCESS_INTEGRITY." },
         { L"process", L"inject-dll", L"KswordCLI.exe process inject-dll --pid PID --dll PATH [--flags 0xN] [--wait-thread] --confirm", L"Inject a DLL path through the R0 process injection protocol.", L"Required: --pid, --dll, --confirm. Optional: --flags overrides request flags; --wait-thread adds wait flag.", L"Backed by IOCTL_KSWORD_ARK_INJECT_PROCESS with LoadLibraryW entrypoint." },
@@ -2401,6 +2402,12 @@ namespace
             KSWORD_ARK_SUSPEND_PROCESS_REQUEST request{};
             request.processId = requireOptionU32(args, L"--pid");
             return runNoOutputIoctl(L"IOCTL_KSWORD_ARK_SUSPEND_PROCESS", IOCTL_KSWORD_ARK_SUSPEND_PROCESS, &request, sizeof(request));
+        }
+        if (sub == L"resume")
+        {
+            KSWORD_ARK_RESUME_PROCESS_REQUEST request{};
+            request.processId = requireOptionU32(args, L"--pid");
+            return runNoOutputIoctl(L"IOCTL_KSWORD_ARK_RESUME_PROCESS", IOCTL_KSWORD_ARK_RESUME_PROCESS, &request, sizeof(request));
         }
         if (sub == L"set-ppl")
         {
