@@ -33,6 +33,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QEasingCurve>
+#include <QEvent>
 #include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -58,6 +59,7 @@
 #include <QScrollArea>
 #include <QShowEvent>
 #include <QSizePolicy>
+#include <QSplitter>
 #include <QStackedWidget>
 #include <QTabBar>
 #include <QTabWidget>
@@ -3410,6 +3412,24 @@ void HardwareDock::resizeEvent(QResizeEvent* resizeEventPointer)
     adjustUtilizationChartHeights();
 }
 
+bool HardwareDock::eventFilter(QObject* watchedObject, QEvent* eventObject)
+{
+    if (eventObject != nullptr
+        && eventObject->type() == QEvent::MouseButtonRelease
+        && m_utilizationBodySplitter != nullptr
+        && watchedObject == m_utilizationBodySplitter->handle(1))
+    {
+        // 非 opaque resize 模式下，释放事件先于最终子控件布局到达；排到下一轮
+        // 事件循环后再读取 viewport 宽度，并保留用户刚提交的 splitter 尺寸。
+        QTimer::singleShot(0, this, [this]()
+        {
+            adjustUtilizationChartHeights();
+        });
+    }
+
+    return QWidget::eventFilter(watchedObject, eventObject);
+}
+
 void HardwareDock::showEvent(QShowEvent* showEventPointer)
 {
     QWidget::showEvent(showEventPointer);
@@ -3422,6 +3442,17 @@ void HardwareDock::showEvent(QShowEvent* showEventPointer)
     }
 
     startPerformanceSampling(true);
+
+    // splitter 在 Dock 首次显示前可能还没有最终宽度，因此分两轮尝试应用
+    // 300px 默认左栏；成功后不再覆盖用户后续拖动结果。
+    QTimer::singleShot(0, this, [this]()
+    {
+        applyInitialUtilizationSplitterSize();
+    });
+    QTimer::singleShot(80, this, [this]()
+    {
+        applyInitialUtilizationSplitterSize();
+    });
 
     // 首次显示阶段分阶段重排，确保滚动区 viewport 高度已经稳定。
     scheduleUtilizationLayoutRefresh();
@@ -3610,10 +3641,16 @@ void HardwareDock::initializeUtilizationTab()
     // 任务管理器风格布局：
     // - 左侧为性能导航卡片列表；
     // - 右侧为详情页堆栈，随左侧选中项切换。
-    m_utilizationBodyLayout = new QHBoxLayout();
-    m_utilizationBodyLayout->setContentsMargins(0, 0, 0, 0);
-    m_utilizationBodyLayout->setSpacing(8);
-    m_utilizationLayout->addLayout(m_utilizationBodyLayout, 1);
+    m_utilizationBodySplitter = new QSplitter(Qt::Horizontal, m_utilizationPage);
+    m_utilizationBodySplitter->setChildrenCollapsible(false);
+    // 拖动期间只显示橡皮筋，不实时重排左侧卡片；松开后再一次性提交新宽度。
+    m_utilizationBodySplitter->setOpaqueResize(false);
+    m_utilizationBodySplitter->setHandleWidth(8);
+    configureCompressibleWidget(
+        m_utilizationBodySplitter,
+        QSizePolicy::Expanding,
+        QSizePolicy::Expanding);
+    m_utilizationLayout->addWidget(m_utilizationBodySplitter, 1);
 
     m_utilizationSidebarList = new QListWidget(m_utilizationPage);
     m_utilizationSidebarList->setFrameShape(QFrame::NoFrame);
@@ -3623,21 +3660,33 @@ void HardwareDock::initializeUtilizationTab()
     m_utilizationSidebarList->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     m_utilizationSidebarList->setSelectionMode(QAbstractItemView::SingleSelection);
     m_utilizationSidebarList->setSpacing(2);
-    configureCompressibleWidget(m_utilizationSidebarList, QSizePolicy::Preferred, QSizePolicy::Expanding);
-    m_utilizationSidebarList->setMinimumWidth(96);
-    m_utilizationSidebarList->setMaximumWidth(228);
+    configureCompressibleWidget(m_utilizationSidebarList, QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_utilizationSidebarList->setMinimumWidth(140);
     m_utilizationSidebarList->setStyleSheet(
         QStringLiteral(
             "QListWidget{border:none;background:transparent;}"
             "QListWidget::item{border:none;padding:0px;margin:0px;}"
             "QListWidget::item:selected{background:transparent;}"));
     appendTransparentBackgroundStyle(m_utilizationSidebarList);
-    m_utilizationBodyLayout->addWidget(m_utilizationSidebarList, 0);
+    m_utilizationBodySplitter->addWidget(m_utilizationSidebarList);
 
-    m_utilizationDetailStack = new QStackedWidget(m_utilizationPage);
-    configureCompressibleWidget(m_utilizationDetailStack, QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_utilizationDetailStack = new QStackedWidget(m_utilizationBodySplitter);
+    // 详情页内容由多个子页共享，不能让隐藏子页的 sizeHint 反向限制 splitter。
+    configureCompressibleWidget(m_utilizationDetailStack, QSizePolicy::Ignored, QSizePolicy::Expanding);
+    // 保证左侧即使被拖到较宽，右侧详情仍保留可读区域；这也是 splitter 的
+    // 最大左栏边界，而不是由卡片 sizeHint 间接决定。
+    m_utilizationDetailStack->setMinimumWidth(360);
     appendTransparentBackgroundStyle(m_utilizationDetailStack);
-    m_utilizationBodyLayout->addWidget(m_utilizationDetailStack, 1);
+    m_utilizationBodySplitter->addWidget(m_utilizationDetailStack);
+    if (QWidget* const splitterHandle = m_utilizationBodySplitter->handle(1))
+    {
+        splitterHandle->installEventFilter(this);
+    }
+    m_utilizationBodySplitter->setStretchFactor(0, 0);
+    m_utilizationBodySplitter->setStretchFactor(1, 1);
+    // 先给出可用的预置值；首次显示后 applyInitialUtilizationSplitterSize 会按实际
+    // splitter 可用宽度把左侧校准到 300px，之后完全保留用户拖动结果。
+    m_utilizationBodySplitter->setSizes({ 300, 360 });
 
     initializeUtilizationCpuSubTab();
     initializeUtilizationMemorySubTab();
@@ -3722,7 +3771,9 @@ PerformanceNavCard* HardwareDock::addUtilizationSidebarCard(
             QStringLiteral("hardware.utilization.card.sampling"),
             QStringLiteral("采样中...")));
     cardPointer->setAccentColor(accentColor);
-    itemPointer->setSizeHint(cardPointer->sizeHint());
+    // 只把高度交给 QListWidget 管理；宽度始终由 viewport/分割器决定，不能把
+    // 卡片推荐宽度写进 item，否则拖动 splitter 时 QListView 会反向拉回 splitter。
+    itemPointer->setSizeHint(QSize(0, cardPointer->sizeHint().height()));
     m_utilizationSidebarList->addItem(itemPointer);
     m_utilizationSidebarList->setItemWidget(itemPointer, cardPointer);
 
@@ -3781,6 +3832,101 @@ void HardwareDock::syncUtilizationSidebarSelection(const int selectedRowIndex)
 
     // 选项切换后立即重算大图高度，避免首帧出现滚动条。
     scheduleUtilizationLayoutRefresh();
+}
+
+void HardwareDock::applyInitialUtilizationSplitterSize()
+{
+    if (m_utilizationSplitterInitialSizeApplied
+        || m_utilizationBodySplitter == nullptr)
+    {
+        return;
+    }
+
+    const QList<int> currentSizes = m_utilizationBodySplitter->sizes();
+    const int availableWidth = currentSizes.value(0) + currentSizes.value(1);
+    if (availableWidth <= 0)
+    {
+        return;
+    }
+
+    const int maxLeftWidth = std::max(140, availableWidth - 360);
+    const int leftWidth = std::clamp(300, 140, maxLeftWidth);
+    m_utilizationBodySplitter->setSizes({ leftWidth, std::max(0, availableWidth - leftWidth) });
+    m_utilizationSplitterInitialSizeApplied = true;
+    syncUtilizationSidebarCardWidths();
+}
+
+void HardwareDock::syncUtilizationSidebarCardWidths()
+{
+    if (m_utilizationSidebarList == nullptr)
+    {
+        return;
+    }
+
+    const int cardWidth = m_utilizationSidebarList->viewport()->width();
+    if (cardWidth <= 0)
+    {
+        return;
+    }
+
+    const QList<int> savedSplitterSizes = m_utilizationBodySplitter != nullptr
+        ? m_utilizationBodySplitter->sizes()
+        : QList<int>();
+    QList<int> boundedSplitterSizes = savedSplitterSizes;
+    if (boundedSplitterSizes.size() == 2)
+    {
+        const int availableWidth = boundedSplitterSizes.value(0) + boundedSplitterSizes.value(1);
+        const int maxLeftWidth = std::max(140, availableWidth - 360);
+        const int boundedLeftWidth = std::clamp(
+            boundedSplitterSizes.value(0),
+            140,
+            maxLeftWidth);
+        boundedSplitterSizes = {
+            boundedLeftWidth,
+            std::max(0, availableWidth - boundedLeftWidth) };
+    }
+    // QListWidget 的行宽始终由 viewport 决定；这里只固定行高，避免把某一轮
+    // 初始布局得到的宽度写成后续 splitter 的隐性最小宽度。
+    const QSize nextSizeHint(0, 52);
+    bool itemSizeChanged = false;
+
+    for (int rowIndex = 0; rowIndex < m_utilizationSidebarList->count(); ++rowIndex)
+    {
+        QListWidgetItem* const itemPointer = m_utilizationSidebarList->item(rowIndex);
+        if (itemPointer == nullptr || itemPointer->sizeHint() == nextSizeHint)
+        {
+            continue;
+        }
+
+        itemPointer->setSizeHint(nextSizeHint);
+        itemSizeChanged = true;
+
+        if (QWidget* const cardWidget = m_utilizationSidebarList->itemWidget(itemPointer))
+        {
+            cardWidget->setMinimumWidth(0);
+            cardWidget->setMaximumWidth(QWIDGETSIZE_MAX);
+            cardWidget->updateGeometry();
+            cardWidget->update();
+        }
+    }
+
+    if (!itemSizeChanged
+        || m_utilizationBodySplitter == nullptr
+        || savedSplitterSizes.size() != 2)
+    {
+        return;
+    }
+
+    // QListWidget 行的宽度 hint 可能触发父 splitter 重新分配；立即恢复一次，
+    // 再在布局事件完成后恢复一次，确保释放时保留用户实际拖到的位置。
+    m_utilizationBodySplitter->setSizes(boundedSplitterSizes);
+    QTimer::singleShot(0, this, [this, boundedSplitterSizes]()
+    {
+        if (m_utilizationBodySplitter != nullptr)
+        {
+            m_utilizationBodySplitter->setSizes(boundedSplitterSizes);
+        }
+    });
 }
 
 void HardwareDock::adjustUtilizationChartHeights()
@@ -3848,35 +3994,12 @@ void HardwareDock::adjustUtilizationChartHeights()
     // ===================== 左侧设备列表：按宽度收缩，按高度滚动 =====================
     if (m_utilizationPage != nullptr && m_utilizationSidebarList != nullptr)
     {
-        // pageWidth 用途：根据利用率页实际宽度估算左侧栏宽，窄面板下主动让出图表区域。
-        const int pageWidth = std::max(0, m_utilizationPage->contentsRect().width());
-        const int sidebarWidth = std::clamp(pageWidth / 4, 96, 228);
-        if (m_utilizationSidebarList->minimumWidth() != sidebarWidth
-            || m_utilizationSidebarList->maximumWidth() != sidebarWidth)
-        {
-            m_utilizationSidebarList->setMinimumWidth(sidebarWidth);
-            m_utilizationSidebarList->setMaximumWidth(sidebarWidth);
-        }
-
         // cardHeight 用途：保持缩略图最小可读高度；多磁盘/多网卡/GPU 时由列表滚动承接溢出。
-        const int cardHeight = 52;
         if (m_utilizationSidebarList->spacing() != 2)
         {
             m_utilizationSidebarList->setSpacing(2);
         }
-        for (int rowIndex = 0; rowIndex < m_utilizationSidebarList->count(); ++rowIndex)
-        {
-            QListWidgetItem* itemPointer = m_utilizationSidebarList->item(rowIndex);
-            if (itemPointer == nullptr)
-            {
-                continue;
-            }
-            const QSize nextSizeHint(sidebarWidth, cardHeight);
-            if (itemPointer->sizeHint() != nextSizeHint)
-            {
-                itemPointer->setSizeHint(nextSizeHint);
-            }
-        }
+        syncUtilizationSidebarCardWidths();
     }
 
     // ===================== CPU 页：按核心网格动态压缩宽高 =====================

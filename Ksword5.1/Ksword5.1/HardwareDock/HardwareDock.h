@@ -30,6 +30,7 @@ class HardwareI8042AuditPage;
 class PerformanceNavCard;
 class QChartView;
 class QAreaSeries;
+class QEvent;
 class QGridLayout;
 class QHBoxLayout;
 class QLabel;
@@ -37,6 +38,7 @@ class QLineSeries;
 class QListWidget;
 class QResizeEvent;
 class QScrollArea;
+class QSplitter;
 class QShowEvent;
 class QStackedWidget;
 class QTabWidget;
@@ -80,6 +82,9 @@ signals:
     void staticOverviewChanged(const QString& overviewText);
 
 protected:
+    // eventFilter 作用：仅在性能页分割线释放后同步卡片宽度，拖动过程不重排内容。
+    bool eventFilter(QObject* watchedObject, QEvent* eventObject) override;
+
     // resizeEvent 作用：
     // - 窗口尺寸变化时动态重排“利用率”页图表高度；
     // - 保证任务管理器风格页面尽量不出现滚动条。
@@ -387,6 +392,8 @@ private:
     void initializeCoreCharts();
     void initializeConnections();
     void scheduleUtilizationLayoutRefresh();
+    void applyInitialUtilizationSplitterSize();
+    void syncUtilizationSidebarCardWidths();
     void syncUtilizationSidebarSelection(int selectedRowIndex);
     void adjustUtilizationChartHeights();
     PerformanceNavCard* addUtilizationSidebarCard(
@@ -565,7 +572,8 @@ private:
     // 利用率页（任务管理器风格）。
     QWidget* m_utilizationPage = nullptr;          // m_utilizationPage：利用率 Tab。
     QVBoxLayout* m_utilizationLayout = nullptr;    // m_utilizationLayout：利用率外层布局。
-    QHBoxLayout* m_utilizationBodyLayout = nullptr; // m_utilizationBodyLayout：左右分栏布局。
+    QSplitter* m_utilizationBodySplitter = nullptr; // m_utilizationBodySplitter：可拖动的左右分栏。
+    bool m_utilizationSplitterInitialSizeApplied = false; // m_utilizationSplitterInitialSizeApplied：是否已应用 300px 默认左栏。
     QListWidget* m_utilizationSidebarList = nullptr; // m_utilizationSidebarList：左侧性能卡片列表。
     QStackedWidget* m_utilizationDetailStack = nullptr; // m_utilizationDetailStack：右侧详情页栈。
     std::vector<UtilizationNavEntry> m_utilizationNavEntries; // m_utilizationNavEntries：左侧卡片到右侧页的映射。

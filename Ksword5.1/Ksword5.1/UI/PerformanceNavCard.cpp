@@ -251,9 +251,9 @@ void PerformanceNavCard::paintEvent(QPaintEvent* paintEventPointer)
     painter.drawRoundedRect(cardRect, 4.0, 4.0);
 
     // 缩略图区域：保留边框与曲线，内部背景保持透明。
-    // showSparkChart 用途：欢迎页在 800px 以下优先保留文字，不让五张卡片互相挤压。
-    const QWidget* hostWindow = window();
-    const bool showSparkChart = hostWindow == nullptr || hostWindow->width() >= 800;
+    // showSparkChart 用途：只根据卡片自身可用宽度决定是否显示折线图。
+    // 不依赖顶层窗口宽度，避免硬件页 QSplitter 拖动与欢迎页宿主窗口条件互相干扰。
+    const bool showSparkChart = cardRect.width() >= 140;
     // compactMode 用途：窄宽度/低高度下收缩文字字号，避免左侧列表触发滚动条。
     const bool compactMode = cardRect.width() < 176 || cardRect.height() < 48;
     const int sparkInset = compactMode ? 4 : 5;
