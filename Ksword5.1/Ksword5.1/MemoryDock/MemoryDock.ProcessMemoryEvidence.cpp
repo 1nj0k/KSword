@@ -411,13 +411,13 @@ void MemoryDock::initializeProcessMemoryEvidenceTab()
     m_processMemoryEvidenceStartEdit = new QLineEdit(scopeGroup);
     m_processMemoryEvidenceStartEdit->setClearButtonEnabled(true);
     m_processMemoryEvidenceStartEdit->setPlaceholderText(QStringLiteral("留空从进程最低地址开始"));
-    m_processMemoryEvidenceStartEdit->setToolTip(QStringLiteral("采样起始虚拟地址，支持 0x 十六进制或十进制"));
+    m_processMemoryEvidenceStartEdit->setToolTip(QStringLiteral("采样起始虚拟地址。无前缀按十六进制解释，也可显式写 0x 前缀。"));
     m_processMemoryEvidenceStartEdit->setStyleSheet(buildBlueInputStyle());
 
     m_processMemoryEvidenceEndEdit = new QLineEdit(scopeGroup);
     m_processMemoryEvidenceEndEdit->setClearButtonEnabled(true);
     m_processMemoryEvidenceEndEdit->setPlaceholderText(QStringLiteral("留空到进程最高地址结束"));
-    m_processMemoryEvidenceEndEdit->setToolTip(QStringLiteral("采样结束虚拟地址，支持 0x 十六进制或十进制"));
+    m_processMemoryEvidenceEndEdit->setToolTip(QStringLiteral("采样结束虚拟地址。无前缀按十六进制解释，也可显式写 0x 前缀。"));
     m_processMemoryEvidenceEndEdit->setStyleSheet(buildBlueInputStyle());
 
     m_processMemoryEvidenceFilterEdit = new QLineEdit(scopeGroup);

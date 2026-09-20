@@ -97,7 +97,54 @@ Both use the same driver and the same `shared/driver/` protocol. Launcher picks 
 
 **Process / Thread / Handle** — tree & list views, R3/R0 cross-view to detect hidden objects, thread stacks, modules, tokens, PDB diagnostics. Gated actions for kill, suspend, R0 hide (recoverable), PPL patch.
 
-**Memory** — region browser, pattern search, hex viewer, bookmarks, R0 reads, kernel executable-memory scan, PTE translation.
+**Memory** — region browser, pattern search, hex viewer, bookmarks, R0 reads, kernel executable-memory scan, PTE translation. Every memory page can also run against a **DDMA** backend that moves bytes with the disk controller's bus-master DMA instead of the CPU, plus a same-address cross-check between the two backends. Lab use only; see below for what it costs.
+
+<details>
+<summary>DDMA — reading physical memory through the disk controller (and its three unavoidable costs)</summary>
+
+<br>
+
+DDMA issues a `_DIRECT` pass-through command against a `\Driver\Disk` device with
+the transfer buffer pointed at an arbitrary physical page — `ATA_PASS_THROUGH_DIRECT`
+where ATA is available, otherwise `SCSI_PASS_THROUGH_DIRECT`, which covers NVMe,
+SAS/SATA and synthetic SCSI. Either way the storage port driver builds the MDL and
+programs the controller, so the *host bus adapter* moves the bytes. The data path never goes through the CPU page tables,
+so it is not constrained by SLAT/EPT — which is the whole point: a page that a
+hypervisor redirects reads to all-`FF` still yields its real contents here. The
+DDMA sub-tab reads the same physical page through both backends and diffs them,
+which turns "this page is hidden" into a byte-level observation.
+
+Technique credit: [btbd/ddma](https://github.com/btbd/ddma).
+
+Three costs, none of which can be engineered away:
+
+1. **It must borrow a disk sector as a staging area.** ATA only has read-sector
+   and write-sector, so reading a physical page means writing it to a sector and
+   reading it back. KSword requires you to name that LBA explicitly and tick an
+   acknowledgement — there is **no default sector**, and the "is the LBA set?"
+   test is a separate flag bit rather than "is it non-zero", because LBA 0 is a
+   legal target and is also where the MBR lives. Each request backs the sectors
+   up, uses them, and restores them inside one call; a failed restore is reported
+   as an explicit warning rather than swallowed.
+2. **Kernel debugging must be off.** Mapping ordinary RAM with `MmMapIoSpace`
+   trips `MiShowBadMapper` and bugchecks. The driver reports the debugger state
+   as a capability bit and the UI refuses the whole channel when it is set.
+3. **The disk's driver stack has to accept a pass-through command.** ATA
+   pass-through is tried first; if it is refused, SCSI pass-through is tried,
+   which `stornvme` translates into NVMe commands — so NVMe, SAS/SATA and
+   synthetic SCSI all work through that second route. A disk that refuses both
+   cannot be used, and some HBAs cannot address above 4 GB. Note that the
+   SLAT-bypass property itself only exists where the OS owns real hardware: in a
+   hypervisor *guest* the "DMA" is emulated by the host and goes through the same
+   address translation as everything else.
+
+Non-full-page writes are read-modify-write and are reported as such, because
+they leave a 4 KiB lost-update window for other bytes on the same page.
+
+`KswordCLI.exe ddma selftest [--lba N]` runs the acceptance checks. Every check
+is a refusal path, so it never writes a sector.
+
+</details>
 
 **Scanner** — structural PE / ELF / Mach-O analysis. Byte editor is length-preserving only, checks the source snapshot before writing, atomic replace, optional backup.
 
@@ -319,6 +366,7 @@ All headers under `shared/driver/`.
 | Process extended info | `KswordArkProcessIoctl.h` (v2) | Session, image path, protection level, field availability. |
 | Process hiding | `IOCTL_KSWORD_ARK_SET_PROCESS_VISIBILITY` | Unlinks from lists, keeps CID entry for restore. |
 | PPL patch | `KSW_CAP_PROCESS_PROTECTION_PATCH` | Gated; dialog shows impact + rollback risk. |
+| Disk DMA (DDMA) | `KswordArkDdmaIoctl.h`, `KswordArkDdmaPlan.h` | Scratch LBA is mandatory and carries its own flag bit, so LBA 0 stays a legal target rather than an "unset" sentinel. Plan header holds the ATA task-file encoding shared by driver, client and tests. |
 | Vendored offsets | `third_party/systeminformer_dyn/` | System Informer offset data only, no KPH comms. |
 
 </details>

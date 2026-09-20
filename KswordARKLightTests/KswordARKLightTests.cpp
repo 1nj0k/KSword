@@ -1,4 +1,4 @@
-#include "../KswordARKLight/Core/DriverLeasePolicy.h"
+﻿#include "../KswordARKLight/Core/DriverLeasePolicy.h"
 #include "../KswordARKLight/Core/EntityRef.h"
 #include "../KswordARKLight/Core/WorkspaceConfig.h"
 #include "../KswordARKLight/Features/File/PathNavigator.h"
@@ -512,6 +512,9 @@ int wmain() {
     failures += RunMemoryEvidenceTests();
     failures += RunInjectionSurveyTests();
     failures += RunHvmEptSwitchTests();
+    failures += RunHvmWatchTests();
+    failures += RunDdmaPlanTests();
+    failures += RunNumericTextParseTests();
     failures += RunHookPatchComposeTests();
 
     if (failures == 0) {

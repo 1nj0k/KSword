@@ -1,7 +1,10 @@
 #include "MemoryDock.Internal.h"
 #include "SystemMemoryAuditPage.h"
+#include "DdmaPage.h"
 #include "../UI/VisibleTableWidget.h"
 #include "../Internationalization/LanguageManager.h"
+
+#include <QCompleter> // 进程下拉的包含式补全需要完整类型。
 
 #include <functional>
 #include <utility>
@@ -303,7 +306,40 @@ void MemoryDock::initializeToolbar()
             }
             });
     m_processCombo->setMinimumWidth(280);
-    m_processCombo->setToolTip("选择目标进程（进程名 + PID）。");
+    m_processCombo->setToolTip("选择目标进程。可直接输入过滤：进程名和 PID 都能匹配。");
+
+    // 可输入 + 包含式补全。几百个进程用纯滚动的下拉是选不出来的，而同名进程多的
+    // 程序（QQ 这类一开就是十个同名进程）更是只能靠 PID 区分——所以补全必须同时
+    // 能匹配到条目文本里的 PID，用 MatchContains 而不是默认的前缀匹配。
+    m_processCombo->setEditable(true);
+    m_processCombo->setInsertPolicy(QComboBox::NoInsert);
+    if (QCompleter* const processCompleter = m_processCombo->completer())
+    {
+        processCompleter->setCompletionMode(QCompleter::PopupCompletion);
+        processCompleter->setFilterMode(Qt::MatchContains);
+        processCompleter->setCaseSensitivity(Qt::CaseInsensitive);
+        processCompleter->setMaxVisibleItems(20);
+    }
+    if (QLineEdit* const processEdit = m_processCombo->lineEdit())
+    {
+        processEdit->setPlaceholderText(QStringLiteral("输入进程名或 PID 过滤"));
+        processEdit->setClearButtonEnabled(true);
+    }
+
+    // 十字准星：按住拖到目标窗口上松手，直接按窗口归属附加。
+    // 这条路径存在的理由是它不可能选错——用户知道的是"哪个窗口是我要的"，
+    // 而不是 PID；让他们指窗口，由工具去解析 PID。
+    m_processPickerButton = new ks::ui::WindowPickerButton(toolbarContainer);
+    m_processPickerButton->setIcon(QIcon(QStringLiteral(":/Icon/codeeditor_goto.svg")));
+    m_processPickerButton->setToolTip(
+        QStringLiteral("按住不放，把光标拖到目标程序的窗口上再松手，即按该窗口所属进程附加。拖动时目标窗口会高亮，按 Esc 取消。"));
+
+    // 拾取过程中的实时目标提示。只在拾取时可见：平时占着工具栏宽度没有意义，
+    // 而拾取时鼠标已经离开了工具栏，用户需要一个不用低头找的地方看当前目标。
+    m_processPickerHintLabel = new QLabel(toolbarContainer);
+    m_processPickerHintLabel->setVisible(false);
+    m_processPickerHintLabel->setStyleSheet(
+        QStringLiteral("color:%1; font-weight:600;").arg(KswordTheme::ControlAccentHex()));
 
     // 按项目规范：动作按钮优先用图标库里的图标，并且每个按钮都要有 tooltip。
     m_attachButton = new QPushButton(
@@ -326,6 +362,8 @@ void MemoryDock::initializeToolbar()
 
     m_toolbarLayout->addWidget(new QLabel("进程:", toolbarContainer));
     m_toolbarLayout->addWidget(m_processCombo, 1);
+    m_toolbarLayout->addWidget(m_processPickerButton);
+    m_toolbarLayout->addWidget(m_processPickerHintLabel);
     m_toolbarLayout->addWidget(m_attachButton);
     m_toolbarLayout->addWidget(m_detachButton);
     m_toolbarLayout->addWidget(toolbarSeparator);
@@ -359,8 +397,9 @@ void MemoryDock::initializeTabs()
     initializeProcessPteTranslateTab();
     initializeProcessMemoryEvidenceTab();
     initializeSystemMemoryAuditTab();
+    initializeDdmaTab();
 
-    // 11 个页签的图标集中在这里设置：分散到各构建函数里会漏，也不好统一调整语义。
+    // 12 个页签的图标集中在这里设置：分散到各构建函数里会漏，也不好统一调整语义。
     // 下标顺序与上面的构建顺序严格一一对应。
     const char* const tabIconAliases[] = {
         ":/Icon/process_list.svg",        // 进程与模块
@@ -373,7 +412,8 @@ void MemoryDock::initializeTabs()
         ":/Icon/file_find.svg",           // 内核内存证据
         ":/Icon/process_tree.svg",        // PTE / VA 翻译
         ":/Icon/process_performance.svg", // 进程内存证据
-        ":/Icon/disk_analyze.svg"         // 系统内存审计
+        ":/Icon/disk_analyze.svg",        // 系统内存审计
+        ":/Icon/disk_storage.svg"         // DDMA
     };
     const int iconCount = static_cast<int>(sizeof(tabIconAliases) / sizeof(tabIconAliases[0]));
     for (int tabIndex = 0; tabIndex < m_tabWidget->count() && tabIndex < iconCount; ++tabIndex)
@@ -420,6 +460,188 @@ void MemoryDock::initializeSystemMemoryAuditTab()
         QStringLiteral("系统内存审计"));
 }
 
+void MemoryDock::initializeDdmaTab()
+{
+    // Tab12：DDMA。页面自己负责通道配置与自检，MemoryDock 只挂载它并订阅
+    // 会话变化，把"现在能不能选 DDMA 后端"同步给其它页面的下拉框。
+    m_ddmaPage = new DdmaPage(m_tabWidget);
+    m_ddmaPage->setSessionChangedCallback([this]() { refreshBackendSelectors(); });
+
+    m_tabWidget->addTab(m_ddmaPage, QStringLiteral("DDMA"));
+    ks::i18n::LanguageManager::instance().bindTab(
+        m_tabWidget,
+        m_ddmaPage,
+        QStringLiteral("memory.tab.ddma"),
+        QStringLiteral("DDMA"));
+
+    // 系统内存审计页也要能用 DDMA 复核物理页，这里把会话读取入口交给它。
+    if (m_systemMemoryAuditPage != nullptr)
+    {
+        m_systemMemoryAuditPage->setDdmaSessionProvider(
+            [this]() -> const ksword::memory_backend::DdmaSession& {
+                return currentDdmaSession();
+            });
+    }
+
+    // 三个下拉框在各自的 Tab 构建函数里已经创建，这里做首次状态同步。
+    refreshBackendSelectors();
+}
+
+void MemoryDock::focusDdmaPage()
+{
+    if (m_tabWidget == nullptr || m_ddmaPage == nullptr)
+    {
+        return;
+    }
+    // 进程详情内嵌模式下这个页是被隐藏的；隐藏的 Tab 用 setCurrentWidget 切不过去，
+    // 所以先确认它可见再切，避免出现"点了没反应"。
+    const int tabIndex = m_tabWidget->indexOf(m_ddmaPage);
+    if (tabIndex < 0 || !m_tabWidget->isTabVisible(tabIndex))
+    {
+        return;
+    }
+    m_tabWidget->setCurrentWidget(m_ddmaPage);
+}
+
+QWidget* MemoryDock::createBackendSelector(
+    QWidget* const parent,
+    QComboBox*& comboOut,
+    QLabel*& hintOut)
+{
+    QWidget* container = new QWidget(parent);
+    QHBoxLayout* layout = new QHBoxLayout(container);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(6);
+
+    comboOut = new QComboBox(container);
+    // 条目顺序必须与 MemoryAccessBackend 枚举一致，界面按索引直接转换。
+    comboOut->addItem(QStringLiteral("R3（ReadProcessMemory）"));
+    comboOut->addItem(QStringLiteral("R0（驱动通道）"));
+    comboOut->addItem(QStringLiteral("DDMA（磁盘 DMA）"));
+    comboOut->setToolTip(
+        QStringLiteral("R3 走 ReadProcessMemory / WriteProcessMemory，不经驱动，受句柄权限与进程保护约束，也读不了内核地址和物理地址。\nR0 走驱动的 MmCopyVirtualMemory / MmMapIoSpaceEx，绕开句柄权限，能读内核地址与物理地址，但仍受 SLAT / EPT 约束。\nDDMA 走磁盘控制器的总线主控 DMA，不受 SLAT 约束，能读到被上层虚拟化重定向或隐藏的物理页；代价是必须借用磁盘扇区中转，而且明显更慢，需要先在“DDMA”子页配置通道。\n同一个地址三条读到的结果不一样，本身就是判据。"));
+
+    hintOut = new QLabel(container);
+    hintOut->setWordWrap(true);
+    hintOut->setTextInteractionFlags(Qt::TextSelectableByMouse);
+
+    layout->addWidget(new QLabel(QStringLiteral("访问后端"), container));
+    layout->addWidget(comboOut);
+    layout->addWidget(hintOut, 1);
+
+    // 选中 DDMA 但通道尚未就绪时，refreshBackendSelectors 会把选择弹回标准通道
+    // 并在提示里说明缺哪一步；它内部用 QSignalBlocker 改索引，不会递归触发。
+    connect(comboOut, &QComboBox::currentIndexChanged, this, [this](int) {
+        refreshBackendSelectors();
+        });
+
+    return container;
+}
+
+void MemoryDock::refreshBackendSelectors()
+{
+    QString reason;
+    const bool ddmaUsable =
+        ksword::memory_backend::isDdmaUsable(currentDdmaSession(), &reason);
+
+    // 三个下拉共享同一份判据与同一段文案，避免三处各写一遍后走散。
+    const auto syncOne = [this, ddmaUsable, &reason](
+                             QComboBox* const combo, QLabel* const hint) {
+        if (combo == nullptr)
+        {
+            return;
+        }
+        const bool ddmaSelected =
+            (combo->currentIndex() ==
+             static_cast<int>(ksword::memory_backend::MemoryAccessBackend::Ddma));
+
+        // DDMA 变得不可用时，已经停在 DDMA 上的下拉必须退回标准通道，
+        // 否则用户下一次点读取才会撞上失败。
+        if (ddmaSelected && !ddmaUsable)
+        {
+            const QSignalBlocker blocker(combo);
+            combo->setCurrentIndex(
+                static_cast<int>(ksword::memory_backend::MemoryAccessBackend::StandardDriver));
+        }
+
+        if (hint == nullptr)
+        {
+            return;
+        }
+        if (ddmaUsable)
+        {
+            hint->setText(QStringLiteral("DDMA 通道已就绪，可随时切换。"));
+            hint->setStyleSheet(QStringLiteral("color:%1;").arg(KswordTheme::SuccessHex()));
+        }
+        else
+        {
+            hint->setText(QStringLiteral("DDMA 暂不可用：%1").arg(reason));
+            hint->setStyleSheet(QStringLiteral("color:%1;").arg(KswordTheme::TextSecondaryHex()));
+        }
+        };
+
+    syncOne(m_searchBackendCombo, m_searchBackendHintLabel);
+    syncOne(m_viewerBackendCombo, m_viewerBackendHintLabel);
+    syncOne(m_driverMemoryBackendCombo, m_driverMemoryBackendHintLabel);
+
+    // 系统内存审计页没有后端下拉，只有一个"DDMA 复核"按钮，但它同样要跟着
+    // 会话可用性开关，否则会留下一个点下去必然失败的按钮。
+    if (m_systemMemoryAuditPage != nullptr)
+    {
+        m_systemMemoryAuditPage->refreshDdmaCrossCheckState();
+    }
+}
+
+const ksword::memory_backend::DdmaSession& MemoryDock::currentDdmaSession() const
+{
+    // 读进程级会话而不是去问 m_ddmaPage：DDMA 页可能还没构建（Dock 布局恢复
+    // 顺序不保证），而进程级会话在任何时刻都有一个确定的值，未配置时就是
+    // "未配置"，不会因为空指针而误判成可用。
+    return ksword::memory_backend::currentDdmaSession();
+}
+
+namespace
+{
+    // backendFromComboIndex：
+    // - 下拉条目顺序与 MemoryAccessBackend 枚举一一对应，所以索引直接转换即可；
+    // - 三个下拉共用这一份映射，免得加一个后端就要在三处各改一遍。
+    //
+    // 原先三处都写成"不是 DDMA 就当标准通道"。枚举只有两个值时那样写看不出
+    // 问题，加进 R3 之后它会把 R3 静默折叠成 R0——用户选了 R3、实际走驱动，
+    // 而"同一个地址两条通道结果不同"正是这三个选项存在的理由，折叠掉就没了。
+    ksword::memory_backend::MemoryAccessBackend backendFromComboIndex(
+        const QComboBox* const combo)
+    {
+        if (combo == nullptr)
+        {
+            return ksword::memory_backend::MemoryAccessBackend::UserMode;
+        }
+        const int selectedIndex = combo->currentIndex();
+        if (selectedIndex < 0
+            || selectedIndex >
+                static_cast<int>(ksword::memory_backend::MemoryAccessBackend::Ddma))
+        {
+            return ksword::memory_backend::MemoryAccessBackend::UserMode;
+        }
+        return static_cast<ksword::memory_backend::MemoryAccessBackend>(selectedIndex);
+    }
+}
+
+ksword::memory_backend::MemoryAccessBackend MemoryDock::currentSearchBackend() const
+{
+    return backendFromComboIndex(m_searchBackendCombo);
+}
+
+ksword::memory_backend::MemoryAccessBackend MemoryDock::currentViewerBackend() const
+{
+    return backendFromComboIndex(m_viewerBackendCombo);
+}
+
+ksword::memory_backend::MemoryAccessBackend MemoryDock::currentDriverMemoryBackend() const
+{
+    return backendFromComboIndex(m_driverMemoryBackendCombo);
+}
+
 void MemoryDock::initializeProcessModuleTab()
 {
     // Tab1 初始化日志：记录“进程与模块”页的构建过程。
@@ -441,7 +663,24 @@ void MemoryDock::initializeProcessModuleTab()
     QVBoxLayout* processLayout = new QVBoxLayout(processPanel);
     processLayout->setContentsMargins(0, 0, 0, 0);
     processLayout->setSpacing(4);
-    processLayout->addWidget(new QLabel("进程列表（双击自动附加）", processPanel));
+    QHBoxLayout* processTopBarLayout = new QHBoxLayout();
+    processTopBarLayout->setContentsMargins(0, 0, 0, 0);
+    processTopBarLayout->setSpacing(8);
+    processTopBarLayout->addWidget(new QLabel("进程列表（双击自动附加）", processPanel));
+
+    // 过滤框对齐下面的模块表：模块表一直有，进程表反而没有，而进程数远多于模块数。
+    m_processFilterEdit = new QLineEdit(processPanel);
+    m_processFilterEdit->setPlaceholderText("按进程名或 PID 过滤");
+    m_processFilterEdit->setClearButtonEnabled(true);
+    m_processFilterEdit->setStyleSheet(buildBlueInputStyle());
+    processTopBarLayout->addWidget(m_processFilterEdit, 1);
+
+    m_processCountLabel = new QLabel(processPanel);
+    m_processCountLabel->setStyleSheet(
+        QStringLiteral("color:%1;").arg(KswordTheme::TextSecondaryHex()));
+    processTopBarLayout->addWidget(m_processCountLabel);
+
+    processLayout->addLayout(processTopBarLayout);
 
     m_processTable = new ks::ui::VisibleTableWidget(processPanel);
     m_processTable->setColumnCount(5);
@@ -456,11 +695,17 @@ void MemoryDock::initializeProcessModuleTab()
     m_processTable->verticalHeader()->setDefaultSectionSize(20);
     // 进程图标统一缩放到 16x16，确保行高可以保持更紧凑。
     m_processTable->setIconSize(QSize(16, 16));
-    m_processTable->setColumnHidden(2, true);
+    // 会话 ID 与工作集放出来。工作集是同名进程之间唯一一眼可辨的差别——主进程
+    // 和辅助进程的内存量通常差一两个数量级，今天正是靠它才分出 QQ 的十个同名
+    // 进程里哪个是目标。CPU 那一列继续隐藏：它从来没被填过，恒为 0.00%，
+    // 放出来只是多一列废数据，比隐藏更糟。
+    m_processTable->setColumnHidden(2, false);
     m_processTable->setColumnHidden(3, true);
-    m_processTable->setColumnHidden(4, true);
+    m_processTable->setColumnHidden(4, false);
     m_processTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_processTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_processTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_processTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     m_processTable->setShowGrid(true);
     processLayout->addWidget(m_processTable, 1);
 
@@ -728,6 +973,10 @@ void MemoryDock::initializeMemorySearchTab()
     compareLayout->addWidget(m_nextScanValueBEdit, 1);
     tabLayout->addWidget(compareGroup);
 
+    // 访问后端选择条：扫描页的每一次区域读取都会走这里选中的通道。
+    tabLayout->addWidget(
+        createBackendSelector(m_tabSearch, m_searchBackendCombo, m_searchBackendHintLabel));
+
     m_searchResultTable = new ks::ui::VisibleTableWidget(m_tabSearch);
     m_searchResultTable->setColumnCount(4);
     m_searchResultTable->setHorizontalHeaderLabels(QStringList{ "地址", "当前值", "前次值", "备注" });
@@ -776,16 +1025,20 @@ void MemoryDock::initializeMemoryViewerTab()
     navLayout->setSpacing(8);
     navLayout->addWidget(new QLabel("地址:", m_tabViewer));
     m_viewAddressEdit = new QLineEdit(m_tabViewer);
-    m_viewAddressEdit->setPlaceholderText("输入地址后跳转");
+    m_viewAddressEdit->setPlaceholderText("输入地址后跳转，默认十六进制");
     m_viewAddressEdit->setStyleSheet(buildBlueInputStyle());
     m_viewJumpButton = new QPushButton(QIcon(":/Icon/codeeditor_goto.svg"), "跳转", m_tabViewer);
     m_viewJumpButton->setStyleSheet(buildBlueButtonStyle());
-    m_viewJumpButton->setToolTip("跳转到左侧输入的内存地址并显示该处内容");
+    m_viewJumpButton->setToolTip("跳转到左侧输入的内存地址并显示该处内容。地址无前缀时按十六进制解释。");
     m_viewProtectLabel = new QLabel("保护属性: -", m_tabViewer);
     navLayout->addWidget(m_viewAddressEdit, 1);
     navLayout->addWidget(m_viewJumpButton);
     navLayout->addWidget(m_viewProtectLabel);
     tabLayout->addLayout(navLayout);
+
+    // 访问后端选择条：查看器翻页时按这里选中的通道取数据。
+    tabLayout->addWidget(
+        createBackendSelector(m_tabViewer, m_viewerBackendCombo, m_viewerBackendHintLabel));
 
     // 统一十六进制编辑器组件：
     // - 后续内存/文件/网络全部复用该控件；
@@ -1004,6 +1257,12 @@ void MemoryDock::initializeDriverMemoryRwTab()
     requestLayout->setColumnStretch(3, 2);
     requestLayout->setColumnStretch(4, 1);
     tabLayout->addWidget(requestGroup);
+
+    // 访问后端选择条：本页的 R0 读取与差异写回都会走这里选中的通道。
+    // 它与上方的"来源"下拉是两个正交的维度——来源决定"读哪块地址空间"，
+    // 后端决定"用哪条通路去读"，不要把两者合并成一个下拉。
+    tabLayout->addWidget(createBackendSelector(
+        m_tabDriverMemoryRw, m_driverMemoryBackendCombo, m_driverMemoryBackendHintLabel));
 
     // ========================================================
     // 操作按钮条：写回、清空、转存、字符串写入

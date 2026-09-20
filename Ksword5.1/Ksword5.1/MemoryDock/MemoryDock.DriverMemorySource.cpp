@@ -285,6 +285,77 @@ void MemoryDock::driverReadPhysicalMemoryFromUi()
         return;
     }
 
+    // DDMA 后端直接按物理地址走磁盘 DMA，不需要 VA → PA 翻译，是这条通道上
+    // 最直接的用法。响应模型与标准物理读不同，因此单独分支后直接返回。
+    const ksword::memory_backend::MemoryAccessBackend backend = currentDriverMemoryBackend();
+    if (backend == ksword::memory_backend::MemoryAccessBackend::Ddma)
+    {
+        if (m_driverMemoryStatusLabel != nullptr)
+        {
+            m_driverMemoryStatusLabel->setText(QStringLiteral("正在通过 DDMA 读取物理内存..."));
+        }
+        const ksword::memory_backend::AccessOutcome ddmaOutcome =
+            ksword::memory_backend::readPhysical(
+                ksword::memory_backend::MemoryAccessBackend::Ddma,
+                currentDdmaSession(),
+                baseAddress,
+                totalBytes);
+        if (!ddmaOutcome.ok)
+        {
+            resetDriverMemoryRwState();
+            if (m_driverMemoryStatusLabel != nullptr)
+            {
+                m_driverMemoryStatusLabel->setText(QStringLiteral("DDMA 物理读取失败。"));
+            }
+            QMessageBox::warning(this, QStringLiteral("驱动内存读写"), ddmaOutcome.failureText);
+            return;
+        }
+
+        m_driverMemoryBaseAddress = baseAddress;
+        m_driverMemoryOffsetBase = 0ULL;
+        m_driverMemoryCenterAddress = physicalAddress;
+        m_driverMemorySnapshotPid = 0U;
+        m_driverMemorySnapshotProcessName = QStringLiteral("物理内存 (DDMA)");
+        m_driverMemorySnapshotIsPhysical = true;
+        m_driverMemoryOriginalBytes = ddmaOutcome.data;
+        m_driverMemoryEditedBytes = m_driverMemoryOriginalBytes;
+        m_driverMemoryHasSnapshot = true;
+
+        if (m_driverMemoryHexEditor != nullptr)
+        {
+            m_driverMemoryHexEditor->setEditable(true);
+            m_driverMemoryHexEditor->setByteArray(
+                m_driverMemoryEditedBytes, m_driverMemoryBaseAddress);
+        }
+        refreshDriverMemoryViewsFromSnapshot();
+
+        if (m_driverMemoryApplyButton != nullptr)
+        {
+            m_driverMemoryApplyButton->setEnabled(false);
+        }
+        if (m_driverMemoryRangeLabel != nullptr)
+        {
+            m_driverMemoryRangeLabel->setText(
+                QStringLiteral("物理范围(DDMA): 0x%1 - 0x%2 | 已读取 %3 字节")
+                    .arg(formatAddress(m_driverMemoryBaseAddress))
+                    .arg(formatAddress(m_driverMemoryBaseAddress
+                        + static_cast<std::uint64_t>(m_driverMemoryOriginalBytes.size()) - 1ULL))
+                    .arg(m_driverMemoryOriginalBytes.size()));
+        }
+        QString ddmaStatusText = QStringLiteral("DDMA 物理读取成功，共 %1 字节。")
+            .arg(m_driverMemoryOriginalBytes.size());
+        if (ddmaOutcome.scratchDirty)
+        {
+            ddmaStatusText += QStringLiteral(
+                " 严重告警：暂存扇区未能还原，磁盘上留下了脏扇区。");
+        }
+        if (m_driverMemoryStatusLabel != nullptr)
+        {
+            m_driverMemoryStatusLabel->setText(ddmaStatusText);
+        }
+        return;
+    }
+
     if (m_driverMemoryStatusLabel != nullptr)
     {
         m_driverMemoryStatusLabel->setText(QStringLiteral("正在通过 R0 读取物理内存..."));
@@ -404,6 +475,79 @@ bool MemoryDock::applyDriverMemoryPhysicalDiff(
     bool forceApproved = false;
     std::uint64_t writtenBytesTotal = 0ULL;
     const ksword::ark::DriverClient driverClient;
+
+    // DDMA 后端按页切片走磁盘 DMA，切片规则、状态码与告警位都在后端门面里，
+    // 这里只负责 force 确认与文案。
+    if (currentDriverMemoryBackend() == ksword::memory_backend::MemoryAccessBackend::Ddma)
+    {
+        bool scratchDirty = false;
+        bool lostUpdate = false;
+
+        for (const DriverDiffBlock& diffBlock : diffBlocks)
+        {
+            ksword::memory_backend::AccessOutcome blockOutcome =
+                ksword::memory_backend::writePhysical(
+                    ksword::memory_backend::MemoryAccessBackend::Ddma,
+                    currentDdmaSession(),
+                    diffBlock.address,
+                    diffBlock.bytes,
+                    forceApproved);
+
+            if (blockOutcome.forceRequired && !forceApproved)
+            {
+                if (!confirmForceDriverMemoryWrite(
+                        diffBlock.address,
+                        static_cast<std::uint32_t>(diffBlock.bytes.size()),
+                        blockOutcome.failureText))
+                {
+                    failureTextOut = QStringLiteral("用户取消了 DDMA 强制写入。");
+                    return false;
+                }
+                forceApproved = true;
+                blockOutcome = ksword::memory_backend::writePhysical(
+                    ksword::memory_backend::MemoryAccessBackend::Ddma,
+                    currentDdmaSession(),
+                    diffBlock.address,
+                    diffBlock.bytes,
+                    true);
+            }
+
+            scratchDirty = scratchDirty || blockOutcome.scratchDirty;
+            lostUpdate = lostUpdate || blockOutcome.lostUpdateWindow;
+            writtenBytesTotal += blockOutcome.bytesDone;
+
+            if (!blockOutcome.ok)
+            {
+                failureTextOut = QStringLiteral(
+                    "DDMA 物理写入失败。\n%1\n本轮累计已写入 %2 字节，失败前的改动不会自动回滚。")
+                    .arg(blockOutcome.failureText)
+                    .arg(writtenBytesTotal);
+                if (scratchDirty)
+                {
+                    failureTextOut += QStringLiteral(
+                        "\n严重告警：暂存扇区未能还原，磁盘上留下了脏扇区。");
+                }
+                return false;
+            }
+        }
+
+        // 成功路径上的告警同样要传出去：写成功不代表磁盘是干净的。
+        if (scratchDirty || lostUpdate)
+        {
+            failureTextOut = QStringLiteral("DDMA 写入已完成，但存在告警：");
+            if (lostUpdate)
+            {
+                failureTextOut += QStringLiteral(
+                    "含非整页写入，驱动做了读-改-写，同页其它字节存在覆盖窗口。");
+            }
+            if (scratchDirty)
+            {
+                failureTextOut += QStringLiteral(
+                    "暂存扇区未能还原，磁盘上留下了脏扇区。");
+            }
+        }
+        return true;
+    }
 
     for (const DriverDiffBlock& diffBlock : diffBlocks)
     {

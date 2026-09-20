@@ -354,6 +354,8 @@
     <ClCompile Include="src\features\memory\memory_kernel_evidence.c" />
     <ClCompile Include="src\features\memory\memory_evidence_enrichment.c" />
     <ClCompile Include="src\features\memory\memory_ioctl.c" />
+    <ClCompile Include="src\features\memory\memory_ddma.c" />
+    <ClCompile Include="src\features\memory\memory_ddma_ioctl.c" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="src\features\hvm\hvm_entry.asm">
@@ -430,6 +432,7 @@
     <ClInclude Include="include\ark\ark_injection_scan.h" />
     <ClInclude Include="src\features\section\section_support.h" />
     <ClInclude Include="include\ark\ark_memory.h" />
+    <ClInclude Include="include\ark\ark_ddma.h" />
     <ClInclude Include="include\ark\ark_memory_evidence.h" />
     <ClInclude Include="src\features\memory\memory_evidence_enrichment.h" />
     <ClInclude Include="src\features\memory\memory_kernel_exec_scan_internal.h" />

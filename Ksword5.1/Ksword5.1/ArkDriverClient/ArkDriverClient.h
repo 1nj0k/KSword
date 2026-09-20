@@ -250,6 +250,69 @@ namespace ksword::ark
             const std::vector<std::uint8_t>& bytes,
             unsigned long flags = KSWORD_ARK_PHYSICAL_WRITE_FLAG_UI_CONFIRMED,
             DriverHandle* existingHandle = nullptr) const;
+        // ====================================================
+        // VA → PA 翻译与 DDMA（磁盘直接内存访问）后端
+        // ====================================================
+
+        // translateVirtualAddress：
+        // - 输入：目标 PID 与虚拟地址；processId 为 0 时按内核地址空间解析。
+        // - 处理：封装 IOCTL_KSWORD_ARK_TRANSLATE_VIRTUAL_ADDRESS，复用 R0 既有的
+        //   只读页表游走后端（memory_pagetable.c），不新增任何页表解析实现。
+        // - 返回：VirtualAddressTranslateResult。physicalAddress 只有在
+        //   resolved 为真时才有意义——走到 not-present 表项时该字段是残留值，
+        //   只看 io.ok 会拿到一个看起来合法、实际无意义的物理地址。
+        VirtualAddressTranslateResult translateVirtualAddress(
+            std::uint32_t processId,
+            std::uint64_t virtualAddress,
+            DriverHandle* existingHandle = nullptr) const;
+
+        // queryDdmaCapability：
+        // - 输入：probeTransfer 决定是否对每块盘真的发一次 ATA DMA 读命令；
+        //   scratchLba/scratchLbaValid 给出探测用的暂存扇区，不声明就只枚举
+        //   设备不发命令；maxDisks 限制回传条数。
+        // - 处理：封装 IOCTL_KSWORD_ARK_DDMA_QUERY_CAPABILITY。
+        // - 返回：DdmaCapabilityResult。调用方必须先看 kernelDebuggerEnabled()：
+        //   开着内核调试的机器上 DDMA 会命中 MiShowBadMapper 蓝屏，此时不应
+        //   放行任何 DDMA 读写。
+        DdmaCapabilityResult queryDdmaCapability(
+            bool probeTransfer,
+            std::uint64_t scratchLba,
+            bool scratchLbaValid,
+            unsigned long maxDisks = KSWORD_ARK_DDMA_DISK_LIMIT_DEFAULT,
+            DriverHandle* existingHandle = nullptr) const;
+
+        // ddmaReadPhysicalMemory：
+        // - 输入：diskIndex 取自能力查询；physicalAddress 与 bytesToRead 必须
+        //   落在同一个 4KB 物理页内（DMA 传输粒度就是一页，跨页由调用方切片）；
+        //   scratchLba 为暂存扇区起始 LBA；flags 必须同时带
+        //   SCRATCH_LBA_VALID 与 SCRATCH_ACKNOWLEDGED，本函数会本地拦截。
+        // - 处理：R0 侧把目标物理页 DMA 写到暂存扇区，再 DMA 读回工作缓冲，
+        //   最后还原暂存扇区。整条路径 CPU 从未解引用过目标物理页。
+        // - 返回：DdmaReadResult；io.ok 只表示 IOCTL 往返成功，数据是否有效看
+        //   readStatus，磁盘是否干净看 scratchRestored()。
+        DdmaReadResult ddmaReadPhysicalMemory(
+            std::uint32_t diskIndex,
+            std::uint64_t physicalAddress,
+            std::uint32_t bytesToRead,
+            std::uint64_t scratchLba,
+            unsigned long flags,
+            DriverHandle* existingHandle = nullptr) const;
+
+        // ddmaWritePhysicalMemory：
+        // - 输入：同上，另需 KSWORD_ARK_DDMA_FLAG_FORCE，缺失时驱动返回
+        //   FORCE_REQUIRED 且一个字节都不会写。
+        // - 处理：请求不是"页对齐且恰好一页"时，R0 会先 DMA 读回整页再整页写
+        //   回，也就是 read-modify-write；这中间存在 4KB 粒度的 lost update
+        //   窗口，结果里的 readModifyWriteUsed() 会如实上报。
+        // - 返回：DdmaWriteResult；必须检查 writeStatus 才能判断是否真的写成功。
+        DdmaWriteResult ddmaWritePhysicalMemory(
+            std::uint32_t diskIndex,
+            std::uint64_t physicalAddress,
+            const std::vector<std::uint8_t>& bytes,
+            std::uint64_t scratchLba,
+            unsigned long flags,
+            DriverHandle* existingHandle = nullptr) const;
+
         // queryKernelMemoryEvidence：
         // - 输入：只读采集 flags、行数/字节预算和可选地址半开区间。
         // - 处理：封装 IOCTL_KSWORD_ARK_SCAN_KERNEL_MEMORY_EVIDENCE，解析变长 evidence rows。
@@ -508,6 +571,36 @@ namespace ksword::ark
             // enforce：持久拒绝（命中注入 #PF 并继续常驻），与 allowOnce 互斥；
             // 驱动侧在存储规则时会丢弃同时给出的 allowOnce。
             bool enforce = false) const;
+
+        // HvmEptWatchRequest：一次 R-1 首次访问归因（Memory Watch）操作。
+        //
+        // 与 controlHvmEptRule 分开而不是再加六个形参：watch 用的是同一条
+        // IOCTL 和同一张规则表（处置语义是新增的 WATCH_ONCE 标志），但它的输入
+        // 是另一组——用户请求的地址与长度、地址种类——而那三项对其余处置一律
+        // 无意义。挤进同一个十参数函数里，每个调用点都要为自己用不到的参数写
+        // 一串零，而"哪个零是哪一项"正是最容易写错又最难看出来的地方。
+        struct HvmEptWatchRequest
+        {
+            // KSWORD_ARK_HVM_EPT_RULE_ADD / _REARM / _REMOVE / _WATCH_QUERY。
+            unsigned long operation = 0;
+            unsigned long expectedGeneration = 0;
+            // REARM / REMOVE 用；ADD 时由驱动分配并回填。
+            unsigned long watchId = 0;
+            // 用户勾选的访问类型，未经架构归一化。
+            unsigned long requestedAccess = 0;
+            // KSWORD_ARK_HVM_WATCH_ADDRESS_*，仅作回显。
+            unsigned long addressKind = 0;
+            // 实际监视的 4 KiB 物理页，必须页对齐。
+            std::uint64_t physicalPage = 0;
+            // 用户真正关心的那一段，用来判断命中是否落在范围内。
+            std::uint64_t requestedAddress = 0;
+            std::uint64_t requestedLength = 0;
+        };
+
+        // controlHvmEptWatch：执行一次 watch 操作。
+        // 查询不需要确认令牌；其余操作一律带上，与规则路径同一道门。
+        HvmEptRuleResult controlHvmEptWatch(
+            const HvmEptWatchRequest& request) const;
         // controlHvmCrPolicy：配置、清除或查询控制寄存器策略。
         // 掩码与 CR3/DR 拦截开关都在建 VMCS 时消费，所以必须在常驻启动前设置。
         HvmCrPolicyResult controlHvmCrPolicy(
@@ -570,6 +663,17 @@ namespace ksword::ark
             unsigned long processId,
             std::uint64_t guestLinearAddress,
             bool uiConfirmed) const;
+        // resolveHvmDirectoryBase：把一个观测到的 CR3 归到一个 PID 上。
+        // - 唯一的来源是内存监视命中现场里的 guestCr3，界面靠它把"哪个地址
+        //   空间"翻译成"哪个进程"；
+        // - 判据是驱动 attach 进去读回来的那个寄存器值，用户态问不出来，所以
+        //   这件事只能在 R0 做；
+        // - 结果必然是 best-effort：PID 会被回收、地址空间会在命中与查询之间
+        //   消失、内核工作线程借别人的地址空间跑、KVA Shadow 下用户态与内核态
+        //   用的不是同一个 CR3。响应里的 resolvedScannedProcesses 把"扫过都不是
+        //   它"与"一个都没扫成"分开，界面必须照着这两种分别措辞。
+        HvmProcessResult resolveHvmDirectoryBase(
+            std::uint64_t directoryBase) const;
         // controlHvmInject：R-1 层的进程注入——分离视图 + 线程劫持。
         // - 与 R0 注入（ZwAllocateVirtualMemory + ZwCreateThreadEx）是两条不同的
         //   通路：这一条一个内核 API 都不调，目标里也不会多出线程或内存区域；

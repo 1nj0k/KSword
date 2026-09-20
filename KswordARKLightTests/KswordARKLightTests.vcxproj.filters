@@ -31,6 +31,7 @@
     <ClCompile Include="..\shared\evidence\HookPatchCompose.cpp"><Filter>Production\Evidence</Filter></ClCompile>
     <ClCompile Include="..\shared\evidence\PageTableWalk.cpp"><Filter>Production\Evidence</Filter></ClCompile>
     <ClCompile Include="..\shared\evidence\MemoryRegionEvidence.cpp"><Filter>Production\Evidence</Filter></ClCompile>
+    <ClCompile Include="..\shared\evidence\DdmaScratchPlan.cpp"><Filter>Production\Evidence</Filter></ClCompile>
     <ClCompile Include="..\shared\evidence\InjectionSurvey.cpp"><Filter>Production\Evidence</Filter></ClCompile>
     <ClCompile Include="..\shared\evidence\CrossViewDiff.cpp"><Filter>Production\Evidence</Filter></ClCompile>
     <ClCompile Include="..\shared\evidence\EvidenceEnvelope.cpp"><Filter>Production\Evidence</Filter></ClCompile>

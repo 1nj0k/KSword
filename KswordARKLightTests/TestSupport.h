@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 // 各验收测试套件共用的最小断言支撑。每个套件返回自己的失败计数，wmain 汇总。
 
@@ -61,3 +61,6 @@ int RunImageIntegrityTests();
 int RunMemoryEvidenceTests();    
 int RunInjectionSurveyTests();    // J：进程内存植入与完整性检查
 int RunHvmEptSwitchTests();       // EPTP 切换后端（shared/driver，纯算术 + 状态机）
+int RunHvmWatchTests();           // 首次访问监视（shared/driver，纯算术 + 状态机）
+int RunDdmaPlanTests();           // DDMA 磁盘 DMA（shared/driver，ATA 寄存器编码 + 切片 + 门禁）
+int RunNumericTextParseTests();   // 数值文本解析（shared/evidence，地址/数量两种默认进制）

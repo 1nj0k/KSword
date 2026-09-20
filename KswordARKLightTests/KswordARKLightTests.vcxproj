@@ -73,10 +73,14 @@
     <ClCompile Include="InjectionSurveyTests.cpp" />
     <ClCompile Include="..\shared\evidence\InjectionSurvey.cpp" />
     <ClCompile Include="HvmEptSwitchTests.cpp" />
+    <ClCompile Include="HvmWatchTests.cpp" />
+    <ClCompile Include="DdmaPlanTests.cpp" />
+    <ClCompile Include="NumericTextParseTests.cpp" />
     <ClCompile Include="HookPatchComposeTests.cpp" />
     <ClCompile Include="..\shared\evidence\HookPatchCompose.cpp" />
     <ClCompile Include="..\shared\evidence\PageTableWalk.cpp" />
     <ClCompile Include="..\shared\evidence\MemoryRegionEvidence.cpp" />
+    <ClCompile Include="..\shared\evidence\DdmaScratchPlan.cpp" />
     <ClCompile Include="..\shared\evidence\CrossViewDiff.cpp" />
     <ClCompile Include="..\shared\evidence\EvidenceEnvelope.cpp" />
     <ClCompile Include="..\shared\evidence\EvidenceJson.cpp" />

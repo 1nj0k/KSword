@@ -352,6 +352,11 @@ void MemoryDock::startNextScan()
     const QPointer<MemoryDock> selfGuard(this);
     const std::shared_ptr<MemoryScanTaskState> taskState = m_scanTaskState;
 
+    // 与首次扫描同理：后端与 DDMA 会话在 UI 线程按值快照，worker 不读活配置。
+    const ksword::memory_backend::MemoryAccessBackend scanBackend = currentSearchBackend();
+    const ksword::memory_backend::DdmaSession scanDdmaSession = currentDdmaSession();
+    const std::uint32_t scanTargetPid = m_attachedPid;
+
     // 再次扫描也统一使用“扫描中”状态，确保取消按钮和顶部按钮行为一致。
     m_scanInProgress.store(true);
     m_scanCancelRequested.store(false);
@@ -380,7 +385,10 @@ void MemoryDock::startNextScan()
         compareB,
         nonNumericCompareBytes,
         nonNumericWildcardMask,
-        bytesToDouble]() mutable
+        bytesToDouble,
+        scanBackend,
+        scanDdmaSession,
+        scanTargetPid]() mutable
     {
         const auto finishScanTask = [taskState]()
         {
@@ -421,15 +429,38 @@ void MemoryDock::startNextScan()
                 static_cast<std::size_t>(oldEntry.currentValueBytes.size()));
             QByteArray currentBytes(static_cast<int>(readLength), '\0');
             SIZE_T bytesRead = 0;
-            const BOOL readOk = ::ReadProcessMemory(
-                processHandle,
-                reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(oldEntry.address)),
-                currentBytes.data(),
-                static_cast<SIZE_T>(readLength),
-                &bytesRead);
+            bool readSucceeded = false;
+
+            if (scanBackend == ksword::memory_backend::MemoryAccessBackend::Ddma)
+            {
+                const ksword::memory_backend::AccessOutcome ddmaOutcome =
+                    ksword::memory_backend::readVirtual(
+                        ksword::memory_backend::MemoryAccessBackend::Ddma,
+                        scanDdmaSession,
+                        scanTargetPid,
+                        oldEntry.address,
+                        static_cast<std::uint64_t>(readLength));
+                if (ddmaOutcome.ok &&
+                    static_cast<std::size_t>(ddmaOutcome.data.size()) == readLength)
+                {
+                    currentBytes = ddmaOutcome.data;
+                    bytesRead = static_cast<SIZE_T>(readLength);
+                    readSucceeded = true;
+                }
+            }
+            else
+            {
+                const BOOL readOk = ::ReadProcessMemory(
+                    processHandle,
+                    reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(oldEntry.address)),
+                    currentBytes.data(),
+                    static_cast<SIZE_T>(readLength),
+                    &bytesRead);
+                readSucceeded = (readOk != FALSE && bytesRead == readLength);
+            }
 
             bool keepThisEntry = false;
-            if (readOk != FALSE && bytesRead == readLength)
+            if (readSucceeded)
             {
                 switch (compareMode)
                 {
@@ -776,6 +807,12 @@ void MemoryDock::scanMemoryRegionsInBackground(
     const auto startTime = std::chrono::steady_clock::now();
     const std::shared_ptr<MemoryScanTaskState> taskState = m_scanTaskState;
 
+    // 后端选择与 DDMA 会话必须在 UI 线程上按值快照下来：worker 跑起来之后
+    // 用户随时可能改这两处配置，后台线程读一个变化中的会话会得到半新半旧的参数。
+    const ksword::memory_backend::MemoryAccessBackend scanBackend = currentSearchBackend();
+    const ksword::memory_backend::DdmaSession scanDdmaSession = currentDdmaSession();
+    const std::uint32_t scanTargetPid = m_attachedPid;
+
     // 外层协调线程会等待其内部 worker，因此登记这一层即可覆盖整轮首次扫描。
     {
         std::lock_guard<std::mutex> lock(taskState->mutex);
@@ -783,7 +820,8 @@ void MemoryDock::scanMemoryRegionsInBackground(
     }
 
     // 后台主线程只负责拉起 worker 并汇总结果，不直接操作 UI 控件。
-    std::thread([selfGuard, taskState, processHandle, regions, scanPattern, threadCount, chunkSize, startTime]() {
+    std::thread([selfGuard, taskState, processHandle, regions, scanPattern, threadCount, chunkSize, startTime,
+                 scanBackend, scanDdmaSession, scanTargetPid]() {
         const auto finishScanTask = [taskState]()
         {
             std::lock_guard<std::mutex> lock(taskState->mutex);
@@ -881,19 +919,44 @@ void MemoryDock::scanMemoryRegionsInBackground(
                         std::min<std::uint64_t>(remainBytes, static_cast<std::uint64_t>(chunkSize)));
                     QByteArray readBuffer(static_cast<int>(requestSize), '\0');
                     SIZE_T bytesRead = 0;
-                    const BOOL readOk = ::ReadProcessMemory(
-                        processHandle,
-                        reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(cursor)),
-                        readBuffer.data(),
-                        static_cast<SIZE_T>(requestSize),
-                        &bytesRead);
-                    if (readOk == FALSE || bytesRead == 0)
+
+                    if (scanBackend == ksword::memory_backend::MemoryAccessBackend::Ddma)
                     {
-                        // 某块读取失败时跳过该块继续扫描，保证任务具备容错能力。
-                        cursor += requestSize;
-                        remainBytes -= requestSize;
-                        carryBytes.clear();
-                        continue;
+                        // DDMA 通道：逐页翻译 + 磁盘 DMA。比 ReadProcessMemory 慢
+                        // 几个数量级，但能扫到被 SLAT 重定向的内容。
+                        const ksword::memory_backend::AccessOutcome ddmaOutcome =
+                            ksword::memory_backend::readVirtual(
+                                ksword::memory_backend::MemoryAccessBackend::Ddma,
+                                scanDdmaSession,
+                                scanTargetPid,
+                                cursor,
+                                static_cast<std::uint64_t>(requestSize));
+                        if (!ddmaOutcome.ok || ddmaOutcome.data.isEmpty())
+                        {
+                            cursor += requestSize;
+                            remainBytes -= requestSize;
+                            carryBytes.clear();
+                            continue;
+                        }
+                        readBuffer = ddmaOutcome.data;
+                        bytesRead = static_cast<SIZE_T>(ddmaOutcome.data.size());
+                    }
+                    else
+                    {
+                        const BOOL readOk = ::ReadProcessMemory(
+                            processHandle,
+                            reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(cursor)),
+                            readBuffer.data(),
+                            static_cast<SIZE_T>(requestSize),
+                            &bytesRead);
+                        if (readOk == FALSE || bytesRead == 0)
+                        {
+                            // 某块读取失败时跳过该块继续扫描，保证任务具备容错能力。
+                            cursor += requestSize;
+                            remainBytes -= requestSize;
+                            carryBytes.clear();
+                            continue;
+                        }
                     }
 
                     // 合并“上一块尾巴 + 当前块”处理边界命中，避免漏掉跨块模式。

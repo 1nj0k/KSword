@@ -1,4 +1,5 @@
 #include "DiskEditorTab.h"
+#include "../../../../shared/evidence/NumericTextParse.h"
 #include "../../SettingsDock/AppearanceSettings.h"
 #include "../../Framework/PrivilegeElevationPrompt.h"
 #include "../../UI/TableInteractionSupport.h"
@@ -2353,28 +2354,23 @@ namespace ks::misc
 
     bool DiskEditorTab::parseAddressText(const QString& text, std::uint64_t& valueOut)
     {
-        const QString trimmedText = text.trimmed();
-        if (trimmedText.isEmpty())
+        // 本页三个输入框（偏移、范围起点、范围长度）的默认值与所有回填都由
+        // hexOffsetText 产生，形如 0x0000000000000000，界面上从头到尾只有
+        // 十六进制。所以无前缀时必须也按十六进制解释：照着框里原有的样子清空
+        // 重打一个 100000，按十进制读会变成 0x186A0，落到磁盘上另一个位置——
+        // 而这一页是**会写盘的**，读错位置只是看错数据，写错位置会毁数据。
+        // 原先这里与 MemoryDock 是同一份"先十进制、失败再十六进制"的写法，
+        // 那条回退只对含 a–f 的串生效，纯数字串永远走不到。
+        valueOut = 0ULL;
+        const auto parsed = ksword::evidence::ParseNumericText(
+            text.trimmed().toStdString(),
+            ksword::evidence::NumericTextDefaultRadix::Hexadecimal);
+        if (!parsed.ok)
         {
             return false;
         }
-
-        bool parseOk = false;
-        qulonglong value = 0;
-        if (trimmedText.startsWith(QStringLiteral("0x"), Qt::CaseInsensitive))
-        {
-            value = trimmedText.mid(2).toULongLong(&parseOk, 16);
-        }
-        else
-        {
-            value = trimmedText.toULongLong(&parseOk, 10);
-            if (!parseOk)
-            {
-                value = trimmedText.toULongLong(&parseOk, 16);
-            }
-        }
-        valueOut = static_cast<std::uint64_t>(value);
-        return parseOk;
+        valueOut = parsed.value;
+        return true;
     }
 
     void DiskEditorTab::setControlsEnabledForBusy(const bool busy)

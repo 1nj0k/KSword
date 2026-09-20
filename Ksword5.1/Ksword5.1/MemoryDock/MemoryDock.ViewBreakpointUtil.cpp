@@ -1,6 +1,7 @@
 #include "MemoryDock.Internal.h"
 #include "../Internationalization/LanguageManager.h"
 #include "../UI/TableInteractionSupport.h"
+#include "../../../shared/evidence/NumericTextParse.h"
 
 // 说明：由原聚合式实现迁移为独立 .cpp，成员函数实现保持原样。
 using namespace ksword::memory_dock_internal;
@@ -80,16 +81,79 @@ void MemoryDock::reloadMemoryViewerPage()
         return;
     }
 
-    // 每页固定读取 512 字节，兼顾可读性与刷新性能。
-    QByteArray pageBytes(static_cast<int>(kHexPageBytes), '\0');
+    // 每页固定读取 512 字节，兼顾可读性与刷新性能。缓冲区由门面分配：三条通道
+    // 的字节数各自由各自的实现决定，这里再准备一个固定长度的缓冲只会多出一个
+    // "看起来读满了"的假象。
     SIZE_T bytesRead = 0;
-    const BOOL readOk = ::ReadProcessMemory(
-        m_attachedProcessHandle,
-        reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(m_currentViewerAddress)),
-        pageBytes.data(),
-        static_cast<SIZE_T>(kHexPageBytes),
-        &bytesRead);
-    if (readOk == FALSE || bytesRead == 0)
+
+    // DDMA 后端不经过 ReadProcessMemory：逐页翻译成物理地址后走磁盘 DMA，
+    // 因此能看到被 SLAT 重定向的内容。翻译失败的页由后端门面补 00 并置 partial。
+    if (currentViewerBackend() == ksword::memory_backend::MemoryAccessBackend::Ddma)
+    {
+        const ksword::memory_backend::AccessOutcome ddmaOutcome =
+            ksword::memory_backend::readVirtual(
+                ksword::memory_backend::MemoryAccessBackend::Ddma,
+                currentDdmaSession(),
+                m_attachedPid,
+                m_currentViewerAddress,
+                kHexPageBytes);
+        if (!ddmaOutcome.ok)
+        {
+            m_currentViewerPageBytes.clear();
+            if (m_hexEditorWidget != nullptr)
+            {
+                m_hexEditorWidget->setEditable(false);
+                m_hexEditorWidget->clearData();
+            }
+            m_viewerStatusLabel->setText(
+                QStringLiteral("DDMA 读取失败：%1").arg(ddmaOutcome.failureText));
+            return;
+        }
+
+        m_currentViewerPageBytes = ddmaOutcome.data;
+        if (m_hexEditorWidget != nullptr)
+        {
+            // DDMA 快照按只读展示：本页的单字节写入走 WriteProcessMemory，
+            // 与 DDMA 不是同一条通路，允许编辑会让用户以为改的是 DMA 视图。
+            m_hexEditorWidget->setEditable(false);
+            m_hexEditorWidget->setBytesPerRow(16);
+            m_hexEditorWidget->setRegionData(
+                m_currentViewerPageBytes.constData(),
+                static_cast<std::size_t>(m_currentViewerPageBytes.size()),
+                m_currentViewerAddress);
+        }
+        QString ddmaStatusText = QStringLiteral("DDMA 读取完成：%1 字节（只读展示）。")
+            .arg(m_currentViewerPageBytes.size());
+        if (ddmaOutcome.partial)
+        {
+            ddmaStatusText += QStringLiteral(" 有页无法翻译成物理地址，已按 00 填充。");
+        }
+        if (ddmaOutcome.scratchDirty)
+        {
+            ddmaStatusText += QStringLiteral(
+                " 严重告警：暂存扇区未能还原，磁盘上留下了脏扇区。");
+        }
+        m_viewerStatusLabel->setText(ddmaStatusText);
+        m_viewProtectLabel->setText(QStringLiteral("保护属性: DDMA 通道不查询"));
+        return;
+    }
+
+    // R3 与 R0 都走同一个门面，只是枚举值不同。**不做自动回退**：这三条通道
+    // 摆在下拉框里的意义就是"同一个地址各自能读到什么"，一条失败时偷偷换另一条
+    // 去读，屏幕上的字节就不再对应用户选的通道，差异也就再也看不出来了。
+    const ksword::memory_backend::MemoryAccessBackend selectedBackend =
+        currentViewerBackend();
+    const ksword::memory_backend::AccessOutcome readOutcome =
+        ksword::memory_backend::readVirtual(
+            selectedBackend,
+            currentDdmaSession(),
+            m_attachedPid,
+            m_currentViewerAddress,
+            kHexPageBytes);
+    const QString channelText =
+        ksword::memory_backend::backendDisplayName(selectedBackend);
+
+    if (!readOutcome.ok)
     {
         m_currentViewerPageBytes.clear();
         if (m_hexEditorWidget != nullptr)
@@ -97,22 +161,92 @@ void MemoryDock::reloadMemoryViewerPage()
             m_hexEditorWidget->setEditable(false);
             m_hexEditorWidget->clearData();
         }
+
+        // 失败时必须把**这个地址在目标进程里到底是什么状态**查出来。原先
+        // VirtualQueryEx 只在成功路径上跑，于是报错只有一个 win32 错误码，
+        // 而 299 同时兼容好几种完全不同的成因：附加的根本不是那个进程、
+        // 那段内存已经被释放、或者是栈的 PAGE_GUARD 页。这几种靠错误码一种都
+        // 分不出来，只能靠猜——而猜出来的机制不是判据。区域状态一摆出来就分完了。
+        MEMORY_BASIC_INFORMATION failMbi{};
+        const SIZE_T failQuerySize = ::VirtualQueryEx(
+            m_attachedProcessHandle,
+            reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(m_currentViewerAddress)),
+            &failMbi,
+            sizeof(failMbi));
+        QString regionText;
+        if (failQuerySize == sizeof(failMbi))
+        {
+            regionText = QString("区域 %1 大小 %2 状态 %3 保护 %4")
+                .arg(formatAddress(reinterpret_cast<std::uint64_t>(failMbi.BaseAddress)))
+                .arg(static_cast<qulonglong>(failMbi.RegionSize))
+                .arg(stateToText(static_cast<std::uint32_t>(failMbi.State)))
+                .arg(protectToText(static_cast<std::uint32_t>(failMbi.Protect)));
+
+            // MEM_FREE 的含义是"这里根本没有内存"，不是"读不到"。三条通道谁都
+            // 变不出不存在的东西，所以此时继续在读取通道上排查一定是白费。
+            // 最常见的成因是附加到了同名的另一个进程：像 QQ 这种一开十个同名
+            // 进程的程序，从别处抄来的地址属于其中某一个，附加到另一个上就正好
+            // 是这个现象。同名进程数是现成的，直接点出来，别让人去猜。
+            if (failMbi.State == MEM_FREE)
+            {
+                int sameNameCount = 0;
+                for (const ProcessEntry& entry : m_processCache)
+                {
+                    if (entry.processName.compare(m_attachedProcessName, Qt::CaseInsensitive) == 0)
+                    {
+                        ++sameNameCount;
+                    }
+                }
+                regionText += QStringLiteral("。该地址在这个进程里根本没有内存（MEM_FREE），不是读不到——换任何通道都一样");
+                if (sameNameCount > 1)
+                {
+                    regionText += QString("。本机有 %1 个都叫 %2 的进程，地址很可能属于其中另一个，请核对 PID")
+                        .arg(sameNameCount)
+                        .arg(m_attachedProcessName);
+                }
+            }
+        }
+        else
+        {
+            regionText = QStringLiteral("区域查询也失败，该地址在本进程中不存在");
+        }
+
+        // 低 64 KB 是每个进程的空指针保护区，系统从不在那里映射任何东西，
+        // 所以这一段永远读不到，跟目标进程、权限、后端通道都无关。把它单独
+        // 判出来，是因为它的真实成因几乎总在读取之外：地址本身就不对。
+        constexpr std::uint64_t kNullGuardEnd = 0x10000ULL;
+        const QString guardText = (m_currentViewerAddress < kNullGuardEnd)
+            ? QStringLiteral("该地址落在进程的空指针保护区（低 64 KB）内，任何进程都不会在这里映射内存，请检查地址是否写少了位数。")
+            : QString();
         m_viewerStatusLabel->setText(
-            QString("读取失败：地址=%1，错误码=%2")
+            QString("%1 读取失败：地址=%2（PID %3）。%4%5。%6")
+            .arg(channelText)
             .arg(formatAddress(m_currentViewerAddress))
-            .arg(::GetLastError()));
+            .arg(m_attachedPid)
+            .arg(guardText)
+            .arg(readOutcome.failureText)
+            .arg(regionText));
         kLogEvent reloadViewerReadFailEvent;
         err << reloadViewerReadFailEvent
-            << "[MemoryDock] reloadMemoryViewerPage: ReadProcessMemory 失败, address="
+            << "[MemoryDock] reloadMemoryViewerPage: 读取失败, backend="
+            << channelText.toStdString()
+            << ", address="
             << formatAddress(m_currentViewerAddress).toStdString()
-            << ", error="
-            << ::GetLastError()
+            << ", pid="
+            << m_attachedPid
+            << ", reason="
+            << readOutcome.failureText.toStdString()
+            << ", region="
+            << regionText.toStdString()
             << eol;
         return;
     }
 
-    // 保存当前页字节并投影到统一十六进制组件。
-    m_currentViewerPageBytes = pageBytes.left(static_cast<int>(bytesRead));
+    m_currentViewerPageBytes = readOutcome.data;
+    bytesRead = static_cast<SIZE_T>(m_currentViewerPageBytes.size());
+    const bool partialRead = readOutcome.partial || (bytesRead < kHexPageBytes);
+
+    // 投影到统一十六进制组件。
     if (m_hexEditorWidget != nullptr)
     {
         m_hexEditorWidget->setEditable(m_canReadWriteMemory);
@@ -172,10 +306,27 @@ void MemoryDock::reloadMemoryViewerPage()
             QString("color:%1;").arg(KswordTheme::TextSecondaryHex()));
     }
 
-    m_viewerStatusLabel->setText(
-        QString("地址 %1 读取 %2 字节。")
-        .arg(formatAddress(m_currentViewerAddress))
-        .arg(bytesRead));
+    // 只读到一部分时必须说出来。少了这句，用户看到的是一屏正常的十六进制，
+    // 却不知道这一页在某个字节之后就是未映射区，剩下的内容压根不存在。
+    // 通道名也要写出来：同一个地址在驱动通道和 RPM 下读到的东西可能不一样，
+    // 不写就分不清屏幕上这一页到底是谁给的。
+    if (partialRead)
+    {
+        m_viewerStatusLabel->setText(
+            QString("地址 %1 经%2只读到 %3 / %4 字节：其余部分不可读，内容不存在。")
+            .arg(formatAddress(m_currentViewerAddress))
+            .arg(channelText)
+            .arg(bytesRead)
+            .arg(kHexPageBytes));
+    }
+    else
+    {
+        m_viewerStatusLabel->setText(
+            QString("地址 %1 经%2读取 %3 字节。")
+            .arg(formatAddress(m_currentViewerAddress))
+            .arg(channelText)
+            .arg(bytesRead));
+    }
 
     // 刷新完成日志：记录本页成功读取字节数。
     kLogEvent reloadViewerFinishEvent;
@@ -664,45 +815,34 @@ bool MemoryDock::parseAddressText(const QString& text, std::uint64_t& valueOut)
         << text.trimmed().toStdString()
         << eol;
 
-    // 地址解析与通用无符号整数解析共享一套规则。
-    return parseUnsignedNumber(text, valueOut);
+    // 地址的无前缀默认进制是**十六进制**，与下面的通用数值解析不是一套规则。
+    // 原先两者共用一个"先试十进制、失败再试十六进制"的解析器，而那条十六进制
+    // 回退只对含 a–f 的串生效：纯数字串的十进制解析永远成立。于是在这个所有
+    // 地址都以 0x 回显的界面里，输入 1233 会跳到十进制 1233（= 0x4D1），
+    // 不报错、不提示，只是读到了别处。
+    const auto parsed = ksword::evidence::ParseNumericText(
+        text.trimmed().toStdString(),
+        ksword::evidence::NumericTextDefaultRadix::Hexadecimal);
+    if (!parsed.ok)
+    {
+        return false;
+    }
+    valueOut = parsed.value;
+    return true;
 }
 
 bool MemoryDock::parseUnsignedNumber(const QString& text, std::uint64_t& valueOut)
 {
-    const QString trimmed = text.trimmed();
-    if (trimmed.isEmpty())
+    // 这里是"数量"语义（搜索的字节值、长度等），无前缀按十进制——数量本来就是
+    // 按十进制念的，不能跟着地址一起改。0x 前缀仍然恒为十六进制。
+    const auto parsed = ksword::evidence::ParseNumericText(
+        text.trimmed().toStdString(),
+        ksword::evidence::NumericTextDefaultRadix::Decimal);
+    if (!parsed.ok)
     {
         return false;
     }
-
-    bool parseOk = false;
-    qulonglong parsedValue = 0;
-
-    // 优先处理 0x 前缀（十六进制）形式。
-    if (trimmed.startsWith("0x", Qt::CaseInsensitive))
-    {
-        parsedValue = trimmed.mid(2).toULongLong(&parseOk, 16);
-        if (!parseOk)
-        {
-            return false;
-        }
-        valueOut = static_cast<std::uint64_t>(parsedValue);
-        return true;
-    }
-
-    // 再尝试十进制；失败后再尝试“无前缀十六进制”以兼容输入习惯。
-    parsedValue = trimmed.toULongLong(&parseOk, 10);
-    if (!parseOk)
-    {
-        parsedValue = trimmed.toULongLong(&parseOk, 16);
-        if (!parseOk)
-        {
-            return false;
-        }
-    }
-
-    valueOut = static_cast<std::uint64_t>(parsedValue);
+    valueOut = parsed.value;
     return true;
 }
 

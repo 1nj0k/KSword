@@ -24,6 +24,7 @@ Environment:
 #include "driver/KswordArkProcessProtectIoctl.h"
 #include "driver/KswordArkCallbackMonitorIoctl.h"
 #include "driver/KswordArkHvmMetricsIoctl.h"
+#include "driver/KswordArkDdmaIoctl.h"
 
 // Feature handler declarations live here instead of in the central dispatch file.
 NTSTATUS KswordARKKernelIoctlControlDriverDispatch(_In_ WDFDEVICE Device, _In_ WDFREQUEST Request, _In_ size_t InputBufferLength, _In_ size_t OutputBufferLength, _Out_ size_t* BytesReturned);
@@ -52,6 +53,9 @@ NTSTATUS KswordARKMemoryIoctlTranslateVirtualAddress(_In_ WDFDEVICE Device, _In_
 NTSTATUS KswordARKMemoryIoctlQueryPageTableEntry(_In_ WDFDEVICE Device, _In_ WDFREQUEST Request, _In_ size_t InputBufferLength, _In_ size_t OutputBufferLength, _Out_ size_t* BytesReturned);
 NTSTATUS KswordARKMemoryIoctlScanKernelExecutableMemory(_In_ WDFDEVICE Device, _In_ WDFREQUEST Request, _In_ size_t InputBufferLength, _In_ size_t OutputBufferLength, _Out_ size_t* BytesReturned);
 NTSTATUS KswordARKMemoryIoctlScanKernelMemoryEvidence(_In_ WDFDEVICE Device, _In_ WDFREQUEST Request, _In_ size_t InputBufferLength, _In_ size_t OutputBufferLength, _Out_ size_t* BytesReturned);
+NTSTATUS KswordARKMemoryIoctlDdmaQueryCapability(_In_ WDFDEVICE Device, _In_ WDFREQUEST Request, _In_ size_t InputBufferLength, _In_ size_t OutputBufferLength, _Out_ size_t* BytesReturned);
+NTSTATUS KswordARKMemoryIoctlDdmaReadPhysical(_In_ WDFDEVICE Device, _In_ WDFREQUEST Request, _In_ size_t InputBufferLength, _In_ size_t OutputBufferLength, _Out_ size_t* BytesReturned);
+NTSTATUS KswordARKMemoryIoctlDdmaWritePhysical(_In_ WDFDEVICE Device, _In_ WDFREQUEST Request, _In_ size_t InputBufferLength, _In_ size_t OutputBufferLength, _Out_ size_t* BytesReturned);
 NTSTATUS KswordARKFileIoctlDeletePath(_In_ WDFDEVICE Device, _In_ WDFREQUEST Request, _In_ size_t InputBufferLength, _In_ size_t OutputBufferLength, _Out_ size_t* BytesReturned);
 NTSTATUS KswordARKFileIoctlQueryFileInfo(_In_ WDFDEVICE Device, _In_ WDFREQUEST Request, _In_ size_t InputBufferLength, _In_ size_t OutputBufferLength, _Out_ size_t* BytesReturned);
 NTSTATUS KswordARKFileIoctlEnumDirectory(_In_ WDFDEVICE Device, _In_ WDFREQUEST Request, _In_ size_t InputBufferLength, _In_ size_t OutputBufferLength, _Out_ size_t* BytesReturned);
@@ -249,6 +253,9 @@ static const KSWORD_ARK_IOCTL_ENTRY g_KswordArkIoctlTable[] = {
     { IOCTL_KSWORD_ARK_QUERY_PAGE_TABLE_ENTRY, KswordARKMemoryIoctlQueryPageTableEntry, "IOCTL_KSWORD_ARK_QUERY_PAGE_TABLE_ENTRY", KSWORD_ARK_IOCTL_CAPABILITY_NONE, KSWORD_ARK_IOCTL_FLAG_NONE },
     { IOCTL_KSWORD_ARK_SCAN_KERNEL_EXECUTABLE_MEMORY, KswordARKMemoryIoctlScanKernelExecutableMemory, "IOCTL_KSWORD_ARK_SCAN_KERNEL_EXECUTABLE_MEMORY", KSWORD_ARK_IOCTL_CAPABILITY_NONE, KSWORD_ARK_IOCTL_FLAG_NONE },
     { IOCTL_KSWORD_ARK_SCAN_KERNEL_MEMORY_EVIDENCE, KswordARKMemoryIoctlScanKernelMemoryEvidence, "IOCTL_KSWORD_ARK_SCAN_KERNEL_MEMORY_EVIDENCE", KSWORD_ARK_IOCTL_CAPABILITY_NONE, KSWORD_ARK_IOCTL_FLAG_NONE },
+    { IOCTL_KSWORD_ARK_DDMA_QUERY_CAPABILITY, KswordARKMemoryIoctlDdmaQueryCapability, "IOCTL_KSWORD_ARK_DDMA_QUERY_CAPABILITY", KSWORD_ARK_IOCTL_CAPABILITY_NONE, KSWORD_ARK_IOCTL_FLAG_NONE },
+    { IOCTL_KSWORD_ARK_DDMA_READ_PHYSICAL, KswordARKMemoryIoctlDdmaReadPhysical, "IOCTL_KSWORD_ARK_DDMA_READ_PHYSICAL", KSWORD_ARK_IOCTL_CAPABILITY_NONE, KSWORD_ARK_IOCTL_FLAG_NONE },
+    { IOCTL_KSWORD_ARK_DDMA_WRITE_PHYSICAL, KswordARKMemoryIoctlDdmaWritePhysical, "IOCTL_KSWORD_ARK_DDMA_WRITE_PHYSICAL", KSWORD_ARK_IOCTL_CAPABILITY_NONE, KSWORD_ARK_IOCTL_FLAG_NONE },
     { IOCTL_KSWORD_ARK_DELETE_PATH, KswordARKFileIoctlDeletePath, "IOCTL_KSWORD_ARK_DELETE_PATH", KSWORD_ARK_IOCTL_CAPABILITY_NONE, KSWORD_ARK_IOCTL_FLAG_NONE },
     { IOCTL_KSWORD_ARK_QUERY_FILE_INFO, KswordARKFileIoctlQueryFileInfo, "IOCTL_KSWORD_ARK_QUERY_FILE_INFO", KSWORD_ARK_IOCTL_CAPABILITY_NONE, KSWORD_ARK_IOCTL_FLAG_NONE },
     { IOCTL_KSWORD_ARK_ENUM_DIRECTORY, KswordARKFileIoctlEnumDirectory, "IOCTL_KSWORD_ARK_ENUM_DIRECTORY", KSWORD_ARK_IOCTL_CAPABILITY_NONE, KSWORD_ARK_IOCTL_FLAG_QUIET_SUCCESS },

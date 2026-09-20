@@ -188,6 +188,59 @@ void MemoryDock::initializeConnections()
         m_processComboChangeTimer->start();
         });
 
+    // 十字准星拾取：拖到目标窗口松手，直接按窗口归属的 PID 附加。
+    // 拾取结果不经过下拉框的当前选择：下拉框的内容是一份可能已经过期的快照，
+    // 而窗口归属是此刻现问出来的，两者不一致时应当以后者为准。附加成功后再把
+    // 下拉框对齐过去，让界面上显示的目标与实际附加的一致。
+    connect(m_processPickerButton, &ks::ui::WindowPickerButton::processPicked, this,
+        [this](const quint32 pickedPid, const QString& pickedName) {
+            if (pickedPid == 0)
+            {
+                m_processPickerHintLabel->setText(
+                    QStringLiteral("没拾到窗口：落点上没有其它程序的窗口。"));
+                return;
+            }
+            kLogEvent pickEvent;
+            info << pickEvent
+                << "[MemoryDock] 窗口拾取附加, pid="
+                << pickedPid
+                << ", name="
+                << pickedName.toStdString()
+                << eol;
+            m_processPickerHintLabel->setText(
+                QStringLiteral("已拾取 %1 [PID:%2]").arg(pickedName).arg(pickedPid));
+            // 拾到的进程可能还不在下拉快照里（刚启动的程序），所以先刷新一次，
+            // 再按 PID 附加。附加本身只认 PID，不依赖下拉框里有没有这一项。
+            attachToProcess(static_cast<std::uint32_t>(pickedPid), pickedName, true);
+            refreshProcessList(true);
+        });
+
+    connect(m_processPickerButton, &ks::ui::WindowPickerButton::hoverPreview, this,
+        [this](const quint32 hoverPid, const QString& hoverName) {
+            if (hoverPid == 0)
+            {
+                m_processPickerHintLabel->setText(QStringLiteral("拖到目标窗口上…"));
+                return;
+            }
+            m_processPickerHintLabel->setText(
+                QStringLiteral("%1 [PID:%2]").arg(hoverName).arg(hoverPid));
+        });
+
+    connect(m_processPickerButton, &ks::ui::WindowPickerButton::pickingChanged, this,
+        [this](const bool picking) {
+            m_processPickerHintLabel->setVisible(picking);
+            if (picking)
+            {
+                m_processPickerHintLabel->setText(QStringLiteral("拖到目标窗口上…"));
+            }
+        });
+
+    // 进程表过滤：进程名或 PID 任一命中即显示。只隐藏行、不重建表格，
+    // 这样刷新与过滤互不干扰，也不会丢掉当前选中行。
+    connect(m_processFilterEdit, &QLineEdit::textChanged, this, [this](const QString&) {
+        applyProcessTableFilter();
+        });
+
     connect(m_attachButton, &QPushButton::clicked, this, [this]() {
         const int comboIndex = m_processCombo->currentIndex();
         if (comboIndex < 0)

@@ -6,8 +6,10 @@
 #include "../UI/TableInteractionSupport.h"
 #include "../UI/VisibleTableWidget.h"
 #include "../ksword/log/log.h"
+#include "MemoryAccessBackend.h"
 
 #include <QAbstractItemView>
+#include <QHBoxLayout>
 #include <QCoreApplication>
 #include <QCheckBox>
 #include <QDateTime>
@@ -792,6 +794,37 @@ void SystemMemoryAuditPage::initializeUi()
     detailSplitter->setSizes(QList<int>{ 420, 160 });
     rootLayout->addWidget(detailSplitter, 1);
 
+    // DDMA 复核条：本页统计的是"标准通道看到的物理内存"，被 SLAT 重定向的页在
+    // 这里只会表现为一段说不清归属的余量。用 DDMA 对同一页再读一次，是唯一能在
+    // 本页内直接验证"这段内存是不是被藏起来了"的手段。
+    {
+        QWidget* const ddmaRow = new QWidget(this);
+        QHBoxLayout* const ddmaLayout = new QHBoxLayout(ddmaRow);
+        ddmaLayout->setContentsMargins(0, 0, 0, 0);
+        ddmaLayout->setSpacing(6);
+
+        m_ddmaCrossCheckAddressEdit = new QLineEdit(ddmaRow);
+        m_ddmaCrossCheckAddressEdit->setPlaceholderText(
+            localized("Physical page address, e.g. 0x1000"));
+        m_ddmaCrossCheckAddressEdit->setClearButtonEnabled(true);
+
+        m_ddmaCrossCheckButton = new QPushButton(
+            QIcon(QStringLiteral(":/Icon/file_find.svg")),
+            localized("Cross-check with DDMA"),
+            ddmaRow);
+        m_ddmaCrossCheckButton->setEnabled(false);
+
+        m_ddmaCrossCheckResultLabel = new QLabel(ddmaRow);
+        m_ddmaCrossCheckResultLabel->setWordWrap(true);
+        m_ddmaCrossCheckResultLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+
+        ddmaLayout->addWidget(new QLabel(localized("DDMA cross-check"), ddmaRow));
+        ddmaLayout->addWidget(m_ddmaCrossCheckAddressEdit);
+        ddmaLayout->addWidget(m_ddmaCrossCheckButton);
+        ddmaLayout->addWidget(m_ddmaCrossCheckResultLabel, 1);
+        rootLayout->addWidget(ddmaRow);
+    }
+
     m_statusLabel = new QLabel(this);
     m_statusLabel->setWordWrap(true);
     m_statusLabel->setMinimumWidth(0);
@@ -920,6 +953,142 @@ void SystemMemoryAuditPage::initializeConnections()
         scheduleCurrentDetailViewRebuild();
         updateDetails();
     });
+    connect(m_ddmaCrossCheckButton, &QPushButton::clicked, this, [this]() {
+        runDdmaCrossCheck();
+        });
+    connect(m_ddmaCrossCheckAddressEdit, &QLineEdit::returnPressed, this, [this]() {
+        runDdmaCrossCheck();
+        });
+}
+
+void SystemMemoryAuditPage::setDdmaSessionProvider(
+    std::function<const ksword::memory_backend::DdmaSession&()> provider)
+{
+    m_ddmaSessionProvider = std::move(provider);
+    refreshDdmaCrossCheckState();
+}
+
+void SystemMemoryAuditPage::refreshDdmaCrossCheckState()
+{
+    if (m_ddmaCrossCheckButton == nullptr)
+    {
+        return;
+    }
+    if (!m_ddmaSessionProvider)
+    {
+        m_ddmaCrossCheckButton->setEnabled(false);
+        m_ddmaCrossCheckButton->setToolTip(localized("DDMA channel is not available in this view."));
+        return;
+    }
+
+    QString reason;
+    const bool usable =
+        ksword::memory_backend::isDdmaUsable(m_ddmaSessionProvider(), &reason);
+    m_ddmaCrossCheckButton->setEnabled(usable);
+    m_ddmaCrossCheckButton->setToolTip(usable
+        ? localized("Read the same physical page through both backends and compare byte by byte.")
+        : reason);
+}
+
+void SystemMemoryAuditPage::runDdmaCrossCheck()
+{
+    if (m_ddmaCrossCheckResultLabel == nullptr || m_ddmaCrossCheckAddressEdit == nullptr)
+    {
+        return;
+    }
+    if (!m_ddmaSessionProvider)
+    {
+        m_ddmaCrossCheckResultLabel->setText(
+            localized("DDMA channel is not available in this view."));
+        return;
+    }
+
+    const QString addressText = m_ddmaCrossCheckAddressEdit->text().trimmed();
+    bool converted = false;
+    std::uint64_t physicalAddress = 0ULL;
+    if (addressText.startsWith(QStringLiteral("0x"), Qt::CaseInsensitive))
+    {
+        physicalAddress = addressText.mid(2).toULongLong(&converted, 16);
+    }
+    else
+    {
+        physicalAddress = addressText.toULongLong(&converted, 16);
+    }
+    if (!converted)
+    {
+        m_ddmaCrossCheckResultLabel->setText(
+            localized("Physical address could not be parsed; use hexadecimal, e.g. 0x1000."));
+        m_ddmaCrossCheckResultLabel->setStyleSheet(
+            QStringLiteral("color:%1;").arg(KswordTheme::WarningHex()));
+        return;
+    }
+
+    // 复核固定比一整页，两个后端读同一段才有可比性。粒度取自后端门面，
+    // 本编译单元不需要为一个常量去包含驱动协议头。
+    const std::uint64_t transferBytes =
+        static_cast<std::uint64_t>(ksword::memory_backend::ddmaTransferBytes());
+    const std::uint64_t pageBase = physicalAddress & ~(transferBytes - 1ULL);
+    const ksword::memory_backend::DdmaSession& session = m_ddmaSessionProvider();
+
+    const ksword::memory_backend::AccessOutcome standardOutcome =
+        ksword::memory_backend::readPhysical(
+            ksword::memory_backend::MemoryAccessBackend::StandardDriver,
+            session,
+            pageBase,
+            transferBytes);
+    const ksword::memory_backend::AccessOutcome ddmaOutcome =
+        ksword::memory_backend::readPhysical(
+            ksword::memory_backend::MemoryAccessBackend::Ddma,
+            session,
+            pageBase,
+            transferBytes);
+
+    // 任何一侧读失败都不能下"一致/不一致"的结论，只能说没法比。
+    if (!standardOutcome.ok || !ddmaOutcome.ok)
+    {
+        const QString detail = !standardOutcome.ok
+            ? standardOutcome.failureText
+            : ddmaOutcome.failureText;
+        m_ddmaCrossCheckResultLabel->setText(
+            QStringLiteral("%1 %2").arg(localized("Cannot compare:")).arg(detail));
+        m_ddmaCrossCheckResultLabel->setStyleSheet(
+            QStringLiteral("color:%1;").arg(KswordTheme::WarningHex()));
+        return;
+    }
+
+    const qsizetype compareLength =
+        std::min<qsizetype>(standardOutcome.data.size(), ddmaOutcome.data.size());
+    qsizetype diffCount = 0;
+    for (qsizetype index = 0; index < compareLength; ++index)
+    {
+        if (standardOutcome.data[index] != ddmaOutcome.data[index])
+        {
+            ++diffCount;
+        }
+    }
+
+    if (diffCount == 0)
+    {
+        m_ddmaCrossCheckResultLabel->setText(
+            QStringLiteral("0x%1: %2")
+                .arg(pageBase, 0, 16)
+                .arg(localized("both backends returned identical bytes; no redirection observed.")));
+        m_ddmaCrossCheckResultLabel->setStyleSheet(
+            QStringLiteral("color:%1;").arg(KswordTheme::SuccessHex()));
+    }
+    else
+    {
+        m_ddmaCrossCheckResultLabel->setText(
+            QStringLiteral("0x%1: %2/%3 %4")
+                .arg(pageBase, 0, 16)
+                .arg(diffCount)
+                .arg(compareLength)
+                .arg(localized(
+                    "bytes differ. The standard channel is subject to SLAT; DDMA is not. "
+                    "This usually means the page is redirected or hidden by a hypervisor.")));
+        m_ddmaCrossCheckResultLabel->setStyleSheet(
+            QStringLiteral("color:%1;").arg(KswordTheme::WarningHex()));
+    }
 }
 
 void SystemMemoryAuditPage::retranslateUi()
