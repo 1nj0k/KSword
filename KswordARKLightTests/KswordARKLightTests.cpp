@@ -513,6 +513,7 @@ int wmain() {
     failures += RunInjectionSurveyTests();
     failures += RunHvmEptSwitchTests();
     failures += RunHvmWatchTests();
+    failures += RunDdmaPlanTests();
     failures += RunHookPatchComposeTests();
 
     if (failures == 0) {

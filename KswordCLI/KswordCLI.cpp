@@ -43,6 +43,8 @@
 #include "../shared/driver/KswordArkKernelIoctl.h"
 #include "../shared/driver/KswordArkKernelObjectIoctl.h"
 #include "../shared/driver/KswordArkMemoryIoctl.h"
+#include "../shared/driver/KswordArkDdmaIoctl.h"
+#include "../shared/driver/KswordArkDdmaPlan.h"
 #include "../shared/driver/KswordArkMutationIoctl.h"
 #include "../shared/driver/KswordArkNetworkIoctl.h"
 #include "../shared/driver/KswordArkPreflightIoctl.h"
@@ -1067,6 +1069,11 @@ namespace
         DriverHandle handle = openDriverOrReport(desiredAccess);
         if (!handle.valid())
         {
+            // 打不开设备时也要把真实错误码留在 io 里：调用方普遍会在失败分支上
+            // 打印 io.win32Error，不填就会印出一个 0，把"设备不存在(2)"说成
+            // "没有错误"。姊妹函数 sendFixedRequestResponse 本来就是这么做的。
+            io.win32Error = ::GetLastError();
+            io.ok = false;
             return 2;
         }
         io = sendIoctl(
@@ -1239,6 +1246,9 @@ namespace
         { L"r0", L"directory-irp", L"KswordCLI.exe r0 directory-irp --path PATH [--layer N] [--max-entries N] [--limit N]", L"Enumerate a directory through a selected R0 file-system stack layer.", L"Required: --path. Optional: --layer, --max-entries, --limit.", L"Reports the resolved receiving layer and driver." },
         { L"r0", L"image-signature", L"KswordCLI.exe r0 image-signature --path PATH [--module-base VA] [--flags 0xN]", L"Read Authenticode certificate-table and CI evidence through R0.", L"Required: --path. Optional: --module-base, --flags.", L"Backed by IOCTL_KSWORD_ARK_QUERY_IMAGE_SIGNATURE." },
         { L"r0", L"debug-output", L"KswordCLI.exe r0 debug-output [--after-sequence N] [--max-records N] [--limit N]", L"Drain captured kernel debug-output records.", L"Optional: --after-sequence, --max-records, --limit.", L"Backed by IOCTL_KSWORD_ARK_DEBUG_OUTPUT_DRAIN; capture state remains driver-managed." },
+        { L"ddma", L"selftest", L"KswordCLI.exe ddma selftest [--lba N]", L"Run the DDMA acceptance checks; every check is a refusal path, so no disk sector is written.", L"Optional: --lba enables the ATA DMA transfer probe on that scratch sector.", L"Verdicts are PASS / FAIL / NOT_APPLICABLE. Missing ATA pass-through is NOT_APPLICABLE, not a failure." },
+        { L"ddma", L"probe", L"KswordCLI.exe ddma probe [--lba N] [--max-disks N]", L"Enumerate disks usable for DDMA and report capability flags.", L"Optional: --lba issues a real ATA DMA read on that sector; --max-disks.", L"Backed by IOCTL_KSWORD_ARK_DDMA_QUERY_CAPABILITY. Without --lba it only enumerates." },
+        { L"ddma", L"read", L"KswordCLI.exe ddma read --disk N --pa ADDR --lba N [--bytes N]", L"Read physical memory through disk DMA.", L"Required: --disk, --pa, --lba. Optional: --bytes (default 64, one page max).", L"Temporarily overwrites the scratch sectors at --lba and restores them; the range must not cross a page." },
         { L"r0", L"hvm-status", L"KswordCLI.exe r0 hvm-status", L"Query HVM v6 VMX/EPT or experimental SVM/NPT lifecycle and capability state.", L"No options.", L"Backed by IOCTL_KSWORD_ARK_QUERY_HVM." },
         { L"r0", L"hvm-metrics", L"KswordCLI.exe r0 hvm-metrics", L"Read HVM metrics v4 timing, resource counters and AMD raw exit evidence.", L"No options.", L"Backed by IOCTL_KSWORD_ARK_HVM_METRICS. Full per-CPU and bounded SVM probe JSON: hvm_ctl --json metrics." },
         { L"r0", L"hvm-events", L"KswordCLI.exe r0 hvm-events [--after-sequence N] [--max-rows N]", L"Read HVM event-ring evidence without clearing it.", L"Optional: --after-sequence, --max-rows.", L"Backed by IOCTL_KSWORD_ARK_HVM_EVENTS." },
@@ -7551,6 +7561,446 @@ namespace
     }
 
     // dispatchCommand maps the first CLI token to an IOCTL command family.
+    // ========================================================================
+    // ddma family: disk direct memory access
+    // ========================================================================
+    //
+    // 这个族存在的唯一理由是"能在靶机上验收 DDMA"。DDMA 的真实读写会覆盖磁盘
+    // 扇区，所以 selftest 默认只走**拒绝路径**：那些请求在驱动碰到任何磁盘之前
+    // 就被门禁挡掉了，跑一百遍也不会写一个字节。
+
+    // kDdmaSelfTestName 作用：给 selftest 的每一项一个稳定名字，便于脚本比对。
+    struct DdmaCheck
+    {
+        const wchar_t* name;
+        const wchar_t* verdict;   // PASS / FAIL / NOT_APPLICABLE
+        std::wstring detail;
+    };
+
+    // printDdmaChecks 作用：按验收约定输出四态结果并给出汇总退出码。
+    // 退出码：0=全部 PASS 或 NOT_APPLICABLE；4=至少一项 FAIL。
+    // NOT_APPLICABLE 不算失败——"这台机器上问不出"与"问出来是错的"是两回事，
+    // 把前者也判成 FAIL 会让报告永远不绿，等于没有报告。
+    int printDdmaChecks(const std::vector<DdmaCheck>& checks)
+    {
+        int failed = 0;
+        int notApplicable = 0;
+        std::wcout << L"== DDMA selftest ==\n";
+        for (const DdmaCheck& check : checks)
+        {
+            std::wcout << L"[" << check.verdict << L"] " << check.name;
+            if (!check.detail.empty())
+            {
+                std::wcout << L" -- " << check.detail;
+            }
+            std::wcout << L"\n";
+            if (std::wstring(check.verdict) == L"FAIL") { ++failed; }
+            else if (std::wstring(check.verdict) == L"NOT_APPLICABLE") { ++notApplicable; }
+        }
+        std::wcout << L"total=" << checks.size()
+                   << L" failed=" << failed
+                   << L" notApplicable=" << notApplicable << L"\n";
+        std::wcout << (failed == 0 ? L"DDMA selftest: PASS\n" : L"DDMA selftest: FAIL\n");
+        return failed == 0 ? 0 : 4;
+    }
+
+    // sendDdmaRead 作用：发一次 DDMA 物理读并把响应头交给调用方。
+    // 返回：true 表示 IOCTL 往返成功（语义结果看 response->readStatus）。
+    bool sendDdmaRead(
+        const KSWORD_ARK_DDMA_READ_PHYSICAL_REQUEST& request,
+        std::vector<std::uint8_t>& buffer,
+        IoctlResult& io)
+    {
+        constexpr std::size_t headerSize =
+            offsetof(KSWORD_ARK_DDMA_READ_PHYSICAL_RESPONSE, data);
+        buffer.assign(headerSize + KSWORD_ARK_DDMA_TRANSFER_BYTES, 0U);
+        const int rc = sendRawIoctl(
+            L"IOCTL_KSWORD_ARK_DDMA_READ_PHYSICAL",
+            IOCTL_KSWORD_ARK_DDMA_READ_PHYSICAL,
+            const_cast<KSWORD_ARK_DDMA_READ_PHYSICAL_REQUEST*>(&request),
+            static_cast<DWORD>(sizeof(request)),
+            buffer,
+            io,
+            GENERIC_READ | GENERIC_WRITE);
+        return rc == 0 && io.bytesReturned >= headerSize;
+    }
+
+    // ddmaReadStatusOf 作用：从读响应里取聚合状态；响应无效时返回 UNAVAILABLE。
+    unsigned long ddmaReadStatusOf(const std::vector<std::uint8_t>& buffer)
+    {
+        constexpr std::size_t headerSize =
+            offsetof(KSWORD_ARK_DDMA_READ_PHYSICAL_RESPONSE, data);
+        if (buffer.size() < headerSize) { return KSWORD_ARK_DDMA_READ_STATUS_UNAVAILABLE; }
+        return reinterpret_cast<const KSWORD_ARK_DDMA_READ_PHYSICAL_RESPONSE*>(
+            buffer.data())->readStatus;
+    }
+
+    // expectDdmaReadStatus 作用：跑一次读请求并断言它落在预期的拒绝状态上。
+    DdmaCheck expectDdmaReadStatus(
+        const wchar_t* name,
+        const KSWORD_ARK_DDMA_READ_PHYSICAL_REQUEST& request,
+        unsigned long expectedStatus)
+    {
+        std::vector<std::uint8_t> buffer;
+        IoctlResult io{};
+        if (!sendDdmaRead(request, buffer, io))
+        {
+            return DdmaCheck{ name, L"FAIL",
+                L"IOCTL failed, win32=" + std::to_wstring(io.win32Error) };
+        }
+        const unsigned long actual = ddmaReadStatusOf(buffer);
+        if (actual == expectedStatus)
+        {
+            return DdmaCheck{ name, L"PASS",
+                L"readStatus=" + std::to_wstring(actual) };
+        }
+        return DdmaCheck{ name, L"FAIL",
+            L"expected readStatus=" + std::to_wstring(expectedStatus) +
+            L" got " + std::to_wstring(actual) };
+    }
+
+    // runDdmaSelfTest 作用：一条命令跑完 DDMA 的全部离线可验项。
+    // 参数 scratchLba / hasLba：是否带显式暂存 LBA（带了才做传输探测）。
+    int runDdmaSelfTest(std::uint64_t scratchLba, bool hasLba)
+    {
+        std::vector<DdmaCheck> checks;
+
+        // ---- 1. 能力查询：IOCTL 是否注册、机器是否具备条件 ----
+        KSWORD_ARK_DDMA_QUERY_CAPABILITY_REQUEST queryRequest{};
+        queryRequest.maxDisks = KSWORD_ARK_DDMA_DISK_LIMIT_DEFAULT;
+        if (hasLba)
+        {
+            queryRequest.flags =
+                KSWORD_ARK_DDMA_QUERY_FLAG_PROBE_TRANSFER |
+                KSWORD_ARK_DDMA_FLAG_SCRATCH_LBA_VALID;
+            queryRequest.scratchLba = scratchLba;
+        }
+
+        constexpr std::size_t queryHeaderSize =
+            offsetof(KSWORD_ARK_DDMA_QUERY_CAPABILITY_RESPONSE, entries);
+        std::vector<std::uint8_t> queryBuffer(
+            queryHeaderSize +
+                (KSWORD_ARK_DDMA_DISK_LIMIT_DEFAULT * sizeof(KSWORD_ARK_DDMA_DISK_ENTRY)),
+            0U);
+        IoctlResult queryIo{};
+        const int queryRc = sendRawIoctl(
+            L"IOCTL_KSWORD_ARK_DDMA_QUERY_CAPABILITY",
+            IOCTL_KSWORD_ARK_DDMA_QUERY_CAPABILITY,
+            &queryRequest,
+            static_cast<DWORD>(sizeof(queryRequest)),
+            queryBuffer,
+            queryIo,
+            GENERIC_READ | GENERIC_WRITE);
+
+        if (queryRc != 0 || queryIo.bytesReturned < queryHeaderSize)
+        {
+            // IOCTL 都发不出去时后面每一项都没有意义，直接如实报告并停下，
+            // 不要用一串 FAIL 掩盖"驱动根本没装这个接口"这一个事实。
+            checks.push_back(DdmaCheck{ L"ddma query-capability IOCTL is registered", L"FAIL",
+                L"win32=" + std::to_wstring(queryIo.win32Error) +
+                L" bytesReturned=" + std::to_wstring(queryIo.bytesReturned) });
+            return printDdmaChecks(checks);
+        }
+        checks.push_back(DdmaCheck{ L"ddma query-capability IOCTL is registered", L"PASS", L"" });
+
+        const auto* queryResponse =
+            reinterpret_cast<const KSWORD_ARK_DDMA_QUERY_CAPABILITY_RESPONSE*>(queryBuffer.data());
+        const bool kernelDebugger =
+            (queryResponse->capabilityFlags & KSWORD_ARK_DDMA_CAP_FLAG_KERNEL_DEBUGGER_ENABLED) != 0UL;
+        const bool diskDriverPresent =
+            (queryResponse->capabilityFlags & KSWORD_ARK_DDMA_CAP_FLAG_DISK_DRIVER_PRESENT) != 0UL;
+
+        checks.push_back(DdmaCheck{ L"protocol version matches this build",
+            (queryResponse->version == KSWORD_ARK_DDMA_PROTOCOL_VERSION) ? L"PASS" : L"FAIL",
+            L"version=" + std::to_wstring(queryResponse->version) });
+        checks.push_back(DdmaCheck{ L"transfer granularity is one page",
+            (queryResponse->transferBytes == KSWORD_ARK_DDMA_TRANSFER_BYTES) ? L"PASS" : L"FAIL",
+            L"transferBytes=" + std::to_wstring(queryResponse->transferBytes) +
+            L" scratchSectors=" + std::to_wstring(queryResponse->scratchSectorCount) });
+        checks.push_back(DdmaCheck{ L"kernel-debugger hazard is reported", L"PASS",
+            kernelDebugger
+                ? std::wstring(L"kernel debugging ENABLED -- DDMA transfers must stay blocked")
+                : std::wstring(L"kernel debugging disabled") });
+        checks.push_back(DdmaCheck{ L"\\Driver\\Disk was reachable",
+            diskDriverPresent ? L"PASS" : L"FAIL",
+            L"status=" + std::to_wstring(queryResponse->status) +
+            L" totalDisks=" + std::to_wstring(queryResponse->totalDisks) });
+
+        // ATA 直通能不能用是机器属性，不是代码正确性。拿不到就是 NOT_APPLICABLE，
+        // 不是 FAIL —— 把它判成 FAIL 会让 Gen2 虚拟机上的报告永远不绿。
+        if (!hasLba)
+        {
+            checks.push_back(DdmaCheck{ L"ATA DMA transfer probe", L"NOT_APPLICABLE",
+                L"no --lba given, so no transfer probe was issued" });
+        }
+        else if (queryResponse->readyDisks == 0UL)
+        {
+            checks.push_back(DdmaCheck{ L"ATA DMA transfer probe", L"NOT_APPLICABLE",
+                L"no disk accepted IOCTL_ATA_PASS_THROUGH_DIRECT (expected on synthetic SCSI, e.g. Hyper-V Gen2)" });
+        }
+        else
+        {
+            checks.push_back(DdmaCheck{ L"ATA DMA transfer probe", L"PASS",
+                L"readyDisks=" + std::to_wstring(queryResponse->readyDisks) });
+        }
+
+        for (unsigned long index = 0UL; index < queryResponse->returnedDisks; ++index)
+        {
+            const KSWORD_ARK_DDMA_DISK_ENTRY& entry = queryResponse->entries[index];
+            std::wcout << L"  disk[" << entry.deviceIndex << L"] flags=0x" << std::hex
+                       << entry.diskFlags << std::dec
+                       << L" probeStatus=0x" << std::hex
+                       << static_cast<unsigned long>(entry.probeStatus) << std::dec
+                       << L" name=" << entry.deviceName << L"\n";
+        }
+
+        // ---- 2. 门禁：三条拒绝路径必须给出三个不同的状态码 ----
+        // 这些请求在驱动碰到任何磁盘之前就被拒绝，不会写一个字节。
+        const std::uint32_t kUnreachableDisk = 0xFFFFFFFFUL;
+
+        {
+            KSWORD_ARK_DDMA_READ_PHYSICAL_REQUEST request{};
+            request.diskIndex = kUnreachableDisk;
+            request.physicalAddress = 0x1000ULL;
+            request.bytesToRead = 64UL;
+            request.flags = KSWORD_ARK_DDMA_FLAG_SCRATCH_ACKNOWLEDGED;
+            checks.push_back(expectDdmaReadStatus(
+                L"read without SCRATCH_LBA_VALID is refused",
+                request,
+                KSWORD_ARK_DDMA_READ_STATUS_SCRATCH_LBA_REQUIRED));
+        }
+        {
+            KSWORD_ARK_DDMA_READ_PHYSICAL_REQUEST request{};
+            request.diskIndex = kUnreachableDisk;
+            request.physicalAddress = 0x1000ULL;
+            request.bytesToRead = 64UL;
+            request.flags = KSWORD_ARK_DDMA_FLAG_SCRATCH_LBA_VALID;
+            request.scratchLba = hasLba ? scratchLba : 0x1000ULL;
+            checks.push_back(expectDdmaReadStatus(
+                L"read without SCRATCH_ACKNOWLEDGED is refused",
+                request,
+                KSWORD_ARK_DDMA_READ_STATUS_SCRATCH_NOT_ACKNOWLEDGED));
+        }
+        {
+            // 这一项是"LBA 0 当哨兵"那个陷阱的回归守卫：LBA 0 是合法取值，
+            // 带上 VALID 位之后就不该再被判成"没填 LBA"。用一个不存在的磁盘
+            // 序号，让驱动在过了 LBA 门之后立刻停在 DISK_NOT_FOUND，
+            // 全程不碰任何真实扇区。
+            KSWORD_ARK_DDMA_READ_PHYSICAL_REQUEST request{};
+            request.diskIndex = kUnreachableDisk;
+            request.physicalAddress = 0x1000ULL;
+            request.bytesToRead = 64UL;
+            request.flags =
+                KSWORD_ARK_DDMA_FLAG_SCRATCH_LBA_VALID |
+                KSWORD_ARK_DDMA_FLAG_SCRATCH_ACKNOWLEDGED;
+            request.scratchLba = 0ULL;
+            checks.push_back(expectDdmaReadStatus(
+                L"scratch LBA 0 is a real value, not an unset sentinel",
+                request,
+                KSWORD_ARK_DDMA_READ_STATUS_DISK_NOT_FOUND));
+        }
+        {
+            // 跨页请求必须在碰盘之前被判掉。
+            KSWORD_ARK_DDMA_READ_PHYSICAL_REQUEST request{};
+            request.diskIndex = kUnreachableDisk;
+            request.physicalAddress = 0x1FFFULL;
+            request.bytesToRead = 64UL;
+            request.flags =
+                KSWORD_ARK_DDMA_FLAG_SCRATCH_LBA_VALID |
+                KSWORD_ARK_DDMA_FLAG_SCRATCH_ACKNOWLEDGED;
+            request.scratchLba = hasLba ? scratchLba : 0x1000ULL;
+            checks.push_back(expectDdmaReadStatus(
+                L"page-crossing range is refused",
+                request,
+                KSWORD_ARK_DDMA_READ_STATUS_RANGE_REJECTED));
+        }
+        {
+            // 未知 flags 位应当被 handler 当成参数错误直接拒收，
+            // 表现为 IOCTL 本身失败而不是返回一个带状态码的响应。
+            KSWORD_ARK_DDMA_READ_PHYSICAL_REQUEST request{};
+            request.diskIndex = kUnreachableDisk;
+            request.physicalAddress = 0x1000ULL;
+            request.bytesToRead = 64UL;
+            request.flags = 0x80000000UL;
+            std::vector<std::uint8_t> buffer;
+            IoctlResult io{};
+            const bool ok = sendDdmaRead(request, buffer, io);
+            checks.push_back(DdmaCheck{ L"unknown flag bits are refused",
+                ok ? L"FAIL" : L"PASS",
+                L"win32=" + std::to_wstring(io.win32Error) });
+        }
+        {
+            // 写路径的第三道门：带齐 LBA 与确认、但缺 FORCE 时必须拒绝，
+            // 且状态码要与前两道门不同。
+            KSWORD_ARK_DDMA_WRITE_PHYSICAL_REQUEST header{};
+            constexpr std::size_t writeHeaderSize =
+                offsetof(KSWORD_ARK_DDMA_WRITE_PHYSICAL_REQUEST, data);
+            std::vector<std::uint8_t> writeRequest(writeHeaderSize + 4U, 0U);
+            auto* request =
+                reinterpret_cast<KSWORD_ARK_DDMA_WRITE_PHYSICAL_REQUEST*>(writeRequest.data());
+            (void)header;
+            request->diskIndex = kUnreachableDisk;
+            request->physicalAddress = 0x1000ULL;
+            request->bytesToWrite = 4UL;
+            request->flags =
+                KSWORD_ARK_DDMA_FLAG_SCRATCH_LBA_VALID |
+                KSWORD_ARK_DDMA_FLAG_SCRATCH_ACKNOWLEDGED;
+            request->scratchLba = hasLba ? scratchLba : 0x1000ULL;
+
+            KSWORD_ARK_DDMA_WRITE_PHYSICAL_RESPONSE response{};
+            IoctlResult io{};
+            std::vector<std::uint8_t> outBuffer(sizeof(response), 0U);
+            const int rc = sendRawIoctl(
+                L"IOCTL_KSWORD_ARK_DDMA_WRITE_PHYSICAL",
+                IOCTL_KSWORD_ARK_DDMA_WRITE_PHYSICAL,
+                writeRequest.data(),
+                static_cast<DWORD>(writeRequest.size()),
+                outBuffer,
+                io,
+                GENERIC_READ | GENERIC_WRITE);
+            if (rc != 0 || io.bytesReturned < sizeof(response))
+            {
+                checks.push_back(DdmaCheck{ L"write without FORCE is refused", L"FAIL",
+                    L"IOCTL failed, win32=" + std::to_wstring(io.win32Error) });
+            }
+            else
+            {
+                const auto* writeResponse =
+                    reinterpret_cast<const KSWORD_ARK_DDMA_WRITE_PHYSICAL_RESPONSE*>(outBuffer.data());
+                const bool expected =
+                    writeResponse->writeStatus == KSWORD_ARK_DDMA_WRITE_STATUS_FORCE_REQUIRED;
+                checks.push_back(DdmaCheck{ L"write without FORCE is refused",
+                    expected ? L"PASS" : L"FAIL",
+                    L"writeStatus=" + std::to_wstring(writeResponse->writeStatus) });
+            }
+        }
+
+        return printDdmaChecks(checks);
+    }
+
+    // commandDdmaFamily 作用：ddma 命令族入口。
+    int commandDdmaFamily(int argc, wchar_t* argv[])
+    {
+        if (argc < 3) { std::wcerr << L"error: ddma requires a subcommand\n"; return 1; }
+        const std::wstring sub = argv[2];
+        const NamedArgs args = parseNamedArgs(argc, argv, 3);
+        IoctlResult io{};
+
+        if (sub == L"selftest")
+        {
+            const bool hasLba = getOptionBool(args, L"--lba");
+            const std::uint64_t lba = hasLba ? requireOptionU64(args, L"--lba") : 0ULL;
+            return runDdmaSelfTest(lba, hasLba);
+        }
+
+        if (sub == L"probe")
+        {
+            KSWORD_ARK_DDMA_QUERY_CAPABILITY_REQUEST request{};
+            request.maxDisks = getOptionU32(args, L"--max-disks", KSWORD_ARK_DDMA_DISK_LIMIT_DEFAULT);
+            const bool hasLba = getOptionBool(args, L"--lba");
+            if (hasLba)
+            {
+                request.flags =
+                    KSWORD_ARK_DDMA_QUERY_FLAG_PROBE_TRANSFER |
+                    KSWORD_ARK_DDMA_FLAG_SCRATCH_LBA_VALID;
+                request.scratchLba = requireOptionU64(args, L"--lba");
+            }
+
+            constexpr std::size_t headerSize =
+                offsetof(KSWORD_ARK_DDMA_QUERY_CAPABILITY_RESPONSE, entries);
+            std::vector<std::uint8_t> buffer(
+                headerSize + (KSWORD_ARK_DDMA_DISK_LIMIT_HARD * sizeof(KSWORD_ARK_DDMA_DISK_ENTRY)),
+                0U);
+            const int rc = sendRawIoctl(
+                L"IOCTL_KSWORD_ARK_DDMA_QUERY_CAPABILITY",
+                IOCTL_KSWORD_ARK_DDMA_QUERY_CAPABILITY,
+                &request,
+                static_cast<DWORD>(sizeof(request)),
+                buffer,
+                io,
+                GENERIC_READ | GENERIC_WRITE);
+            if (rc != 0) { return normalizeIoctlRc(L"ddma probe", io, rc); }
+            if (io.bytesReturned < headerSize)
+            {
+                std::wcerr << L"error: ddma probe response too small\n";
+                return 4;
+            }
+            const auto* response =
+                reinterpret_cast<const KSWORD_ARK_DDMA_QUERY_CAPABILITY_RESPONSE*>(buffer.data());
+            std::wcout << L"version=" << response->version
+                       << L" status=" << response->status
+                       << L" capabilityFlags=0x" << std::hex << response->capabilityFlags << std::dec
+                       << L" totalDisks=" << response->totalDisks
+                       << L" readyDisks=" << response->readyDisks
+                       << L" transferBytes=" << response->transferBytes
+                       << L" scratchSectors=" << response->scratchSectorCount
+                       << L" lastStatus=0x" << std::hex
+                       << static_cast<unsigned long>(response->lastStatus) << std::dec << L"\n";
+            if ((response->capabilityFlags & KSWORD_ARK_DDMA_CAP_FLAG_KERNEL_DEBUGGER_ENABLED) != 0UL)
+            {
+                std::wcout << L"WARNING: kernel debugging is enabled; DDMA transfers would hit "
+                              L"MiShowBadMapper and bugcheck.\n";
+            }
+            for (unsigned long index = 0UL; index < response->returnedDisks; ++index)
+            {
+                const KSWORD_ARK_DDMA_DISK_ENTRY& entry = response->entries[index];
+                std::wcout << L"  disk[" << entry.deviceIndex << L"]"
+                           << L" flags=0x" << std::hex << entry.diskFlags << std::dec
+                           << L" sectorSize=" << entry.sectorSize
+                           << L" probeStatus=0x" << std::hex
+                           << static_cast<unsigned long>(entry.probeStatus) << std::dec
+                           << L" name=" << entry.deviceName << L"\n";
+            }
+            return 0;
+        }
+
+        if (sub == L"read")
+        {
+            KSWORD_ARK_DDMA_READ_PHYSICAL_REQUEST request{};
+            request.diskIndex = requireOptionU32(args, L"--disk");
+            request.physicalAddress = requireOptionU64(args, L"--pa");
+            request.bytesToRead = getOptionU32(args, L"--bytes", 64U);
+            request.scratchLba = requireOptionU64(args, L"--lba");
+            // 读同样会覆盖暂存扇区，所以确认位是必需的，不是可选的。
+            request.flags =
+                KSWORD_ARK_DDMA_FLAG_UI_CONFIRMED |
+                KSWORD_ARK_DDMA_FLAG_SCRATCH_LBA_VALID |
+                KSWORD_ARK_DDMA_FLAG_SCRATCH_ACKNOWLEDGED;
+
+            std::vector<std::uint8_t> buffer;
+            if (!sendDdmaRead(request, buffer, io))
+            {
+                return normalizeIoctlRc(L"ddma read", io, 3);
+            }
+            constexpr std::size_t headerSize =
+                offsetof(KSWORD_ARK_DDMA_READ_PHYSICAL_RESPONSE, data);
+            const auto* response =
+                reinterpret_cast<const KSWORD_ARK_DDMA_READ_PHYSICAL_RESPONSE*>(buffer.data());
+            std::wcout << L"readStatus=" << response->readStatus
+                       << L" bytesRead=" << response->bytesRead
+                       << L" fieldFlags=0x" << std::hex << response->fieldFlags << std::dec
+                       << L" map=0x" << std::hex << static_cast<unsigned long>(response->mapStatus)
+                       << L" backup=0x" << static_cast<unsigned long>(response->backupStatus)
+                       << L" stageOut=0x" << static_cast<unsigned long>(response->stageOutStatus)
+                       << L" stageIn=0x" << static_cast<unsigned long>(response->stageInStatus)
+                       << L" restore=0x" << static_cast<unsigned long>(response->restoreStatus)
+                       << std::dec << L"\n";
+            if ((response->fieldFlags & KSWORD_ARK_DDMA_FIELD_SCRATCH_RESTORED) == 0UL &&
+                response->backupStatus != static_cast<long>(0xC00000BBL))
+            {
+                std::wcout << L"WARNING: scratch sectors were NOT restored; the disk is left dirty.\n";
+            }
+            if (response->bytesRead > 0UL)
+            {
+                hexdump(buffer.data() + headerSize, response->bytesRead);
+            }
+            return 0;
+        }
+
+        std::wcerr << L"error: unknown ddma subcommand '" << sub << L"'\n";
+        return 1;
+    }
+
     // Inputs: argc/argv from wmain; argv[1] is the command family.
     // Processing: keeps family routing centralized and leaves subcommand parsing
     //             to the family handlers.
@@ -7602,6 +8052,7 @@ namespace
         if (family == L"mutation") return commandMutationFamily(argc, argv);
         if (family == L"capability") return commandCapabilityFamily(argc, argv);
         if (family == L"wsl") return commandWslFamily(argc, argv);
+        if (family == L"ddma") return commandDdmaFamily(argc, argv);
         if (family == L"r0") return commandArkDriverExtended(argc, argv);
 
         std::wcerr << L"error: unknown family '" << family << L"'\n";
