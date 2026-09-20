@@ -129,8 +129,20 @@ private:
         std::uint32_t pid = 0;          // 进程 PID。
         std::uint32_t sessionId = 0;    // 会话 ID。
         QString processName;            // 进程名。
-        double cpuPercent = 0.0;        // CPU 占用（当前实现可选，默认为 0）。
+        // CPU 占用率。需要两次采样相减才算得出，所以"这一轮算不出来"是一个真实
+        // 且常见的状态（首次刷新、进程刚启动、权限不足取不到 CPU 时间）。用独立
+        // 的 valid 位表示，不拿 0.0 当哨兵——0% 是一个完全合法的占用率，两者混同
+        // 就等于把"不知道"显示成"空闲"。
+        double cpuPercent = 0.0;
+        bool cpuPercentValid = false;
         double workingSetMB = 0.0;      // 工作集内存（MB）。
+    };
+
+    // ProcessCpuSample：上一轮的 CPU 采样，按 PID 保存，用于算增量。
+    struct ProcessCpuSample
+    {
+        std::uint64_t cpuTime100ns = 0;
+        std::uint64_t sampleTime100ns = 0;
     };
 
     // ModuleEntry：
@@ -1060,6 +1072,7 @@ private:
 
     QWidget* m_tabProcessModule = nullptr;    // Tab1 页面容器。
     QTableWidget* m_processTable = nullptr;   // 进程列表表格。
+    QHash<std::uint32_t, ProcessCpuSample> m_previousCpuSamples; // 上一轮 CPU 采样，按 PID。
     QLineEdit* m_processFilterEdit = nullptr; // 进程名/PID 过滤输入框。
     QLabel* m_processCountLabel = nullptr;    // 进程表"显示 N / 共 M"计数。
     QLineEdit* m_moduleFilterEdit = nullptr;  // 模块名称过滤输入框。

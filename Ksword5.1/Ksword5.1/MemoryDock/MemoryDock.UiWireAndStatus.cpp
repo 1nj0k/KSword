@@ -186,6 +186,45 @@ void MemoryDock::initializeConnections()
             << eol;
         m_pendingModuleRefreshPid = pid;
         m_processComboChangeTimer->start();
+
+        // 选中的进程存在同名兄弟时，把用户带到 Tab1 并按这个名字过滤。
+        // 理由：同名进程在下拉里只有一行文本，看不出该选哪个；而 Tab1 的进程表
+        // 有图标、工作集、CPU、会话，还能按列排序——真正能做出选择的信息都在那里。
+        // 只在同名 > 1 时触发：唯一进程没有可选的余地，这时抢走当前页面纯属打扰。
+        const QString selectedName =
+            m_processCombo->itemData(indexValue, Qt::UserRole + 1).toString();
+        int sameNameCount = 0;
+        for (const ProcessEntry& entry : m_processCache)
+        {
+            if (entry.processName.compare(selectedName, Qt::CaseInsensitive) == 0)
+            {
+                ++sameNameCount;
+            }
+        }
+        if (sameNameCount > 1
+            && m_processFilterEdit != nullptr
+            && m_tabWidget != nullptr
+            && m_processTable != nullptr)
+        {
+            // setText 会触发 textChanged，过滤由那条连接完成，这里不重复调用。
+            m_processFilterEdit->setText(selectedName);
+            m_tabWidget->setCurrentWidget(m_tabProcessModule);
+
+            // 把下拉里选中的那一个在表里也选上并滚到可见处，两边保持一致；
+            // 用户接着在同名的几行之间上下比较即可，双击任意一行就附加。
+            const QString pidText = QString::number(pid);
+            for (int row = 0; row < m_processTable->rowCount(); ++row)
+            {
+                const QTableWidgetItem* const pidItem = m_processTable->item(row, 1);
+                if (pidItem != nullptr && pidItem->text() == pidText)
+                {
+                    m_processTable->selectRow(row);
+                    m_processTable->scrollToItem(
+                        m_processTable->item(row, 0), QAbstractItemView::PositionAtCenter);
+                    break;
+                }
+            }
+        }
         });
 
     // 十字准星拾取：拖到目标窗口松手，直接按窗口归属的 PID 附加。

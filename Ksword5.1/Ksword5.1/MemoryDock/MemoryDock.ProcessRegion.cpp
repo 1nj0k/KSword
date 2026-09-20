@@ -7,8 +7,10 @@
 #include <QPixmap>
 #include <QRunnable>
 #include <QSet>
+#include <QThread> // QThread::idealThreadCount：CPU 占用率的分母要按逻辑核数归一化。
 #include <QVector>
 
+#include <algorithm> // std::clamp / std::max：占用率夹取与核数下界。
 #include <functional>
 #include <memory>
 #include <utility>
@@ -362,6 +364,41 @@ namespace
         QString processName;            // 进程名（Toolhelp 快照给出的映像文件名）。
         QString imagePath;              // 映像完整路径，供图标解析使用（可能为空）。
         double workingSetMB = 0.0;      // 工作集大小（MB），查询失败时保持 0。
+        // CPU 占用没法一次采样得出，只能靠两次采样之间的增量。这里只带回本次的
+        // 累计 CPU 时间与它是否取到，占用率由 UI 线程与上一轮相减算出。
+        std::uint64_t cpuTime100ns = 0; // 内核态 + 用户态累计时间，单位 100ns。
+        bool cpuTimeValid = false;      // 取不到时间的进程（权限不足、已退出）保持 false。
+    };
+
+    // kProcessNumericSortRole：数值排序键。
+    constexpr int kProcessNumericSortRole = Qt::UserRole + 50;
+
+    // NumericSortTableItem 作用：
+    // - 显示带单位的文本，排序按藏在角色里的裸数值。
+    //
+    // 为什么必须自定义：QTableWidgetItem 的默认 operator< 比的是 **DisplayRole**，
+    // 也就是带单位的那串文本，按字典序排。于是 "10.00%" 会排在 "9.00%" 前面、
+    // "100.0 MB" 排在 "9.0 MB" 前面。工作集正是用来从一堆同名进程里挑出主进程的
+    // 那一列，排错了这一列就完全失去意义，而且排错了不会报任何错。
+    class NumericSortTableItem final : public QTableWidgetItem
+    {
+    public:
+        NumericSortTableItem(const QString& displayText, const double sortValue)
+        {
+            setData(Qt::DisplayRole, displayText);
+            setData(kProcessNumericSortRole, sortValue);
+        }
+
+        bool operator<(const QTableWidgetItem& other) const override
+        {
+            const QVariant leftValue = data(kProcessNumericSortRole);
+            const QVariant rightValue = other.data(kProcessNumericSortRole);
+            if (leftValue.isValid() && rightValue.isValid())
+            {
+                return leftValue.toDouble() < rightValue.toDouble();
+            }
+            return QTableWidgetItem::operator<(other);
+        }
     };
 
     // ProcessSnapshotResult 作用：
@@ -372,6 +409,10 @@ namespace
         bool enumerationStarted = false;    // Process32FirstW 是否成功。
         std::uint32_t lastErrorCode = 0;    // 失败时的 Win32 错误码。
         std::vector<ProcessSnapshotRow> rows; // 按 PID 升序排列的进程快照。
+        // 采样时刻，单位 100ns，与 cpuTime100ns 同一量纲。CPU 占用率 =
+        // CPU 时间增量 / (墙上时间增量 × 逻辑核数)，分母必须用这个时刻算，
+        // 不能用"刷新间隔"这种名义值——刷新被推迟或提前时名义值就不成立了。
+        std::uint64_t sampleTime100ns = 0;
     };
 
     // collectProcessSnapshotRows 作用：
@@ -430,6 +471,23 @@ namespace
                     snapshotRow.workingSetMB =
                         static_cast<double>(memoryCounter.WorkingSetSize) / (1024.0 * 1024.0);
                 }
+
+                // 顺便在同一个句柄上取 CPU 累计时间：这里已经有
+                // PROCESS_QUERY_LIMITED_INFORMATION，不必为它再开一次进程。
+                FILETIME creationTime{};
+                FILETIME exitTime{};
+                FILETIME kernelTime{};
+                FILETIME userTime{};
+                if (::GetProcessTimes(
+                    processHandle, &creationTime, &exitTime, &kernelTime, &userTime) != FALSE)
+                {
+                    const auto toU64 = [](const FILETIME& fileTime) {
+                        return (static_cast<std::uint64_t>(fileTime.dwHighDateTime) << 32)
+                            | static_cast<std::uint64_t>(fileTime.dwLowDateTime);
+                    };
+                    snapshotRow.cpuTime100ns = toU64(kernelTime) + toU64(userTime);
+                    snapshotRow.cpuTimeValid = true;
+                }
                 ::CloseHandle(processHandle);
             }
 
@@ -440,6 +498,14 @@ namespace
             snapshotResult.rows.push_back(std::move(snapshotRow));
         } while (::Process32NextW(snapshotHandle, &processEntry) != FALSE);
         ::CloseHandle(snapshotHandle);
+
+        // 采样时刻取在遍历**之后**：整轮遍历本身要花时间，取在前面会让分母比
+        // 实际观察窗口短，算出来的占用率偏高。取在后面则偏低一点点，宁可偏低。
+        FILETIME sampleFileTime{};
+        ::GetSystemTimeAsFileTime(&sampleFileTime);
+        snapshotResult.sampleTime100ns =
+            (static_cast<std::uint64_t>(sampleFileTime.dwHighDateTime) << 32)
+            | static_cast<std::uint64_t>(sampleFileTime.dwLowDateTime);
 
         // 为了稳定展示顺序，这里按 PID 升序排序。
         std::sort(
@@ -735,7 +801,9 @@ void MemoryDock::refreshProcessList(const bool keepSelection)
 
                 const auto snapshotRows =
                     std::make_shared<std::vector<ProcessSnapshotRow>>(std::move(snapshotResult.rows));
-                auto commitProcessSnapshot = [guardedSelf, requestGeneration, previousPid, snapshotRows]() {
+                const std::uint64_t snapshotSampleTime = snapshotResult.sampleTime100ns;
+                auto commitProcessSnapshot =
+                    [guardedSelf, requestGeneration, previousPid, snapshotRows, snapshotSampleTime]() {
                     if (guardedSelf == nullptr)
                     {
                         return;
@@ -746,19 +814,57 @@ void MemoryDock::refreshProcessList(const bool keepSelection)
                         return;
                     }
 
+                    // 逻辑核数：占用率的分母要乘上它，否则一个跑满单核的进程在
+                    // 16 核机器上会被算成 100%，而任务管理器给的是 6.25%，两边对不上。
+                    const int logicalCoreCount =
+                        (std::max)(1, QThread::idealThreadCount());
+
                     // 缓存与表格一次性替换，避免中途被其它页读到半成品。
                     commitDock->m_processCache.clear();
                     commitDock->m_processCache.reserve(snapshotRows->size());
+                    QHash<std::uint32_t, ProcessCpuSample> freshCpuSamples;
+                    freshCpuSamples.reserve(static_cast<int>(snapshotRows->size()));
                     for (const ProcessSnapshotRow& snapshotRow : *snapshotRows)
                     {
                         ProcessEntry entry{};
                         entry.pid = snapshotRow.pid;
                         entry.sessionId = snapshotRow.sessionId;
                         entry.processName = snapshotRow.processName;
-                        entry.cpuPercent = 0.0; // CPU 为可选字段，当前版本保留 0。
                         entry.workingSetMB = snapshotRow.workingSetMB;
+
+                        if (snapshotRow.cpuTimeValid)
+                        {
+                            freshCpuSamples.insert(
+                                snapshotRow.pid,
+                                ProcessCpuSample{
+                                    snapshotRow.cpuTime100ns, snapshotSampleTime });
+
+                            const auto previous =
+                                commitDock->m_previousCpuSamples.constFind(snapshotRow.pid);
+                            if (previous != commitDock->m_previousCpuSamples.constEnd()
+                                && snapshotSampleTime > previous->sampleTime100ns
+                                && snapshotRow.cpuTime100ns >= previous->cpuTime100ns)
+                            {
+                                // PID 会被系统回收：同一个 PID 的新进程 CPU 时间
+                                // 从 0 重新开始，于是增量为负。上面那条 >= 判据把
+                                // 这种情况挡掉，宁可这一轮显示"-"也不报一个假数。
+                                const double cpuDelta = static_cast<double>(
+                                    snapshotRow.cpuTime100ns - previous->cpuTime100ns);
+                                const double wallDelta = static_cast<double>(
+                                    snapshotSampleTime - previous->sampleTime100ns);
+                                const double percent =
+                                    (cpuDelta / (wallDelta * logicalCoreCount)) * 100.0;
+                                // 采样窗口两端的取数不是同一瞬间完成的，极端情况下
+                                // 算出来可能略微越界，夹一下再显示。
+                                entry.cpuPercent = std::clamp(percent, 0.0, 100.0);
+                                entry.cpuPercentValid = true;
+                            }
+                        }
                         commitDock->m_processCache.push_back(std::move(entry));
                     }
+                    // 整表替换而不是逐条更新：已退出的进程必须随之消失，否则它的
+                    // 采样会一直留着，等 PID 被复用时和新进程的时间相减。
+                    commitDock->m_previousCpuSamples = std::move(freshCpuSamples);
 
                     // 先重建进程表。
                     QTableWidget* const processTable = commitDock->m_processTable;
@@ -780,16 +886,28 @@ void MemoryDock::refreshProcessList(const bool keepSelection)
                         processNameItem->setIcon(lookupCachedPathIcon(imagePath));
                         processTable->setItem(row, 0, processNameItem);
 
-                        processTable->setItem(row, 1, new QTableWidgetItem(QString::number(entry.pid)));
-                        processTable->setItem(row, 2, new QTableWidgetItem(QString::number(entry.sessionId)));
-                        processTable->setItem(
-                            row,
-                            3,
-                            new QTableWidgetItem(QString::number(entry.cpuPercent, 'f', 2) + "%"));
-                        processTable->setItem(
-                            row,
-                            4,
-                            new QTableWidgetItem(QString("%1 MB").arg(entry.workingSetMB, 0, 'f', 1)));
+                        // PID / 会话 / CPU / 工作集四列一律用 NumericSortTableItem，
+                        // 显示带单位的文本、排序按裸数值（理由见该类的注释）。
+                        const auto makeNumericItem =
+                            [](const QString& displayText, const double sortValue) {
+                                return new NumericSortTableItem(displayText, sortValue);
+                            };
+
+                        processTable->setItem(row, 1, makeNumericItem(
+                            QString::number(entry.pid), static_cast<double>(entry.pid)));
+                        processTable->setItem(row, 2, makeNumericItem(
+                            QString::number(entry.sessionId), static_cast<double>(entry.sessionId)));
+                        // CPU 取不到时显示 "-" 而不是 0.00%：首次刷新、刚启动的进程、
+                        // 权限不足取不到 CPU 时间，这三种都是"还不知道"，跟"空闲"
+                        // 是两回事，显示成 0% 等于报了一个我们没有的读数。
+                        processTable->setItem(row, 3, makeNumericItem(
+                            entry.cpuPercentValid
+                                ? (QString::number(entry.cpuPercent, 'f', 2) + "%")
+                                : QStringLiteral("-"),
+                            entry.cpuPercentValid ? entry.cpuPercent : -1.0));
+                        processTable->setItem(row, 4, makeNumericItem(
+                            QString("%1 MB").arg(entry.workingSetMB, 0, 'f', 1),
+                            entry.workingSetMB));
                     }
                     processTable->setSortingEnabled(true);
 

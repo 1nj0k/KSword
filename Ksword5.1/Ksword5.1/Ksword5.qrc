@@ -20,6 +20,9 @@
         <file alias="log_track.svg">Resource/Icon/editor/list_search_line.svg</file>
         <file alias="log_cancel_track.svg">Resource/Icon/system/close_line.svg</file>
         <file alias="filter_funnel.svg">Resource/Icon/business/filter_line.svg</file>
+        <!-- 十字准星：内存页"拖到目标窗口拾取进程"按钮。原先借用了 codeeditor_goto
+             的向下箭头，那个图形跟"拖到窗口上"没有任何关系，看图标猜不出该怎么用。 -->
+        <file alias="window_picker_aim.svg">Resource/Icon/map/aiming_line.svg</file>
         <file alias="plus.svg">Resource/Icon/system/plus_line.svg</file>
         <file alias="ks_control_check_white.svg">Resource/Icon/system/ks_control_check_white.svg</file>
         <file alias="ks_control_check_black.svg">Resource/Icon/system/ks_control_check_black.svg</file>

@@ -330,7 +330,7 @@ void MemoryDock::initializeToolbar()
     // 这条路径存在的理由是它不可能选错——用户知道的是"哪个窗口是我要的"，
     // 而不是 PID；让他们指窗口，由工具去解析 PID。
     m_processPickerButton = new ks::ui::WindowPickerButton(toolbarContainer);
-    m_processPickerButton->setIcon(QIcon(QStringLiteral(":/Icon/codeeditor_goto.svg")));
+    m_processPickerButton->setIcon(QIcon(QStringLiteral(":/Icon/window_picker_aim.svg")));
     m_processPickerButton->setToolTip(
         QStringLiteral("按住不放，把光标拖到目标程序的窗口上再松手，即按该窗口所属进程附加。拖动时目标窗口会高亮，按 Esc 取消。"));
 
