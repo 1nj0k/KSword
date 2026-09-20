@@ -515,6 +515,7 @@ int wmain() {
     failures += RunHvmWatchTests();
     failures += RunDdmaPlanTests();
     failures += RunNumericTextParseTests();
+    failures += RunMemoryTamperCrossViewTests();
     failures += RunHookPatchComposeTests();
 
     if (failures == 0) {

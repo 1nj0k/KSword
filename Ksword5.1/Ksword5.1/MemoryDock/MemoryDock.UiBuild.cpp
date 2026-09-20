@@ -397,6 +397,7 @@ void MemoryDock::initializeTabs()
     initializeProcessPteTranslateTab();
     initializeProcessMemoryEvidenceTab();
     initializeSystemMemoryAuditTab();
+    initializeTamperDetectionTab();
     initializeDdmaTab();
 
     // 12 个页签的图标集中在这里设置：分散到各构建函数里会漏，也不好统一调整语义。
@@ -458,6 +459,20 @@ void MemoryDock::initializeSystemMemoryAuditTab()
         m_systemMemoryAuditPage,
         QStringLiteral("memory.tab.system_memory_audit"),
         QStringLiteral("系统内存审计"));
+}
+
+void MemoryDock::initializeTamperDetectionTab()
+{
+    // 放在 DDMA 页**之前**挂载，但依赖它的会话：DDMA 通道是本页唯一一条不经过
+    // CPU 页表的读取路径，没有它这一页就只能发现普通补丁。页面自己会在通道不可用
+    // 时把这句话写在界面上，而不是只把复选框置灰。
+    m_tamperDetectionPage = new ksword::memory_dock::TamperDetectionPage(m_tabWidget);
+    m_tabWidget->addTab(m_tamperDetectionPage, QStringLiteral("篡改检测"));
+    ks::i18n::LanguageManager::instance().bindTab(
+        m_tabWidget,
+        m_tamperDetectionPage,
+        QStringLiteral("memory.tab.tamper_detection"),
+        QStringLiteral("篡改检测"));
 }
 
 void MemoryDock::initializeDdmaTab()
@@ -589,6 +604,13 @@ void MemoryDock::refreshBackendSelectors()
     if (m_systemMemoryAuditPage != nullptr)
     {
         m_systemMemoryAuditPage->refreshDdmaCrossCheckState();
+    }
+
+    // 篡改检测页同样要跟着会话走：DDMA 是它唯一一条不经过 CPU 页表的路径，
+    // 通道状态变了，它能给出的结论种类也跟着变，必须在界面上如实反映。
+    if (m_tamperDetectionPage != nullptr)
+    {
+        m_tamperDetectionPage->refreshChannelAvailability();
     }
 }
 

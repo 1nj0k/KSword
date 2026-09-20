@@ -1012,6 +1012,33 @@ void MemoryDock::refreshProcessList(const bool keepSelection)
     QThreadPool::globalInstance()->start(refreshProcessTask);
 }
 
+void MemoryDock::syncTamperDetectionTargets()
+{
+    if (m_tamperDetectionPage == nullptr)
+    {
+        return;
+    }
+    m_tamperDetectionPage->setAttachedProcess(m_attachedPid, m_attachedProcessName);
+
+    // 模块列表转成"可扫描目标"。只传基址和大小：篡改检测页不需要知道签名、
+    // 入口点之类的东西，多传一份就会多一处需要同步的状态。
+    std::vector<ksword::memory_dock::TamperDetectionPage::ModuleCandidate> candidates;
+    candidates.reserve(m_moduleCache.size());
+    for (const ModuleEntry& module : m_moduleCache)
+    {
+        ksword::memory_dock::TamperDetectionPage::ModuleCandidate candidate;
+        candidate.displayText = QString("%1  (%2 KB)")
+            .arg(module.moduleName)
+            .arg(module.sizeBytes / 1024ULL);
+        // 磁盘映像那条参考路径要按加载基址归一化文件字节，所以完整路径必须带过去。
+        candidate.filePath = module.fullPath;
+        candidate.baseAddress = module.baseAddress;
+        candidate.sizeBytes = module.sizeBytes;
+        candidates.push_back(std::move(candidate));
+    }
+    m_tamperDetectionPage->setModuleCandidates(candidates);
+}
+
 void MemoryDock::applyProcessTableFilter()
 {
     if (m_processTable == nullptr)
@@ -1368,6 +1395,7 @@ bool MemoryDock::refreshModuleListForPid(const std::uint32_t pid)
                     // 缓存和树必须原子落地；菜单打开时不能先换缓存再保留旧节点。
                     selfGuard->m_moduleCache = std::move(*moduleCacheSnapshot);
                     selfGuard->rebuildModuleTableFromCache();
+                    selfGuard->syncTamperDetectionTargets();
 
                     selfGuard->m_moduleRefreshInProgress.store(false);
                     if (selfGuard->m_moduleRefreshButton != nullptr)
@@ -1513,6 +1541,7 @@ bool MemoryDock::attachToProcess(
     m_attachedPid = pid;
     m_attachedProcessName = processName;
     updateStatusBarText();
+    syncTamperDetectionTargets();
 
     // 附加后立即刷新模块与区域，减少下一步等待。两者都在后台执行，
     // 附加按钮点下去之后界面立刻可用，不会因为目标进程地址空间庞大而白屏。

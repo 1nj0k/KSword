@@ -64,3 +64,4 @@ int RunHvmEptSwitchTests();       // EPTP 切换后端（shared/driver，纯算�
 int RunHvmWatchTests();           // 首次访问监视（shared/driver，纯算术 + 状态机）
 int RunDdmaPlanTests();           // DDMA 磁盘 DMA（shared/driver，ATA 寄存器编码 + 切片 + 门禁）
 int RunNumericTextParseTests();   // 数值文本解析（shared/evidence，地址/数量两种默认进制）
+int RunMemoryTamperCrossViewTests(); // 内存内容交叉视图（shared/evidence，多读取路径互比）

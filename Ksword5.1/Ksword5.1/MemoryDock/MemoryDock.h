@@ -13,6 +13,7 @@
 #include "../UI/KernelDisassemblyDialog.h" // ks::ui::DisassemblyRow：驱动读写页反汇编视图的行缓存需要完整类型。
 #include "../UI/WindowPickerButton.h" // ks::ui::WindowPickerButton：十字准星拾取按钮，按值出现在成员指针里。
 #include "MemoryAccessBackend.h" // 访问后端枚举与 DDMA 会话：按值出现在成员与返回类型里。
+#include "TamperDetectionPage.h" // ksword::memory_dock::TamperDetectionPage：按值出现在成员指针与模块同步调用里。
 
 #include <QVector>     // QVector：保存反汇编解码结果行。
 #include <QWidget>
@@ -396,6 +397,10 @@ private:
     // - 处理逻辑：页面自身负责通道配置，本函数只负责挂载与注册会话变化回调。
     void initializeDdmaTab();
 
+    // initializeTamperDetectionTab：
+    // - 作用：挂载“篡改检测”页，并把附加进程与模块列表同步给它。
+    void initializeTamperDetectionTab();
+
     // createBackendSelector：
     // - 作用：创建一个统一样式的"访问后端"下拉框；
     // - 参数 parent：父控件；
@@ -491,6 +496,12 @@ private:
     // - 说明：该函数只做“缓存 -> UI”投影，不做 Win32 枚举。
     // - 返回：无。
     void rebuildModuleTableFromCache();
+
+    // syncTamperDetectionTargets：
+    // - 作用：把当前附加进程与模块列表同步给“篡改检测”页；
+    // - 说明：附加成功与模块缓存落地两处都要调用。少了任一处，那一页的目标下拉
+    //   就会停在上一个进程的模块上——而它会照样跑，只是扫的是别的进程的地址。
+    void syncTamperDetectionTargets();
 
     // applyProcessTableFilter：
     // - 作用：按 m_processFilterEdit 的关键字隐藏/显示进程表的行，并更新计数标签；
@@ -1243,6 +1254,7 @@ private:
     // ========================================================
 
     DdmaPage* m_ddmaPage = nullptr;           // DDMA 通道配置与自检页面。
+    ksword::memory_dock::TamperDetectionPage* m_tamperDetectionPage = nullptr; // 多路径交叉篡改检测页。
 
     // 三个"访问后端"下拉分别挂在搜索、查看器与驱动读写页上。
     // 它们共享 m_ddmaPage 里的同一份会话配置，切换互不影响。
