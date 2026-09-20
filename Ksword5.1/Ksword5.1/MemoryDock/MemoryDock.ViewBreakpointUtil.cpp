@@ -142,7 +142,16 @@ void MemoryDock::reloadMemoryViewerPage()
         pageBytes.data(),
         static_cast<SIZE_T>(kHexPageBytes),
         &bytesRead);
-    if (readOk == FALSE || bytesRead == 0)
+    // 错误码必须紧挨着调用取一次并存起来。原先在失败分支里调了两次
+    // ::GetLastError()，中间还夹着 formatAddress 与 QString 拼接——那些都可能
+    // 改写线程的 last error，于是日志里那个数字未必是 ReadProcessMemory 的。
+    const DWORD readError = (readOk == FALSE) ? ::GetLastError() : ERROR_SUCCESS;
+
+    // bytesRead == 0 才是真的什么都没读到。ERROR_PARTIAL_COPY(299) 表示 Windows
+    // 已经把边界之前的字节拷好了，只是这一页跨过了未映射区——把这些字节丢掉
+    // 显示一片空白，用户只会看到"读取失败"而不知道其实前半页是好的。
+    // DDMA 通道对翻译不出的页是补零并标记 partial，两个后端的行为要一致。
+    if (bytesRead == 0)
     {
         m_currentViewerPageBytes.clear();
         if (m_hexEditorWidget != nullptr)
@@ -150,16 +159,20 @@ void MemoryDock::reloadMemoryViewerPage()
             m_hexEditorWidget->setEditable(false);
             m_hexEditorWidget->clearData();
         }
+        const QString reasonText = (readError == ERROR_PARTIAL_COPY)
+            ? QStringLiteral("该地址所在区域未映射")
+            : QStringLiteral("读取被拒绝");
         m_viewerStatusLabel->setText(
-            QString("读取失败：地址=%1，错误码=%2")
+            QString("读取失败：地址=%1，错误码=%2（%3）")
             .arg(formatAddress(m_currentViewerAddress))
-            .arg(::GetLastError()));
+            .arg(readError)
+            .arg(reasonText));
         kLogEvent reloadViewerReadFailEvent;
         err << reloadViewerReadFailEvent
             << "[MemoryDock] reloadMemoryViewerPage: ReadProcessMemory 失败, address="
             << formatAddress(m_currentViewerAddress).toStdString()
             << ", error="
-            << ::GetLastError()
+            << readError
             << eol;
         return;
     }
@@ -225,10 +238,23 @@ void MemoryDock::reloadMemoryViewerPage()
             QString("color:%1;").arg(KswordTheme::TextSecondaryHex()));
     }
 
-    m_viewerStatusLabel->setText(
-        QString("地址 %1 读取 %2 字节。")
-        .arg(formatAddress(m_currentViewerAddress))
-        .arg(bytesRead));
+    // 只读到一部分时必须说出来。少了这句，用户看到的是一屏正常的十六进制，
+    // 却不知道这一页在某个字节之后就是未映射区，剩下的内容压根不存在。
+    if (readError == ERROR_PARTIAL_COPY || bytesRead < kHexPageBytes)
+    {
+        m_viewerStatusLabel->setText(
+            QString("地址 %1 只读到 %2 / %3 字节：该页在此之后未映射，后续内容不存在。")
+            .arg(formatAddress(m_currentViewerAddress))
+            .arg(bytesRead)
+            .arg(kHexPageBytes));
+    }
+    else
+    {
+        m_viewerStatusLabel->setText(
+            QString("地址 %1 读取 %2 字节。")
+            .arg(formatAddress(m_currentViewerAddress))
+            .arg(bytesRead));
+    }
 
     // 刷新完成日志：记录本页成功读取字节数。
     kLogEvent reloadViewerFinishEvent;

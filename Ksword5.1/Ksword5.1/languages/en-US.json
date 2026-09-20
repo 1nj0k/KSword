@@ -33806,6 +33806,10 @@
     "删除专属暂存文件失败：%1。": "Deleting the dedicated scratch file failed: %1.",
     "已删除专属暂存文件 %1。": "Deleted the dedicated scratch file %1.",
     "是否同时删除本页创建的专属暂存文件？\n%1\n\n删除后这些簇会交还系统。如果还有别处正在用这个 LBA，请选择“否”。": "Also delete the dedicated scratch file this page created?\n%1\n\nDeleting it returns those clusters to the system. Choose No if anything else is still using this LBA.",
-    "清空 DDMA 会话，所有页面立刻退回标准驱动通道。本页创建过专属暂存文件时会问你是否一并删除。": "Clear the DDMA session; every page falls back to the standard driver channel immediately. If this page created a dedicated scratch file, you will be asked whether to delete it too."
+    "清空 DDMA 会话，所有页面立刻退回标准驱动通道。本页创建过专属暂存文件时会问你是否一并删除。": "Clear the DDMA session; every page falls back to the standard driver channel immediately. If this page created a dedicated scratch file, you will be asked whether to delete it too.",
+    "地址 %1 只读到 %2 / %3 字节：该页在此之后未映射，后续内容不存在。": "Address %1: only %2 of %3 bytes could be read -- the page is unmapped past that point, so the rest does not exist.",
+    "该地址所在区域未映射": "the region at this address is not mapped",
+    "读取失败：地址=%1，错误码=%2（%3）": "Read failed: address=%1, error=%2 (%3)",
+    "读取被拒绝": "the read was denied"
   }
 }
