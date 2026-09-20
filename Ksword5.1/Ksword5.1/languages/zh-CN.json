@@ -34008,16 +34008,9 @@
     "走驱动的 PsSuspendProcess，取不到则退到 Zw/NtSuspendProcess。": "走驱动的 PsSuspendProcess，取不到则退到 Zw/NtSuspendProcess。",
     "走驱动的 PsResumeProcess，取不到则退到 Zw/NtResumeProcess。与 R0 挂起成对：R3 的恢复在 R0 挂得动的那些目标上往往也恢复不了。": "走驱动的 PsResumeProcess，取不到则退到 Zw/NtResumeProcess。与 R0 挂起成对：R3 的恢复在 R0 挂得动的那些目标上往往也恢复不了。",
     "[ProcessDock] executeR0ResumeProcessAction 被忽略：当前没有选中进程。": "[ProcessDock] executeR0ResumeProcessAction 被忽略：当前没有选中进程。",
-    "%1 / DMA 结束操作": "%1 / DMA 结束操作",
+    "%1 / DMA 进程操作": "%1 / DMA 进程操作",
     "%1 解除（冻结/结束）": "%1 解除（冻结/结束）",
-    "R3（用户态）": "R3（用户态）",
-    "进程级结束 API": "进程级结束 API",
-    "会话 / 终端服务": "会话 / 终端服务",
-    "作业对象（连坐）": "作业对象（连坐）",
-    "重启管理器": "重启管理器",
-    "句柄取巧": "句柄取巧",
-    "线程级（逐线程）": "线程级（逐线程）",
-    "调试器路径": "调试器路径",
-    "破坏性（不是请求退出）": "破坏性（不是请求退出）"
+    "效率模式（绿叶）": "效率模式（绿叶）",
+    "走驱动的 PsSuspendProcess，取不到则退到 Zw/NtSuspendProcess。取消勾选走 PsResumeProcess。勾选态与上面那条共用同一个读数——它反映的是进程当前是否挂起，不表示是谁挂的。": "走驱动的 PsSuspendProcess，取不到则退到 Zw/NtSuspendProcess。取消勾选走 PsResumeProcess。勾选态与上面那条共用同一个读数——它反映的是进程当前是否挂起，不表示是谁挂的。"
   }
 }

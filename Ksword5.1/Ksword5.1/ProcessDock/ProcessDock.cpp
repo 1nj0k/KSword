@@ -3636,20 +3636,10 @@ namespace
     // 用户以为自己点的是 A，跑的是 B，失败原因还落在 A 头上。
     struct TerminateMethodEntry
     {
-        // groupName："请谁去结束"的分类，**不画分节线**，挂在每一项的悬停说明里。
-        //
-        // 菜单里的分节线只按权限等级画两条（R3 / R0），不按分类画——八条分节线
-        // 把十四个选项切得比不分组还难扫。分类本身要留着：同一类方法的失败原因
-        // 往往相同（作业对象那两条，目标不在任何 Job 里时一起失败），看见分类就
-        // 知道这条失败时同类的另一条不必再试。
-        //
-        // 这张表十四条全在用户态，所以 R3 那条分节线在循环外画一次即可，不给每
-        // 行存一个恒等的权限字段。以后真要往表里加内核态方法，那时再把权限拆成
-        // 字段——现在加等于十四行存同一个值。
-        //
-        // 中文原文，翻译走整串词条（languages/*.json 的 source_translations）
-        // 加运行期扫描，与本文件其它菜单文案同一条路。
-        const char* groupName = nullptr;
+        // 表里十四条方法**全在用户态**；菜单里那条横线以下才是 R0 那批。分类
+        // 不进界面，只用下面的注释分段——排列顺序仍按"请谁去结束"聚在一起，因为
+        // 同类方法的失败原因往往相同（作业对象那两条，目标不在任何 Job 里时一起
+        // 失败），改这张表的人需要知道这件事，用菜单的人不需要。
         const char* methodName = nullptr;
         std::function<bool(std::uint32_t, std::string*)> invokeMethod;
     };
@@ -3659,54 +3649,54 @@ namespace
         static const std::vector<TerminateMethodEntry> table =
         {
             // 直接请内核结束这个进程。最常规，也最容易被内核回调挡下来。
-            { "进程级结束 API", "TerminateProcess(Kernel32)", [](std::uint32_t pid, std::string* d)
+            { "TerminateProcess(Kernel32)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByWin32(pid, d); } },
-            { "进程级结束 API", "NtTerminateProcess/ZwTerminateProcess", [](std::uint32_t pid, std::string* d)
+            { "NtTerminateProcess/ZwTerminateProcess", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByNtNative(pid, d); } },
 
             // 请会话/终端服务去结束。走的是另一个服务进程，因此不吃调用方自己
             // 的句柄权限，但目标必须属于某个会话。
-            { "会话 / 终端服务", "WTSTerminateProcess(WTS API)", [](std::uint32_t pid, std::string* d)
+            { "WTSTerminateProcess(WTS API)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByWtsApi(pid, d); } },
-            { "会话 / 终端服务", "WinStationTerminateProcess(winsta)", [](std::uint32_t pid, std::string* d)
+            { "WinStationTerminateProcess(winsta)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByWinStationApi(pid, d); } },
 
             // 请作业对象连坐。目标不在任何 Job 里时这一组会一起失败——知道这点
             // 就不必把组里另一条再试一遍。
-            { "作业对象（连坐）", "TerminateJobObject(Job)", [](std::uint32_t pid, std::string* d)
+            { "TerminateJobObject(Job)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByJobObject(pid, d); } },
-            { "作业对象（连坐）", "NtTerminateJobObject/ZwTerminateJobObject", [](std::uint32_t pid, std::string* d)
+            { "NtTerminateJobObject/ZwTerminateJobObject", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByNtJobObject(pid, d); } },
 
             // 请重启管理器出面。它会先让目标自己优雅退出，force 那条才强制。
-            { "重启管理器", "RmShutdown(Restart Manager)", [](std::uint32_t pid, std::string* d)
+            { "RmShutdown(Restart Manager)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByRestartManager(pid, false, d); } },
-            { "重启管理器", "RmShutdown(Restart Manager, force)", [](std::uint32_t pid, std::string* d)
+            { "RmShutdown(Restart Manager, force)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByRestartManager(pid, true, d); } },
 
             // 绕开"拿不到有效句柄"这一类失败。
-            { "句柄取巧", "DuplicateHandle(-1)+TerminateProcess", [](std::uint32_t pid, std::string* d)
+            { "DuplicateHandle(-1)+TerminateProcess", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByDuplicateHandlePseudo(pid, d); } },
 
             // 不结束进程本身，而是把它的线程逐个干掉。进程对象会留到最后一条
             // 线程退出，所以"成功"之后目标可能还在列表里待一会儿。
-            { "线程级（逐线程）", "TerminateThread(全部线程)", [](std::uint32_t pid, std::string* d)
+            { "TerminateThread(全部线程)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateAllThreadsByPid(pid, d); } },
-            { "线程级（逐线程）", "NtTerminateThread/ZwTerminateThread(全部线程)", [](std::uint32_t pid, std::string* d)
+            { "NtTerminateThread/ZwTerminateThread(全部线程)", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateAllThreadsByPidNtNative(pid, d); } },
 
             // 借调试器身份。附加成功后脱离即杀，对拒绝常规结束的目标常常有效，
             // 但目标已被别的调试器附加时整组都用不了。
-            { "调试器路径", "DebugActiveProcess 调试附加", [](std::uint32_t pid, std::string* d)
+            { "DebugActiveProcess 调试附加", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByDebugAttach(pid, d); } },
-            { "调试器路径", "ntsd -c q -p <pid>", [](std::uint32_t pid, std::string* d)
+            { "ntsd -c q -p <pid>", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByNtsdCommand(pid, d); } },
 
             // 这一条与上面所有方法都不同类：它**不请任何人结束这个进程**，
             // 而是把目标必需的映射拆掉让它自己崩。因此没有"优雅退出"可言，
             // 也可能只是让目标变成一个半死不活的状态。单独成组就是为了让人
             // 在点之前看见这个区别。
-            { "破坏性（不是请求退出）", "NtUnmapViewOfSection 卸载 ntdll.dll", [](std::uint32_t pid, std::string* d)
+            { "NtUnmapViewOfSection 卸载 ntdll.dll", [](std::uint32_t pid, std::string* d)
                 { return ks::process::TerminateProcessByNtUnmapNtdll(pid, d); } }
         };
         return table;
@@ -11155,7 +11145,7 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
      */
     QMenu* ringMinusOneSubMenu = contextMenu.addMenu(
         buildR0ActionIcon(":/Icon/process_terminate.svg"),
-        processContextText("process.menu.ring_minus_one_group", QStringLiteral("%1 / DMA 结束操作"))
+        processContextText("process.menu.ring_minus_one_group", QStringLiteral("%1 / DMA 进程操作"))
             .arg(hvmName));
     QAction* hvmFreezeAction = ringMinusOneSubMenu->addAction(
         buildR0ActionIcon(":/Icon/process_suspend.svg"),
@@ -11204,50 +11194,24 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
     advancedTerminateSubMenu->setToolTipsVisible(true);
     std::vector<QAction*> advancedTerminateActions;
     advancedTerminateActions.reserve(terminateMethodTable().size());
-    // addRingHeader：画一条带字的分组标题。
-    //
-    // **不能用 QMenu::addSection。** 本菜单的样式表（buildThreadContextMenuStyle）
-    // 接管了 QMenu::separator 并把高度写死成 1px，而 addSection 本质就是"带文字
-    // 的分隔符"——文字没有地方渲染，画出来跟普通分隔线一模一样。这一点很难在
-    // 代码里看出来：addSection 调用成功、字符串也确实编进了二进制，只是永远不
-    // 显示。本文件另外那处 r0PplLevelSubMenu 的 addSection 多半也是这个下场。
-    //
-    // 禁用项则走 QMenu::item:disabled，那条规则在同一份样式表里明确给了颜色，
-    // 所以一定看得见；禁用项也不参与键盘导航，不会被误点。
-    const auto addRingHeader = [advancedTerminateSubMenu](const QString& title) {
-        if (!advancedTerminateSubMenu->isEmpty())
-        {
-            advancedTerminateSubMenu->addSeparator();
-        }
-        QAction* const headerAction = advancedTerminateSubMenu->addAction(title);
-        headerAction->setEnabled(false);
-    };
-
-    // 两条标题按权限等级分：这一条管下面整张表（十四条全在用户态），R0 那条在
-    // 表跑完之后。分类不单独起标题，见 TerminateMethodEntry::groupName 的说明。
-    addRingHeader(ks::i18n::sourceText(QStringLiteral("R3（用户态）")));
     for (std::size_t methodIndex = 0; methodIndex < terminateMethodTable().size(); ++methodIndex)
     {
         const TerminateMethodEntry& entry = terminateMethodTable()[methodIndex];
         QAction* const methodAction = advancedTerminateSubMenu->addAction(
             QString::fromUtf8(entry.methodName));
-        // 分类放悬停说明的第一行。它不画横线，但必须留着：同一类方法的失败原因
-        // 往往相同，看见"作业对象（连坐）"就知道这条失败时同类的另一条不必再试。
-        const QString methodTooltipBody = processContextText(
+        methodAction->setToolTip(processContextText(
             "process.menu.advanced_terminate.item_tooltip",
-            QStringLiteral("只执行这一种方法一次，不跑其余方法、也不退到 R0。结果与细节写进日志面板。"));
-        methodAction->setToolTip(
-            (entry.groupName != nullptr)
-                ? QStringLiteral("%1\n%2")
-                      .arg(QString::fromUtf8(entry.groupName), methodTooltipBody)
-                : methodTooltipBody);
+            QStringLiteral("只执行这一种方法一次，不跑其余方法、也不退到 R0。结果与细节写进日志面板。")));
         advancedTerminateActions.push_back(methodAction);
     }
-    // R0 那一节。这几条不走上面的循环，是因为它们不在 terminateMethodTable()
-    // 里：表里每条的签名是 (pid, detail*)，而 R0 这条要带上创建时间做 PID 复用
-    // 校验，塞进表就得把那个参数丢掉——校验没了不会报错，只会在 PID 被复用时
-    // 结束错进程。
-    addRingHeader(ks::i18n::sourceText(QStringLiteral("R0（内核驱动）")));
+    // 横线以下不是 R3。这几条不走上面的循环，是因为它们不在
+    // terminateMethodTable() 里：表里每条的签名是 (pid, detail*)，而 R0 这条要
+    // 带上创建时间做 PID 复用校验，塞进表就得把那个参数丢掉——校验没了不会报
+    // 错，只会在 PID 被复用时结束错进程。
+    //
+    // 这里只画线不写字：本菜单的样式表接管了 QMenu::separator 且高度写死 1px，
+    // QMenu::addSection 的文字没有地方渲染，写了也不会显示。
+    advancedTerminateSubMenu->addSeparator();
     QAction* advancedR0OnlyAction = advancedTerminateSubMenu->addAction(
         buildR0ActionIcon(":/Icon/process_terminate.svg"),
         processContextText("process.menu.advanced_terminate_r0",
@@ -11385,12 +11349,28 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
     r0DkomCidRemoveAction->setToolTip(QStringLiteral("从 PspCidTable 清零目标 EPROCESS 的 CID 表项；高风险且不可通过本菜单恢复。"));
     contextMenu.addSeparator();
 
-    QAction* suspendAction = contextMenu.addAction(
-        blueTintedIcon(":/Icon/process_suspend.svg"),
+    /*
+     * 挂起与效率模式都是**开关**，不是两个动作，所以各做成一个可勾选项：
+     * 勾上=已挂起/已开启，点一下切到另一边。
+     *
+     * 勾选态取自 processStateKnown/processSuspended，这两个字段是从
+     * SystemProcessInformation 的线程数组直接算出来的——不开进程句柄、不要特权，
+     * 所以受保护进程上也是已知的，勾选框不会显示一个编出来的状态。
+     * 只有缓冲区越界那种病态情况才是未知，那时按未勾显示（即点了就是挂起）。
+     *
+     * 这三项**不设图标**。Qt 的菜单项里图标和勾选标记共用同一列：带图标时
+     * 勾选态靠图标底下的选中框表示，而本菜单的样式表接管了 QMenu::item，那个
+     * 框很可能根本画不出来——那样就又是一个"代码对了但界面上看不见"的东西。
+     * 不给图标，Qt 就在那一列画勾。
+     */
+    const bool contextProcessSuspended =
+        contextProcessRecord != nullptr
+        && contextProcessRecord->processStateKnown
+        && contextProcessRecord->processSuspended;
+    QAction* suspendToggleAction = contextMenu.addAction(
         processContextText("process.menu.suspend", QStringLiteral("挂起进程")));
-    QAction* resumeAction = contextMenu.addAction(
-        blueTintedIcon(":/Icon/process_resume.svg"),
-        processContextText("process.menu.resume", QStringLiteral("恢复进程")));
+    suspendToggleAction->setCheckable(true);
+    suspendToggleAction->setChecked(contextProcessSuspended);
     /*
      * R0 挂起跟 R3 的挂起/恢复放在一起，而不是跟结束那一组。
      *
@@ -11398,29 +11378,20 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
      * "挂起"，不会先想清楚自己要 R3 还是 R0。按层级堆在一起的结果是同一件事
      * 散在菜单两头，而每一头都不完整。
      */
-    QAction* r0SuspendAction = contextMenu.addAction(
-        buildR0ActionIcon(":/Icon/process_suspend.svg"),
+    QAction* r0SuspendToggleAction = contextMenu.addAction(
         processContextText("process.menu.r0_suspend", QStringLiteral("R0挂起进程")));
-    r0SuspendAction->setToolTip(processContextText(
+    r0SuspendToggleAction->setCheckable(true);
+    r0SuspendToggleAction->setChecked(contextProcessSuspended);
+    r0SuspendToggleAction->setToolTip(processContextText(
         "process.menu.r0_suspend.tooltip",
-        QStringLiteral("走驱动的 PsSuspendProcess，取不到则退到 Zw/NtSuspendProcess。")));
-    QAction* r0ResumeAction = contextMenu.addAction(
-        buildR0ActionIcon(":/Icon/process_resume.svg"),
-        processContextText("process.menu.r0_resume", QStringLiteral("R0恢复进程")));
-    r0ResumeAction->setToolTip(processContextText(
-        "process.menu.r0_resume.tooltip",
-        QStringLiteral("走驱动的 PsResumeProcess，取不到则退到 Zw/NtResumeProcess。与 R0 挂起成对：R3 的恢复在 R0 挂得动的那些目标上往往也恢复不了。")));
-    QAction* enableEfficiencyAction = contextMenu.addAction(
-        blueTintedIcon(":/Icon/process_resume.svg"),
-        processContextText("process.menu.efficiency_on", QStringLiteral("开启效率模式（绿叶）")));
-    QAction* disableEfficiencyAction = contextMenu.addAction(
-        blueTintedIcon(":/Icon/process_suspend.svg"),
-        processContextText("process.menu.efficiency_off", QStringLiteral("关闭效率模式")));
-    if (contextProcessRecord != nullptr && contextProcessRecord->efficiencyModeSupported)
-    {
-        enableEfficiencyAction->setEnabled(!contextProcessRecord->efficiencyModeEnabled);
-        disableEfficiencyAction->setEnabled(contextProcessRecord->efficiencyModeEnabled);
-    }
+        QStringLiteral("走驱动的 PsSuspendProcess，取不到则退到 Zw/NtSuspendProcess。取消勾选走 PsResumeProcess。勾选态与上面那条共用同一个读数——它反映的是进程当前是否挂起，不表示是谁挂的。")));
+    QAction* efficiencyToggleAction = contextMenu.addAction(
+        processContextText("process.menu.efficiency", QStringLiteral("效率模式（绿叶）")));
+    efficiencyToggleAction->setCheckable(true);
+    efficiencyToggleAction->setChecked(
+        contextProcessRecord != nullptr
+        && contextProcessRecord->efficiencyModeSupported
+        && contextProcessRecord->efficiencyModeEnabled);
     QAction* openFolderAction = contextMenu.addAction(
         blueTintedIcon(":/Icon/process_open_folder.svg"),
         processContextText("process.menu.open_folder", QStringLiteral("打开所在目录")));
@@ -12487,8 +12458,13 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
         else if (selectedAction == terminateProcessTreeAction) { executeTerminateProcessTreeAction(); }
         else if (selectedAction == r0TerminateAction) { executeR0TerminateProcessAction(); }
         else if (selectedAction == r0TerminateTreeAction) { executeR0TerminateProcessTreeAction(); }
-        else if (selectedAction == r0SuspendAction) { executeR0SuspendProcessAction(); }
-        else if (selectedAction == r0ResumeAction) { executeR0ResumeProcessAction(); }
+        // 可勾选项：exec() 返回时 Qt 已经把勾选态翻到了用户想要的那一边，
+        // 所以 isChecked() 就是"用户要它变成什么"，不是"它原来是什么"。
+        else if (selectedAction == r0SuspendToggleAction)
+        {
+            if (r0SuspendToggleAction->isChecked()) { executeR0SuspendProcessAction(); }
+            else { executeR0ResumeProcessAction(); }
+        }
         else if (selectedAction == dmaProcessOpAction || selectedAction == advancedDmaAction)
         {
             openDmaProcessOpWindow();
@@ -12551,10 +12527,15 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
         else if (selectedAction == r0DkomCidRemoveAction) { executeR0DkomRemoveFromCidTableAction(); }
         else if (selectedAction == screenInjectionSurfaceAction) { executeScreenInjectionSurfaceAction(); }
         else if (selectedAction == refreshPplLevelAction) { executeRefreshPplProtectionLevelAction(); }
-        else if (selectedAction == suspendAction) { executeSuspendAction(); }
-        else if (selectedAction == resumeAction) { executeResumeAction(); }
-        else if (selectedAction == enableEfficiencyAction) { executeSetEfficiencyModeAction(true); }
-        else if (selectedAction == disableEfficiencyAction) { executeSetEfficiencyModeAction(false); }
+        else if (selectedAction == suspendToggleAction)
+        {
+            if (suspendToggleAction->isChecked()) { executeSuspendAction(); }
+            else { executeResumeAction(); }
+        }
+        else if (selectedAction == efficiencyToggleAction)
+        {
+            executeSetEfficiencyModeAction(efficiencyToggleAction->isChecked());
+        }
         else if (selectedAction == setCriticalAction) { executeSetCriticalAction(true); }
         else if (selectedAction == clearCriticalAction) { executeSetCriticalAction(false); }
         else if (selectedAction == openFolderAction) { executeOpenFolderAction(); }
