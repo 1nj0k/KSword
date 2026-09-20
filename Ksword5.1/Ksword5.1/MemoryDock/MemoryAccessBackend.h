@@ -34,8 +34,25 @@ namespace ksword::memory_backend
     {
         UserMode = 0,       // R3：ReadProcessMemory / WriteProcessMemory，不经驱动。
         StandardDriver,     // R0：驱动通道 MmCopyVirtualMemory / MmMapIoSpaceEx。
+        Hvm,                // R0 私有页表窗口：改写自有页表项指向目标帧，不调内存管理器。
         Ddma                // 磁盘直接内存访问：ATA / SCSI PASS_THROUGH_DIRECT + DMA。
     };
+
+    // HVM 这一条到底独立在哪：**不是**"绕过 EPT"。
+    //
+    // 名字叫 ring -1，但实现（KswordARKDriver/src/features/hvm/hvm_memory.c）在
+    // PASSIVE_LEVEL 的驱动上下文里跑，不进 VMX root。它预留一个私有页、把该页的
+    // 页表项改写成指向目标帧、访问完再还原——所以它**照样受 SLAT / EPT 约束**，
+    // 与 R3 / R0 同组。
+    //
+    // 它的独立性是另一回事：整条路径不调用任何文档化的内存管理器例程
+    // （MmCopyMemory / MmCopyVirtualMemory），因此**别的驱动挂钩那些例程挂不到
+    // 它头上**。R0 与 HVM 对同一地址给出不同答案，说明内存管理器被挂了钩；
+    // 这跟 DDMA 与 CPU 侧分歧说明的 SLAT 重定向是两件事，不能混为一谈。
+    //
+    // 一个必须传递给调用方的状态：自映射基址发现失败时（窗口落进大页映射、
+    // 布局不认识），驱动会**回退到 MmCopyMemory** 并把 usedDirectWindow 置 0。
+    // 那一次读走的正是我们想避开的那条路，拿它去跟 R0 比对什么都证明不了。
 
     // 为什么 R3 与 R0 必须是两个并列的选项，而不是"标准通道"一个条目：
     // - 两者的失败面完全不同。R3 受句柄权限、进程保护、VAD 可读性约束；R0 走
@@ -127,6 +144,13 @@ namespace ksword::memory_backend
     //   每一条都给出可直接展示的中文原因；
     // - 返回：true 表示可以发起 DDMA 访问；false 时 reasonOut 说明缺哪一步。
     bool isDdmaUsable(const DdmaSession& session, QString* reasonOut);
+
+    // isHvmMemoryUsable：
+    // - 处理：发一次 QUERY_WINDOW，它不碰任何内存，只回答私有窗口在不在；
+    // - 返回：true 表示可以走 HVM 通道；false 时 reasonOut 说明卡在哪一步。
+    // - 注意返回 true 只代表"这条通道能用"，不代表每一次访问都会走私有窗口——
+    //   窗口没标定出来时驱动会回退，那一次的 usedDirectWindow 为 0。
+    bool isHvmMemoryUsable(QString* reasonOut);
 
     // readPhysical：
     // - 输入：后端、DDMA 会话、物理起始地址与长度；

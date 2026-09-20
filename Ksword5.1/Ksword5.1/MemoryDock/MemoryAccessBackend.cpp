@@ -297,6 +297,10 @@ namespace ksword::memory_backend
         {
             return QStringLiteral("R3（ReadProcessMemory）");
         }
+        if (backend == MemoryAccessBackend::Hvm)
+        {
+            return QStringLiteral("HVM（私有页表窗口）");
+        }
         return QStringLiteral("R0（驱动通道）");
     }
 
@@ -405,10 +409,189 @@ namespace ksword::memory_backend
         AccessOutcome userModeRejectPhysical()
         {
             AccessOutcome outcome;
-            outcome.failureText = QStringLiteral(
-                "R3 通道没有访问物理地址的手段，物理内存读写请选 R0 驱动通道或 DDMA。");
+            outcome.failureText = QStringLiteral("R3 通道没有访问物理地址的手段，物理内存读写请选 R0 驱动通道或 DDMA。");
             return outcome;
         }
+
+        // describeHvmMemoryStatus：把 R-1 内存状态翻成可据以行动的文案。
+        QString describeHvmMemoryStatus(const unsigned long status)
+        {
+            switch (status)
+            {
+            case KSWORD_ARK_HVM_MEMORY_STATUS_INVALID_REQUEST:
+                return QStringLiteral("驱动拒绝：请求字段无效。");
+            case KSWORD_ARK_HVM_MEMORY_STATUS_CONFIRMATION_REQUIRED:
+                return QStringLiteral("驱动拒绝：缺少界面确认令牌。");
+            case KSWORD_ARK_HVM_MEMORY_STATUS_WINDOW_UNAVAILABLE:
+                return QStringLiteral(
+                    "私有页表窗口不可用：自映射基址没有标定出来（窗口可能落在大页映射里）。");
+            case KSWORD_ARK_HVM_MEMORY_STATUS_ADDRESS_INVALID:
+                return QStringLiteral("地址无效。");
+            case KSWORD_ARK_HVM_MEMORY_STATUS_TRANSLATION_FAILED:
+                return QStringLiteral("虚拟地址翻译失败，该页可能未驻留。");
+            case KSWORD_ARK_HVM_MEMORY_STATUS_ACCESS_FAILED:
+                return QStringLiteral("访问目标页失败。");
+            case KSWORD_ARK_HVM_MEMORY_STATUS_BUSY:
+                return QStringLiteral("私有窗口正被另一次访问占用，请重试。");
+            case KSWORD_ARK_HVM_MEMORY_STATUS_PROCESS_LOOKUP_FAILED:
+                return QStringLiteral("目标进程查找失败或已退出。");
+            default:
+                break;
+            }
+            return QStringLiteral("R-1 内存访问失败，status=%1。").arg(status);
+        }
+
+        // hvmTransfer：按 1024 字节上限切片跑一次 R-1 读或写。
+        //
+        // 切片是协议要求（KSWORD_ARK_HVM_MEMORY_MAX_BYTES），不是调优：请求走
+        // METHOD_BUFFERED，整个请求结构要被快照进系统缓冲，所以单次必须小。
+        //
+        // usedDirectWindow 按**所有分片的与**汇总，不是取最后一片。任意一片退回
+        // 了 MmCopyMemory，这一次访问作为整体就不再是"没走内存管理器"的——
+        // 取最后一片会让一次半数退回的访问看上去完全没退回。
+        AccessOutcome hvmTransfer(
+            const ksword::ark::DriverClient& client,
+            const unsigned long readOperation,
+            const unsigned long writeOperation,
+            const std::uint32_t processId,
+            const std::uint64_t baseAddress,
+            const QByteArray* payload,
+            const std::uint64_t lengthBytes)
+        {
+            AccessOutcome outcome;
+            const bool isWrite = (payload != nullptr);
+            const std::uint64_t totalBytes =
+                isWrite ? static_cast<std::uint64_t>(payload->size()) : lengthBytes;
+
+            QByteArray collected;
+            bool allDirectWindow = true;
+            bool anyTransferred = false;
+
+            for (std::uint64_t offset = 0ULL; offset < totalBytes;)
+            {
+                const std::uint64_t remaining = totalBytes - offset;
+                const unsigned long chunk = static_cast<unsigned long>(
+                    (std::min)(remaining,
+                        static_cast<std::uint64_t>(KSWORD_ARK_HVM_MEMORY_MAX_BYTES)));
+
+                const ksword::ark::HvmMemoryResult result = client.hvmMemory(
+                    isWrite ? writeOperation : readOperation,
+                    baseAddress + offset,
+                    0ULL,
+                    chunk,
+                    isWrite
+                        ? reinterpret_cast<const unsigned char*>(payload->constData() + offset)
+                        : nullptr,
+                    /*requireWindow*/ false,
+                    /*uiConfirmed*/ true,
+                    processId);
+
+                if (!result.io.ok)
+                {
+                    outcome.failureText = result.unsupported
+                        ? QStringLiteral("当前驱动不支持 R-1 内存访问，请更新 KswordARK 驱动。")
+                        : QStringLiteral("R-1 内存访问通信失败：%1")
+                              .arg(QString::fromStdString(result.io.message));
+                    outcome.bytesDone = offset;
+                    outcome.data = collected;
+                    return outcome;
+                }
+                const unsigned long status = result.response.status;
+                if (status != KSWORD_ARK_HVM_MEMORY_STATUS_OK
+                    && status != KSWORD_ARK_HVM_MEMORY_STATUS_PARTIAL)
+                {
+                    outcome.failureText = describeHvmMemoryStatus(status);
+                    outcome.bytesDone = offset;
+                    outcome.data = collected;
+                    return outcome;
+                }
+
+                anyTransferred = true;
+                if (result.response.usedDirectWindow == 0U)
+                {
+                    allDirectWindow = false;
+                }
+                const unsigned long done = result.response.bytesTransferred;
+                if (!isWrite && done != 0UL)
+                {
+                    collected.append(
+                        reinterpret_cast<const char*>(result.response.data),
+                        static_cast<qsizetype>((std::min)(done,
+                            static_cast<unsigned long>(KSWORD_ARK_HVM_MEMORY_MAX_BYTES))));
+                }
+                offset += done;
+                // 驱动报完成 0 字节却又不报失败时必须停下，否则这里会空转。
+                if (done == 0UL)
+                {
+                    outcome.partial = true;
+                    break;
+                }
+                if (status == KSWORD_ARK_HVM_MEMORY_STATUS_PARTIAL)
+                {
+                    outcome.partial = true;
+                    break;
+                }
+            }
+
+            if (!anyTransferred)
+            {
+                outcome.failureText = QStringLiteral("R-1 内存访问未完成任何分片。");
+                return outcome;
+            }
+            outcome.ok = true;
+            outcome.bytesDone = isWrite
+                ? static_cast<std::uint64_t>(totalBytes)
+                : static_cast<std::uint64_t>(collected.size());
+            outcome.data = collected;
+            if (!isWrite && static_cast<std::uint64_t>(collected.size()) < totalBytes)
+            {
+                outcome.partial = true;
+            }
+            // 没走成私有窗口时**不能静默成功**：那一次读走的正是我们想避开的
+            // MmCopyMemory，拿它去跟 R0 比对什么都证明不了，而界面上两者看起来
+            // 完全一样。借 lostUpdateWindow 之外没有合适字段，所以写进 failureText
+            // 的同时保持 ok=true——数据是真的，只是它的独立性没有成立。
+            if (!allDirectWindow)
+            {
+                outcome.failureText = QStringLiteral("注意：本次访问回退到了 MmCopyMemory（私有页表窗口未标定），因此它与 R0 通道不再是两条独立的路径，两者一致不能用来排除内存管理器被挂钩。");
+            }
+            return outcome;
+        }
+    }
+
+    bool isHvmMemoryUsable(QString* const reasonOut)
+    {
+        const auto setReason = [reasonOut](const QString& text) {
+            if (reasonOut != nullptr)
+            {
+                *reasonOut = text;
+            }
+        };
+
+        const ksword::ark::DriverClient client;
+        const ksword::ark::HvmMemoryResult result = client.hvmMemory(
+            KSWORD_ARK_HVM_MEMORY_OP_QUERY_WINDOW,
+            0ULL, 0ULL, 0UL, nullptr,
+            /*requireWindow*/ false,
+            /*uiConfirmed*/ true);
+        if (!result.io.ok)
+        {
+            setReason(result.unsupported
+                ? QStringLiteral("当前驱动不支持 R-1 内存访问。")
+                : QStringLiteral("查询 R-1 内存窗口失败：%1")
+                      .arg(QString::fromStdString(result.io.message)));
+            return false;
+        }
+        if (result.response.windowReady == 0U)
+        {
+            // 窗口没标定出来时这条通道**仍然能返回数据**（回退 MmCopyMemory），
+            // 但那样它就不再独立于 R0。这里判为不可用，免得用户在界面上看到
+            // 两条通道一致就以为排除了挂钩。
+            setReason(QStringLiteral("私有页表窗口未标定：自映射基址没有找到（窗口可能落在大页映射里）。此时访问会回退到 MmCopyMemory，与 R0 不再是独立的两条路径。"));
+            return false;
+        }
+        setReason(QString());
+        return true;
     }
 
     bool isKernelVirtualAddress(const std::uint64_t virtualAddress)
@@ -483,6 +666,15 @@ namespace ksword::memory_backend
         }
 
         const ksword::ark::DriverClient client;
+
+        if (backend == MemoryAccessBackend::Hvm)
+        {
+            return hvmTransfer(
+                client,
+                KSWORD_ARK_HVM_MEMORY_OP_READ_PHYSICAL,
+                KSWORD_ARK_HVM_MEMORY_OP_WRITE_PHYSICAL,
+                0U, physicalAddress, nullptr, lengthBytes);
+        }
 
         if (backend == MemoryAccessBackend::StandardDriver)
         {
@@ -580,6 +772,15 @@ namespace ksword::memory_backend
         }
 
         const ksword::ark::DriverClient client;
+
+        if (backend == MemoryAccessBackend::Hvm)
+        {
+            return hvmTransfer(
+                client,
+                KSWORD_ARK_HVM_MEMORY_OP_READ_PHYSICAL,
+                KSWORD_ARK_HVM_MEMORY_OP_WRITE_PHYSICAL,
+                0U, physicalAddress, &bytes, 0ULL);
+        }
 
         if (backend == MemoryAccessBackend::StandardDriver)
         {
@@ -693,6 +894,15 @@ namespace ksword::memory_backend
         }
 
         const ksword::ark::DriverClient client;
+
+        if (backend == MemoryAccessBackend::Hvm)
+        {
+            return hvmTransfer(
+                client,
+                KSWORD_ARK_HVM_MEMORY_OP_READ_VIRTUAL,
+                KSWORD_ARK_HVM_MEMORY_OP_WRITE_VIRTUAL,
+                processId, virtualAddress, nullptr, lengthBytes);
+        }
 
         if (backend == MemoryAccessBackend::StandardDriver)
         {
@@ -830,6 +1040,15 @@ namespace ksword::memory_backend
         }
 
         const ksword::ark::DriverClient client;
+
+        if (backend == MemoryAccessBackend::Hvm)
+        {
+            return hvmTransfer(
+                client,
+                KSWORD_ARK_HVM_MEMORY_OP_READ_VIRTUAL,
+                KSWORD_ARK_HVM_MEMORY_OP_WRITE_VIRTUAL,
+                processId, virtualAddress, &bytes, 0ULL);
+        }
 
         if (backend == MemoryAccessBackend::StandardDriver)
         {

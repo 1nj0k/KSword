@@ -73,6 +73,7 @@ namespace ksword::memory_dock
         bool useUserMode = true;
         bool useKernelVirtual = true;
         bool useKernelPhysical = true;
+        bool useHvm = true;
         bool useDma = true;
         // 两条静态参考。它们不反映内存现状，只回答"这一页本来该是什么样"，
         // 因此与活体路径分属不同的组，跨组分歧的含义也不同。
@@ -131,6 +132,7 @@ namespace ksword::memory_dock
         QCheckBox* m_useUserModeCheck = nullptr;
         QCheckBox* m_useKernelVirtualCheck = nullptr;
         QCheckBox* m_useKernelPhysicalCheck = nullptr;
+        QCheckBox* m_useHvmCheck = nullptr;
         QCheckBox* m_useDmaCheck = nullptr;
         QCheckBox* m_useImageSectionCheck = nullptr;
         QCheckBox* m_useOnDiskImageCheck = nullptr;

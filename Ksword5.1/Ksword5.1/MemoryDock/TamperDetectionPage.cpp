@@ -147,6 +147,20 @@ namespace ksword::memory_dock
                             kPageBytes));
                 }
             }
+            // HVM 走虚拟地址而不是物理地址：它的独立性来自"不调内存管理器例程"，
+            // 那条性质在虚拟地址读上才成立且才有对比意义——与 R0 虚拟读比对，分歧
+            // 说明 MmCopyVirtualMemory 被挂了钩。
+            if (request.useHvm)
+            {
+                pushSample(
+                    TamperReadPath::HvmPrivateWindow,
+                    ksword::memory_backend::readVirtual(
+                        ksword::memory_backend::MemoryAccessBackend::Hvm,
+                        request.ddmaSession,
+                        request.processId,
+                        virtualAddress,
+                        kPageBytes));
+            }
             if (request.useDma)
             {
                 if (!physicalValid)
@@ -401,10 +415,12 @@ namespace ksword::memory_dock
         m_useUserModeCheck = new QCheckBox(QStringLiteral("R3 用户态读"), this);
         m_useKernelVirtualCheck = new QCheckBox(QStringLiteral("R0 虚拟地址读"), this);
         m_useKernelPhysicalCheck = new QCheckBox(QStringLiteral("R0 物理地址读"), this);
+        m_useHvmCheck = new QCheckBox(QStringLiteral("HVM 私有页表窗口"), this);
         m_useDmaCheck = new QCheckBox(QStringLiteral("DDMA 物理读"), this);
         m_useUserModeCheck->setChecked(true);
         m_useKernelVirtualCheck->setChecked(true);
         m_useKernelPhysicalCheck->setChecked(true);
+        m_useHvmCheck->setChecked(true);
         m_useDmaCheck->setChecked(true);
         m_useDmaCheck->setToolTip(QStringLiteral("唯一一条不经过 CPU 页表的路径。去掉它之后，剩下的几条会被同一个隐藏者一起骗过，这一页就只能抓到普通补丁了。"));
         m_useImageSectionCheck = new QCheckBox(QStringLiteral("节对象干净页"), this);
@@ -414,6 +430,7 @@ namespace ksword::memory_dock
         pathLayout->addWidget(m_useUserModeCheck);
         pathLayout->addWidget(m_useKernelVirtualCheck);
         pathLayout->addWidget(m_useKernelPhysicalCheck);
+        pathLayout->addWidget(m_useHvmCheck);
         pathLayout->addWidget(m_useDmaCheck);
         pathLayout->addWidget(m_useImageSectionCheck);
         pathLayout->addWidget(m_useOnDiskImageCheck);
@@ -476,6 +493,7 @@ namespace ksword::memory_dock
         connect(m_useUserModeCheck, &QCheckBox::toggled, this, pathToggled);
         connect(m_useKernelVirtualCheck, &QCheckBox::toggled, this, pathToggled);
         connect(m_useKernelPhysicalCheck, &QCheckBox::toggled, this, pathToggled);
+        connect(m_useHvmCheck, &QCheckBox::toggled, this, pathToggled);
         connect(m_useDmaCheck, &QCheckBox::toggled, this, pathToggled);
         connect(m_useImageSectionCheck, &QCheckBox::toggled, this, pathToggled);
         connect(m_useOnDiskImageCheck, &QCheckBox::toggled, this, pathToggled);
@@ -513,6 +531,23 @@ namespace ksword::memory_dock
         const bool ddmaUsable = ksword::memory_backend::isDdmaUsable(
             ksword::memory_backend::currentDdmaSession(), &reason);
         m_useDmaCheck->setEnabled(ddmaUsable);
+
+        // HVM 的可用性与 DDMA 无关，单独问一次。窗口没标定出来时这条通道
+        // 仍会返回数据（回退 MmCopyMemory），但那时它与 R0 不再独立——
+        // 两者一致就不能用来排除内存管理器被挂钩，所以判为不可用而不是
+        // 让它带着一个悄悄失效的性质继续参与比对。
+        QString hvmReason;
+        const bool hvmUsable = ksword::memory_backend::isHvmMemoryUsable(&hvmReason);
+        m_useHvmCheck->setEnabled(hvmUsable);
+        if (!hvmUsable)
+        {
+            m_useHvmCheck->setChecked(false);
+            m_useHvmCheck->setToolTip(hvmReason);
+        }
+        else
+        {
+            m_useHvmCheck->setToolTip(QStringLiteral("改写自有页表项指向目标帧，整条路径不调用文档化的内存管理器例程。它同样受 SLAT / EPT 约束，与 R0 分歧说明的是内存管理器被挂了钩，不是重定向。"));
+        }
         if (ddmaUsable)
         {
             m_channelHintLabel->setText(QStringLiteral("DDMA 通道就绪，本页可以判定 SLAT / EPT 级别的重定向。"));
@@ -550,6 +585,7 @@ namespace ksword::memory_dock
         selectedPathCount += m_useUserModeCheck->isChecked() ? 1 : 0;
         selectedPathCount += m_useKernelVirtualCheck->isChecked() ? 1 : 0;
         selectedPathCount += m_useKernelPhysicalCheck->isChecked() ? 1 : 0;
+        selectedPathCount += (m_useHvmCheck->isEnabled() && m_useHvmCheck->isChecked()) ? 1 : 0;
         selectedPathCount += (m_useDmaCheck->isEnabled() && m_useDmaCheck->isChecked()) ? 1 : 0;
         selectedPathCount += m_useImageSectionCheck->isChecked() ? 1 : 0;
         selectedPathCount += (m_useOnDiskImageCheck->isEnabled()
@@ -623,6 +659,7 @@ namespace ksword::memory_dock
         request.useUserMode = m_useUserModeCheck->isChecked();
         request.useKernelVirtual = m_useKernelVirtualCheck->isChecked();
         request.useKernelPhysical = m_useKernelPhysicalCheck->isChecked();
+        request.useHvm = m_useHvmCheck->isEnabled() && m_useHvmCheck->isChecked();
         request.useDma = m_useDmaCheck->isEnabled() && m_useDmaCheck->isChecked();
         request.useImageSection = m_useImageSectionCheck->isChecked();
         request.useOnDiskImage =

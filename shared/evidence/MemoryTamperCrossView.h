@@ -36,13 +36,19 @@ namespace Ksword::Evidence {
 
 // TamperReadPath：参与比对的读取路径。
 //
-// 分组是判据的核心，不是分类的方便：前三条都经过 CPU 的地址翻译，因此**会被
-// SLAT / EPT 一起骗过**；第四条走磁盘控制器的 DMA，不经过 CPU 页表；后两条是
+// 分组是判据的核心，不是分类的方便：前四条都经过 CPU 的地址翻译，因此**会被
+// SLAT / EPT 一起骗过**；DDMA 走磁盘控制器的 DMA，不经过 CPU 页表；最后两条是
 // 静态参考，不反映内存现状。只有跨组的分歧才说明问题，组内分歧说明的是另一回事。
 enum class TamperReadPath : int {
     UserModeVirtual = 0,  // R3：ReadProcessMemory。受句柄权限与用户态钩子影响。
     KernelVirtual,        // R0：MmCopyVirtualMemory。绕开句柄权限，仍走 CPU 页表。
     KernelPhysical,       // R0：先 VA→PA 再按物理地址读。仍由 CPU 发起访存。
+    // HVM：改写自有页表项指向目标帧，**不调用任何文档化的内存管理器例程**。
+    // 它与上面三条同属 CPU 组——名字叫 ring -1，但实现跑在 PASSIVE_LEVEL 的驱动
+    // 上下文里、不进 VMX root，照样受 SLAT / EPT 约束。把它归进 DMA 组会让
+    // 「CPU 视图被重定向」这个结论凭空多出一条不成立的证据。
+    // 它独立的是另一件事：别的驱动挂钩 MmCopyMemory 挂不到它头上。
+    HvmPrivateWindow,
     DmaPhysical,          // DDMA：磁盘控制器 DMA 读同一物理页。**不经过 CPU 页表**。
     ImageSectionClean,    // 节对象的干净参考页。静态参考，不是内存现状。
     OnDiskImage,          // 磁盘文件里对应位置。静态参考，不是内存现状。

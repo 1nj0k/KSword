@@ -11,6 +11,7 @@ const char* TamperReadPathName(const TamperReadPath path) noexcept {
         case TamperReadPath::UserModeVirtual: return "R3 用户态读";
         case TamperReadPath::KernelVirtual: return "R0 虚拟地址读";
         case TamperReadPath::KernelPhysical: return "R0 物理地址读";
+        case TamperReadPath::HvmPrivateWindow: return "HVM 私有页表窗口";
         case TamperReadPath::DmaPhysical: return "DDMA 物理读";
         case TamperReadPath::ImageSectionClean: return "节对象干净页";
         case TamperReadPath::OnDiskImage: return "磁盘映像";
@@ -23,6 +24,7 @@ TamperPathGroup GroupOf(const TamperReadPath path) noexcept {
         case TamperReadPath::UserModeVirtual:
         case TamperReadPath::KernelVirtual:
         case TamperReadPath::KernelPhysical:
+        case TamperReadPath::HvmPrivateWindow:
             return TamperPathGroup::CpuMediated;
         case TamperReadPath::DmaPhysical:
             return TamperPathGroup::DmaMediated;

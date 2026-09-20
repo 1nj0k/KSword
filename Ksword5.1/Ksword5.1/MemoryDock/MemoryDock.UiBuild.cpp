@@ -532,9 +532,10 @@ QWidget* MemoryDock::createBackendSelector(
     // 条目顺序必须与 MemoryAccessBackend 枚举一致，界面按索引直接转换。
     comboOut->addItem(QStringLiteral("R3（ReadProcessMemory）"));
     comboOut->addItem(QStringLiteral("R0（驱动通道）"));
+    comboOut->addItem(QStringLiteral("HVM（私有页表窗口）"));
     comboOut->addItem(QStringLiteral("DDMA（磁盘 DMA）"));
     comboOut->setToolTip(
-        QStringLiteral("R3 走 ReadProcessMemory / WriteProcessMemory，不经驱动，受句柄权限与进程保护约束，也读不了内核地址和物理地址。\nR0 走驱动的 MmCopyVirtualMemory / MmMapIoSpaceEx，绕开句柄权限，能读内核地址与物理地址，但仍受 SLAT / EPT 约束。\nDDMA 走磁盘控制器的总线主控 DMA，不受 SLAT 约束，能读到被上层虚拟化重定向或隐藏的物理页；代价是必须借用磁盘扇区中转，而且明显更慢，需要先在“DDMA”子页配置通道。\n同一个地址三条读到的结果不一样，本身就是判据。"));
+        QStringLiteral("R3 走 ReadProcessMemory / WriteProcessMemory，不经驱动，受句柄权限与进程保护约束，也读不了内核地址和物理地址。\nR0 走驱动的 MmCopyVirtualMemory / MmMapIoSpaceEx，绕开句柄权限，能读内核地址与物理地址，但仍受 SLAT / EPT 约束。\nHVM 改写自有页表项指向目标帧，整条路径不调用任何文档化的内存管理器例程，别的驱动挂钩那些例程挂不到它头上；它同样受 SLAT / EPT 约束，与 R0 分歧说明的是内存管理器被挂了钩，而不是重定向。\nDDMA 走磁盘控制器的总线主控 DMA，不受 SLAT 约束，能读到被上层虚拟化重定向或隐藏的物理页；代价是必须借用磁盘扇区中转，而且明显更慢，需要先在“DDMA”子页配置通道。\n同一个地址几条读到的结果不一样本身就是判据，而分歧落在哪两条之间决定了它说明什么。"));
 
     hintOut = new QLabel(container);
     hintOut->setWordWrap(true);

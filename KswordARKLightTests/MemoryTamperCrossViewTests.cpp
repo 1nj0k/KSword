@@ -67,6 +67,12 @@ void TestPathGrouping(KswordTests::Suite& suite) {
     // 照样会被 SLAT 骗过。归错组会让 EPT 隐藏变得检测不到。
     suite.expect(GroupOf(TamperReadPath::KernelPhysical) == TamperPathGroup::CpuMediated,
         L"tamper: R0 physical read is still CPU-mediated, not DMA");
+    // HVM 更容易归错：它的接口叫 "ring -1 memory access"，听上去就在 VMX root。
+    // 实现（hvm_memory.c）跑在 PASSIVE_LEVEL 的驱动上下文里、不进 VMX root，
+    // 照样吃 SLAT。归进 DMA 组会让「CPU 视图被重定向」凭空多出一条不成立的证据，
+    // 而且不会有任何报错。它独立的是别的：不调用文档化的内存管理器例程。
+    suite.expect(GroupOf(TamperReadPath::HvmPrivateWindow) == TamperPathGroup::CpuMediated,
+        L"tamper: the HVM private window is CPU-mediated despite its ring -1 name");
     suite.expect(GroupOf(TamperReadPath::DmaPhysical) == TamperPathGroup::DmaMediated,
         L"tamper: DDMA read is the only DMA-mediated path");
     suite.expect(GroupOf(TamperReadPath::ImageSectionClean) == TamperPathGroup::StaticReference,
