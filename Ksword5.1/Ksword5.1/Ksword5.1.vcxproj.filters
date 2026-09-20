@@ -969,6 +969,9 @@
     <ClCompile Include="UI\TableInteractionSupport.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="UI\WindowPickerButton.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="UI\TableSearchSupport.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

@@ -481,6 +481,7 @@
     <ClCompile Include="UI\TableFreezeSupport.cpp" />
     <ClCompile Include="UI\TableHeaderSortingSupport.cpp" />
     <ClCompile Include="UI\TableInteractionSupport.cpp" />
+    <ClCompile Include="UI\WindowPickerButton.cpp" />
     <ClCompile Include="UI\TableSearchSupport.cpp" />
     <ClCompile Include="UI\TextSearchReplaceSupport.cpp" />
     <ClCompile Include="UI\TableSnapshotCompare.cpp" />
@@ -819,6 +820,7 @@
     <QtMoc Include="ProcessDock\ProcessDock.h" />
     <QtMoc Include="SettingsDock\SettingsDock.h" />
     <QtMoc Include="UI\CodeEditorWidget.h" />
+    <QtMoc Include="UI\WindowPickerButton.h" />
     <QtMoc Include="UI\KernelDisassemblyDialog.h" />
     <ClInclude Include="UI\GlobalDialogTheme.h" />
     <ClInclude Include="UI\GlobalUiBaseStyle.h" />

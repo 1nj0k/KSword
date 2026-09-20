@@ -4,6 +4,8 @@
 #include "../UI/VisibleTableWidget.h"
 #include "../Internationalization/LanguageManager.h"
 
+#include <QCompleter> // 进程下拉的包含式补全需要完整类型。
+
 #include <functional>
 #include <utility>
 
@@ -304,7 +306,40 @@ void MemoryDock::initializeToolbar()
             }
             });
     m_processCombo->setMinimumWidth(280);
-    m_processCombo->setToolTip("选择目标进程（进程名 + PID）。");
+    m_processCombo->setToolTip("选择目标进程。可直接输入过滤：进程名和 PID 都能匹配。");
+
+    // 可输入 + 包含式补全。几百个进程用纯滚动的下拉是选不出来的，而同名进程多的
+    // 程序（QQ 这类一开就是十个同名进程）更是只能靠 PID 区分——所以补全必须同时
+    // 能匹配到条目文本里的 PID，用 MatchContains 而不是默认的前缀匹配。
+    m_processCombo->setEditable(true);
+    m_processCombo->setInsertPolicy(QComboBox::NoInsert);
+    if (QCompleter* const processCompleter = m_processCombo->completer())
+    {
+        processCompleter->setCompletionMode(QCompleter::PopupCompletion);
+        processCompleter->setFilterMode(Qt::MatchContains);
+        processCompleter->setCaseSensitivity(Qt::CaseInsensitive);
+        processCompleter->setMaxVisibleItems(20);
+    }
+    if (QLineEdit* const processEdit = m_processCombo->lineEdit())
+    {
+        processEdit->setPlaceholderText(QStringLiteral("输入进程名或 PID 过滤"));
+        processEdit->setClearButtonEnabled(true);
+    }
+
+    // 十字准星：按住拖到目标窗口上松手，直接按窗口归属附加。
+    // 这条路径存在的理由是它不可能选错——用户知道的是"哪个窗口是我要的"，
+    // 而不是 PID；让他们指窗口，由工具去解析 PID。
+    m_processPickerButton = new ks::ui::WindowPickerButton(toolbarContainer);
+    m_processPickerButton->setIcon(QIcon(QStringLiteral(":/Icon/codeeditor_goto.svg")));
+    m_processPickerButton->setToolTip(
+        QStringLiteral("按住不放，把光标拖到目标程序的窗口上再松手，即按该窗口所属进程附加。拖动时目标窗口会高亮，按 Esc 取消。"));
+
+    // 拾取过程中的实时目标提示。只在拾取时可见：平时占着工具栏宽度没有意义，
+    // 而拾取时鼠标已经离开了工具栏，用户需要一个不用低头找的地方看当前目标。
+    m_processPickerHintLabel = new QLabel(toolbarContainer);
+    m_processPickerHintLabel->setVisible(false);
+    m_processPickerHintLabel->setStyleSheet(
+        QStringLiteral("color:%1; font-weight:600;").arg(KswordTheme::ControlAccentHex()));
 
     // 按项目规范：动作按钮优先用图标库里的图标，并且每个按钮都要有 tooltip。
     m_attachButton = new QPushButton(
@@ -327,6 +362,8 @@ void MemoryDock::initializeToolbar()
 
     m_toolbarLayout->addWidget(new QLabel("进程:", toolbarContainer));
     m_toolbarLayout->addWidget(m_processCombo, 1);
+    m_toolbarLayout->addWidget(m_processPickerButton);
+    m_toolbarLayout->addWidget(m_processPickerHintLabel);
     m_toolbarLayout->addWidget(m_attachButton);
     m_toolbarLayout->addWidget(m_detachButton);
     m_toolbarLayout->addWidget(toolbarSeparator);
@@ -478,14 +515,11 @@ QWidget* MemoryDock::createBackendSelector(
 
     comboOut = new QComboBox(container);
     // 条目顺序必须与 MemoryAccessBackend 枚举一致，界面按索引直接转换。
-    comboOut->addItem(QStringLiteral("标准驱动通道"));
+    comboOut->addItem(QStringLiteral("R3（ReadProcessMemory）"));
+    comboOut->addItem(QStringLiteral("R0（驱动通道）"));
     comboOut->addItem(QStringLiteral("DDMA（磁盘 DMA）"));
     comboOut->setToolTip(
-        QStringLiteral(
-            "标准驱动通道走 MmCopyMemory / MmMapIoSpaceEx，受 SLAT / EPT 约束。\n"
-            "DDMA 走磁盘控制器的总线主控 DMA，不受 SLAT 约束，能读到被上层虚拟化"
-            "重定向或隐藏的物理页；代价是必须借用磁盘扇区中转，而且明显更慢。\n"
-            "DDMA 需要先在“DDMA”子页配置通道。"));
+        QStringLiteral("R3 走 ReadProcessMemory / WriteProcessMemory，不经驱动，受句柄权限与进程保护约束，也读不了内核地址和物理地址。\nR0 走驱动的 MmCopyVirtualMemory / MmMapIoSpaceEx，绕开句柄权限，能读内核地址与物理地址，但仍受 SLAT / EPT 约束。\nDDMA 走磁盘控制器的总线主控 DMA，不受 SLAT 约束，能读到被上层虚拟化重定向或隐藏的物理页；代价是必须借用磁盘扇区中转，而且明显更慢，需要先在“DDMA”子页配置通道。\n同一个地址三条读到的结果不一样，本身就是判据。"));
 
     hintOut = new QLabel(container);
     hintOut->setWordWrap(true);
@@ -566,37 +600,46 @@ const ksword::memory_backend::DdmaSession& MemoryDock::currentDdmaSession() cons
     return ksword::memory_backend::currentDdmaSession();
 }
 
+namespace
+{
+    // backendFromComboIndex：
+    // - 下拉条目顺序与 MemoryAccessBackend 枚举一一对应，所以索引直接转换即可；
+    // - 三个下拉共用这一份映射，免得加一个后端就要在三处各改一遍。
+    //
+    // 原先三处都写成"不是 DDMA 就当标准通道"。枚举只有两个值时那样写看不出
+    // 问题，加进 R3 之后它会把 R3 静默折叠成 R0——用户选了 R3、实际走驱动，
+    // 而"同一个地址两条通道结果不同"正是这三个选项存在的理由，折叠掉就没了。
+    ksword::memory_backend::MemoryAccessBackend backendFromComboIndex(
+        const QComboBox* const combo)
+    {
+        if (combo == nullptr)
+        {
+            return ksword::memory_backend::MemoryAccessBackend::UserMode;
+        }
+        const int selectedIndex = combo->currentIndex();
+        if (selectedIndex < 0
+            || selectedIndex >
+                static_cast<int>(ksword::memory_backend::MemoryAccessBackend::Ddma))
+        {
+            return ksword::memory_backend::MemoryAccessBackend::UserMode;
+        }
+        return static_cast<ksword::memory_backend::MemoryAccessBackend>(selectedIndex);
+    }
+}
+
 ksword::memory_backend::MemoryAccessBackend MemoryDock::currentSearchBackend() const
 {
-    if (m_searchBackendCombo == nullptr
-        || m_searchBackendCombo->currentIndex() !=
-            static_cast<int>(ksword::memory_backend::MemoryAccessBackend::Ddma))
-    {
-        return ksword::memory_backend::MemoryAccessBackend::StandardDriver;
-    }
-    return ksword::memory_backend::MemoryAccessBackend::Ddma;
+    return backendFromComboIndex(m_searchBackendCombo);
 }
 
 ksword::memory_backend::MemoryAccessBackend MemoryDock::currentViewerBackend() const
 {
-    if (m_viewerBackendCombo == nullptr
-        || m_viewerBackendCombo->currentIndex() !=
-            static_cast<int>(ksword::memory_backend::MemoryAccessBackend::Ddma))
-    {
-        return ksword::memory_backend::MemoryAccessBackend::StandardDriver;
-    }
-    return ksword::memory_backend::MemoryAccessBackend::Ddma;
+    return backendFromComboIndex(m_viewerBackendCombo);
 }
 
 ksword::memory_backend::MemoryAccessBackend MemoryDock::currentDriverMemoryBackend() const
 {
-    if (m_driverMemoryBackendCombo == nullptr
-        || m_driverMemoryBackendCombo->currentIndex() !=
-            static_cast<int>(ksword::memory_backend::MemoryAccessBackend::Ddma))
-    {
-        return ksword::memory_backend::MemoryAccessBackend::StandardDriver;
-    }
-    return ksword::memory_backend::MemoryAccessBackend::Ddma;
+    return backendFromComboIndex(m_driverMemoryBackendCombo);
 }
 
 void MemoryDock::initializeProcessModuleTab()
@@ -620,7 +663,24 @@ void MemoryDock::initializeProcessModuleTab()
     QVBoxLayout* processLayout = new QVBoxLayout(processPanel);
     processLayout->setContentsMargins(0, 0, 0, 0);
     processLayout->setSpacing(4);
-    processLayout->addWidget(new QLabel("进程列表（双击自动附加）", processPanel));
+    QHBoxLayout* processTopBarLayout = new QHBoxLayout();
+    processTopBarLayout->setContentsMargins(0, 0, 0, 0);
+    processTopBarLayout->setSpacing(8);
+    processTopBarLayout->addWidget(new QLabel("进程列表（双击自动附加）", processPanel));
+
+    // 过滤框对齐下面的模块表：模块表一直有，进程表反而没有，而进程数远多于模块数。
+    m_processFilterEdit = new QLineEdit(processPanel);
+    m_processFilterEdit->setPlaceholderText("按进程名或 PID 过滤");
+    m_processFilterEdit->setClearButtonEnabled(true);
+    m_processFilterEdit->setStyleSheet(buildBlueInputStyle());
+    processTopBarLayout->addWidget(m_processFilterEdit, 1);
+
+    m_processCountLabel = new QLabel(processPanel);
+    m_processCountLabel->setStyleSheet(
+        QStringLiteral("color:%1;").arg(KswordTheme::TextSecondaryHex()));
+    processTopBarLayout->addWidget(m_processCountLabel);
+
+    processLayout->addLayout(processTopBarLayout);
 
     m_processTable = new ks::ui::VisibleTableWidget(processPanel);
     m_processTable->setColumnCount(5);
@@ -635,11 +695,17 @@ void MemoryDock::initializeProcessModuleTab()
     m_processTable->verticalHeader()->setDefaultSectionSize(20);
     // 进程图标统一缩放到 16x16，确保行高可以保持更紧凑。
     m_processTable->setIconSize(QSize(16, 16));
-    m_processTable->setColumnHidden(2, true);
+    // 会话 ID 与工作集放出来。工作集是同名进程之间唯一一眼可辨的差别——主进程
+    // 和辅助进程的内存量通常差一两个数量级，今天正是靠它才分出 QQ 的十个同名
+    // 进程里哪个是目标。CPU 那一列继续隐藏：它从来没被填过，恒为 0.00%，
+    // 放出来只是多一列废数据，比隐藏更糟。
+    m_processTable->setColumnHidden(2, false);
     m_processTable->setColumnHidden(3, true);
-    m_processTable->setColumnHidden(4, true);
+    m_processTable->setColumnHidden(4, false);
     m_processTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_processTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_processTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_processTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     m_processTable->setShowGrid(true);
     processLayout->addWidget(m_processTable, 1);
 

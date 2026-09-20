@@ -32,9 +32,18 @@ namespace ksword::memory_backend
     // - 枚举值顺序必须与各页面"访问后端"下拉框的条目顺序一致，界面按索引转换。
     enum class MemoryAccessBackend : int
     {
-        StandardDriver = 0, // 驱动标准通道：MmCopyMemory / MmMapIoSpaceEx。
-        Ddma                // 磁盘直接内存访问：ATA_PASS_THROUGH_DIRECT + DMA。
+        UserMode = 0,       // R3：ReadProcessMemory / WriteProcessMemory，不经驱动。
+        StandardDriver,     // R0：驱动通道 MmCopyVirtualMemory / MmMapIoSpaceEx。
+        Ddma                // 磁盘直接内存访问：ATA / SCSI PASS_THROUGH_DIRECT + DMA。
     };
+
+    // 为什么 R3 与 R0 必须是两个并列的选项，而不是"标准通道"一个条目：
+    // - 两者的失败面完全不同。R3 受句柄权限、进程保护、VAD 可读性约束；R0 走
+    //   MmCopyVirtualMemory，绕开前两项但仍受页表约束。同一个地址一条读得到
+    //   另一条读不到，本身就是判据——合成一个条目就把这个判据抹掉了。
+    // - 原先查看器那条"标准驱动通道"名义上是 R0，实现却是 ReadProcessMemory，
+    //   而同一个枚举值在另外三个页面确实走驱动。名字与行为不一致时，用户读到
+    //   的失败原因就指不到真因。
 
     // DdmaSession：
     // - DDMA 的一次配置，由"DDMA"子页产出，四个页面共用同一份；

@@ -81,8 +81,9 @@ void MemoryDock::reloadMemoryViewerPage()
         return;
     }
 
-    // 每页固定读取 512 字节，兼顾可读性与刷新性能。
-    QByteArray pageBytes(static_cast<int>(kHexPageBytes), '\0');
+    // 每页固定读取 512 字节，兼顾可读性与刷新性能。缓冲区由门面分配：三条通道
+    // 的字节数各自由各自的实现决定，这里再准备一个固定长度的缓冲只会多出一个
+    // "看起来读满了"的假象。
     SIZE_T bytesRead = 0;
 
     // DDMA 后端不经过 ReadProcessMemory：逐页翻译成物理地址后走磁盘 DMA，
@@ -137,22 +138,22 @@ void MemoryDock::reloadMemoryViewerPage()
         return;
     }
 
-    const BOOL readOk = ::ReadProcessMemory(
-        m_attachedProcessHandle,
-        reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(m_currentViewerAddress)),
-        pageBytes.data(),
-        static_cast<SIZE_T>(kHexPageBytes),
-        &bytesRead);
-    // 错误码必须紧挨着调用取一次并存起来。原先在失败分支里调了两次
-    // ::GetLastError()，中间还夹着 formatAddress 与 QString 拼接——那些都可能
-    // 改写线程的 last error，于是日志里那个数字未必是 ReadProcessMemory 的。
-    const DWORD readError = (readOk == FALSE) ? ::GetLastError() : ERROR_SUCCESS;
+    // R3 与 R0 都走同一个门面，只是枚举值不同。**不做自动回退**：这三条通道
+    // 摆在下拉框里的意义就是"同一个地址各自能读到什么"，一条失败时偷偷换另一条
+    // 去读，屏幕上的字节就不再对应用户选的通道，差异也就再也看不出来了。
+    const ksword::memory_backend::MemoryAccessBackend selectedBackend =
+        currentViewerBackend();
+    const ksword::memory_backend::AccessOutcome readOutcome =
+        ksword::memory_backend::readVirtual(
+            selectedBackend,
+            currentDdmaSession(),
+            m_attachedPid,
+            m_currentViewerAddress,
+            kHexPageBytes);
+    const QString channelText =
+        ksword::memory_backend::backendDisplayName(selectedBackend);
 
-    // bytesRead == 0 才是真的什么都没读到。ERROR_PARTIAL_COPY(299) 表示 Windows
-    // 已经把边界之前的字节拷好了，只是这一页跨过了未映射区——把这些字节丢掉
-    // 显示一片空白，用户只会看到"读取失败"而不知道其实前半页是好的。
-    // DDMA 通道对翻译不出的页是补零并标记 partial，两个后端的行为要一致。
-    if (bytesRead == 0)
+    if (!readOutcome.ok)
     {
         m_currentViewerPageBytes.clear();
         if (m_hexEditorWidget != nullptr)
@@ -160,34 +161,92 @@ void MemoryDock::reloadMemoryViewerPage()
             m_hexEditorWidget->setEditable(false);
             m_hexEditorWidget->clearData();
         }
+
+        // 失败时必须把**这个地址在目标进程里到底是什么状态**查出来。原先
+        // VirtualQueryEx 只在成功路径上跑，于是报错只有一个 win32 错误码，
+        // 而 299 同时兼容好几种完全不同的成因：附加的根本不是那个进程、
+        // 那段内存已经被释放、或者是栈的 PAGE_GUARD 页。这几种靠错误码一种都
+        // 分不出来，只能靠猜——而猜出来的机制不是判据。区域状态一摆出来就分完了。
+        MEMORY_BASIC_INFORMATION failMbi{};
+        const SIZE_T failQuerySize = ::VirtualQueryEx(
+            m_attachedProcessHandle,
+            reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(m_currentViewerAddress)),
+            &failMbi,
+            sizeof(failMbi));
+        QString regionText;
+        if (failQuerySize == sizeof(failMbi))
+        {
+            regionText = QString("区域 %1 大小 %2 状态 %3 保护 %4")
+                .arg(formatAddress(reinterpret_cast<std::uint64_t>(failMbi.BaseAddress)))
+                .arg(static_cast<qulonglong>(failMbi.RegionSize))
+                .arg(stateToText(static_cast<std::uint32_t>(failMbi.State)))
+                .arg(protectToText(static_cast<std::uint32_t>(failMbi.Protect)));
+
+            // MEM_FREE 的含义是"这里根本没有内存"，不是"读不到"。三条通道谁都
+            // 变不出不存在的东西，所以此时继续在读取通道上排查一定是白费。
+            // 最常见的成因是附加到了同名的另一个进程：像 QQ 这种一开十个同名
+            // 进程的程序，从别处抄来的地址属于其中某一个，附加到另一个上就正好
+            // 是这个现象。同名进程数是现成的，直接点出来，别让人去猜。
+            if (failMbi.State == MEM_FREE)
+            {
+                int sameNameCount = 0;
+                for (const ProcessEntry& entry : m_processCache)
+                {
+                    if (entry.processName.compare(m_attachedProcessName, Qt::CaseInsensitive) == 0)
+                    {
+                        ++sameNameCount;
+                    }
+                }
+                regionText += QStringLiteral("。该地址在这个进程里根本没有内存（MEM_FREE），不是读不到——换任何通道都一样");
+                if (sameNameCount > 1)
+                {
+                    regionText += QString("。本机有 %1 个都叫 %2 的进程，地址很可能属于其中另一个，请核对 PID")
+                        .arg(sameNameCount)
+                        .arg(m_attachedProcessName);
+                }
+            }
+        }
+        else
+        {
+            regionText = QStringLiteral("区域查询也失败，该地址在本进程中不存在");
+        }
+
         // 低 64 KB 是每个进程的空指针保护区，系统从不在那里映射任何东西，
         // 所以这一段永远读不到，跟目标进程、权限、后端通道都无关。把它单独
-        // 判出来，是因为它的真实成因几乎总在读取之外：地址本身就不对。最常见
-        // 的两种来源——把十六进制地址少写了几位，以及把某处的偏移当成了地址。
-        // 只报"错误码 299"会把排查方向整个带到内存读取上去。
+        // 判出来，是因为它的真实成因几乎总在读取之外：地址本身就不对。
         constexpr std::uint64_t kNullGuardEnd = 0x10000ULL;
-        const QString reasonText = (m_currentViewerAddress < kNullGuardEnd)
-            ? QStringLiteral("该地址落在进程的空指针保护区（低 64 KB）内，任何进程都不会在这里映射内存，请检查地址是否写少了位数")
-            : ((readError == ERROR_PARTIAL_COPY)
-                ? QStringLiteral("该地址所在区域未映射")
-                : QStringLiteral("读取被拒绝"));
+        const QString guardText = (m_currentViewerAddress < kNullGuardEnd)
+            ? QStringLiteral("该地址落在进程的空指针保护区（低 64 KB）内，任何进程都不会在这里映射内存，请检查地址是否写少了位数。")
+            : QString();
         m_viewerStatusLabel->setText(
-            QString("读取失败：地址=%1，错误码=%2（%3）")
+            QString("%1 读取失败：地址=%2（PID %3）。%4%5。%6")
+            .arg(channelText)
             .arg(formatAddress(m_currentViewerAddress))
-            .arg(readError)
-            .arg(reasonText));
+            .arg(m_attachedPid)
+            .arg(guardText)
+            .arg(readOutcome.failureText)
+            .arg(regionText));
         kLogEvent reloadViewerReadFailEvent;
         err << reloadViewerReadFailEvent
-            << "[MemoryDock] reloadMemoryViewerPage: ReadProcessMemory 失败, address="
+            << "[MemoryDock] reloadMemoryViewerPage: 读取失败, backend="
+            << channelText.toStdString()
+            << ", address="
             << formatAddress(m_currentViewerAddress).toStdString()
-            << ", error="
-            << readError
+            << ", pid="
+            << m_attachedPid
+            << ", reason="
+            << readOutcome.failureText.toStdString()
+            << ", region="
+            << regionText.toStdString()
             << eol;
         return;
     }
 
-    // 保存当前页字节并投影到统一十六进制组件。
-    m_currentViewerPageBytes = pageBytes.left(static_cast<int>(bytesRead));
+    m_currentViewerPageBytes = readOutcome.data;
+    bytesRead = static_cast<SIZE_T>(m_currentViewerPageBytes.size());
+    const bool partialRead = readOutcome.partial || (bytesRead < kHexPageBytes);
+
+    // 投影到统一十六进制组件。
     if (m_hexEditorWidget != nullptr)
     {
         m_hexEditorWidget->setEditable(m_canReadWriteMemory);
@@ -249,19 +308,23 @@ void MemoryDock::reloadMemoryViewerPage()
 
     // 只读到一部分时必须说出来。少了这句，用户看到的是一屏正常的十六进制，
     // 却不知道这一页在某个字节之后就是未映射区，剩下的内容压根不存在。
-    if (readError == ERROR_PARTIAL_COPY || bytesRead < kHexPageBytes)
+    // 通道名也要写出来：同一个地址在驱动通道和 RPM 下读到的东西可能不一样，
+    // 不写就分不清屏幕上这一页到底是谁给的。
+    if (partialRead)
     {
         m_viewerStatusLabel->setText(
-            QString("地址 %1 只读到 %2 / %3 字节：该页在此之后未映射，后续内容不存在。")
+            QString("地址 %1 经%2只读到 %3 / %4 字节：其余部分不可读，内容不存在。")
             .arg(formatAddress(m_currentViewerAddress))
+            .arg(channelText)
             .arg(bytesRead)
             .arg(kHexPageBytes));
     }
     else
     {
         m_viewerStatusLabel->setText(
-            QString("地址 %1 读取 %2 字节。")
+            QString("地址 %1 经%2读取 %3 字节。")
             .arg(formatAddress(m_currentViewerAddress))
+            .arg(channelText)
             .arg(bytesRead));
     }
 

@@ -1806,12 +1806,37 @@ void DdmaPage::compareBackendsFromUi()
     }
     if (diffCount == 0)
     {
-        m_compareResultLabel->setText(QStringLiteral(
-            "物理页 %1：两个后端读到的 %2 字节完全一致，没有观察到重定向迹象。")
-            .arg(formatAddress(pageBase))
-            .arg(compareLength));
-        m_compareResultLabel->setStyleSheet(
-            QStringLiteral("color:%1;").arg(KswordTheme::SuccessHex()));
+        // "一致"在一张退化页上什么都不证明：整页只有同一个字节时，一条彻底
+        // 坏掉的 DDMA（比如什么都没搬、缓冲区留着全零）同样会与标准通道逐字节
+        // 相等，于是这里报绿。而这条判据本身正是用来判断 DDMA 通路成不成立
+        // 的——拿它当证据之前，必须先排除"两边都没读到有意义的内容"。
+        bool uniformPage = true;
+        for (qsizetype index = 1; index < compareLength; ++index)
+        {
+            if (standardOutcome.data[index] != standardOutcome.data[0])
+            {
+                uniformPage = false;
+                break;
+            }
+        }
+        if (compareLength > 0 && uniformPage)
+        {
+            m_compareResultLabel->setText(QStringLiteral("物理页 %1：整页 %2 字节都是同一个值 0x%3，两个后端一致不构成 DDMA 通路成立的证据——什么都没搬过来的实现也会得到同样的结果。请换一张内容有区分度的页再比对，例如某个已加载模块 PE 头所在的物理页。")
+                .arg(formatAddress(pageBase))
+                .arg(compareLength)
+                .arg(static_cast<std::uint8_t>(standardOutcome.data[0]), 2, 16, QChar('0')));
+            m_compareResultLabel->setStyleSheet(
+                QStringLiteral("color:%1;").arg(KswordTheme::WarningHex()));
+        }
+        else
+        {
+            m_compareResultLabel->setText(QStringLiteral(
+                "物理页 %1：两个后端读到的 %2 字节完全一致，没有观察到重定向迹象。")
+                .arg(formatAddress(pageBase))
+                .arg(compareLength));
+            m_compareResultLabel->setStyleSheet(
+                QStringLiteral("color:%1;").arg(KswordTheme::SuccessHex()));
+        }
     }
     else
     {

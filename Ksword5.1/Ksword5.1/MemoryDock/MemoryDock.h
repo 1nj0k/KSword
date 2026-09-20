@@ -11,6 +11,7 @@
 #include "../Framework.h"
 #include "../ArkDriverClient/ArkDriverTypes.h"
 #include "../UI/KernelDisassemblyDialog.h" // ks::ui::DisassemblyRow：驱动读写页反汇编视图的行缓存需要完整类型。
+#include "../UI/WindowPickerButton.h" // ks::ui::WindowPickerButton：十字准星拾取按钮，按值出现在成员指针里。
 #include "MemoryAccessBackend.h" // 访问后端枚举与 DDMA 会话：按值出现在成员与返回类型里。
 
 #include <QVector>     // QVector：保存反汇编解码结果行。
@@ -478,6 +479,12 @@ private:
     // - 说明：该函数只做“缓存 -> UI”投影，不做 Win32 枚举。
     // - 返回：无。
     void rebuildModuleTableFromCache();
+
+    // applyProcessTableFilter：
+    // - 作用：按 m_processFilterEdit 的关键字隐藏/显示进程表的行，并更新计数标签；
+    // - 说明：只隐藏行、不重建表格。重建会丢掉当前选中行，也会和后台刷新的
+    //   增量回填（图标是异步补进来的）打架。
+    void applyProcessTableFilter();
 
     // attachToProcess：
     // - 作用：附加目标进程并缓存句柄。
@@ -1029,7 +1036,9 @@ private:
     // 工具栏控件。
     QLabel* m_dockTitleLabel = nullptr;       // 页面标题标签（顶部三段头第一段）。
     QLabel* m_dockHeaderStatusLabel = nullptr; // 顶部附加状态摘要（顶部三段头第二段）。
-    QComboBox* m_processCombo = nullptr;      // 进程选择下拉框。
+    QComboBox* m_processCombo = nullptr;      // 进程选择下拉框（可输入过滤）。
+    ks::ui::WindowPickerButton* m_processPickerButton = nullptr; // 十字准星窗口拾取。
+    QLabel* m_processPickerHintLabel = nullptr; // 拾取过程中的实时目标提示，仅拾取时可见。
     bool m_processComboPopupLifecycleActive = false; // 包含 Qt 弹层动画在内的完整展开生命周期。
     // 弹层展开期间缓存的最新进程列表提交；收起后回投，避免重建正在展开的下拉框。
     std::function<void()> m_processComboDeferredCommit;
@@ -1051,6 +1060,8 @@ private:
 
     QWidget* m_tabProcessModule = nullptr;    // Tab1 页面容器。
     QTableWidget* m_processTable = nullptr;   // 进程列表表格。
+    QLineEdit* m_processFilterEdit = nullptr; // 进程名/PID 过滤输入框。
+    QLabel* m_processCountLabel = nullptr;    // 进程表"显示 N / 共 M"计数。
     QLineEdit* m_moduleFilterEdit = nullptr;  // 模块名称过滤输入框。
     QPushButton* m_moduleRefreshButton = nullptr; // 模块刷新按钮。
     QCheckBox* m_moduleSignatureCheck = nullptr;  // 模块刷新时是否校验签名。

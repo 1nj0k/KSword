@@ -793,6 +793,11 @@ void MemoryDock::refreshProcessList(const bool keepSelection)
                     }
                     processTable->setSortingEnabled(true);
 
+                    // 刷新出来的新行默认全是可见的，必须立刻按当前关键字重新过滤
+                    // 一遍。少了这一步，过滤框里留着关键字、列表却在下一次刷新后
+                    // 悄悄变回全量——而用户并不会察觉自己看的已经不是过滤结果。
+                    commitDock->applyProcessTableFilter();
+
                     // 未命中缓存的映像路径统一提交后台提取，回调只改对应单元格图标，不重建整表。
                     QSet<QString> queuedIconPaths;
                     for (const ProcessSnapshotRow& snapshotRow : *snapshotRows)
@@ -889,6 +894,45 @@ void MemoryDock::refreshProcessList(const bool keepSelection)
     QThreadPool::globalInstance()->start(refreshProcessTask);
 }
 
+void MemoryDock::applyProcessTableFilter()
+{
+    if (m_processTable == nullptr)
+    {
+        return;
+    }
+    const QString keyword = (m_processFilterEdit != nullptr)
+        ? m_processFilterEdit->text().trimmed()
+        : QString();
+
+    int shownRows = 0;
+    const int totalRows = m_processTable->rowCount();
+    for (int row = 0; row < totalRows; ++row)
+    {
+        bool matched = keyword.isEmpty();
+        if (!matched)
+        {
+            // 进程名与 PID 任一命中即算命中：用户手里可能只有其中一个。
+            const QTableWidgetItem* const nameItem = m_processTable->item(row, 0);
+            const QTableWidgetItem* const pidItem = m_processTable->item(row, 1);
+            matched =
+                (nameItem != nullptr && nameItem->text().contains(keyword, Qt::CaseInsensitive))
+                || (pidItem != nullptr && pidItem->text().contains(keyword, Qt::CaseInsensitive));
+        }
+        m_processTable->setRowHidden(row, !matched);
+        if (matched)
+        {
+            ++shownRows;
+        }
+    }
+
+    if (m_processCountLabel != nullptr)
+    {
+        m_processCountLabel->setText(keyword.isEmpty()
+            ? QString("共 %1 个进程").arg(totalRows)
+            : QString("显示 %1 / 共 %2").arg(shownRows).arg(totalRows));
+    }
+}
+
 void MemoryDock::updateProcessComboFromCache()
 {
     // 下拉框重建入口日志：记录缓存规模。
@@ -902,9 +946,25 @@ void MemoryDock::updateProcessComboFromCache()
     QSignalBlocker blocker(m_processCombo);
     m_processCombo->clear();
 
+    // 同名进程有几个：像 QQ 这种一开就是十个同名进程的程序，光看名字选不出
+    // 目标，选错之后的表现是"地址读不到"，而读取代码其实完全正常——排查会被
+    // 整个带偏到内存读取上去。所以同名时把工作集也显示出来：主进程和辅助进程
+    // 的内存量差一两个数量级，一眼就能分开。
+    QHash<QString, int> nameCount;
     for (const ProcessEntry& entry : m_processCache)
     {
-        const QString text = QString("%1 [PID:%2]").arg(entry.processName).arg(entry.pid);
+        nameCount[entry.processName] += 1;
+    }
+
+    for (const ProcessEntry& entry : m_processCache)
+    {
+        QString text = QString("%1 [PID:%2]").arg(entry.processName).arg(entry.pid);
+        if (nameCount.value(entry.processName) > 1)
+        {
+            text += QString(" · %1 MB · 同名 %2 个")
+                .arg(entry.workingSetMB, 0, 'f', 0)
+                .arg(nameCount.value(entry.processName));
+        }
         m_processCombo->addItem(text, QVariant::fromValue(static_cast<uint>(entry.pid)));
         const int row = m_processCombo->count() - 1;
         m_processCombo->setItemData(row, entry.processName, Qt::UserRole + 1);

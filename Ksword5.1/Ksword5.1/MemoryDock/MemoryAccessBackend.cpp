@@ -293,7 +293,122 @@ namespace ksword::memory_backend
         {
             return QStringLiteral("DDMA（磁盘 DMA）");
         }
-        return QStringLiteral("标准驱动通道");
+        if (backend == MemoryAccessBackend::UserMode)
+        {
+            return QStringLiteral("R3（ReadProcessMemory）");
+        }
+        return QStringLiteral("R0（驱动通道）");
+    }
+
+    namespace
+    {
+        // userModeReadVirtual：R3 通道。自己开句柄而不是借用调用方的，理由是
+        // 这样四个页面对同一个 PID 得到的权限完全一致——借句柄的话，能不能读
+        // 取决于调用方当初 OpenProcess 要了什么，同一条通道在不同页面上会有
+        // 不同的失败面，而失败面正是用来区分三条通道的判据。
+        AccessOutcome userModeReadVirtual(
+            const std::uint32_t processId,
+            const std::uint64_t virtualAddress,
+            const std::uint64_t lengthBytes)
+        {
+            AccessOutcome outcome;
+            if (virtualAddress >= kKernelSpaceStart)
+            {
+                outcome.failureText = QStringLiteral("R3 通道读不了内核地址：ReadProcessMemory 只能访问目标进程的用户态地址空间，请改用 R0 驱动通道。");
+                return outcome;
+            }
+            const HANDLE processHandle = ::OpenProcess(
+                PROCESS_VM_READ | PROCESS_QUERY_INFORMATION,
+                FALSE,
+                static_cast<DWORD>(processId));
+            if (processHandle == nullptr)
+            {
+                outcome.failureText = QStringLiteral("R3 通道打开进程失败，win32=%1。")
+                    .arg(::GetLastError());
+                return outcome;
+            }
+
+            QByteArray buffer(static_cast<qsizetype>(lengthBytes), '\0');
+            SIZE_T bytesRead = 0;
+            const BOOL readOk = ::ReadProcessMemory(
+                processHandle,
+                reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(virtualAddress)),
+                buffer.data(),
+                static_cast<SIZE_T>(lengthBytes),
+                &bytesRead);
+            // 错误码必须紧挨着调用取一次：后面的 CloseHandle 与 QString 拼接
+            // 都可能改写线程的 last error。
+            const DWORD readError = (readOk == FALSE) ? ::GetLastError() : ERROR_SUCCESS;
+            ::CloseHandle(processHandle);
+
+            if (bytesRead == 0)
+            {
+                outcome.failureText = QStringLiteral("R3 通道读取失败，win32=%1。")
+                    .arg(readError);
+                return outcome;
+            }
+            outcome.ok = true;
+            outcome.bytesDone = static_cast<std::uint64_t>(bytesRead);
+            outcome.partial = (bytesRead < lengthBytes);
+            outcome.data = buffer.left(static_cast<qsizetype>(bytesRead));
+            return outcome;
+        }
+
+        // userModeWriteVirtual：R3 写。
+        AccessOutcome userModeWriteVirtual(
+            const std::uint32_t processId,
+            const std::uint64_t virtualAddress,
+            const QByteArray& payload)
+        {
+            AccessOutcome outcome;
+            if (virtualAddress >= kKernelSpaceStart)
+            {
+                outcome.failureText = QStringLiteral(
+                    "R3 通道写不了内核地址，请改用 R0 驱动通道。");
+                return outcome;
+            }
+            const HANDLE processHandle = ::OpenProcess(
+                PROCESS_VM_WRITE | PROCESS_VM_OPERATION | PROCESS_QUERY_INFORMATION,
+                FALSE,
+                static_cast<DWORD>(processId));
+            if (processHandle == nullptr)
+            {
+                outcome.failureText = QStringLiteral("R3 通道打开进程失败，win32=%1。")
+                    .arg(::GetLastError());
+                return outcome;
+            }
+            SIZE_T bytesWritten = 0;
+            const BOOL writeOk = ::WriteProcessMemory(
+                processHandle,
+                reinterpret_cast<LPVOID>(static_cast<std::uintptr_t>(virtualAddress)),
+                payload.constData(),
+                static_cast<SIZE_T>(payload.size()),
+                &bytesWritten);
+            const DWORD writeError = (writeOk == FALSE) ? ::GetLastError() : ERROR_SUCCESS;
+            ::CloseHandle(processHandle);
+
+            if (bytesWritten == 0)
+            {
+                outcome.failureText = QStringLiteral("R3 通道写入失败，win32=%1。")
+                    .arg(writeError);
+                return outcome;
+            }
+            outcome.ok = true;
+            outcome.bytesDone = static_cast<std::uint64_t>(bytesWritten);
+            outcome.partial = (static_cast<qsizetype>(bytesWritten) < payload.size());
+            return outcome;
+        }
+
+        // userModeRejectPhysical：R3 没有任何访问物理地址的手段。这里干净地
+        // 拒绝，而不是悄悄退回别的通道——退回去的话用户以为自己在用 R3，
+        // 读到的却是 R0 的结果，两条通道的差异就再也看不出来了。
+        AccessOutcome userModeRejectPhysical()
+        {
+            AccessOutcome outcome;
+            outcome.failureText = QStringLiteral(
+                "R3 通道没有访问物理地址的手段，物理内存读写请选 R0 驱动通道或 DDMA。");
+            return outcome;
+        }
     }
 
     bool isKernelVirtualAddress(const std::uint64_t virtualAddress)
@@ -360,6 +475,11 @@ namespace ksword::memory_backend
         {
             outcome.failureText = QStringLiteral("读取长度为 0。");
             return outcome;
+        }
+
+        if (backend == MemoryAccessBackend::UserMode)
+        {
+            return userModeRejectPhysical();
         }
 
         const ksword::ark::DriverClient client;
@@ -452,6 +572,11 @@ namespace ksword::memory_backend
         {
             outcome.failureText = QStringLiteral("写入长度为 0。");
             return outcome;
+        }
+
+        if (backend == MemoryAccessBackend::UserMode)
+        {
+            return userModeRejectPhysical();
         }
 
         const ksword::ark::DriverClient client;
@@ -562,6 +687,11 @@ namespace ksword::memory_backend
             return outcome;
         }
 
+        if (backend == MemoryAccessBackend::UserMode)
+        {
+            return userModeReadVirtual(processId, virtualAddress, lengthBytes);
+        }
+
         const ksword::ark::DriverClient client;
 
         if (backend == MemoryAccessBackend::StandardDriver)
@@ -593,6 +723,21 @@ namespace ksword::memory_backend
             {
                 outcome.failureText = QStringLiteral(
                     "虚拟内存读取未返回数据，readStatus=%1。").arg(result.readStatus);
+                return outcome;
+            }
+            // 状态必须按白名单认，与上面物理读那条保持同一种写法。原先这里只看
+            // "data 非空"，于是 ZERO_FILLED 会被当成干净成功——而它的字面含义是
+            // **整段都不可读、返回的全是补上去的零**。调用方拿到一片零字节，界面
+            // 上与真读到一页零毫无区别。这与"两个后端都读到全零就报一致"属于同
+            // 一类假读数：读取失败被装扮成了数据。
+            if (result.readStatus != KSWORD_ARK_MEMORY_READ_STATUS_OK &&
+                result.readStatus != KSWORD_ARK_MEMORY_READ_STATUS_PARTIAL_COPY)
+            {
+                outcome.failureText =
+                    (result.readStatus == KSWORD_ARK_MEMORY_READ_STATUS_ZERO_FILLED)
+                    ? QStringLiteral("该范围整段都不可读，驱动返回的全部是补零数据。")
+                    : QStringLiteral("虚拟内存读取未返回可用数据，readStatus=%1。")
+                        .arg(result.readStatus);
                 return outcome;
             }
             outcome.ok = true;
@@ -677,6 +822,11 @@ namespace ksword::memory_backend
         {
             outcome.failureText = QStringLiteral("写入长度为 0。");
             return outcome;
+        }
+
+        if (backend == MemoryAccessBackend::UserMode)
+        {
+            return userModeWriteVirtual(processId, virtualAddress, bytes);
         }
 
         const ksword::ark::DriverClient client;
