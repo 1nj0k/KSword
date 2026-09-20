@@ -3636,13 +3636,19 @@ namespace
     // 用户以为自己点的是 A，跑的是 B，失败原因还落在 A 头上。
     struct TerminateMethodEntry
     {
-        // groupName：菜单里的分节标题，中文原文。翻译走的是整串词条
-        // （languages/*.json 的 source_translations）加运行期扫描，与本文件其它
-        // 菜单文案同一条路，所以这里不需要再配一个上下文键。
+        // groupName："请谁去结束"的分类，**不画分节线**，挂在每一项的悬停说明里。
         //
-        // 分组按**它请谁去结束**来分，不按名字长相分：同一组里的方法失败原因
-        // 往往相同（比如作业对象那两条，目标不在任何 Job 里时两条一起失败），
-        // 知道这一点就不必把同组的另一条再试一遍。
+        // 菜单里的分节线只按权限等级画两条（R3 / R0），不按分类画——八条分节线
+        // 把十四个选项切得比不分组还难扫。分类本身要留着：同一类方法的失败原因
+        // 往往相同（作业对象那两条，目标不在任何 Job 里时一起失败），看见分类就
+        // 知道这条失败时同类的另一条不必再试。
+        //
+        // 这张表十四条全在用户态，所以 R3 那条分节线在循环外画一次即可，不给每
+        // 行存一个恒等的权限字段。以后真要往表里加内核态方法，那时再把权限拆成
+        // 字段——现在加等于十四行存同一个值。
+        //
+        // 中文原文，翻译走整串词条（languages/*.json 的 source_translations）
+        // 加运行期扫描，与本文件其它菜单文案同一条路。
         const char* groupName = nullptr;
         const char* methodName = nullptr;
         std::function<bool(std::uint32_t, std::string*)> invokeMethod;
@@ -11198,28 +11204,33 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
     advancedTerminateSubMenu->setToolTipsVisible(true);
     std::vector<QAction*> advancedTerminateActions;
     advancedTerminateActions.reserve(terminateMethodTable().size());
-    QString lastGroupTitle;
+    // 两条分节线按权限等级画：这一条管下面整张表（十四条全在用户态），R0 那条
+    // 在表跑完之后。分类不画线，见 TerminateMethodEntry::groupName 的说明。
+    advancedTerminateSubMenu->addSection(
+        ks::i18n::sourceText(QStringLiteral("R3（用户态）")));
     for (std::size_t methodIndex = 0; methodIndex < terminateMethodTable().size(); ++methodIndex)
     {
         const TerminateMethodEntry& entry = terminateMethodTable()[methodIndex];
-        // 换组时插一条分节标题。比的是**内容**不是指针：字面量会不会被合并成
-        // 同一个地址由编译器决定（MSVC 的 /GF 在 Release 开、Debug 关），按指针
-        // 比会在不合并的构建里让每一条都自成一组——14 条方法配 14 条分节线。
-        const QString groupTitle =
-            (entry.groupName != nullptr) ? QString::fromUtf8(entry.groupName) : QString();
-        if (!groupTitle.isEmpty() && groupTitle != lastGroupTitle)
-        {
-            advancedTerminateSubMenu->addSection(groupTitle);
-            lastGroupTitle = groupTitle;
-        }
         QAction* const methodAction = advancedTerminateSubMenu->addAction(
             QString::fromUtf8(entry.methodName));
-        methodAction->setToolTip(processContextText(
+        // 分类放悬停说明的第一行。它不画横线，但必须留着：同一类方法的失败原因
+        // 往往相同，看见"作业对象（连坐）"就知道这条失败时同类的另一条不必再试。
+        const QString methodTooltipBody = processContextText(
             "process.menu.advanced_terminate.item_tooltip",
-            QStringLiteral("只执行这一种方法一次，不跑其余方法、也不退到 R0。结果与细节写进日志面板。")));
+            QStringLiteral("只执行这一种方法一次，不跑其余方法、也不退到 R0。结果与细节写进日志面板。"));
+        methodAction->setToolTip(
+            (entry.groupName != nullptr)
+                ? QStringLiteral("%1\n%2")
+                      .arg(QString::fromUtf8(entry.groupName), methodTooltipBody)
+                : methodTooltipBody);
         advancedTerminateActions.push_back(methodAction);
     }
-    advancedTerminateSubMenu->addSeparator();
+    // R0 那一节。这几条不走上面的循环，是因为它们不在 terminateMethodTable()
+    // 里：表里每条的签名是 (pid, detail*)，而 R0 这条要带上创建时间做 PID 复用
+    // 校验，塞进表就得把那个参数丢掉——校验没了不会报错，只会在 PID 被复用时
+    // 结束错进程。分节标题写法与表里一致，换语言时两节走同一条翻译路径。
+    advancedTerminateSubMenu->addSection(
+        ks::i18n::sourceText(QStringLiteral("R0（内核驱动）")));
     QAction* advancedR0OnlyAction = advancedTerminateSubMenu->addAction(
         buildR0ActionIcon(":/Icon/process_terminate.svg"),
         processContextText("process.menu.advanced_terminate_r0",

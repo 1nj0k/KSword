@@ -34010,6 +34010,7 @@
     "[ProcessDock] executeR0ResumeProcessAction 被忽略：当前没有选中进程。": "[ProcessDock] executeR0ResumeProcessAction ignored: no process is selected.",
     "%1 / DMA 结束操作": "%1 / DMA termination",
     "%1 解除（冻结/结束）": "%1 release (freeze / terminate)",
+    "R3（用户态）": "R3 (user mode)",
     "进程级结束 API": "Process-level terminate APIs",
     "会话 / 终端服务": "Session / terminal services",
     "作业对象（连坐）": "Job object (takes the whole job)",
