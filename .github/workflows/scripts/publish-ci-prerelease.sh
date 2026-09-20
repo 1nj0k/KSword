@@ -23,6 +23,67 @@ readonly -a expected_artifacts=(
   'KswordARKDriver-unsigned-Release'
 )
 
+readonly download_attempt_limit=4
+
+# Download one binary body through gh api, with context on failure.
+#
+# Why this exists rather than `gh api ... > file` inline:
+#
+#   * `gh api` is a JSON client.  When the request fails it tries to parse the
+#     error body and prints `unexpected end of JSON input` - a message that
+#     names neither the artifact nor the endpoint.  Under `set -e` the script
+#     then aborted on that one line with nothing else in the log, which is
+#     exactly what happened on 2026-09-20 (run 35530777917): the whole failure
+#     report was six words that pointed at jq, and which of the seven downloads
+#     died could not be recovered afterwards.
+#   * These bodies come from blob storage over a 302, tens of megabytes each.
+#     A transient failure there is ordinary and must not fail a release that is
+#     otherwise complete.
+#   * `[[ -s "$file" ]]` only rejects an *empty* file.  A JSON or HTML error
+#     body is not empty, so it passed that check and blew up later inside
+#     `python3 -m zipfile` or 7z with an error about the archive being corrupt
+#     - pointing at the archive rather than at the failed download.  Checking
+#     the magic bytes is what separates "server sent us an error page" from
+#     "we really have an archive".
+#
+# Arguments: description, endpoint, accept header, destination, magic hex.
+download_binary_body() {
+  local description="$1"
+  local endpoint="$2"
+  local accept="$3"
+  local destination="$4"
+  local expected_magic="$5"
+  local attempt=1
+  local error_text=''
+  local actual_magic=''
+
+  while (( attempt <= download_attempt_limit )); do
+    error_text="$({ gh api -H "Accept: $accept" "$endpoint" > "$destination"; } 2>&1)" && {
+      if [[ ! -s "$destination" ]]; then
+        error_text='the response body was empty'
+      else
+        actual_magic="$(head -c "$(( ${#expected_magic} / 2 ))" "$destination" | od -An -tx1 | tr -d ' \n')"
+        if [[ "$actual_magic" == "$expected_magic" ]]; then
+          return 0
+        fi
+        # Report what we actually received.  A short body is almost always the
+        # API's own error JSON, and printing it turns an unexplainable failure
+        # into a readable one.
+        error_text="expected magic $expected_magic but got $actual_magic; first bytes: $(head -c 200 "$destination" | tr -d '\0')"
+      fi
+    }
+    echo "Attempt $attempt/$download_attempt_limit failed for $description ($endpoint): $error_text" >&2
+    rm -f "$destination"
+    (( attempt++ ))
+    if (( attempt <= download_attempt_limit )); then
+      sleep $(( attempt * 5 ))
+    fi
+  done
+
+  echo "Unable to download $description after $download_attempt_limit attempts: $endpoint" >&2
+  return 1
+}
+
 # Wait for the independently triggered driver workflow for this exact push.
 # A user-mode CI success must not publish an automatic release while the R0
 # build is still running or after it has failed.
@@ -161,14 +222,12 @@ for artifact_name in "${expected_artifacts[@]}"; do
   fi
 
   artifact_archive="$artifact_download_root/$artifact_name.zip"
-  gh api \
-    -H 'Accept: application/vnd.github+json' \
+  download_binary_body \
+    "artifact $artifact_name (id $artifact_id)" \
     "/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" \
-    > "$artifact_archive"
-  if [[ ! -s "$artifact_archive" ]]; then
-    echo "Downloaded artifact is empty: $artifact_name" >&2
-    exit 1
-  fi
+    'application/vnd.github+json' \
+    "$artifact_archive" \
+    '504b0304' || exit 1
 
   artifact_directory="$artifact_download_root/$artifact_name"
   mkdir -p "$artifact_directory"
@@ -200,14 +259,12 @@ if [[ -z "$manual_asset_id" || -z "$manual_asset_name" ]]; then
 fi
 
 manual_archive="$RUNNER_TEMP/manual-release-template.7z"
-gh api \
-  -H 'Accept: application/octet-stream' \
+download_binary_body \
+  "manual release template $manual_asset_name (asset $manual_asset_id, tag $manual_tag)" \
   "/repos/$GITHUB_REPOSITORY/releases/assets/$manual_asset_id" \
-  > "$manual_archive"
-if [[ ! -s "$manual_archive" ]]; then
-  echo "Downloaded manual release template is empty: $manual_asset_name" >&2
-  exit 1
-fi
+  'application/octet-stream' \
+  "$manual_archive" \
+  '377abcaf271c' || exit 1
 
 seven_zip="$(command -v 7z || command -v 7zz || true)"
 if [[ -z "$seven_zip" ]]; then
