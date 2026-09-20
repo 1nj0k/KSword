@@ -104,10 +104,11 @@ Both use the same driver and the same `shared/driver/` protocol. Launcher picks 
 
 <br>
 
-DDMA issues `IOCTL_ATA_PASS_THROUGH_DIRECT` with `ATA_FLAGS_USE_DMA` against a
-`\Driver\Disk` device, pointing the transfer buffer at an arbitrary physical page.
-The storage port driver builds the MDL and programs the HBA, so the *host bus
-adapter* moves the bytes. The data path never goes through the CPU page tables,
+DDMA issues a `_DIRECT` pass-through command against a `\Driver\Disk` device with
+the transfer buffer pointed at an arbitrary physical page — `ATA_PASS_THROUGH_DIRECT`
+where ATA is available, otherwise `SCSI_PASS_THROUGH_DIRECT`, which covers NVMe,
+SAS/SATA and synthetic SCSI. Either way the storage port driver builds the MDL and
+programs the controller, so the *host bus adapter* moves the bytes. The data path never goes through the CPU page tables,
 so it is not constrained by SLAT/EPT — which is the whole point: a page that a
 hypervisor redirects reads to all-`FF` still yields its real contents here. The
 DDMA sub-tab reads the same physical page through both backends and diffs them,
@@ -128,10 +129,14 @@ Three costs, none of which can be engineered away:
 2. **Kernel debugging must be off.** Mapping ordinary RAM with `MmMapIoSpace`
    trips `MiShowBadMapper` and bugchecks. The driver reports the debugger state
    as a capability bit and the UI refuses the whole channel when it is set.
-3. **ATA only.** Synthetic SCSI stacks reject the pass-through outright, and some
-   HBAs cannot address above 4 GB. Hyper-V Gen2 guests have no IDE controller at
-   all, so DDMA reports "no supported disk" there by design — the SLAT-bypass
-   property only exists where the OS owns a real HBA.
+3. **The disk's driver stack has to accept a pass-through command.** ATA
+   pass-through is tried first; if it is refused, SCSI pass-through is tried,
+   which `stornvme` translates into NVMe commands — so NVMe, SAS/SATA and
+   synthetic SCSI all work through that second route. A disk that refuses both
+   cannot be used, and some HBAs cannot address above 4 GB. Note that the
+   SLAT-bypass property itself only exists where the OS owns real hardware: in a
+   hypervisor *guest* the "DMA" is emulated by the host and goes through the same
+   address translation as everything else.
 
 Non-full-page writes are read-modify-write and are reported as such, because
 they leave a 4 KiB lost-update window for other bytes on the same page.
