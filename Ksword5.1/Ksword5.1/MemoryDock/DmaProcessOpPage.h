@@ -77,6 +77,14 @@ namespace ksword::memory_dock
         void restoreLastWrite();
         void appendLog(const QString& line);
 
+        // evaluateSharing：跨进程比物理地址，判断目标页是不是共享的。
+        // 这是本页后果最重的一条检查：DMA 写的是物理页，而写时复制靠缺页异常
+        // 实现、DMA 不触发缺页，所以写一张共享映像页会打到每一个映射它的进程。
+        Ksword::Evidence::DmaTargetSharing evaluateSharing(
+            std::uint64_t pageVirtualAddress,
+            std::uint64_t pagePhysical,
+            QString& evidenceOut);
+
         bool resolveTargetPage(
             std::uint64_t& virtualAddressOut,
             std::uint64_t& pagePhysicalOut,
@@ -92,6 +100,8 @@ namespace ksword::memory_dock
         QLineEdit* m_payloadEdit = nullptr;
         QCheckBox* m_forceCheck = nullptr;
         QCheckBox* m_acknowledgeCheck = nullptr;
+        // 仅当共享性无法确认时才需要勾；已确认共享的页**没有任何开关能解锁**。
+        QCheckBox* m_unknownSharingCheck = nullptr;
         QPushButton* m_injectButton = nullptr;
         QPushButton* m_ud2Button = nullptr;
         QPushButton* m_restoreButton = nullptr;

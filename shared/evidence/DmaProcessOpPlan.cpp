@@ -161,6 +161,33 @@ DmaWritePlan PlanBytesAtOffset(
     return plan;
 }
 
+const char* DmaTargetSharingName(const DmaTargetSharing sharing) noexcept {
+    switch (sharing) {
+        case DmaTargetSharing::PrivateConfirmed: return "已确认为进程私有";
+        case DmaTargetSharing::SharedConfirmed: return "已确认被其它进程共享";
+        case DmaTargetSharing::SharingUnknown: return "无法确认是否共享";
+    }
+    return "未知";
+}
+
+DmaTargetSharing EvaluateTargetSharing(
+    const bool regionIsPrivate,
+    const bool comparisonPerformed,
+    const bool comparisonMatched) noexcept {
+    // MEM_PRIVATE 的页不由节对象支撑，谈不上跨进程共享，不需要再比对。
+    if (regionIsPrivate) {
+        return DmaTargetSharing::PrivateConfirmed;
+    }
+    // 没比对过就**不能**说私有。此刻没有别的进程映射它，也不代表下一刻没有；
+    // 而把"没找到"读成"确认私有"正是这条判据存在要防的那个错误。
+    if (!comparisonPerformed) {
+        return DmaTargetSharing::SharingUnknown;
+    }
+    return comparisonMatched
+        ? DmaTargetSharing::SharedConfirmed
+        : DmaTargetSharing::PrivateConfirmed;
+}
+
 std::vector<std::uint8_t> UndefinedInstructionBytes() {
     return std::vector<std::uint8_t>{0x0FU, 0x0BU};
 }

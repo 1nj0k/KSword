@@ -33974,6 +33974,17 @@
     "   还原后的读回校验失败，目标页仍处于未知状态。": "   readback verification after the restore failed; the target page is still in an unknown state.",
     "还原命令被接受，但读回校验失败。目标页仍处于未知状态，备份保留在日志里。": "The restore command was accepted but readback verification failed. The target page is still in an unknown state and the backup is kept in the log.",
     "   还原完成并通过读回校验。": "   the restore completed and passed readback verification.",
-    "已还原并通过读回校验。": "Restored and verified by readback."
+    "已还原并通过读回校验。": "Restored and verified by readback.",
+    "── 共享性检查：%1": "-- sharing check: %1",
+    "   依据：%1": "   evidence: %1",
+    "区域类型 MEM_PRIVATE，不由节对象支撑。": "The region type is MEM_PRIVATE, so it is not backed by a section object.",
+    "查询目标区域失败：%1": "Querying the target region failed: %1",
+    "PID %1 的同一虚拟地址落在同一张物理页 %2 上，支撑文件 %3。": "PID %1 resolves the same virtual address to the same physical page %2, backed by %3.",
+    "PID %1 映射同一文件但物理页不同（%2 vs %3），写时复制已经发生。": "PID %1 maps the same file but a different physical page (%2 vs %3), so copy-on-write already happened.",
+    "区域类型不是 MEM_PRIVATE（支撑文件 %1），但在检查过的进程里没找到第二个映射它的，无法比对物理页。": "The region is not MEM_PRIVATE (backed by %1), but no second process mapping it was found among those checked, so no physical page comparison was possible.",
+    "目标页的共享性无法确认时仍然写入（后果可能波及其它进程）": "Write anyway when the target page's sharing cannot be confirmed (this may affect other processes)",
+    "只在“无法确认”时起作用。已经确认被其它进程共享的页没有任何开关能解锁——往一张共享的映像页写字节会打到每一个映射它的进程。": "Only applies to the unconfirmed case. A page already confirmed as shared cannot be unlocked by any switch: writing into a shared image page hits every process that maps it.",
+    "已拒绝：目标页确认被其它进程共享。%1 DMA 不触发写时复制，写入会波及每一个映射这张页的进程。请改用 R-1 注入（它把载荷放在影子页里，作用域限定在单个进程），或选一张进程私有的页。": "Refused: the target page is confirmed to be shared with other processes. %1 DMA does not trigger copy-on-write, so the write would reach every process mapping this page. Use R-1 injection instead, which keeps the payload in a shadow page scoped to a single process, or pick a page private to the process.",
+    "已拒绝：无法确认目标页是否被其它进程共享。%1 没找到第二个映射它的进程不等于没有。要继续，请勾选下面那一项并自行承担波及其它进程的可能。": "Refused: whether the target page is shared could not be confirmed. %1 Not finding a second process that maps it does not mean none exists. To proceed, tick the option below and accept that other processes may be affected."
   }
 }

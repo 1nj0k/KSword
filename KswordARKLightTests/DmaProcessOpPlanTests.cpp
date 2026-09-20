@@ -252,6 +252,48 @@ void TestReadbackVerification(KswordTests::Suite& suite) {
         L"dma op: verifying an empty write never reports success");
 }
 
+
+// ------------------------------------------------------------
+// 五、目标页是不是被别的进程共享 —— 本模块后果最重的一条判据。
+// ------------------------------------------------------------
+void TestTargetSharing(KswordTests::Suite& suite) {
+    using Ksword::Evidence::DmaTargetSharing;
+    using Ksword::Evidence::EvaluateTargetSharing;
+
+    // MEM_PRIVATE：不由节对象支撑，谈不上共享，不需要比对。
+    suite.expect(EvaluateTargetSharing(true, false, false)
+            == DmaTargetSharing::PrivateConfirmed,
+        L"dma op: a private region is private without needing a cross-process comparison");
+    suite.expect(EvaluateTargetSharing(true, true, true)
+            == DmaTargetSharing::PrivateConfirmed,
+        L"dma op: a private region stays private whatever the comparison said");
+
+    // 比对过且物理地址相同 = 同一张页 = 共享。这是唯一一个真读数。
+    suite.expect(EvaluateTargetSharing(false, true, true)
+            == DmaTargetSharing::SharedConfirmed,
+        L"dma op: another process resolving to the same physical page confirms sharing");
+
+    // 比对过但物理地址不同：写时复制已经发生，这个进程拿的是自己的副本。
+    suite.expect(EvaluateTargetSharing(false, true, false)
+            == DmaTargetSharing::PrivateConfirmed,
+        L"dma op: a differing physical address means copy-on-write already happened");
+
+    // **最重要的一条**：没比对过不等于私有。没找到第二个进程，不代表不存在；
+    // 此刻没有别的进程映射它，也不代表下一刻没有。把这一格读成"私有"就是这条
+    // 判据存在要防的那个错误，而它一旦发生，后果是全机器范围的。
+    suite.expect(EvaluateTargetSharing(false, false, false)
+            == DmaTargetSharing::SharingUnknown,
+        L"dma op: not having compared is never reported as private");
+    suite.expect(EvaluateTargetSharing(false, false, true)
+            == DmaTargetSharing::SharingUnknown,
+        L"dma op: a matched flag without an actual comparison is still unknown");
+
+    // 三态必须互不相等，否则调用方按其中一个分支处理时会连带吃掉另一个。
+    suite.expect(DmaTargetSharing::PrivateConfirmed != DmaTargetSharing::SharingUnknown
+        && DmaTargetSharing::SharedConfirmed != DmaTargetSharing::SharingUnknown,
+        L"dma op: the three sharing verdicts are distinct states, not two plus a synonym");
+}
+
 }  // namespace
 
 int RunDmaProcessOpPlanTests() {
@@ -260,6 +302,7 @@ int RunDmaProcessOpPlanTests() {
     TestPlanIntoCave(suite);
     TestPlanAtOffset(suite);
     TestReadbackVerification(suite);
+    TestTargetSharing(suite);
     suite.report();
     return suite.failures();
 }

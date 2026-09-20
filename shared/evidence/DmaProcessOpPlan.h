@@ -124,6 +124,45 @@ DmaWritePlan PlanBytesAtOffset(
 // 而"目标停住了"与"目标退出了"在界面上会被读成同一个结果。
 std::vector<std::uint8_t> UndefinedInstructionBytes();
 
+// ============================================================
+// 目标页是不是被别的进程共享
+// ============================================================
+//
+// 这是本模块里后果最重的一条判据。DMA 写的是**物理页**，而写时复制靠缺页异常
+// 实现——**DMA 不触发缺页**。于是往一张共享的映像页（任何 DLL 的代码页都是）
+// 写字节，会打到**每一个映射了它的进程**，不只是目标。往 ntdll 的代码页写一条
+// UD2，等于让全机器的进程在跑到那里时一起崩。
+//
+// 光看区域类型是**推测**而不是读数：一页 MEM_IMAGE 可能早就因为写时复制变成了
+// 这个进程私有的副本，此时写它只影响目标；而一页 MEM_IMAGE 也可能仍然是那张
+// 共享页。两者在 MEMORY_BASIC_INFORMATION 里长得一样。
+//
+// 唯一的读数是**跨进程比物理地址**：在另一个映射同一文件的进程里翻译同一个虚拟
+// 地址，拿到的物理地址相同就是同一张页，也就是共享。
+enum class DmaTargetSharing : int {
+    // 区域是进程私有的，或跨进程比对证明物理地址不同（写时复制已经发生）。
+    PrivateConfirmed = 0,
+    // 跨进程比对证明另一个进程的同一虚拟地址落在同一张物理页上。
+    SharedConfirmed,
+    // 区域由节对象支撑，但没能找到第二个进程来比对。**不是"私有"**：
+    // 没找到不等于不存在，此刻没有别的进程映射它也不代表下一刻没有。
+    SharingUnknown,
+};
+
+const char* DmaTargetSharingName(DmaTargetSharing sharing) noexcept;
+
+// EvaluateTargetSharing：
+// - regionIsPrivate：目标区域的 type 是否为 MEM_PRIVATE；
+// - comparisonPerformed：是否真的在另一个进程里翻译过同一个虚拟地址；
+// - comparisonMatched：那个进程拿到的物理地址是否与目标相同。
+//
+// 三个输入刻意分开而不是合成一个 bool：没比对过与比对了但不同，是完全不同的
+// 两件事，合并之后"没找到别的进程"会被读成"确认私有"。
+DmaTargetSharing EvaluateTargetSharing(
+    bool regionIsPrivate,
+    bool comparisonPerformed,
+    bool comparisonMatched) noexcept;
+
 // DmaWriteVerification：写入之后读回来的比对结果。
 struct DmaWriteVerification final {
     bool matched = false;

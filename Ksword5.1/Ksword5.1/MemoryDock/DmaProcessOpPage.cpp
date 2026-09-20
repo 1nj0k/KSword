@@ -145,7 +145,11 @@ namespace ksword::memory_dock
         m_acknowledgeCheck = new QCheckBox(
             QStringLiteral("我确认这会修改目标进程的真实内存页，并且由我负责还原"), this);
         root->addWidget(m_forceCheck);
+        m_unknownSharingCheck = new QCheckBox(
+            QStringLiteral("目标页的共享性无法确认时仍然写入（后果可能波及其它进程）"), this);
+        m_unknownSharingCheck->setToolTip(QStringLiteral("只在“无法确认”时起作用。已经确认被其它进程共享的页没有任何开关能解锁——往一张共享的映像页写字节会打到每一个映射它的进程。"));
         root->addWidget(m_acknowledgeCheck);
+        root->addWidget(m_unknownSharingCheck);
 
         QHBoxLayout* actions = new QHBoxLayout();
         actions->setContentsMargins(0, 0, 0, 0);
@@ -184,6 +188,7 @@ namespace ksword::memory_dock
         const auto gate = [this](bool) { updateActionState(); };
         connect(m_forceCheck, &QCheckBox::toggled, this, gate);
         connect(m_acknowledgeCheck, &QCheckBox::toggled, this, gate);
+        connect(m_unknownSharingCheck, &QCheckBox::toggled, this, gate);
         connect(m_addressEdit, &QLineEdit::textChanged, this,
             [this](const QString&) { updateActionState(); });
     }
@@ -298,6 +303,88 @@ namespace ksword::memory_dock
         return true;
     }
 
+    Ksword::Evidence::DmaTargetSharing DmaProcessOpPage::evaluateSharing(
+        const std::uint64_t pageVirtualAddress,
+        const std::uint64_t pagePhysical,
+        QString& evidenceOut)
+    {
+        const ksword::ark::DriverClient client;
+        const ksword::ark::VirtualMemoryQueryResult self =
+            client.queryVirtualMemory(m_attachedPid, pageVirtualAddress,
+                KSWORD_ARK_MEMORY_QUERY_FLAG_INCLUDE_MAPPED_FILE_NAME);
+        if (!self.io.ok)
+        {
+            // 问不出区域类型时不能默认私有。查询失败与"确认私有"是两件事。
+            evidenceOut = QStringLiteral("查询目标区域失败：%1")
+                .arg(QString::fromStdString(self.io.message));
+            return Ksword::Evidence::EvaluateTargetSharing(false, false, false);
+        }
+
+        const bool isPrivate = (self.type == MEM_PRIVATE);
+        if (isPrivate)
+        {
+            evidenceOut = QStringLiteral("区域类型 MEM_PRIVATE，不由节对象支撑。");
+            return Ksword::Evidence::EvaluateTargetSharing(true, false, false);
+        }
+
+        const QString backingFile = QString::fromStdWString(self.mappedFileName);
+        // 跨进程比物理地址：在另一个映射同一文件的进程里翻译同一个虚拟地址，
+        // 拿到的物理地址相同就是同一张页。这是唯一一个真读数——区域类型只是推测，
+        // 一页 MEM_IMAGE 可能早就因写时复制变成了私有副本。
+        const ksword::ark::ProcessEnumResult processes = client.enumerateProcesses(0UL);
+        int examined = 0;
+        if (processes.io.ok)
+        {
+            for (const auto& entry : processes.entries)
+            {
+                const std::uint32_t otherPid = static_cast<std::uint32_t>(entry.processId);
+                if (otherPid == m_attachedPid || otherPid == 0U || otherPid == 4U)
+                {
+                    continue;
+                }
+                if (examined >= 64)
+                {
+                    break;
+                }
+                const ksword::ark::VirtualMemoryQueryResult other =
+                    client.queryVirtualMemory(otherPid, pageVirtualAddress,
+                        KSWORD_ARK_MEMORY_QUERY_FLAG_INCLUDE_MAPPED_FILE_NAME);
+                if (!other.io.ok || other.state != MEM_COMMIT)
+                {
+                    continue;
+                }
+                if (QString::fromStdWString(other.mappedFileName) != backingFile)
+                {
+                    continue;
+                }
+                ++examined;
+                const ksword::ark::VirtualAddressTranslateResult otherPa =
+                    client.translateVirtualAddress(otherPid, pageVirtualAddress, 0UL);
+                if (!otherPa.io.ok || !otherPa.resolved)
+                {
+                    continue;
+                }
+                if (otherPa.physicalAddress == pagePhysical)
+                {
+                    evidenceOut = QStringLiteral(
+                        "PID %1 的同一虚拟地址落在同一张物理页 %2 上，支撑文件 %3。")
+                        .arg(otherPid).arg(hex64(pagePhysical)).arg(backingFile);
+                    return Ksword::Evidence::EvaluateTargetSharing(false, true, true);
+                }
+                // 物理地址不同说明写时复制已经发生，这个进程拿的是自己的副本。
+                evidenceOut = QStringLiteral(
+                    "PID %1 映射同一文件但物理页不同（%2 vs %3），写时复制已经发生。")
+                    .arg(otherPid).arg(hex64(otherPa.physicalAddress)).arg(hex64(pagePhysical));
+                return Ksword::Evidence::EvaluateTargetSharing(false, true, false);
+            }
+        }
+
+        evidenceOut = QStringLiteral(
+            "区域类型不是 MEM_PRIVATE（支撑文件 %1），但在检查过的进程里没找到第二个映射它的，无法比对物理页。")
+            .arg(backingFile.isEmpty() ? QStringLiteral("未知") : backingFile);
+        return Ksword::Evidence::EvaluateTargetSharing(false, false, false);
+    }
+
     void DmaProcessOpPage::performWrite(const bool injectPayload)
     {
         std::uint64_t virtualAddress = 0ULL;
@@ -309,6 +396,38 @@ namespace ksword::memory_dock
             m_statusLabel->setText(error);
             m_statusLabel->setStyleSheet(
                 QStringLiteral("color:%1;").arg(KswordTheme::WarningHex()));
+            return;
+        }
+
+        // 共享性检查排在计划之前：一张共享页上算出来的计划再正确也不该执行。
+        QString sharingEvidence;
+        const DmaTargetSharing sharing = evaluateSharing(
+            virtualAddress & ~(kPageBytes - 1ULL), pagePhysical, sharingEvidence);
+        appendLog(QStringLiteral("── 共享性检查：%1")
+            .arg(QString::fromUtf8(DmaTargetSharingName(sharing))));
+        appendLog(QStringLiteral("   依据：%1").arg(sharingEvidence));
+
+        if (sharing == DmaTargetSharing::SharedConfirmed)
+        {
+            // **没有开关能解锁这一条。** DMA 写的是物理页，而写时复制靠缺页异常
+            // 实现、DMA 不触发缺页；往一张已经确认被共享的映像页写字节，会打到
+            // 每一个映射它的进程。往 ntdll 的代码页写一条 UD2 等于让全机器的进程
+            // 在跑到那里时一起崩。这不是一个用户勾一下就该承担的后果。
+            m_statusLabel->setText(QStringLiteral(
+                "已拒绝：目标页确认被其它进程共享。%1 DMA 不触发写时复制，写入会波及每一个映射这张页的进程。请改用 R-1 注入（它把载荷放在影子页里，作用域限定在单个进程），或选一张进程私有的页。")
+                .arg(sharingEvidence));
+            m_statusLabel->setStyleSheet(
+                QStringLiteral("color:%1; font-weight:600;").arg(KswordTheme::ErrorHex()));
+            return;
+        }
+        if (sharing == DmaTargetSharing::SharingUnknown
+            && !m_unknownSharingCheck->isChecked())
+        {
+            m_statusLabel->setText(QStringLiteral(
+                "已拒绝：无法确认目标页是否被其它进程共享。%1 没找到第二个映射它的进程不等于没有。要继续，请勾选下面那一项并自行承担波及其它进程的可能。")
+                .arg(sharingEvidence));
+            m_statusLabel->setStyleSheet(
+                QStringLiteral("color:%1; font-weight:600;").arg(KswordTheme::WarningHex()));
             return;
         }
 
