@@ -307,6 +307,8 @@
     <ClCompile Include="MemoryDock\MemoryDock.SearchParseAndFilter.cpp" />
     <ClCompile Include="MemoryDock\MemoryDock.SearchFlow.cpp" />
     <ClCompile Include="MemoryDock\SystemMemoryAuditPage.cpp" />
+    <ClCompile Include="MemoryDock\MemoryAccessBackend.cpp" />
+    <ClCompile Include="MemoryDock\DdmaPage.cpp" />
     <ClCompile Include="MemoryDock\MemoryDock.ViewBreakpointUtil.cpp" />
     <ClCompile Include="MiscDock\BootEditor\BootEditorTab.cpp" />
     <ClCompile Include="MiscDock\MiscDock.cpp" />
@@ -553,6 +555,7 @@
     <ClCompile Include="ArkDriverClient\ArkDriverSection.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverInjectionScan.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverMemory.cpp" />
+    <ClCompile Include="ArkDriverClient\ArkDriverDdma.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverFile.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverFileIrp.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverRegistry.cpp" />
@@ -716,6 +719,8 @@
     <QtMoc Include="MemoryDock\MemoryDock.h" />
     <ClInclude Include="MemoryDock\MemoryDock.Internal.h" />
     <ClInclude Include="MemoryDock\SystemMemoryAuditPage.h" />
+    <ClInclude Include="MemoryDock\MemoryAccessBackend.h" />
+    <ClInclude Include="MemoryDock\DdmaPage.h" />
     <QtMoc Include="MiscDock\BootEditor\BootEditorTab.h" />
     <ClInclude Include="MiscDock\ApplicationControlPage.h" />
     <ClInclude Include="MiscDock\SoundSource\SoundSourceDetector.h" />

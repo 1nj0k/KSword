@@ -1,5 +1,6 @@
 #include "MemoryDock.Internal.h"
 #include "SystemMemoryAuditPage.h"
+#include "DdmaPage.h"
 #include "../UI/VisibleTableWidget.h"
 #include "../Internationalization/LanguageManager.h"
 
@@ -359,8 +360,9 @@ void MemoryDock::initializeTabs()
     initializeProcessPteTranslateTab();
     initializeProcessMemoryEvidenceTab();
     initializeSystemMemoryAuditTab();
+    initializeDdmaTab();
 
-    // 11 个页签的图标集中在这里设置：分散到各构建函数里会漏，也不好统一调整语义。
+    // 12 个页签的图标集中在这里设置：分散到各构建函数里会漏，也不好统一调整语义。
     // 下标顺序与上面的构建顺序严格一一对应。
     const char* const tabIconAliases[] = {
         ":/Icon/process_list.svg",        // 进程与模块
@@ -373,7 +375,8 @@ void MemoryDock::initializeTabs()
         ":/Icon/file_find.svg",           // 内核内存证据
         ":/Icon/process_tree.svg",        // PTE / VA 翻译
         ":/Icon/process_performance.svg", // 进程内存证据
-        ":/Icon/disk_analyze.svg"         // 系统内存审计
+        ":/Icon/disk_analyze.svg",        // 系统内存审计
+        ":/Icon/disk_storage.svg"         // DDMA
     };
     const int iconCount = static_cast<int>(sizeof(tabIconAliases) / sizeof(tabIconAliases[0]));
     for (int tabIndex = 0; tabIndex < m_tabWidget->count() && tabIndex < iconCount; ++tabIndex)
@@ -418,6 +421,182 @@ void MemoryDock::initializeSystemMemoryAuditTab()
         m_systemMemoryAuditPage,
         QStringLiteral("memory.tab.system_memory_audit"),
         QStringLiteral("系统内存审计"));
+}
+
+void MemoryDock::initializeDdmaTab()
+{
+    // Tab12：DDMA。页面自己负责通道配置与自检，MemoryDock 只挂载它并订阅
+    // 会话变化，把"现在能不能选 DDMA 后端"同步给其它页面的下拉框。
+    m_ddmaPage = new DdmaPage(m_tabWidget);
+    m_ddmaPage->setSessionChangedCallback([this]() { refreshBackendSelectors(); });
+
+    m_tabWidget->addTab(m_ddmaPage, QStringLiteral("DDMA"));
+    ks::i18n::LanguageManager::instance().bindTab(
+        m_tabWidget,
+        m_ddmaPage,
+        QStringLiteral("memory.tab.ddma"),
+        QStringLiteral("DDMA"));
+
+    // 系统内存审计页也要能用 DDMA 复核物理页，这里把会话读取入口交给它。
+    if (m_systemMemoryAuditPage != nullptr)
+    {
+        m_systemMemoryAuditPage->setDdmaSessionProvider(
+            [this]() -> const ksword::memory_backend::DdmaSession& {
+                return currentDdmaSession();
+            });
+    }
+
+    // 三个下拉框在各自的 Tab 构建函数里已经创建，这里做首次状态同步。
+    refreshBackendSelectors();
+}
+
+void MemoryDock::focusDdmaPage()
+{
+    if (m_tabWidget == nullptr || m_ddmaPage == nullptr)
+    {
+        return;
+    }
+    // 进程详情内嵌模式下这个页是被隐藏的；隐藏的 Tab 用 setCurrentWidget 切不过去，
+    // 所以先确认它可见再切，避免出现"点了没反应"。
+    const int tabIndex = m_tabWidget->indexOf(m_ddmaPage);
+    if (tabIndex < 0 || !m_tabWidget->isTabVisible(tabIndex))
+    {
+        return;
+    }
+    m_tabWidget->setCurrentWidget(m_ddmaPage);
+}
+
+QWidget* MemoryDock::createBackendSelector(
+    QWidget* const parent,
+    QComboBox*& comboOut,
+    QLabel*& hintOut)
+{
+    QWidget* container = new QWidget(parent);
+    QHBoxLayout* layout = new QHBoxLayout(container);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(6);
+
+    comboOut = new QComboBox(container);
+    // 条目顺序必须与 MemoryAccessBackend 枚举一致，界面按索引直接转换。
+    comboOut->addItem(QStringLiteral("标准驱动通道"));
+    comboOut->addItem(QStringLiteral("DDMA（磁盘 DMA）"));
+    comboOut->setToolTip(
+        QStringLiteral(
+            "标准驱动通道走 MmCopyMemory / MmMapIoSpaceEx，受 SLAT / EPT 约束。\n"
+            "DDMA 走磁盘控制器的总线主控 DMA，不受 SLAT 约束，能读到被上层虚拟化"
+            "重定向或隐藏的物理页；代价是必须借用磁盘扇区中转，而且明显更慢。\n"
+            "DDMA 需要先在“DDMA”子页配置通道。"));
+
+    hintOut = new QLabel(container);
+    hintOut->setWordWrap(true);
+    hintOut->setTextInteractionFlags(Qt::TextSelectableByMouse);
+
+    layout->addWidget(new QLabel(QStringLiteral("访问后端"), container));
+    layout->addWidget(comboOut);
+    layout->addWidget(hintOut, 1);
+
+    // 选中 DDMA 但通道尚未就绪时，refreshBackendSelectors 会把选择弹回标准通道
+    // 并在提示里说明缺哪一步；它内部用 QSignalBlocker 改索引，不会递归触发。
+    connect(comboOut, &QComboBox::currentIndexChanged, this, [this](int) {
+        refreshBackendSelectors();
+        });
+
+    return container;
+}
+
+void MemoryDock::refreshBackendSelectors()
+{
+    QString reason;
+    const bool ddmaUsable =
+        ksword::memory_backend::isDdmaUsable(currentDdmaSession(), &reason);
+
+    // 三个下拉共享同一份判据与同一段文案，避免三处各写一遍后走散。
+    const auto syncOne = [this, ddmaUsable, &reason](
+                             QComboBox* const combo, QLabel* const hint) {
+        if (combo == nullptr)
+        {
+            return;
+        }
+        const bool ddmaSelected =
+            (combo->currentIndex() ==
+             static_cast<int>(ksword::memory_backend::MemoryAccessBackend::Ddma));
+
+        // DDMA 变得不可用时，已经停在 DDMA 上的下拉必须退回标准通道，
+        // 否则用户下一次点读取才会撞上失败。
+        if (ddmaSelected && !ddmaUsable)
+        {
+            const QSignalBlocker blocker(combo);
+            combo->setCurrentIndex(
+                static_cast<int>(ksword::memory_backend::MemoryAccessBackend::StandardDriver));
+        }
+
+        if (hint == nullptr)
+        {
+            return;
+        }
+        if (ddmaUsable)
+        {
+            hint->setText(QStringLiteral("DDMA 通道已就绪，可随时切换。"));
+            hint->setStyleSheet(QStringLiteral("color:%1;").arg(KswordTheme::SuccessHex()));
+        }
+        else
+        {
+            hint->setText(QStringLiteral("DDMA 暂不可用：%1").arg(reason));
+            hint->setStyleSheet(QStringLiteral("color:%1;").arg(KswordTheme::TextSecondaryHex()));
+        }
+        };
+
+    syncOne(m_searchBackendCombo, m_searchBackendHintLabel);
+    syncOne(m_viewerBackendCombo, m_viewerBackendHintLabel);
+    syncOne(m_driverMemoryBackendCombo, m_driverMemoryBackendHintLabel);
+
+    // 系统内存审计页没有后端下拉，只有一个"DDMA 复核"按钮，但它同样要跟着
+    // 会话可用性开关，否则会留下一个点下去必然失败的按钮。
+    if (m_systemMemoryAuditPage != nullptr)
+    {
+        m_systemMemoryAuditPage->refreshDdmaCrossCheckState();
+    }
+}
+
+const ksword::memory_backend::DdmaSession& MemoryDock::currentDdmaSession() const
+{
+    // 读进程级会话而不是去问 m_ddmaPage：DDMA 页可能还没构建（Dock 布局恢复
+    // 顺序不保证），而进程级会话在任何时刻都有一个确定的值，未配置时就是
+    // "未配置"，不会因为空指针而误判成可用。
+    return ksword::memory_backend::currentDdmaSession();
+}
+
+ksword::memory_backend::MemoryAccessBackend MemoryDock::currentSearchBackend() const
+{
+    if (m_searchBackendCombo == nullptr
+        || m_searchBackendCombo->currentIndex() !=
+            static_cast<int>(ksword::memory_backend::MemoryAccessBackend::Ddma))
+    {
+        return ksword::memory_backend::MemoryAccessBackend::StandardDriver;
+    }
+    return ksword::memory_backend::MemoryAccessBackend::Ddma;
+}
+
+ksword::memory_backend::MemoryAccessBackend MemoryDock::currentViewerBackend() const
+{
+    if (m_viewerBackendCombo == nullptr
+        || m_viewerBackendCombo->currentIndex() !=
+            static_cast<int>(ksword::memory_backend::MemoryAccessBackend::Ddma))
+    {
+        return ksword::memory_backend::MemoryAccessBackend::StandardDriver;
+    }
+    return ksword::memory_backend::MemoryAccessBackend::Ddma;
+}
+
+ksword::memory_backend::MemoryAccessBackend MemoryDock::currentDriverMemoryBackend() const
+{
+    if (m_driverMemoryBackendCombo == nullptr
+        || m_driverMemoryBackendCombo->currentIndex() !=
+            static_cast<int>(ksword::memory_backend::MemoryAccessBackend::Ddma))
+    {
+        return ksword::memory_backend::MemoryAccessBackend::StandardDriver;
+    }
+    return ksword::memory_backend::MemoryAccessBackend::Ddma;
 }
 
 void MemoryDock::initializeProcessModuleTab()
@@ -728,6 +907,10 @@ void MemoryDock::initializeMemorySearchTab()
     compareLayout->addWidget(m_nextScanValueBEdit, 1);
     tabLayout->addWidget(compareGroup);
 
+    // 访问后端选择条：扫描页的每一次区域读取都会走这里选中的通道。
+    tabLayout->addWidget(
+        createBackendSelector(m_tabSearch, m_searchBackendCombo, m_searchBackendHintLabel));
+
     m_searchResultTable = new ks::ui::VisibleTableWidget(m_tabSearch);
     m_searchResultTable->setColumnCount(4);
     m_searchResultTable->setHorizontalHeaderLabels(QStringList{ "地址", "当前值", "前次值", "备注" });
@@ -786,6 +969,10 @@ void MemoryDock::initializeMemoryViewerTab()
     navLayout->addWidget(m_viewJumpButton);
     navLayout->addWidget(m_viewProtectLabel);
     tabLayout->addLayout(navLayout);
+
+    // 访问后端选择条：查看器翻页时按这里选中的通道取数据。
+    tabLayout->addWidget(
+        createBackendSelector(m_tabViewer, m_viewerBackendCombo, m_viewerBackendHintLabel));
 
     // 统一十六进制编辑器组件：
     // - 后续内存/文件/网络全部复用该控件；
@@ -1004,6 +1191,12 @@ void MemoryDock::initializeDriverMemoryRwTab()
     requestLayout->setColumnStretch(3, 2);
     requestLayout->setColumnStretch(4, 1);
     tabLayout->addWidget(requestGroup);
+
+    // 访问后端选择条：本页的 R0 读取与差异写回都会走这里选中的通道。
+    // 它与上方的"来源"下拉是两个正交的维度——来源决定"读哪块地址空间"，
+    // 后端决定"用哪条通路去读"，不要把两者合并成一个下拉。
+    tabLayout->addWidget(createBackendSelector(
+        m_tabDriverMemoryRw, m_driverMemoryBackendCombo, m_driverMemoryBackendHintLabel));
 
     // ========================================================
     // 操作按钮条：写回、清空、转存、字符串写入

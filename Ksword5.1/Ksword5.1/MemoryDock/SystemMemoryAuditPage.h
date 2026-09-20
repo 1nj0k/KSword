@@ -8,6 +8,8 @@
 // 3) 明确展示尚不能由稳定快照接口唯一归属的物理内存余量。
 // ============================================================
 
+#include "MemoryAccessBackend.h"
+
 #include <QHash>
 #include <QString>
 #include <QStringList>
@@ -16,6 +18,7 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 class QCheckBox;
@@ -37,6 +40,19 @@ public:
 
     // refreshSnapshot：重新采集整机内存快照并刷新全部审计视图。
     void refreshSnapshot();
+
+    // setDdmaSessionProvider：
+    // - 作用：注入 DDMA 会话读取入口，让本页的"DDMA 复核"按钮能拿到当前通道配置；
+    // - 参数 provider：返回常量引用的取值函数，由 MemoryDock 在 DDMA 页构建后注册；
+    // - 说明：本页不持有也不修改 DDMA 配置，只读。未注册时复核入口保持禁用。
+    void setDdmaSessionProvider(
+        std::function<const ksword::memory_backend::DdmaSession&()> provider);
+
+    // refreshDdmaCrossCheckState：
+    // - 作用：按当前会话可用性刷新复核入口的启用状态与提示；
+    // - 说明：DDMA 会话由别的页面维护，会话一变就必须回调这里，否则会留下一个
+    //   点下去必然失败的按钮。因此它是 public 的外部刷新入口。
+    void refreshDdmaCrossCheckState();
 
 protected:
     void changeEvent(QEvent* event) override;
@@ -208,6 +224,13 @@ private:
     void updateStatus();
     void loadPoolTagMetadata();
 
+    // runDdmaCrossCheck：
+    // - 作用：对用户给定的物理页，分别用标准通道和 DDMA 各读一页并逐字节比对；
+    // - 处理逻辑：两侧任何一侧读失败都只报"无法比对"，不下一致/不一致的结论；
+    // - 说明：两者不一致正是"这一页被 SLAT 重定向或隐藏"的直接证据，而这正是
+    //   本页"无法归属的驻留内存"一栏最需要的第二个视角。
+    void runDdmaCrossCheck();
+
     static Snapshot collectSnapshot();
     static UserResidencyScan collectUserResidency(const std::vector<ProcessRow>& processes, std::uint64_t pageSize);
     static QString formatBytes(std::uint64_t bytes);
@@ -235,6 +258,12 @@ private:
     QPlainTextEdit* m_detailText = nullptr;
     QLabel* m_statusLabel = nullptr;
     QTimer* m_autoRefreshTimer = nullptr;
+
+    // DDMA 复核入口。本页只读 DDMA 会话，配置仍然只在 DDMA 子页上做。
+    QLineEdit* m_ddmaCrossCheckAddressEdit = nullptr;
+    QPushButton* m_ddmaCrossCheckButton = nullptr;
+    QLabel* m_ddmaCrossCheckResultLabel = nullptr;
+    std::function<const ksword::memory_backend::DdmaSession&()> m_ddmaSessionProvider;
 
     Snapshot m_snapshot;
     UserResidencyScan m_userResidencyScan;

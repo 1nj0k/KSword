@@ -83,6 +83,59 @@ void MemoryDock::reloadMemoryViewerPage()
     // 每页固定读取 512 字节，兼顾可读性与刷新性能。
     QByteArray pageBytes(static_cast<int>(kHexPageBytes), '\0');
     SIZE_T bytesRead = 0;
+
+    // DDMA 后端不经过 ReadProcessMemory：逐页翻译成物理地址后走磁盘 DMA，
+    // 因此能看到被 SLAT 重定向的内容。翻译失败的页由后端门面补 00 并置 partial。
+    if (currentViewerBackend() == ksword::memory_backend::MemoryAccessBackend::Ddma)
+    {
+        const ksword::memory_backend::AccessOutcome ddmaOutcome =
+            ksword::memory_backend::readVirtual(
+                ksword::memory_backend::MemoryAccessBackend::Ddma,
+                currentDdmaSession(),
+                m_attachedPid,
+                m_currentViewerAddress,
+                kHexPageBytes);
+        if (!ddmaOutcome.ok)
+        {
+            m_currentViewerPageBytes.clear();
+            if (m_hexEditorWidget != nullptr)
+            {
+                m_hexEditorWidget->setEditable(false);
+                m_hexEditorWidget->clearData();
+            }
+            m_viewerStatusLabel->setText(
+                QStringLiteral("DDMA 读取失败：%1").arg(ddmaOutcome.failureText));
+            return;
+        }
+
+        m_currentViewerPageBytes = ddmaOutcome.data;
+        if (m_hexEditorWidget != nullptr)
+        {
+            // DDMA 快照按只读展示：本页的单字节写入走 WriteProcessMemory，
+            // 与 DDMA 不是同一条通路，允许编辑会让用户以为改的是 DMA 视图。
+            m_hexEditorWidget->setEditable(false);
+            m_hexEditorWidget->setBytesPerRow(16);
+            m_hexEditorWidget->setRegionData(
+                m_currentViewerPageBytes.constData(),
+                static_cast<std::size_t>(m_currentViewerPageBytes.size()),
+                m_currentViewerAddress);
+        }
+        QString ddmaStatusText = QStringLiteral("DDMA 读取完成：%1 字节（只读展示）。")
+            .arg(m_currentViewerPageBytes.size());
+        if (ddmaOutcome.partial)
+        {
+            ddmaStatusText += QStringLiteral(" 有页无法翻译成物理地址，已按 00 填充。");
+        }
+        if (ddmaOutcome.scratchDirty)
+        {
+            ddmaStatusText += QStringLiteral(
+                " 严重告警：暂存扇区未能还原，磁盘上留下了脏扇区。");
+        }
+        m_viewerStatusLabel->setText(ddmaStatusText);
+        m_viewProtectLabel->setText(QStringLiteral("保护属性: DDMA 通道不查询"));
+        return;
+    }
+
     const BOOL readOk = ::ReadProcessMemory(
         m_attachedProcessHandle,
         reinterpret_cast<LPCVOID>(static_cast<std::uintptr_t>(m_currentViewerAddress)),

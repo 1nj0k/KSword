@@ -11,6 +11,7 @@
 #include "../Framework.h"
 #include "../ArkDriverClient/ArkDriverTypes.h"
 #include "../UI/KernelDisassemblyDialog.h" // ks::ui::DisassemblyRow：驱动读写页反汇编视图的行缓存需要完整类型。
+#include "MemoryAccessBackend.h" // 访问后端枚举与 DDMA 会话：按值出现在成员与返回类型里。
 
 #include <QVector>     // QVector：保存反汇编解码结果行。
 #include <QWidget>
@@ -50,6 +51,7 @@ class QVBoxLayout;
 class CodeEditorWidget;
 class HexEditorWidget;
 class SystemMemoryAuditPage;
+class DdmaPage;
 
 // 项目内 UI 组件前置声明：只用指针，避免把表格组件头拉进本头文件。
 namespace ks::ui
@@ -94,6 +96,11 @@ public:
     // - 供进程详情窗口内嵌时使用；
     // - 仅保留进程与模块、内存区域、内存搜索、内存查看器四个页面。
     void setProcessDetailMemoryScope();
+
+    // focusDdmaPage：
+    // - 作用：把当前 Tab 切到 DDMA 子页；
+    // - 调用方式：MainWindow::focusMemoryDockDdmaPage（右上角 DDMA 指示灯点击）。
+    void focusDdmaPage();
 
 protected:
     // changeEvent：
@@ -370,6 +377,40 @@ private:
     // - 作用：构建 Tab11（系统内存审计）界面；
     // - 处理逻辑：聚合物理分布、内核进程快照、Pool Tag 与 Big Pool 证据。
     void initializeSystemMemoryAuditTab();
+
+    // initializeDdmaTab：
+    // - 作用：构建 Tab12（DDMA）界面；
+    // - 处理逻辑：页面自身负责通道配置，本函数只负责挂载与注册会话变化回调。
+    void initializeDdmaTab();
+
+    // createBackendSelector：
+    // - 作用：创建一个统一样式的"访问后端"下拉框；
+    // - 参数 parent：父控件；
+    // - 参数 comboOut/hintOut：输出下拉框与配套提示标签；
+    // - 说明：三个页面共用这一个构造入口，条目顺序与 MemoryAccessBackend 一致，
+    //   避免某个页面自己加一份顺序不同的下拉。
+    QWidget* createBackendSelector(
+        QWidget* parent,
+        QComboBox*& comboOut,
+        QLabel*& hintOut);
+
+    // refreshBackendSelectors：
+    // - 作用：DDMA 会话变化后刷新三个下拉框的可用性与提示文本；
+    // - 说明：DDMA 不可用时不禁用下拉项，而是保留选项并在提示里说明缺哪一步，
+    //   否则用户只会看到一个灰掉的选项，不知道要去哪里补配置。
+    void refreshBackendSelectors();
+
+    // currentSearchBackend / currentViewerBackend / currentDriverMemoryBackend：
+    // - 作用：读取各页面当前选中的访问后端；
+    // - 返回：控件缺失时一律回落到标准驱动通道。
+    ksword::memory_backend::MemoryAccessBackend currentSearchBackend() const;
+    ksword::memory_backend::MemoryAccessBackend currentViewerBackend() const;
+    ksword::memory_backend::MemoryAccessBackend currentDriverMemoryBackend() const;
+
+    // currentDdmaSession：
+    // - 作用：取 DDMA 页维护的会话配置；
+    // - 返回：DDMA 页尚未创建时返回一个"未配置"的空会话。
+    const ksword::memory_backend::DdmaSession& currentDdmaSession() const;
 
     // initializeConnections：
     // - 作用：统一连接各控件交互逻辑。
@@ -1172,6 +1213,21 @@ private:
     // ========================================================
 
     SystemMemoryAuditPage* m_systemMemoryAuditPage = nullptr; // 系统级物理内存归因页面。
+
+    // ========================================================
+    // Tab12：DDMA（磁盘直接内存访问）
+    // ========================================================
+
+    DdmaPage* m_ddmaPage = nullptr;           // DDMA 通道配置与自检页面。
+
+    // 三个"访问后端"下拉分别挂在搜索、查看器与驱动读写页上。
+    // 它们共享 m_ddmaPage 里的同一份会话配置，切换互不影响。
+    QComboBox* m_searchBackendCombo = nullptr;        // Tab3 访问后端。
+    QComboBox* m_viewerBackendCombo = nullptr;        // Tab4 访问后端。
+    QComboBox* m_driverMemoryBackendCombo = nullptr;  // Tab6 访问后端。
+    QLabel* m_searchBackendHintLabel = nullptr;       // Tab3 后端状态提示。
+    QLabel* m_viewerBackendHintLabel = nullptr;       // Tab4 后端状态提示。
+    QLabel* m_driverMemoryBackendHintLabel = nullptr; // Tab6 后端状态提示。
 
 private:
     // ========================================================

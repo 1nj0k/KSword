@@ -709,6 +709,82 @@ void MemoryDock::driverReadMemoryFromUi()
     {
         m_driverMemoryStatusLabel->setText("正在通过 R0 读取内存...");
     }
+
+    // DDMA 后端是一条完全不同的通路：逐页 VA → PA 翻译后走磁盘 DMA，
+    // 响应模型也不是 VirtualMemoryReadResult，因此单独分支处理并直接返回，
+    // 不去改动下面那段已经稳定的标准通道解析逻辑。
+    if (currentDriverMemoryBackend() == ksword::memory_backend::MemoryAccessBackend::Ddma)
+    {
+        if (m_driverMemoryStatusLabel != nullptr)
+        {
+            m_driverMemoryStatusLabel->setText(
+                QStringLiteral("正在通过 DDMA 逐页翻译并读取内存..."));
+        }
+        const ksword::memory_backend::AccessOutcome ddmaOutcome =
+            ksword::memory_backend::readVirtual(
+                ksword::memory_backend::MemoryAccessBackend::Ddma,
+                currentDdmaSession(),
+                kernelAddressRead ? 0U : targetPid,
+                baseAddress,
+                totalBytes64);
+        if (!ddmaOutcome.ok)
+        {
+            resetDriverMemoryRwState();
+            if (m_driverMemoryRangeLabel != nullptr)
+            {
+                m_driverMemoryRangeLabel->setText(requestRangeText + QStringLiteral(" | DDMA失败"));
+            }
+            if (m_driverMemoryStatusLabel != nullptr)
+            {
+                m_driverMemoryStatusLabel->setText(
+                    QStringLiteral("DDMA 读取失败：%1").arg(ddmaOutcome.failureText));
+            }
+            QMessageBox::warning(this, "驱动内存读写", ddmaOutcome.failureText);
+            return;
+        }
+
+        m_driverMemoryBaseAddress = baseAddress;
+        m_driverMemoryOffsetBase = offsetBase;
+        m_driverMemoryCenterAddress = centerAddress;
+        m_driverMemorySnapshotPid = kernelAddressRead ? 0U : targetPid;
+        m_driverMemorySnapshotProcessName = targetProcessName;
+        m_driverMemoryOriginalBytes = ddmaOutcome.data;
+        m_driverMemoryEditedBytes = m_driverMemoryOriginalBytes;
+        m_driverMemoryHasSnapshot = true;
+        // 虚拟地址通道读到的快照按虚拟地址写回，写回时再按后端选择通路。
+        m_driverMemorySnapshotIsPhysical = false;
+
+        m_driverMemoryHexEditor->setEditable(true);
+        m_driverMemoryHexEditor->setBytesPerRow(16);
+        m_driverMemoryHexEditor->setByteArray(
+            m_driverMemoryEditedBytes,
+            m_driverMemoryBaseAddress);
+        refreshDriverMemoryViewsFromSnapshot();
+
+        m_driverMemoryApplyButton->setEnabled(false);
+        if (m_driverMemoryRangeLabel != nullptr)
+        {
+            m_driverMemoryRangeLabel->setText(requestRangeText + QStringLiteral(" | DDMA读取完成"));
+        }
+        QString ddmaStatusText = QStringLiteral("DDMA 读取完成：返回 %1 字节。")
+            .arg(m_driverMemoryEditedBytes.size());
+        if (ddmaOutcome.partial)
+        {
+            ddmaStatusText += QStringLiteral(
+                " 有页无法翻译成物理地址，这些页已按 00 填充。");
+        }
+        if (ddmaOutcome.scratchDirty)
+        {
+            ddmaStatusText += QStringLiteral(
+                " 严重告警：暂存扇区未能还原，磁盘上留下了脏扇区。");
+        }
+        if (m_driverMemoryStatusLabel != nullptr)
+        {
+            m_driverMemoryStatusLabel->setText(ddmaStatusText);
+        }
+        return;
+    }
+
     ksword::ark::DriverClient driverClient;
     const ksword::ark::VirtualMemoryReadResult readResult =
         driverClient.readVirtualMemory(
@@ -987,8 +1063,15 @@ void MemoryDock::driverApplyMemoryDiffFromUi()
             }
             if (m_driverMemoryStatusLabel != nullptr)
             {
-                m_driverMemoryStatusLabel->setText(
-                    QStringLiteral("物理内存写入完成，已提交 %1 个差异块。").arg(diffBlocks.size()));
+                // 成功路径也可能带告警（DDMA 的脏扇区与读-改-写窗口），
+                // 这里必须把 physicalFailureText 一起显示，不能因为返回了 true 就丢掉。
+                QString doneText =
+                    QStringLiteral("物理内存写入完成，已提交 %1 个差异块。").arg(diffBlocks.size());
+                if (!physicalFailureText.isEmpty())
+                {
+                    doneText += QStringLiteral(" ") + physicalFailureText;
+                }
+                m_driverMemoryStatusLabel->setText(doneText);
             }
             refreshDriverMemoryViewsFromSnapshot();
             return;
@@ -1000,6 +1083,106 @@ void MemoryDock::driverApplyMemoryDiffFromUi()
             m_driverMemoryStatusLabel->setText(QStringLiteral("物理内存写入失败。"));
         }
         QMessageBox::warning(this, "驱动内存读写", physicalFailureText);
+        return;
+    }
+
+    // DDMA 后端整条通路都不一样：不走 R0 的虚拟写，也没有内核字节事务与回滚，
+    // 而是逐页翻译成物理地址后做磁盘 DMA。单独分支并直接返回，避免把下面那段
+    // 已经带事务与回滚的标准写回逻辑改成两用。
+    if (currentDriverMemoryBackend() == ksword::memory_backend::MemoryAccessBackend::Ddma)
+    {
+        const std::uint32_t ddmaTargetPid =
+            kernelAddressSnapshot ? 0U : m_driverMemorySnapshotPid;
+        std::uint64_t ddmaWrittenTotal = 0ULL;
+        bool ddmaScratchDirty = false;
+        bool ddmaLostUpdate = false;
+        bool ddmaForceApproved = false;
+
+        for (const DriverDiffBlock& block : diffBlocks)
+        {
+            ksword::memory_backend::AccessOutcome blockOutcome =
+                ksword::memory_backend::writeVirtual(
+                    ksword::memory_backend::MemoryAccessBackend::Ddma,
+                    currentDdmaSession(),
+                    ddmaTargetPid,
+                    block.address,
+                    block.bytes,
+                    ddmaForceApproved);
+
+            // 首个块触发 force 确认后，本轮后续块复用同一次同意。
+            if (blockOutcome.forceRequired && !ddmaForceApproved)
+            {
+                if (!confirmForceDriverMemoryWrite(
+                        block.address,
+                        static_cast<std::uint32_t>(block.bytes.size()),
+                        blockOutcome.failureText))
+                {
+                    if (m_driverMemoryStatusLabel != nullptr)
+                    {
+                        m_driverMemoryStatusLabel->setText(
+                            QStringLiteral("用户取消了 DDMA 强制写入。"));
+                    }
+                    return;
+                }
+                ddmaForceApproved = true;
+                blockOutcome = ksword::memory_backend::writeVirtual(
+                    ksword::memory_backend::MemoryAccessBackend::Ddma,
+                    currentDdmaSession(),
+                    ddmaTargetPid,
+                    block.address,
+                    block.bytes,
+                    true);
+            }
+
+            ddmaScratchDirty = ddmaScratchDirty || blockOutcome.scratchDirty;
+            ddmaLostUpdate = ddmaLostUpdate || blockOutcome.lostUpdateWindow;
+            ddmaWrittenTotal += blockOutcome.bytesDone;
+
+            if (!blockOutcome.ok)
+            {
+                // DDMA 写没有事务也没有回滚，失败即停并如实报告已写入量。
+                QString failureText = QStringLiteral(
+                    "DDMA 写入失败。\n%1\n本轮累计已写入 %2 字节，失败前的改动不会自动回滚。")
+                    .arg(blockOutcome.failureText)
+                    .arg(ddmaWrittenTotal);
+                if (ddmaScratchDirty)
+                {
+                    failureText += QStringLiteral(
+                        "\n严重告警：暂存扇区未能还原，磁盘上留下了脏扇区。");
+                }
+                if (m_driverMemoryStatusLabel != nullptr)
+                {
+                    m_driverMemoryStatusLabel->setText(QStringLiteral("DDMA 写入失败。"));
+                }
+                QMessageBox::warning(this, "驱动内存读写", failureText);
+                return;
+            }
+        }
+
+        m_driverMemoryOriginalBytes = m_driverMemoryEditedBytes;
+        if (m_driverMemoryApplyButton != nullptr)
+        {
+            m_driverMemoryApplyButton->setEnabled(false);
+        }
+        QString ddmaDoneText = QStringLiteral(
+            "DDMA 写入完成，已提交 %1 个差异块，共 %2 字节。")
+            .arg(diffBlocks.size())
+            .arg(ddmaWrittenTotal);
+        if (ddmaLostUpdate)
+        {
+            ddmaDoneText += QStringLiteral(
+                " 含非整页写入，驱动做了读-改-写，同页其它字节存在覆盖窗口。");
+        }
+        if (ddmaScratchDirty)
+        {
+            ddmaDoneText += QStringLiteral(
+                " 严重告警：暂存扇区未能还原，磁盘上留下了脏扇区。");
+        }
+        if (m_driverMemoryStatusLabel != nullptr)
+        {
+            m_driverMemoryStatusLabel->setText(ddmaDoneText);
+        }
+        refreshDriverMemoryViewsFromSnapshot();
         return;
     }
 

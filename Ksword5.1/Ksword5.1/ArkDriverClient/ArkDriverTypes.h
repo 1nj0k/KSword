@@ -21,6 +21,7 @@
 #include "../../../shared/driver/KswordArkKernelIoctl.h"
 #include "../../../shared/driver/KswordArkKeyboardIoctl.h"
 #include "../../../shared/driver/KswordArkMemoryIoctl.h"
+#include "../../../shared/driver/KswordArkDdmaIoctl.h"
 #include "../../../shared/driver/KswordArkMutationIoctl.h"
 #include "../../../shared/driver/KswordArkProcessIoctl.h"
 #include "../../../shared/driver/KswordArkProcessProtectIoctl.h"
@@ -1169,6 +1170,139 @@ namespace ksword::ark
         std::uint32_t requestedBytes = 0;       // requestedBytes：请求写入长度。
         std::uint32_t bytesWritten = 0;         // bytesWritten：实际写入长度。
         std::uint32_t maxBytesPerRequest = 0;   // maxBytesPerRequest：驱动单次写上限。
+    };
+
+    // ========================================================
+    // VA → PA 翻译（复用 R0 页表游走后端）
+    // ========================================================
+
+    // VirtualAddressTranslateResult 是 IOCTL_KSWORD_ARK_TRANSLATE_VIRTUAL_ADDRESS
+    // 的 R3 模型。此前只有 KswordCLI 直接发这个 IOCTL，没有 C++ 封装；DDMA 的
+    // 虚拟地址通道需要逐页拿物理地址，因此在这里补上，两边共用同一个后端。
+    struct VirtualAddressTranslateResult
+    {
+        IoResult io;                    // io：DeviceIoControl 调用状态。
+        std::uint32_t version = 0;      // version：协议版本。
+        std::uint32_t processId = 0;    // processId：R0 回显的目标 PID。
+        std::uint32_t fieldFlags = 0;   // fieldFlags：KSWORD_ARK_MEMORY_FIELD_*。
+        std::uint32_t queryStatus = KSWORD_ARK_MEMORY_TRANSLATE_STATUS_UNAVAILABLE; // queryStatus：翻译聚合状态。
+        long lookupStatus = 0;          // lookupStatus：进程查找 NTSTATUS。
+        long walkStatus = 0;            // walkStatus：页表游走 NTSTATUS。
+        std::uint64_t virtualAddress = 0;   // virtualAddress：请求的虚拟地址。
+        std::uint64_t physicalAddress = 0;  // physicalAddress：翻译结果；resolved 为假时无意义。
+        std::uint64_t cr3PhysicalAddress = 0; // cr3PhysicalAddress：目标进程页表根。
+        std::uint32_t pageSize = 0;     // pageSize：终端映射页大小（4KB/2MB/1GB）。
+        std::uint32_t largePageType = 0; // largePageType：KSWORD_ARK_PAGE_TABLE_LARGE_PAGE_*。
+        std::uint32_t protection = 0;   // protection：KSWORD_ARK_MEMORY_PROTECTION_* 汇总位。
+        std::uint32_t confidence = 0;   // confidence：R0 自评可信度。
+        bool resolved = false;          // resolved：是否走到了有效终端映射。
+    };
+
+    // ========================================================
+    // DDMA（磁盘直接内存访问）后端
+    // ========================================================
+
+    // DdmaDiskEntry 是一块可作为 DDMA 通道的磁盘。
+    struct DdmaDiskEntry
+    {
+        std::uint32_t deviceIndex = 0;  // deviceIndex：\Driver\Disk 设备列表下标，读写请求按它定位。
+        std::uint32_t diskFlags = 0;    // diskFlags：KSWORD_ARK_DDMA_DISK_FLAG_*。
+        long probeStatus = 0;           // probeStatus：探测用 ATA DMA 读命令的 NTSTATUS。
+        std::uint32_t sectorSize = 0;   // sectorSize：扇区字节数。
+        std::wstring deviceName;        // deviceName：设备对象名，例如 \Device\Harddisk0\DR0。
+
+        // ready：这块盘真的完成过一次 ATA DMA 传输，可以拿来做 DDMA。
+        bool ready() const
+        {
+            return (diskFlags & KSWORD_ARK_DDMA_DISK_FLAG_ATA_DMA_READY) != 0UL;
+        }
+    };
+
+    // DdmaCapabilityResult 是 DDMA 能力查询结果。
+    struct DdmaCapabilityResult
+    {
+        IoResult io;                    // io：DeviceIoControl 调用状态。
+        bool unsupported = false;       // unsupported：驱动不认识这个 IOCTL（旧驱动）。
+        std::uint32_t version = 0;      // version：协议版本。
+        std::uint32_t status = KSWORD_ARK_DDMA_QUERY_STATUS_UNAVAILABLE; // status：查询聚合状态。
+        std::uint32_t capabilityFlags = 0; // capabilityFlags：KSWORD_ARK_DDMA_CAP_FLAG_*。
+        std::uint32_t totalDisks = 0;   // totalDisks：枚举到的磁盘总数。
+        std::uint32_t readyDisks = 0;   // readyDisks：探测通过的磁盘数。
+        std::uint32_t transferBytes = 0;    // transferBytes：一次 DMA 传输长度，固定一页。
+        std::uint32_t scratchSectorCount = 0; // scratchSectorCount：暂存区占用的扇区数。
+        long lastStatus = 0;            // lastStatus：最近一次底层 NTSTATUS。
+        std::vector<DdmaDiskEntry> disks; // disks：磁盘条目。
+
+        // kernelDebuggerEnabled：本机开着内核调试。DDMA 用 MmMapIoSpace 映射
+        // 普通 RAM，这种机器上会命中 MiShowBadMapper 蓝屏，UI 必须据此禁用。
+        bool kernelDebuggerEnabled() const
+        {
+            return (capabilityFlags & KSWORD_ARK_DDMA_CAP_FLAG_KERNEL_DEBUGGER_ENABLED) != 0UL;
+        }
+    };
+
+    // DdmaReadResult 是一次 DDMA 物理读结果。
+    struct DdmaReadResult
+    {
+        IoResult io;                    // io：DeviceIoControl 调用状态。
+        bool unsupported = false;       // unsupported：驱动不认识这个 IOCTL。
+        std::uint32_t version = 0;      // version：协议版本。
+        std::uint32_t fieldFlags = 0;   // fieldFlags：KSWORD_ARK_DDMA_FIELD_*。
+        std::uint32_t readStatus = KSWORD_ARK_DDMA_READ_STATUS_UNAVAILABLE; // readStatus：读取聚合状态。
+        long mapStatus = 0;             // mapStatus：MmMapIoSpace 阶段。
+        long backupStatus = 0;          // backupStatus：暂存扇区备份阶段。
+        long stageOutStatus = 0;        // stageOutStatus：目标页 → 磁盘暂存扇区。
+        long stageInStatus = 0;         // stageInStatus：磁盘暂存扇区 → 工作缓冲。
+        long restoreStatus = 0;         // restoreStatus：暂存扇区还原阶段。
+        std::uint64_t requestedPhysicalAddress = 0; // requestedPhysicalAddress：请求物理地址。
+        std::uint64_t scratchLba = 0;   // scratchLba：本次使用的暂存扇区 LBA。
+        std::uint32_t diskIndex = 0;    // diskIndex：本次使用的磁盘下标。
+        std::uint32_t requestedBytes = 0;   // requestedBytes：请求长度。
+        std::uint32_t bytesRead = 0;        // bytesRead：实际读回长度。
+        std::uint32_t maxBytesPerRequest = 0; // maxBytesPerRequest：单次上限。
+        std::wstring deviceName;        // deviceName：本次实际使用的设备名，供 R3 比对。
+        std::vector<std::uint8_t> data; // data：读回的物理字节。
+
+        // scratchRestored：暂存扇区已还原。为假说明磁盘上留下了脏扇区。
+        bool scratchRestored() const
+        {
+            return (fieldFlags & KSWORD_ARK_DDMA_FIELD_SCRATCH_RESTORED) != 0UL;
+        }
+    };
+
+    // DdmaWriteResult 是一次 DDMA 物理写结果。
+    struct DdmaWriteResult
+    {
+        IoResult io;                    // io：DeviceIoControl 调用状态。
+        bool unsupported = false;       // unsupported：驱动不认识这个 IOCTL。
+        std::uint32_t version = 0;      // version：协议版本。
+        std::uint32_t fieldFlags = 0;   // fieldFlags：KSWORD_ARK_DDMA_FIELD_*。
+        std::uint32_t writeStatus = KSWORD_ARK_DDMA_WRITE_STATUS_UNAVAILABLE; // writeStatus：写入聚合状态。
+        long mapStatus = 0;             // mapStatus：MmMapIoSpace 阶段。
+        long backupStatus = 0;          // backupStatus：暂存扇区备份阶段。
+        long stageOutStatus = 0;        // stageOutStatus：工作缓冲 → 磁盘暂存扇区。
+        long stageInStatus = 0;         // stageInStatus：磁盘暂存扇区 → 目标页。
+        long restoreStatus = 0;         // restoreStatus：暂存扇区还原阶段。
+        long readbackStatus = 0;        // readbackStatus：read-modify-write 的读回阶段。
+        std::uint64_t requestedPhysicalAddress = 0; // requestedPhysicalAddress：请求物理地址。
+        std::uint64_t scratchLba = 0;   // scratchLba：本次使用的暂存扇区 LBA。
+        std::uint32_t diskIndex = 0;    // diskIndex：本次使用的磁盘下标。
+        std::uint32_t requestedBytes = 0;   // requestedBytes：请求长度。
+        std::uint32_t bytesWritten = 0;     // bytesWritten：实际写入长度。
+        std::uint32_t maxBytesPerRequest = 0; // maxBytesPerRequest：单次上限。
+        std::wstring deviceName;        // deviceName：本次实际使用的设备名。
+
+        bool scratchRestored() const
+        {
+            return (fieldFlags & KSWORD_ARK_DDMA_FIELD_SCRATCH_RESTORED) != 0UL;
+        }
+
+        // readModifyWriteUsed：写入不是整页覆盖，驱动做了读-改-写。
+        // 这意味着同页其它字节存在 4KB 粒度的 lost update 窗口。
+        bool readModifyWriteUsed() const
+        {
+            return (fieldFlags & KSWORD_ARK_DDMA_FIELD_READ_MODIFY_WRITE_USED) != 0UL;
+        }
     };
 
     // Kernel executable-memory permission bits used by the R3 display model.

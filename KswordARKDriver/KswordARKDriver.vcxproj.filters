@@ -516,6 +516,9 @@
     <ClInclude Include="include\ark\ark_memory.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\ark\ark_ddma.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="include\ark\ark_memory_evidence.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -1194,6 +1197,12 @@
       <Filter>Source Files\Features\Memory</Filter>
     </ClCompile>
     <ClCompile Include="src\features\memory\memory_ioctl.c">
+      <Filter>Source Files\Features\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\memory\memory_ddma.c">
+      <Filter>Source Files\Features\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="src\features\memory\memory_ddma_ioctl.c">
       <Filter>Source Files\Features\Memory</Filter>
     </ClCompile>
     <ClCompile Include="src\features\memory\memory_kernel_evidence.c">

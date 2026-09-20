@@ -250,6 +250,69 @@ namespace ksword::ark
             const std::vector<std::uint8_t>& bytes,
             unsigned long flags = KSWORD_ARK_PHYSICAL_WRITE_FLAG_UI_CONFIRMED,
             DriverHandle* existingHandle = nullptr) const;
+        // ====================================================
+        // VA → PA 翻译与 DDMA（磁盘直接内存访问）后端
+        // ====================================================
+
+        // translateVirtualAddress：
+        // - 输入：目标 PID 与虚拟地址；processId 为 0 时按内核地址空间解析。
+        // - 处理：封装 IOCTL_KSWORD_ARK_TRANSLATE_VIRTUAL_ADDRESS，复用 R0 既有的
+        //   只读页表游走后端（memory_pagetable.c），不新增任何页表解析实现。
+        // - 返回：VirtualAddressTranslateResult。physicalAddress 只有在
+        //   resolved 为真时才有意义——走到 not-present 表项时该字段是残留值，
+        //   只看 io.ok 会拿到一个看起来合法、实际无意义的物理地址。
+        VirtualAddressTranslateResult translateVirtualAddress(
+            std::uint32_t processId,
+            std::uint64_t virtualAddress,
+            DriverHandle* existingHandle = nullptr) const;
+
+        // queryDdmaCapability：
+        // - 输入：probeTransfer 决定是否对每块盘真的发一次 ATA DMA 读命令；
+        //   scratchLba/scratchLbaValid 给出探测用的暂存扇区，不声明就只枚举
+        //   设备不发命令；maxDisks 限制回传条数。
+        // - 处理：封装 IOCTL_KSWORD_ARK_DDMA_QUERY_CAPABILITY。
+        // - 返回：DdmaCapabilityResult。调用方必须先看 kernelDebuggerEnabled()：
+        //   开着内核调试的机器上 DDMA 会命中 MiShowBadMapper 蓝屏，此时不应
+        //   放行任何 DDMA 读写。
+        DdmaCapabilityResult queryDdmaCapability(
+            bool probeTransfer,
+            std::uint64_t scratchLba,
+            bool scratchLbaValid,
+            unsigned long maxDisks = KSWORD_ARK_DDMA_DISK_LIMIT_DEFAULT,
+            DriverHandle* existingHandle = nullptr) const;
+
+        // ddmaReadPhysicalMemory：
+        // - 输入：diskIndex 取自能力查询；physicalAddress 与 bytesToRead 必须
+        //   落在同一个 4KB 物理页内（DMA 传输粒度就是一页，跨页由调用方切片）；
+        //   scratchLba 为暂存扇区起始 LBA；flags 必须同时带
+        //   SCRATCH_LBA_VALID 与 SCRATCH_ACKNOWLEDGED，本函数会本地拦截。
+        // - 处理：R0 侧把目标物理页 DMA 写到暂存扇区，再 DMA 读回工作缓冲，
+        //   最后还原暂存扇区。整条路径 CPU 从未解引用过目标物理页。
+        // - 返回：DdmaReadResult；io.ok 只表示 IOCTL 往返成功，数据是否有效看
+        //   readStatus，磁盘是否干净看 scratchRestored()。
+        DdmaReadResult ddmaReadPhysicalMemory(
+            std::uint32_t diskIndex,
+            std::uint64_t physicalAddress,
+            std::uint32_t bytesToRead,
+            std::uint64_t scratchLba,
+            unsigned long flags,
+            DriverHandle* existingHandle = nullptr) const;
+
+        // ddmaWritePhysicalMemory：
+        // - 输入：同上，另需 KSWORD_ARK_DDMA_FLAG_FORCE，缺失时驱动返回
+        //   FORCE_REQUIRED 且一个字节都不会写。
+        // - 处理：请求不是"页对齐且恰好一页"时，R0 会先 DMA 读回整页再整页写
+        //   回，也就是 read-modify-write；这中间存在 4KB 粒度的 lost update
+        //   窗口，结果里的 readModifyWriteUsed() 会如实上报。
+        // - 返回：DdmaWriteResult；必须检查 writeStatus 才能判断是否真的写成功。
+        DdmaWriteResult ddmaWritePhysicalMemory(
+            std::uint32_t diskIndex,
+            std::uint64_t physicalAddress,
+            const std::vector<std::uint8_t>& bytes,
+            std::uint64_t scratchLba,
+            unsigned long flags,
+            DriverHandle* existingHandle = nullptr) const;
+
         // queryKernelMemoryEvidence：
         // - 输入：只读采集 flags、行数/字节预算和可选地址半开区间。
         // - 处理：封装 IOCTL_KSWORD_ARK_SCAN_KERNEL_MEMORY_EVIDENCE，解析变长 evidence rows。
