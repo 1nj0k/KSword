@@ -24,6 +24,8 @@
 #include "../ArkDriverClient/ArkDriverClient.h"
 // 暂存扇区候选的纯算术在 shared/evidence 里，Qt-free / Win32-free，单测覆盖同一份。
 #include "../../../shared/evidence/DdmaScratchPlan.h"
+// 地址/扇区号的进制规则同样在 shared/evidence 里，两边共用同一份并被穷举测试覆盖。
+#include "../../../shared/evidence/NumericTextParse.h"
 
 #include <QByteArray>
 #include <QString>
@@ -205,8 +207,10 @@ private:
     //   这也是 DDMA 相对标准通道的全部价值所在。
     void compareBackendsFromUi();
 
-    // parseAddressText：解析十进制或 0x 十六进制地址。
+    // parseAddressText：解析物理地址。无前缀按十六进制，0x 前缀恒为十六进制。
     static bool parseAddressText(const QString& text, std::uint64_t& valueOut);
+    // parseSectorNumberText：解析扇区 LBA。LBA 是数量不是地址，无前缀按十进制。
+    static bool parseSectorNumberText(const QString& text, std::uint64_t& valueOut);
     // formatAddress：格式化成 16 位十六进制文本。
     static QString formatAddress(std::uint64_t address);
 

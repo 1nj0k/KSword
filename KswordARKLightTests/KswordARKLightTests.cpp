@@ -514,6 +514,7 @@ int wmain() {
     failures += RunHvmEptSwitchTests();
     failures += RunHvmWatchTests();
     failures += RunDdmaPlanTests();
+    failures += RunNumericTextParseTests();
     failures += RunHookPatchComposeTests();
 
     if (failures == 0) {

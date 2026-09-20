@@ -433,7 +433,7 @@ bool DdmaPage::parseScratchLbaFromUi(std::uint64_t& lbaOut, QString& errorTextOu
     }
 
     std::uint64_t value = 0ULL;
-    if (!parseAddressText(text, value))
+    if (!parseSectorNumberText(text, value))
     {
         errorTextOut = QStringLiteral("暂存扇区 LBA 解析失败，请填写十进制或 0x 十六进制数值。");
         return false;
@@ -1829,27 +1829,36 @@ void DdmaPage::compareBackendsFromUi()
 
 bool DdmaPage::parseAddressText(const QString& text, std::uint64_t& valueOut)
 {
+    // 物理地址：无前缀按十六进制。本页的地址提示词写的就是 0x1000，回显也带
+    // 0x，输入却按十进制解释的话，用户会去读另一个物理页而完全不会收到提示。
     valueOut = 0ULL;
-    const QString trimmed = text.trimmed();
-    if (trimmed.isEmpty())
+    const auto parsed = ksword::evidence::ParseNumericText(
+        text.trimmed().toStdString(),
+        ksword::evidence::NumericTextDefaultRadix::Hexadecimal);
+    if (!parsed.ok)
     {
         return false;
     }
+    valueOut = parsed.value;
+    return true;
+}
 
-    bool converted = false;
-    if (trimmed.startsWith(QStringLiteral("0x"), Qt::CaseInsensitive))
+bool DdmaPage::parseSectorNumberText(const QString& text, std::uint64_t& valueOut)
+{
+    // 扇区 LBA 是**数量**不是地址：它是从 0 数起的扇区序号，分区表、磁盘管理
+    // 工具和本页的提示词（"例如 0x100000 或 1048576"）都按十进制念。所以这里
+    // 必须保留十进制默认，不能跟着地址一起改成十六进制——那会让已经填好的
+    // LBA 在下次打开时指向另一个扇区，而 LBA 指错的后果是覆盖别处的数据。
+    valueOut = 0ULL;
+    const auto parsed = ksword::evidence::ParseNumericText(
+        text.trimmed().toStdString(),
+        ksword::evidence::NumericTextDefaultRadix::Decimal);
+    if (!parsed.ok)
     {
-        valueOut = trimmed.mid(2).toULongLong(&converted, 16);
+        return false;
     }
-    else
-    {
-        valueOut = trimmed.toULongLong(&converted, 10);
-        if (!converted)
-        {
-            valueOut = trimmed.toULongLong(&converted, 16);
-        }
-    }
-    return converted;
+    valueOut = parsed.value;
+    return true;
 }
 
 QString DdmaPage::formatAddress(const std::uint64_t address)

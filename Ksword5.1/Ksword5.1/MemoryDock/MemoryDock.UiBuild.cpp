@@ -959,11 +959,11 @@ void MemoryDock::initializeMemoryViewerTab()
     navLayout->setSpacing(8);
     navLayout->addWidget(new QLabel("地址:", m_tabViewer));
     m_viewAddressEdit = new QLineEdit(m_tabViewer);
-    m_viewAddressEdit->setPlaceholderText("输入地址后跳转");
+    m_viewAddressEdit->setPlaceholderText("输入地址后跳转，默认十六进制");
     m_viewAddressEdit->setStyleSheet(buildBlueInputStyle());
     m_viewJumpButton = new QPushButton(QIcon(":/Icon/codeeditor_goto.svg"), "跳转", m_tabViewer);
     m_viewJumpButton->setStyleSheet(buildBlueButtonStyle());
-    m_viewJumpButton->setToolTip("跳转到左侧输入的内存地址并显示该处内容");
+    m_viewJumpButton->setToolTip("跳转到左侧输入的内存地址并显示该处内容。地址无前缀时按十六进制解释。");
     m_viewProtectLabel = new QLabel("保护属性: -", m_tabViewer);
     navLayout->addWidget(m_viewAddressEdit, 1);
     navLayout->addWidget(m_viewJumpButton);

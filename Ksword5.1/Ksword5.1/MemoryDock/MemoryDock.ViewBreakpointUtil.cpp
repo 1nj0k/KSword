@@ -1,6 +1,7 @@
 #include "MemoryDock.Internal.h"
 #include "../Internationalization/LanguageManager.h"
 #include "../UI/TableInteractionSupport.h"
+#include "../../../shared/evidence/NumericTextParse.h"
 
 // 说明：由原聚合式实现迁移为独立 .cpp，成员函数实现保持原样。
 using namespace ksword::memory_dock_internal;
@@ -159,9 +160,17 @@ void MemoryDock::reloadMemoryViewerPage()
             m_hexEditorWidget->setEditable(false);
             m_hexEditorWidget->clearData();
         }
-        const QString reasonText = (readError == ERROR_PARTIAL_COPY)
-            ? QStringLiteral("该地址所在区域未映射")
-            : QStringLiteral("读取被拒绝");
+        // 低 64 KB 是每个进程的空指针保护区，系统从不在那里映射任何东西，
+        // 所以这一段永远读不到，跟目标进程、权限、后端通道都无关。把它单独
+        // 判出来，是因为它的真实成因几乎总在读取之外：地址本身就不对。最常见
+        // 的两种来源——把十六进制地址少写了几位，以及把某处的偏移当成了地址。
+        // 只报"错误码 299"会把排查方向整个带到内存读取上去。
+        constexpr std::uint64_t kNullGuardEnd = 0x10000ULL;
+        const QString reasonText = (m_currentViewerAddress < kNullGuardEnd)
+            ? QStringLiteral("该地址落在进程的空指针保护区（低 64 KB）内，任何进程都不会在这里映射内存，请检查地址是否写少了位数")
+            : ((readError == ERROR_PARTIAL_COPY)
+                ? QStringLiteral("该地址所在区域未映射")
+                : QStringLiteral("读取被拒绝"));
         m_viewerStatusLabel->setText(
             QString("读取失败：地址=%1，错误码=%2（%3）")
             .arg(formatAddress(m_currentViewerAddress))
@@ -743,45 +752,34 @@ bool MemoryDock::parseAddressText(const QString& text, std::uint64_t& valueOut)
         << text.trimmed().toStdString()
         << eol;
 
-    // 地址解析与通用无符号整数解析共享一套规则。
-    return parseUnsignedNumber(text, valueOut);
+    // 地址的无前缀默认进制是**十六进制**，与下面的通用数值解析不是一套规则。
+    // 原先两者共用一个"先试十进制、失败再试十六进制"的解析器，而那条十六进制
+    // 回退只对含 a–f 的串生效：纯数字串的十进制解析永远成立。于是在这个所有
+    // 地址都以 0x 回显的界面里，输入 1233 会跳到十进制 1233（= 0x4D1），
+    // 不报错、不提示，只是读到了别处。
+    const auto parsed = ksword::evidence::ParseNumericText(
+        text.trimmed().toStdString(),
+        ksword::evidence::NumericTextDefaultRadix::Hexadecimal);
+    if (!parsed.ok)
+    {
+        return false;
+    }
+    valueOut = parsed.value;
+    return true;
 }
 
 bool MemoryDock::parseUnsignedNumber(const QString& text, std::uint64_t& valueOut)
 {
-    const QString trimmed = text.trimmed();
-    if (trimmed.isEmpty())
+    // 这里是"数量"语义（搜索的字节值、长度等），无前缀按十进制——数量本来就是
+    // 按十进制念的，不能跟着地址一起改。0x 前缀仍然恒为十六进制。
+    const auto parsed = ksword::evidence::ParseNumericText(
+        text.trimmed().toStdString(),
+        ksword::evidence::NumericTextDefaultRadix::Decimal);
+    if (!parsed.ok)
     {
         return false;
     }
-
-    bool parseOk = false;
-    qulonglong parsedValue = 0;
-
-    // 优先处理 0x 前缀（十六进制）形式。
-    if (trimmed.startsWith("0x", Qt::CaseInsensitive))
-    {
-        parsedValue = trimmed.mid(2).toULongLong(&parseOk, 16);
-        if (!parseOk)
-        {
-            return false;
-        }
-        valueOut = static_cast<std::uint64_t>(parsedValue);
-        return true;
-    }
-
-    // 再尝试十进制；失败后再尝试“无前缀十六进制”以兼容输入习惯。
-    parsedValue = trimmed.toULongLong(&parseOk, 10);
-    if (!parseOk)
-    {
-        parsedValue = trimmed.toULongLong(&parseOk, 16);
-        if (!parseOk)
-        {
-            return false;
-        }
-    }
-
-    valueOut = static_cast<std::uint64_t>(parsedValue);
+    valueOut = parsed.value;
     return true;
 }
 

@@ -33810,6 +33810,11 @@
     "地址 %1 只读到 %2 / %3 字节：该页在此之后未映射，后续内容不存在。": "Address %1: only %2 of %3 bytes could be read -- the page is unmapped past that point, so the rest does not exist.",
     "该地址所在区域未映射": "the region at this address is not mapped",
     "读取失败：地址=%1，错误码=%2（%3）": "Read failed: address=%1, error=%2 (%3)",
-    "读取被拒绝": "the read was denied"
+    "读取被拒绝": "the read was denied",
+    "该地址落在进程的空指针保护区（低 64 KB）内，任何进程都不会在这里映射内存，请检查地址是否写少了位数": "This address falls inside the process's null-pointer guard region (the low 64 KB); no process ever maps memory there, so check whether the address is missing digits",
+    "跳转到左侧输入的内存地址并显示该处内容。地址无前缀时按十六进制解释。": "Jump to the address entered on the left and show what is there. An address with no prefix is read as hexadecimal.",
+    "输入地址后跳转，默认十六进制": "Enter an address to jump; hexadecimal by default",
+    "采样结束虚拟地址。无前缀按十六进制解释，也可显式写 0x 前缀。": "End virtual address for sampling. Read as hexadecimal when it carries no prefix; an explicit 0x prefix works too.",
+    "采样起始虚拟地址。无前缀按十六进制解释，也可显式写 0x 前缀。": "Start virtual address for sampling. Read as hexadecimal when it carries no prefix; an explicit 0x prefix works too."
   }
 }
