@@ -976,6 +976,15 @@ void SettingsDock::initializeAppearanceTab()
         QStringLiteral("R-1（硬件虚拟化）"));
     privilegeLayout->addWidget(m_privilegeHvmCheckBox);
 
+    m_privilegeDdmaCheckBox = new QCheckBox(QStringLiteral("DDMA（磁盘直接内存访问）"), privilegeGroupBox);
+    languageManager.bindText(
+        m_privilegeDdmaCheckBox,
+        QStringLiteral("settings.privilege_buttons.ddma"),
+        QStringLiteral("DDMA（磁盘直接内存访问）"));
+    // 整串写在一行：跨行拼接会被 i18n 审计当成多个独立源串，逐段都要词条。
+    m_privilegeDdmaCheckBox->setToolTip(QStringLiteral("显示 DDMA 常驻虚扇区指示灯。亮起代表磁盘上有一块扇区正被当作 DMA 中转站占用。"));
+    privilegeLayout->addWidget(m_privilegeDdmaCheckBox);
+
     QHBoxLayout* hvmNameLayout = new QHBoxLayout();
     hvmNameLayout->setSpacing(6);
     QLabel* hvmNameLabel = new QLabel(QStringLiteral("虚拟化按钮显示为"), privilegeGroupBox);
@@ -1270,14 +1279,15 @@ void SettingsDock::bindAppearanceSignals()
         markPendingChanges(QString());
         });
 
-    // 权限按钮排：六个开关与一个称呼下拉，任一变化都进同一个待应用标记。
+    // 权限按钮排：七个开关与一个称呼下拉，任一变化都进同一个待应用标记。
     for (QCheckBox* privilegeCheckBox : {
              m_privilegeUiAccessCheckBox,
              m_privilegeAdminCheckBox,
              m_privilegeDebugCheckBox,
              m_privilegeSystemCheckBox,
              m_privilegeR0CheckBox,
-             m_privilegeHvmCheckBox})
+             m_privilegeHvmCheckBox,
+             m_privilegeDdmaCheckBox})
     {
         if (privilegeCheckBox == nullptr)
         {
@@ -1559,6 +1569,10 @@ void SettingsDock::applySettingsToUi(const ks::settings::AppearanceSettings& set
     if (m_privilegeHvmCheckBox != nullptr)
     {
         m_privilegeHvmCheckBox->setChecked(settings.privilegeButtonHvmVisible);
+    }
+    if (m_privilegeDdmaCheckBox != nullptr)
+    {
+        m_privilegeDdmaCheckBox->setChecked(settings.privilegeButtonDdmaVisible);
     }
     if (m_hvmDisplayNameCombo != nullptr)
     {
@@ -1854,6 +1868,10 @@ ks::settings::AppearanceSettings SettingsDock::collectSettingsFromUi() const
         (m_privilegeHvmCheckBox != nullptr)
             ? m_privilegeHvmCheckBox->isChecked()
             : m_currentAppearanceSettings.privilegeButtonHvmVisible;
+    collectedSettings.privilegeButtonDdmaVisible =
+        (m_privilegeDdmaCheckBox != nullptr)
+            ? m_privilegeDdmaCheckBox->isChecked()
+            : m_currentAppearanceSettings.privilegeButtonDdmaVisible;
     collectedSettings.hvmDisplayName =
         (m_hvmDisplayNameCombo != nullptr)
             ? static_cast<ks::settings::HvmDisplayName>(
@@ -2139,6 +2157,7 @@ void SettingsDock::saveAndEmitFromUi(const QString& triggerReason)
         && nextSettings.privilegeButtonSystemVisible == m_currentAppearanceSettings.privilegeButtonSystemVisible
         && nextSettings.privilegeButtonR0Visible == m_currentAppearanceSettings.privilegeButtonR0Visible
         && nextSettings.privilegeButtonHvmVisible == m_currentAppearanceSettings.privilegeButtonHvmVisible
+        && nextSettings.privilegeButtonDdmaVisible == m_currentAppearanceSettings.privilegeButtonDdmaVisible
         && nextSettings.hvmDisplayName == m_currentAppearanceSettings.hvmDisplayName
         && nextSettings.notificationCardsEnabled == m_currentAppearanceSettings.notificationCardsEnabled
         && nextSettings.notificationMinimumLevel == m_currentAppearanceSettings.notificationMinimumLevel

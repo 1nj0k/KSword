@@ -167,6 +167,10 @@ namespace ks::settings
         bool privilegeButtonSystemVisible = true;
         bool privilegeButtonR0Visible = true;
         bool privilegeButtonHvmVisible = true;
+        // DDMA（磁盘直接内存访问）常驻虚扇区指示灯，排在 R-1 右侧。
+        // 与其它权限灯一致默认显示：它本身只是指示灯加跳转入口，点击不会做任何
+        // 破坏性操作；真正要占用磁盘扇区必须在 DDMA 子页上显式配置。
+        bool privilegeButtonDdmaVisible = true;
         // 右上角那个按钮上写哪个名字；见 HvmDisplayName 的说明。
         HvmDisplayName hvmDisplayName = HvmDisplayName::Kvm;
     };

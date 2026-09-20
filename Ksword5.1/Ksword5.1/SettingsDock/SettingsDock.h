@@ -390,6 +390,7 @@ private:
     QCheckBox* m_privilegeSystemCheckBox = nullptr;
     QCheckBox* m_privilegeR0CheckBox = nullptr;
     QCheckBox* m_privilegeHvmCheckBox = nullptr;
+    QCheckBox* m_privilegeDdmaCheckBox = nullptr;
     // m_hvmDisplayNameCombo 作用：选择硬件虚拟化按钮上显示 KVM / HVM / R-1。
     QComboBox* m_hvmDisplayNameCombo = nullptr;
 

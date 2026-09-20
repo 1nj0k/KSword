@@ -7803,15 +7803,19 @@ void MainWindow::initPrivilegeStatusButtons()
     m_r0StatusButton = new QPushButton("R0", m_privilegeButtonContainer);
     // KVM 排在 R0 右侧：它比 R0 更低一层（hypervisor / R-1），且以 R0 为前提。
     m_kvmStatusButton = new QPushButton("KVM", m_privilegeButtonContainer);
+    // DDMA 排在 R-1 右侧。它不是又低一层的权限环，而是另一条绕开 CPU 的访问
+    // 通路（设备侧 DMA），放在这一排的末尾表示"比 R-1 更少受 CPU 约束"。
+    m_ddmaStatusButton = new QPushButton("DDMA", m_privilegeButtonContainer);
 
     // 统一按钮尺寸，保证右上角布局整齐。
-    const std::array<QPushButton*, 6> statusButtons{
+    const std::array<QPushButton*, 7> statusButtons{
         m_uiAccessStatusButton,
         m_adminStatusButton,
         m_debugStatusButton,
         m_systemStatusButton,
         m_r0StatusButton,
-        m_kvmStatusButton
+        m_kvmStatusButton,
+        m_ddmaStatusButton
     };
     for (QPushButton* statusButton : statusButtons)
     {
@@ -7846,6 +7850,14 @@ void MainWindow::initPrivilegeStatusButtons()
         });
     connect(m_kvmStatusButton, &QPushButton::clicked, this, [this]() {
         handleKvmStatusButtonClicked();
+    });
+
+    // DDMA 指示灯：亮 = 已登记常驻虚扇区。点击跳到内存页的 DDMA 子页，
+    // 因为常驻要落地必须先选磁盘、填暂存 LBA 并确认覆盖，塞不进一次点击。
+    m_ddmaStatusButton->setToolTip(QStringLiteral(
+        "DDMA：磁盘直接内存访问的常驻虚扇区状态。亮起代表磁盘上有一块扇区正被登记为 DMA 中转站。点击打开内存页的 DDMA 子页进行配置或解除。"));
+    connect(m_ddmaStatusButton, &QPushButton::clicked, this, [this]() {
+        handleDdmaStatusButtonClicked();
     });
 
     // UIAccess 按钮：
@@ -8253,6 +8265,53 @@ void MainWindow::enableR0ForUserRequest()
     }
 }
 
+void MainWindow::applyDdmaButtonState()
+{
+    if (m_ddmaStatusButton == nullptr)
+    {
+        return;
+    }
+
+    // 代次没变就不重画：这条路径被权限按钮的周期刷新反复调用，而 DDMA 配置
+    // 在两次配置之间是完全静止的。首帧必须靠 m_ddmaButtonPainted 放行——
+    // 代次与成员都从 0 开始，只比代次会把首帧误判成"无变化"。
+    const std::uint64_t generation = ksword::memory_backend::ddmaSessionGeneration();
+    if (m_ddmaButtonPainted && generation == m_ddmaSessionGeneration)
+    {
+        return;
+    }
+    m_ddmaSessionGeneration = generation;
+    m_ddmaButtonPainted = true;
+
+    const ksword::memory_backend::DdmaSession& session =
+        ksword::memory_backend::currentDdmaSession();
+    QString reason;
+    // 亮起的判据就是"这条通道现在真的能用"，与其它权限灯一致：不把"配了一半"
+    // 也画成亮的，否则指示灯会比实际能力乐观。
+    const bool resident = ksword::memory_backend::isDdmaUsable(session, &reason);
+
+    m_ddmaStatusButton->setStyleSheet(buildR0ButtonStyle(resident));
+    if (resident)
+    {
+        m_ddmaStatusButton->setToolTip(
+            ks::i18n::sourceText(QStringLiteral(
+                "DDMA：常驻虚扇区已登记（磁盘 #%1，暂存 LBA %2）。该扇区会在每次 DMA 读写时被临时覆盖并立即还原。点击打开内存页的 DDMA 子页。"))
+                .arg(session.diskIndex)
+                .arg(session.scratchLba));
+        return;
+    }
+    m_ddmaStatusButton->setToolTip(
+        ks::i18n::sourceText(QStringLiteral("DDMA：未常驻虚扇区。%1点击打开内存页的 DDMA 子页进行配置。"))
+            .arg(reason.isEmpty() ? QString() : (reason + QStringLiteral(" "))));
+}
+
+void MainWindow::handleDdmaStatusButtonClicked()
+{
+    // 这个按钮不直接开关常驻：登记一块暂存扇区必须先选磁盘、填 LBA、确认覆盖，
+    // 三步都需要用户输入。所以点击只负责把人送到能做这三步的地方。
+    focusMemoryDockDdmaPage();
+}
+
 void MainWindow::applyPrivilegeButtonVisibility()
 {
     // 容器尚未建立时无事可做；建立时会立刻回调本函数。
@@ -8262,13 +8321,14 @@ void MainWindow::applyPrivilegeButtonVisibility()
     }
 
     const ks::settings::AppearanceSettings& settings = m_currentAppearanceSettings;
-    const std::array<std::pair<QPushButton*, bool>, 6> visibility{{
+    const std::array<std::pair<QPushButton*, bool>, 7> visibility{{
         {m_uiAccessStatusButton, settings.privilegeButtonUiAccessVisible},
         {m_adminStatusButton, settings.privilegeButtonAdminVisible},
         {m_debugStatusButton, settings.privilegeButtonDebugVisible},
         {m_systemStatusButton, settings.privilegeButtonSystemVisible},
         {m_r0StatusButton, settings.privilegeButtonR0Visible},
-        {m_kvmStatusButton, settings.privilegeButtonHvmVisible}
+        {m_kvmStatusButton, settings.privilegeButtonHvmVisible},
+        {m_ddmaStatusButton, settings.privilegeButtonDdmaVisible}
     }};
     int visibleCount = 0;
     for (const std::pair<QPushButton*, bool>& entry : visibility)
@@ -8332,6 +8392,9 @@ void MainWindow::refreshPrivilegeStatusButtons()
     }
     // KVM 只用缓存值刷新外观：状态查询是阻塞 IOCTL，必须走后台。
     applyKvmButtonState();
+    // DDMA 的常驻与否完全是本进程内的一份配置，读它不需要任何 IOCTL，
+    // 所以可以直接放在这条同步刷新路径里。
+    applyDdmaButtonState();
     // 驱动没运行时不查询，避免每个刷新周期都撞一次不存在的设备。
     if (r0Enabled)
     {
@@ -11117,6 +11180,33 @@ void MainWindow::focusMemoryDockByPid(const quint32 pid)
     if (m_memoryWidget != nullptr)
     {
         m_memoryWidget->focusProcessForOperations(static_cast<std::uint32_t>(pid), false);
+    }
+    if (m_dockMemory != nullptr)
+    {
+        withTemporaryNonTopMostForDockSwitch([this]()
+            {
+                m_dockMemory->raise();
+            });
+        m_dockMemory->setVisible(true);
+    }
+}
+
+void MainWindow::focusMemoryDockDdmaPage()
+{
+    kLogEvent focusDdmaEvent;
+    info << focusDdmaEvent
+        << "[MainWindow] focusMemoryDockDdmaPage: 打开内存页的 DDMA 子页。"
+        << eol;
+
+    // 内存 Dock 是惰性加载的：不先确保内容已构建，m_memoryWidget 可能还是空的，
+    // 按钮点下去会毫无反应。
+    if (m_dockMemory != nullptr)
+    {
+        ensureDockContentInitialized(m_dockMemory);
+    }
+    if (m_memoryWidget != nullptr)
+    {
+        m_memoryWidget->focusDdmaPage();
     }
     if (m_dockMemory != nullptr)
     {

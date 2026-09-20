@@ -433,6 +433,8 @@ namespace
         defaultSettings.privilegeButtonSystemVisible = true;
         defaultSettings.privilegeButtonR0Visible = true;
         defaultSettings.privilegeButtonHvmVisible = true;
+        // DDMA 指示灯与其它权限灯一致默认显示，可在外观设置里关掉。
+        defaultSettings.privilegeButtonDdmaVisible = true;
         defaultSettings.hvmDisplayName = ks::settings::HvmDisplayName::Kvm;
         return defaultSettings;
     }
@@ -823,6 +825,9 @@ ks::settings::AppearanceSettings ks::settings::loadAppearanceSettings()
     loadedSettings.privilegeButtonHvmVisible = rootObject
         .value(QStringLiteral("privilege_button_hvm_visible"))
         .toBool(loadedSettings.privilegeButtonHvmVisible);
+    loadedSettings.privilegeButtonDdmaVisible = rootObject
+        .value(QStringLiteral("privilege_button_ddma_visible"))
+        .toBool(loadedSettings.privilegeButtonDdmaVisible);
     loadedSettings.hvmDisplayName = hvmDisplayNameFromJsonText(
         rootObject
             .value(QStringLiteral("hvm_display_name"))
@@ -996,6 +1001,9 @@ bool ks::settings::saveAppearanceSettings(const AppearanceSettings& settings, QS
     rootObject.insert(
         QStringLiteral("privilege_button_hvm_visible"),
         settings.privilegeButtonHvmVisible);
+    rootObject.insert(
+        QStringLiteral("privilege_button_ddma_visible"),
+        settings.privilegeButtonDdmaVisible);
     rootObject.insert(
         QStringLiteral("hvm_display_name"),
         hvmDisplayNameToJsonText(settings.hvmDisplayName));

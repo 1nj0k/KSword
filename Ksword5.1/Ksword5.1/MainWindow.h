@@ -117,6 +117,9 @@ public slots:
     // 调用方式：进程页右键菜单“跳转到内存操作”调用。
     // 入参 pid：目标进程 PID。
     void focusMemoryDockByPid(quint32 pid);
+    // focusMemoryDockDdmaPage：打开内存 Dock 并切到 DDMA 子页。
+    // 右上角的 DDMA 指示灯点击后走这里——常驻虚扇区的登记与解除都在那个页面上。
+    void focusMemoryDockDdmaPage();
     void focusNetworkDockByPids(const QString& pidListText);
     void focusWindowDockByPids(const QString& pidListText);
 
@@ -237,6 +240,11 @@ private:
     // - refreshKvmStatusAsync：后台线程读取 HVM 状态快照，回到 UI 线程刷新按钮。
     //   状态查询是阻塞 IOCTL，绝不能在权限按钮的同步刷新路径里直接调用。
     void handleKvmStatusButtonClicked();
+    // DDMA（磁盘直接内存访问）常驻虚扇区按钮：
+    // - handleDdmaStatusButtonClicked：跳到内存页的 DDMA 子页去配置或解除常驻；
+    // - applyDdmaButtonState：按当前进程级会话刷新亮灭与提示，纯本地读，无 IOCTL。
+    void handleDdmaStatusButtonClicked();
+    void applyDdmaButtonState();
     void showKvmMenu(const QPoint& globalPosition);
     void refreshKvmStatusAsync();
     void applyKvmButtonState();
@@ -748,6 +756,16 @@ private:
     QPushButton* m_systemStatusButton = nullptr;
     QPushButton* m_r0StatusButton = nullptr;
     QPushButton* m_kvmStatusButton = nullptr;   // m_kvmStatusButton：KSwordVM（R-1 层）常驻开关与能力入口。
+    // m_ddmaStatusButton：DDMA 常驻虚扇区指示灯，排在 R-1 右侧。
+    // 亮起代表磁盘上有一块扇区正被登记为 DMA 中转站（"常驻虚扇区"）。
+    // 它只是指示灯 + 跳转入口：常驻与否由内存页的 DDMA 子页决定，因为要落地
+    // 必须先选磁盘、填 LBA 并确认覆盖，这三步没法塞进一次点击。
+    QPushButton* m_ddmaStatusButton = nullptr;
+    // m_ddmaSessionGeneration：上一次画按钮时的会话代次，用来跳过无变化的重画。
+    // 配套的 m_ddmaButtonPainted 不能省：代次从 0 开始，成员也从 0 开始，
+    // 只比代次会让首帧被当成"无变化"而跳过，按钮永远停在无样式状态。
+    std::uint64_t m_ddmaSessionGeneration = 0;
+    bool m_ddmaButtonPainted = false;
     bool m_kvmResidentActive = false;           // m_kvmResidentActive：最近一次快照中是否有处理器处于 VMX non-root。
     bool m_kvmAvailable = false;                // m_kvmAvailable：硬件与驱动是否满足常驻硬件门。
     // m_kvmAvailability：完整的可用性取值。按钮样式从它算，不用上面那个压扁的
