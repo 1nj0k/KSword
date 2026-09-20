@@ -907,6 +907,24 @@
       "notes": "低端常规 RAM 页只读；不触碰 MMIO/保留区间。"
     },
     {
+      "id": "memory.ddma-selftest",
+      "tier": "probe",
+      "ioctls": [
+        "DDMA_QUERY_CAPABILITY",
+        "DDMA_READ_PHYSICAL",
+        "DDMA_WRITE_PHYSICAL"
+      ],
+      "steps": [
+        [
+          "ddma",
+          "selftest"
+        ]
+      ],
+      "expect": "success",
+      "timeoutSeconds": 120,
+      "notes": "不带 --lba：能力查询只枚举 \\Driver\\Disk 设备，不发任何 ATA 命令；读写两条都只走拒绝路径（缺 SCRATCH_LBA_VALID / 缺确认 / 跨页 / 未知 flags / 缺 FORCE），在驱动碰到磁盘之前就被门禁挡掉，因此一个扇区都不会被写。同时这是唯一能让 CI 抓到「flags 位段冲突或允许掩码不是自用位超集」的用例——那类缺陷编译与离线单测都看不出来。加 --lba 会让能力查询真的发 ATA 读命令，所以计划里不带。"
+    },
+    {
       "id": "memory.scan-kexec",
       "tier": "probe",
       "ioctls": [
