@@ -813,8 +813,9 @@ private:
     QVBoxLayout* m_actionLayout = nullptr;     // 操作页总布局。
     QComboBox* m_terminateActionCombo = nullptr; // 结束方案下拉框。
     QPushButton* m_executeTerminateActionButton = nullptr; // 执行当前结束方案按钮。
-    QPushButton* m_suspendProcessButton = nullptr; // 挂起进程。
-    QPushButton* m_resumeProcessButton = nullptr; // 恢复进程。
+    // 挂起是个开关，不是两个动作：勾上=已挂起，取消勾选=恢复。勾选态来自
+    // m_baseRecord.processSuspended，每次 refreshDetailTabTexts 同步一次。
+    QCheckBox* m_suspendProcessCheck = nullptr; // 挂起/恢复开关。
     QPushButton* m_setCriticalButton = nullptr; // 设为关键进程。
     QPushButton* m_clearCriticalButton = nullptr; // 取消关键进程。
 
@@ -845,8 +846,7 @@ private:
     QPushButton* m_applyPriorityButton = nullptr; // 应用优先级按钮。
     QPushButton* m_openProcessFolderButton = nullptr; // 打开进程所在目录按钮。
     QPushButton* m_refreshPplProtectionButton = nullptr; // 手动刷新 PPL 保护级别按钮。
-    QPushButton* m_enableEfficiencyModeButton = nullptr; // 开启效率模式按钮。
-    QPushButton* m_disableEfficiencyModeButton = nullptr; // 关闭效率模式按钮。
+    QCheckBox* m_efficiencyModeCheck = nullptr; // 效率模式（绿叶）开关。
     QPushButton* m_r0TerminateProcessButton = nullptr; // R0 结束进程按钮。
     QPushButton* m_r0SuspendProcessButton = nullptr; // R0 挂起进程按钮。
     QPushButton* m_r0SetPplButton = nullptr; // R0 设置 PPL 层级按钮。

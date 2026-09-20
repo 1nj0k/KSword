@@ -4605,14 +4605,9 @@ void ProcessDetailWindow::initializeActionTab()
         QStringLiteral("执行当前选中的结束方案"),
         controlGroup);
 
-    m_suspendProcessButton = buildTextActionButton(
-        QStringLiteral("挂起"),
-        QStringLiteral("挂起当前进程"),
-        controlGroup);
-    m_resumeProcessButton = buildTextActionButton(
-        QStringLiteral("恢复"),
-        QStringLiteral("恢复当前进程"),
-        controlGroup);
+    m_suspendProcessCheck = new QCheckBox(QStringLiteral("挂起"), controlGroup);
+    m_suspendProcessCheck->setToolTip(
+        QStringLiteral("勾上挂起当前进程，取消勾选恢复。勾选态反映进程当前是否处于挂起，不表示是谁挂的。"));
     m_setCriticalButton = buildTextActionButton(
         QStringLiteral("设为关键"),
         QStringLiteral("把当前进程设为关键进程"),
@@ -4639,8 +4634,7 @@ void ProcessDetailWindow::initializeActionTab()
     controlLayout->addWidget(m_terminateActionCombo, 0, 1, 1, 3);
     controlLayout->addWidget(m_executeTerminateActionButton, 0, 4);
     controlLayout->addWidget(new QLabel("运行控制", controlGroup), 1, 0);
-    controlLayout->addWidget(m_suspendProcessButton, 1, 1);
-    controlLayout->addWidget(m_resumeProcessButton, 1, 2);
+    controlLayout->addWidget(m_suspendProcessCheck, 1, 1, 1, 2);
     controlLayout->addWidget(new QLabel("关键进程", controlGroup), 2, 0);
     controlLayout->addWidget(m_setCriticalButton, 2, 1);
     controlLayout->addWidget(m_clearCriticalButton, 2, 2);
@@ -4959,14 +4953,9 @@ void ProcessDetailWindow::initializeActionTab()
         QStringLiteral("刷新PPL"),
         QStringLiteral("手动刷新当前进程 PPL 保护级别"),
         extendedActionGroup);
-    m_enableEfficiencyModeButton = buildTextActionButton(
-        QStringLiteral("开效率"),
-        QStringLiteral("开启当前进程效率模式（绿叶）"),
-        extendedActionGroup);
-    m_disableEfficiencyModeButton = buildTextActionButton(
-        QStringLiteral("关效率"),
-        QStringLiteral("关闭当前进程效率模式"),
-        extendedActionGroup);
+    m_efficiencyModeCheck = new QCheckBox(QStringLiteral("效率模式"), extendedActionGroup);
+    m_efficiencyModeCheck->setToolTip(
+        QStringLiteral("勾上开启当前进程效率模式（绿叶），取消勾选关闭。本机或该进程不支持时勾选无效，详情页的效率模式一行会显示不可用。"));
 
     // buildR0MenuButton 作用：
     // - 为 R0 功能创建“明确文字 + 业务图标”的按钮；
@@ -5016,8 +5005,7 @@ void ProcessDetailWindow::initializeActionTab()
     extendedActionLayout->addWidget(m_openProcessFolderButton, 0, 1);
     extendedActionLayout->addWidget(m_refreshPplProtectionButton, 0, 2);
     extendedActionLayout->addWidget(new QLabel(QStringLiteral("效率模式"), extendedActionGroup), 1, 0);
-    extendedActionLayout->addWidget(m_enableEfficiencyModeButton, 1, 1);
-    extendedActionLayout->addWidget(m_disableEfficiencyModeButton, 1, 2);
+    extendedActionLayout->addWidget(m_efficiencyModeCheck, 1, 1, 1, 2);
     extendedActionLayout->addWidget(new QLabel(QStringLiteral("R0"), extendedActionGroup), 2, 0);
     extendedActionLayout->addWidget(m_r0TerminateProcessButton, 2, 1);
     extendedActionLayout->addWidget(m_r0SuspendProcessButton, 2, 2);
@@ -5090,8 +5078,6 @@ void ProcessDetailWindow::initializeActionTab()
 
     const std::vector<QPushButton*> actionButtons{
         m_executeTerminateActionButton,
-        m_suspendProcessButton,
-        m_resumeProcessButton,
         m_setCriticalButton,
         m_clearCriticalButton,
         m_applyPriorityButton,
@@ -5102,8 +5088,6 @@ void ProcessDetailWindow::initializeActionTab()
         m_applyActionPrivilegeR0Button,
         m_openProcessFolderButton,
         m_refreshPplProtectionButton,
-        m_enableEfficiencyModeButton,
-        m_disableEfficiencyModeButton,
         m_r0TerminateProcessButton,
         m_r0SuspendProcessButton,
         m_r0SetPplButton,
@@ -6058,8 +6042,13 @@ void ProcessDetailWindow::initializeConnections()
     // - 结束方案统一走下拉框调度，避免保留多个重复大按钮；
     // - 其余控制动作保持原有执行函数不变。
     connect(m_executeTerminateActionButton, &QPushButton::clicked, this, [this]() { executeSelectedTerminateAction(); });
-    connect(m_suspendProcessButton, &QPushButton::clicked, this, [this]() { executeSuspendProcessAction(); });
-    connect(m_resumeProcessButton, &QPushButton::clicked, this, [this]() { executeResumeProcessAction(); });
+    // 用 clicked 而不是 toggled：toggled 连 setChecked 的程序化改动也会发出，
+    // 而刷新时每次都要按最新读数 setChecked 一次——那样会在刷新里反复触发挂起
+    // 与恢复。clicked 只在用户点击时发出。
+    connect(m_suspendProcessCheck, &QCheckBox::clicked, this, [this](const bool checked) {
+        if (checked) { executeSuspendProcessAction(); }
+        else { executeResumeProcessAction(); }
+    });
     connect(m_setCriticalButton, &QPushButton::clicked, this, [this]() { executeSetCriticalAction(true); });
     connect(m_clearCriticalButton, &QPushButton::clicked, this, [this]() { executeSetCriticalAction(false); });
     connect(m_applyPriorityButton, &QPushButton::clicked, this, [this]() { executeSetPriorityAction(); });
@@ -6068,8 +6057,9 @@ void ProcessDetailWindow::initializeConnections()
     connect(m_applyActionPrivilegeR0Button, &QPushButton::clicked, this, [this]() { executeApplyActionPrivileges(true); });
     connect(m_openProcessFolderButton, &QPushButton::clicked, this, [this]() { executeOpenProcessFolderAction(); });
     connect(m_refreshPplProtectionButton, &QPushButton::clicked, this, [this]() { executeRefreshPplProtectionLevelAction(); });
-    connect(m_enableEfficiencyModeButton, &QPushButton::clicked, this, [this]() { executeSetEfficiencyModeAction(true); });
-    connect(m_disableEfficiencyModeButton, &QPushButton::clicked, this, [this]() { executeSetEfficiencyModeAction(false); });
+    connect(m_efficiencyModeCheck, &QCheckBox::clicked, this, [this](const bool checked) {
+        executeSetEfficiencyModeAction(checked);
+    });
     connect(m_r0TerminateProcessButton, &QPushButton::clicked, this, [this]() { executeR0TerminateProcessAction(); });
     connect(m_r0SuspendProcessButton, &QPushButton::clicked, this, [this]() { executeR0SuspendProcessAction(); });
 
@@ -6414,6 +6404,22 @@ void ProcessDetailWindow::refreshDetailTabTexts()
         m_baseRecord.efficiencyModeSupported
             ? detailBoolText(m_baseRecord.efficiencyModeEnabled)
             : detailUnavailableText());
+
+    // 两个开关的勾选态跟着同一份读数刷新。不同步的话它只停在窗口打开那一刻的
+    // 值，而挂起可能是别处（右键菜单、别的工具）做的，界面就会一直说反话。
+    //
+    // 状态未知时按未勾显示：processStateKnown 只有缓冲区越界那种病态情况才是
+    // 假，正常进程都判得出来，所以这不是在拿默认值冒充读数。
+    if (m_suspendProcessCheck != nullptr)
+    {
+        m_suspendProcessCheck->setChecked(
+            m_baseRecord.processStateKnown && m_baseRecord.processSuspended);
+    }
+    if (m_efficiencyModeCheck != nullptr)
+    {
+        m_efficiencyModeCheck->setChecked(
+            m_baseRecord.efficiencyModeSupported && m_baseRecord.efficiencyModeEnabled);
+    }
     if (m_baseRecord.protectionLevelKnown && !m_baseRecord.protectionLevelText.empty())
     {
         setExtraValue(QStringLiteral("ppl_protection"), QString::fromStdString(m_baseRecord.protectionLevelText));
