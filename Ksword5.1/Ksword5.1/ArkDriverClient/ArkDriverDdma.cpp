@@ -252,6 +252,7 @@ namespace ksword::ark
             diskEntry.deviceIndex = static_cast<std::uint32_t>(entry->deviceIndex);
             diskEntry.diskFlags = static_cast<std::uint32_t>(entry->diskFlags);
             diskEntry.probeStatus = static_cast<long>(entry->probeStatus);
+            diskEntry.scsiProbeStatus = static_cast<long>(entry->scsiProbeStatus);
             diskEntry.sectorSize = static_cast<std::uint32_t>(entry->sectorSize);
             if ((diskEntry.diskFlags & KSWORD_ARK_DDMA_DISK_FLAG_NAME_PRESENT) != 0UL)
             {

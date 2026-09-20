@@ -427,6 +427,96 @@ void TestFlagLayout(KswordTests::Suite& suite) {
 }
 
 // ---------------------------------------------------------------------------
+// SCSI CDB 编码（NVMe / SAS / SATA / 合成 SCSI 那条传输）
+// ---------------------------------------------------------------------------
+//
+// 两类错误在这里都不会报错，只会去读写另一个扇区：
+//   * CDB 的多字节字段是**大端**，与 x86 相反；写反了 LBA 就是另一个位置。
+//   * 传输长度的单位是**块**不是字节；拿 4096 当块数会让控制器动八百倍的范围。
+void TestScsiCdb(KswordTests::Suite& suite) {
+    constexpr unsigned long kBytes = KSWORD_ARK_DDMA_TRANSFER_BYTES;  // 4096
+
+    // 512 字节扇区：4096 / 512 = 8 块。LBA 0x01020304 按大端铺开是 01 02 03 04。
+    {
+        const KSWORD_ARK_DDMA_CDB read =
+            KswordArkDdmaEncodeCdb(0x01020304ULL, kBytes, 512UL, 0);
+        suite.expect(read.valid == 1, L"ddma cdb: a representative 512-byte-sector read encodes");
+        suite.expect(read.cdbLength == 10, L"ddma cdb: a 32-bit LBA uses the 10-byte CDB");
+        suite.expect(read.cdb[0] == KSWORD_ARK_SCSI_CMD_READ_10,
+            L"ddma cdb: read uses opcode 0x28");
+        suite.expect(read.cdb[2] == 0x01, L"ddma cdb: LBA byte 0 is the most significant (big endian)");
+        suite.expect(read.cdb[3] == 0x02, L"ddma cdb: LBA byte 1");
+        suite.expect(read.cdb[4] == 0x03, L"ddma cdb: LBA byte 2");
+        suite.expect(read.cdb[5] == 0x04, L"ddma cdb: LBA byte 3 is the least significant");
+        suite.expect(read.cdb[7] == 0x00, L"ddma cdb: block count high byte");
+        suite.expect(read.cdb[8] == 0x08,
+            L"ddma cdb: the transfer length is 8 BLOCKS, not 4096 bytes");
+
+        const KSWORD_ARK_DDMA_CDB write =
+            KswordArkDdmaEncodeCdb(0x01020304ULL, kBytes, 512UL, 1);
+        suite.expect(write.cdb[0] == KSWORD_ARK_SCSI_CMD_WRITE_10,
+            L"ddma cdb: write uses opcode 0x2A");
+        suite.expect(write.cdb[5] == 0x04, L"ddma cdb: write keeps the same LBA encoding as read");
+    }
+
+    // 4Kn 盘：4096 / 4096 = 1 块。拿 512 去算会得到 8，也就是八倍范围。
+    {
+        const KSWORD_ARK_DDMA_CDB read = KswordArkDdmaEncodeCdb(100ULL, kBytes, 4096UL, 0);
+        suite.expect(read.valid == 1, L"ddma cdb: a 4Kn sector size encodes");
+        suite.expect(read.cdb[8] == 0x01,
+            L"ddma cdb: on a 4Kn disk one transfer is exactly one block");
+    }
+
+    // 扇区大小除不尽：说明调用方把字节数当块数用了，必须拒绝而不是四舍五入。
+    suite.expect(KswordArkDdmaEncodeCdb(0ULL, 4096UL, 3000UL, 0).valid == 0,
+        L"ddma cdb: a transfer size that is not a multiple of the sector size is refused");
+    suite.expect(KswordArkDdmaEncodeCdb(0ULL, 4096UL, 0UL, 0).valid == 0,
+        L"ddma cdb: a zero sector size is refused");
+    suite.expect(KswordArkDdmaEncodeCdb(0ULL, 0UL, 512UL, 0).valid == 0,
+        L"ddma cdb: a zero transfer size is refused");
+
+    // 32 位边界两侧：恰好放得下用 10 字节 CDB，再加一就必须换 16 字节。
+    {
+        const KSWORD_ARK_DDMA_CDB last32 =
+            KswordArkDdmaEncodeCdb(KSWORD_ARK_DDMA_LBA32_LIMIT - 1ULL, kBytes, 512UL, 0);
+        suite.expect(last32.cdbLength == 10,
+            L"ddma cdb: the last 32-bit LBA still uses the 10-byte CDB");
+        suite.expect(last32.cdb[2] == 0xFF && last32.cdb[5] == 0xFF,
+            L"ddma cdb: the last 32-bit LBA fills all four LBA bytes");
+
+        const KSWORD_ARK_DDMA_CDB first64 =
+            KswordArkDdmaEncodeCdb(KSWORD_ARK_DDMA_LBA32_LIMIT, kBytes, 512UL, 0);
+        suite.expect(first64.cdbLength == 16,
+            L"ddma cdb: one past the 32-bit limit switches to the 16-byte CDB");
+        suite.expect(first64.cdb[0] == KSWORD_ARK_SCSI_CMD_READ_16,
+            L"ddma cdb: the 16-byte read uses opcode 0x88");
+        // 0x0000000100000000 大端铺开：00 00 00 01 00 00 00 00
+        suite.expect(first64.cdb[5] == 0x01,
+            L"ddma cdb: the 16-byte CDB places the 33rd bit in LBA byte 3");
+        suite.expect(first64.cdb[9] == 0x00, L"ddma cdb: the 16-byte CDB low LBA byte");
+        suite.expect(first64.cdb[13] == 0x08,
+            L"ddma cdb: the 16-byte CDB block count is also in blocks");
+
+        const KSWORD_ARK_DDMA_CDB write64 =
+            KswordArkDdmaEncodeCdb(KSWORD_ARK_DDMA_LBA32_LIMIT, kBytes, 512UL, 1);
+        suite.expect(write64.cdb[0] == KSWORD_ARK_SCSI_CMD_WRITE_16,
+            L"ddma cdb: the 16-byte write uses opcode 0x8A");
+    }
+
+    // CDB 尾部必须保持为零：残留字节会被当成控制位。
+    {
+        const KSWORD_ARK_DDMA_CDB read = KswordArkDdmaEncodeCdb(1ULL, kBytes, 512UL, 0);
+        bool tailZero = true;
+        for (int index = 10; index < KSWORD_ARK_SCSI_CDB_BYTES; ++index) {
+            if (read.cdb[index] != 0) { tailZero = false; }
+        }
+        suite.expect(tailZero, L"ddma cdb: bytes past a 10-byte CDB stay zero");
+        suite.expect(read.cdb[1] == 0 && read.cdb[6] == 0 && read.cdb[9] == 0,
+            L"ddma cdb: the reserved and control bytes stay zero");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 暂存扇区候选选择
 // ---------------------------------------------------------------------------
 //
@@ -583,6 +673,7 @@ void TestScratchPlan(KswordTests::Suite& suite) {
 int RunDdmaPlanTests() {
     KswordTests::Suite suite(L"DDMA plan");
     TestFlagLayout(suite);
+    TestScsiCdb(suite);
     TestScratchPlan(suite);
     TestLba28Encoding(suite);
     TestLbaModeBoundary(suite);

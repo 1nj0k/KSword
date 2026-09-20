@@ -33,6 +33,9 @@ Environment:
 #include "../../platform/pool_compat.h"
 
 #include <ntddscsi.h>
+// DISK_GEOMETRY 与 IOCTL_DISK_GET_DRIVE_GEOMETRY 在这里；SCSI 直通要用真实
+// 扇区大小换算 CDB 的块数，拿不到就不能试那条路。
+#include <ntdddisk.h>
 #include <ntstrsafe.h>
 
 #define KSWORD_ARK_DDMA_POOL_TAG 'dDsK'
@@ -421,6 +424,117 @@ Return Value:
 }
 
 // ============================================================
+// SCSI 直通传输（覆盖 NVMe / SAS / SATA / 合成 SCSI）
+// ============================================================
+
+static NTSTATUS
+KswordARKDdmaIssueScsiCommand(
+    _In_ PDEVICE_OBJECT Device,
+    _In_ BOOLEAN IsWrite,
+    _In_ ULONG64 Lba,
+    _In_ ULONG SectorSize,
+    _In_ PVOID DataBuffer
+    )
+/*++
+
+Routine Description:
+
+    用 SCSI 直通读写暂存扇区。中文说明：这是 ATA 之外的第二条传输，也是现代
+    机器上真正能用的那条——DDMA 需要的是"能把指定物理页当 DMA 目标的直通通道"，
+    而不是"ATA"。IOCTL_SCSI_PASS_THROUGH_DIRECT 同样带 _DIRECT，storport 会为
+    DataBuffer 建 MDL、把物理页填进控制器的散列表；stornvme 则把 SCSI
+    READ/WRITE 翻译成 NVMe 命令。于是 NVMe、SAS/SATA 与合成 SCSI 盘都走得通。
+
+    请求缓冲布局是"SCSI_PASS_THROUGH_DIRECT 头 + sense 区"，两者在同一块内存里，
+    SenseInfoOffset 指向 sense 区相对头部的偏移。
+
+Arguments:
+
+    Device - 目标磁盘设备对象。
+    IsWrite - TRUE 表示往磁盘写。
+    Lba - 暂存扇区起始逻辑块号。
+    SectorSize - 该盘逻辑扇区大小；CDB 里的传输长度按块计，必须用真实值。
+    DataBuffer - 非分页数据缓冲或物理页映射，长度为一次传输长度。
+
+Return Value:
+
+    IRP 完成状态；SCSI 状态非零时转成 STATUS_IO_DEVICE_ERROR。
+
+--*/
+{
+    typedef struct _KSWORD_ARK_SCSI_REQUEST
+    {
+        SCSI_PASS_THROUGH_DIRECT Header;
+        UCHAR Sense[32];
+    } KSWORD_ARK_SCSI_REQUEST;
+
+    KEVENT completionEvent;
+    KSWORD_ARK_SCSI_REQUEST request;
+    IO_STATUS_BLOCK ioStatusBlock;
+    KSWORD_ARK_DDMA_CDB command;
+    PIRP irp = NULL;
+    NTSTATUS status = STATUS_SUCCESS;
+
+    if (Device == NULL || DataBuffer == NULL || SectorSize == 0UL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    // CDB 编码交给 KswordArkDdmaPlan.h 里的共用纯函数：单元测试覆盖的就是这一份。
+    // 注意 CDB 里的传输长度单位是块而不是字节，除不尽时那个函数会直接拒绝。
+    command = KswordArkDdmaEncodeCdb(
+        Lba,
+        KSWORD_ARK_DDMA_TRANSFER_BYTES,
+        SectorSize,
+        IsWrite ? 1 : 0);
+    if (!command.valid) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    KeInitializeEvent(&completionEvent, SynchronizationEvent, FALSE);
+    RtlZeroMemory(&request, sizeof(request));
+    RtlZeroMemory(&ioStatusBlock, sizeof(ioStatusBlock));
+
+    request.Header.Length = sizeof(SCSI_PASS_THROUGH_DIRECT);
+    request.Header.CdbLength = command.cdbLength;
+    request.Header.SenseInfoLength = (UCHAR)sizeof(request.Sense);
+    request.Header.DataIn = (UCHAR)(IsWrite ? SCSI_IOCTL_DATA_OUT : SCSI_IOCTL_DATA_IN);
+    request.Header.DataTransferLength = KSWORD_ARK_DDMA_TRANSFER_BYTES;
+    request.Header.TimeOutValue = KSWORD_ARK_ATA_IO_TIMEOUT;
+    request.Header.DataBuffer = DataBuffer;
+    request.Header.SenseInfoOffset =
+        (ULONG)FIELD_OFFSET(KSWORD_ARK_SCSI_REQUEST, Sense);
+    RtlCopyMemory(request.Header.Cdb, command.cdb, sizeof(request.Header.Cdb));
+
+    irp = IoBuildDeviceIoControlRequest(
+        IOCTL_SCSI_PASS_THROUGH_DIRECT,
+        Device,
+        &request,
+        sizeof(request),
+        &request,
+        sizeof(request),
+        FALSE,
+        &completionEvent,
+        &ioStatusBlock);
+    if (irp == NULL) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    status = IoCallDriver(Device, irp);
+    if (status == STATUS_PENDING) {
+        KeWaitForSingleObject(&completionEvent, Executive, KernelMode, FALSE, NULL);
+        status = ioStatusBlock.Status;
+    }
+
+    // IRP 成功不等于命令成功：SCSI 状态非零说明设备拒绝了这条命令，
+    // 把它当成功会让调用方以为数据搬过去了，而缓冲区里其实是旧内容。
+    if (NT_SUCCESS(status) && request.Header.ScsiStatus != 0U) {
+        status = STATUS_IO_DEVICE_ERROR;
+    }
+
+    return status;
+}
+
+// ============================================================
 // 暂存扇区会话
 // ============================================================
 
@@ -430,14 +544,63 @@ typedef struct _KSWORD_ARK_DDMA_SESSION
     ULONG64 ScratchLba;         // 暂存扇区起始 LBA。
     PVOID BackupBuffer;         // 暂存扇区原始内容，连续非分页内存。
     BOOLEAN BackupValid;        // 备份是否成功，决定还原能不能做。
+    ULONG Transport;            // KSWORD_ARK_DDMA_TRANSPORT_*：本会话走哪条传输。
+    ULONG SectorSize;           // 该盘逻辑扇区大小，SCSI 传输按它换算块数。
 } KSWORD_ARK_DDMA_SESSION;
+
+static NTSTATUS
+KswordARKDdmaTransfer(
+    _In_ PDEVICE_OBJECT Device,
+    _In_ ULONG Transport,
+    _In_ ULONG SectorSize,
+    _In_ BOOLEAN IsWrite,
+    _In_ ULONG64 Lba,
+    _In_ PVOID DataBuffer
+    )
+/*++
+
+Routine Description:
+
+    按会话选定的传输执行一次扇区读写。中文说明：把"走哪条直通"收敛到这一处，
+    上层的备份/搬运/还原三步都不需要再关心 ATA 与 SCSI 的差别。
+
+Arguments:
+
+    Device - 目标磁盘设备对象。
+    Transport - KSWORD_ARK_DDMA_TRANSPORT_ATA 或 _SCSI。
+    SectorSize - 逻辑扇区大小，SCSI 路径需要。
+    IsWrite - TRUE 表示往磁盘写。
+    Lba - 暂存扇区起始 LBA。
+    DataBuffer - 数据缓冲或物理页映射。
+
+Return Value:
+
+    对应传输的 NTSTATUS；传输标识非法时返回 STATUS_INVALID_PARAMETER。
+
+--*/
+{
+    if (Transport == KSWORD_ARK_DDMA_TRANSPORT_ATA) {
+        return KswordARKDdmaIssueAtaCommand(
+            Device,
+            IsWrite ? ATA_FLAGS_DATA_OUT : ATA_FLAGS_DATA_IN,
+            IsWrite,
+            Lba,
+            DataBuffer);
+    }
+    if (Transport == KSWORD_ARK_DDMA_TRANSPORT_SCSI) {
+        return KswordARKDdmaIssueScsiCommand(Device, IsWrite, Lba, SectorSize, DataBuffer);
+    }
+    return STATUS_INVALID_PARAMETER;
+}
 
 static NTSTATUS
 KswordARKDdmaSessionBegin(
     _Inout_ KSWORD_ARK_DDMA_SESSION* Session,
     _In_ PDEVICE_OBJECT Device,
     _In_ ULONG64 ScratchLba,
-    _In_ PVOID BackupBuffer
+    _In_ PVOID BackupBuffer,
+    _In_ ULONG Transport,
+    _In_ ULONG SectorSize
     )
 /*++
 
@@ -470,13 +633,11 @@ Return Value:
     Session->ScratchLba = ScratchLba;
     Session->BackupBuffer = BackupBuffer;
     Session->BackupValid = FALSE;
+    Session->Transport = Transport;
+    Session->SectorSize = SectorSize;
 
-    status = KswordARKDdmaIssueAtaCommand(
-        Device,
-        ATA_FLAGS_DATA_IN,
-        FALSE,
-        ScratchLba,
-        BackupBuffer);
+    status = KswordARKDdmaTransfer(
+        Device, Transport, SectorSize, FALSE, ScratchLba, BackupBuffer);
     if (NT_SUCCESS(status)) {
         Session->BackupValid = TRUE;
     }
@@ -516,9 +677,10 @@ Return Value:
         return STATUS_UNSUCCESSFUL;
     }
 
-    status = KswordARKDdmaIssueAtaCommand(
+    status = KswordARKDdmaTransfer(
         Session->Device,
-        ATA_FLAGS_DATA_OUT,
+        Session->Transport,
+        Session->SectorSize,
         TRUE,
         Session->ScratchLba,
         Session->BackupBuffer);
@@ -568,9 +730,10 @@ Return Value:
     *StageOutStatusOut = STATUS_NOT_SUPPORTED;
     *StageInStatusOut = STATUS_NOT_SUPPORTED;
 
-    status = KswordARKDdmaIssueAtaCommand(
+    status = KswordARKDdmaTransfer(
         Session->Device,
-        ATA_FLAGS_DATA_OUT,
+        Session->Transport,
+        Session->SectorSize,
         TRUE,
         Session->ScratchLba,
         Source);
@@ -579,9 +742,10 @@ Return Value:
         return status;
     }
 
-    status = KswordARKDdmaIssueAtaCommand(
+    status = KswordARKDdmaTransfer(
         Session->Device,
-        ATA_FLAGS_DATA_IN,
+        Session->Transport,
+        Session->SectorSize,
         FALSE,
         Session->ScratchLba,
         Destination);
@@ -592,6 +756,56 @@ Return Value:
 // ============================================================
 // 通用校验
 // ============================================================
+
+static ULONG
+KswordARKDdmaSelectTransport(
+    _In_ PDEVICE_OBJECT Device,
+    _In_ ULONG64 ScratchLba,
+    _In_ ULONG SectorSize,
+    _In_ PVOID ProbeBuffer
+    )
+/*++
+
+Routine Description:
+
+    在真正开始搬数据之前，确定这块盘走哪条直通。中文说明：用一次**只读**暂存
+    扇区的命令来判定，读不成功就换另一条；两条都不成功返回 NONE。
+
+    为什么每次请求都重新判定而不是记住能力查询的结果：设备可能被重新枚举、
+    驱动可能被换掉，而判错传输的后果是命令被拒绝后我们仍以为数据搬过去了。
+    一次只读探测的代价远小于这个风险。
+
+Arguments:
+
+    Device - 目标磁盘设备对象。
+    ScratchLba - 暂存扇区起始 LBA。
+    SectorSize - 逻辑扇区大小；为 0 时不尝试 SCSI。
+    ProbeBuffer - 探测用缓冲，长度为一次传输长度。
+
+Return Value:
+
+    KSWORD_ARK_DDMA_TRANSPORT_ATA / _SCSI / _NONE。
+
+--*/
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    status = KswordARKDdmaIssueAtaCommand(
+        Device, ATA_FLAGS_DATA_IN, FALSE, ScratchLba, ProbeBuffer);
+    if (NT_SUCCESS(status)) {
+        return KSWORD_ARK_DDMA_TRANSPORT_ATA;
+    }
+
+    if (SectorSize != 0UL) {
+        status = KswordARKDdmaIssueScsiCommand(
+            Device, FALSE, ScratchLba, SectorSize, ProbeBuffer);
+        if (NT_SUCCESS(status)) {
+            return KSWORD_ARK_DDMA_TRANSPORT_SCSI;
+        }
+    }
+
+    return KSWORD_ARK_DDMA_TRANSPORT_NONE;
+}
 
 static BOOLEAN
 KswordARKDdmaIsPhysicalRangeValid(
@@ -617,6 +831,67 @@ Return Value:
 --*/
 {
     return KswordArkDdmaIsPhysicalRangeValid(PhysicalAddress, Length) ? TRUE : FALSE;
+}
+
+static ULONG
+KswordARKDdmaQuerySectorSize(
+    _In_ PDEVICE_OBJECT Device
+    )
+/*++
+
+Routine Description:
+
+    问出磁盘的逻辑扇区大小。中文说明：SCSI CDB 里的传输长度单位是**块**而不是
+    字节，拿 512 当默认值去算 4Kn 盘就会让控制器读写出八倍的范围。所以这个值
+    必须真的问出来，问不到时返回 0 让调用方按"不可用"处理，而不是猜一个。
+
+Arguments:
+
+    Device - 目标磁盘设备对象。
+
+Return Value:
+
+    逻辑扇区字节数；查询失败返回 0。
+
+--*/
+{
+    KEVENT completionEvent;
+    DISK_GEOMETRY geometry;
+    IO_STATUS_BLOCK ioStatusBlock;
+    PIRP irp = NULL;
+    NTSTATUS status = STATUS_SUCCESS;
+
+    if (Device == NULL) {
+        return 0UL;
+    }
+
+    KeInitializeEvent(&completionEvent, SynchronizationEvent, FALSE);
+    RtlZeroMemory(&geometry, sizeof(geometry));
+    RtlZeroMemory(&ioStatusBlock, sizeof(ioStatusBlock));
+
+    irp = IoBuildDeviceIoControlRequest(
+        IOCTL_DISK_GET_DRIVE_GEOMETRY,
+        Device,
+        NULL,
+        0U,
+        &geometry,
+        sizeof(geometry),
+        FALSE,
+        &completionEvent,
+        &ioStatusBlock);
+    if (irp == NULL) {
+        return 0UL;
+    }
+
+    status = IoCallDriver(Device, irp);
+    if (status == STATUS_PENDING) {
+        KeWaitForSingleObject(&completionEvent, Executive, KernelMode, FALSE, NULL);
+        status = ioStatusBlock.Status;
+    }
+    if (!NT_SUCCESS(status)) {
+        return 0UL;
+    }
+    return geometry.BytesPerSector;
 }
 
 static PVOID
@@ -783,9 +1058,12 @@ Return Value:
         entry = &response->entries[returnedDisks];
         entry->entrySize = (ULONG)sizeof(*entry);
         entry->deviceIndex = index;
-        entry->sectorSize = KSWORD_ARK_DDMA_SECTOR_SIZE;
         entry->probeStatus = STATUS_NOT_SUPPORTED;
+        entry->scsiProbeStatus = STATUS_NOT_SUPPORTED;
         entry->diskFlags = 0UL;
+        // 扇区大小要真的问出来：SCSI CDB 按块计长，4Kn 盘上拿 512 去算会读写
+        // 出八倍范围。问不到就留 0，下面的探测会据此跳过 SCSI 那条。
+        entry->sectorSize = KswordARKDdmaQuerySectorSize(diskList.Devices[index]);
 
         KswordARKDdmaQueryDeviceName(
             diskList.Devices[index],
@@ -797,7 +1075,9 @@ Return Value:
         }
 
         if (probeRequested) {
-            // 探测只发一条 DMA 读命令：能读到暂存扇区就说明这条通道可用。
+            // 两条传输都试：DDMA 要的是"能把指定物理页当 DMA 目标的直通通道"，
+            // 不是 ATA 本身。现代机器基本都是 NVMe，只试 ATA 会让这条通路在
+            // 绝大多数机器上直接判死。两条各自记状态，便于分辨"哪条不行"。
             entry->probeStatus = KswordARKDdmaIssueAtaCommand(
                 diskList.Devices[index],
                 ATA_FLAGS_DATA_IN,
@@ -806,9 +1086,29 @@ Return Value:
                 probeBuffer);
             if (NT_SUCCESS(entry->probeStatus)) {
                 entry->diskFlags |= KSWORD_ARK_DDMA_DISK_FLAG_ATA_DMA_READY;
+            }
+
+            // 扇区大小问不出来时不能试 SCSI：CDB 的块数算不出来，
+            // 硬填一个默认值就等于赌这块盘是 512 字节扇区。
+            if (entry->sectorSize != 0UL) {
+                entry->scsiProbeStatus = KswordARKDdmaIssueScsiCommand(
+                    diskList.Devices[index],
+                    FALSE,
+                    Request->scratchLba,
+                    entry->sectorSize,
+                    probeBuffer);
+                if (NT_SUCCESS(entry->scsiProbeStatus)) {
+                    entry->diskFlags |= KSWORD_ARK_DDMA_DISK_FLAG_SCSI_DMA_READY;
+                }
+            }
+
+            if ((entry->diskFlags & KSWORD_ARK_DDMA_DISK_FLAG_ANY_DMA_READY) != 0UL) {
                 ++readyDisks;
             }
-            response->lastStatus = entry->probeStatus;
+            // lastStatus 留给诊断：优先记还没成功的那条，全成功时记 ATA 那条。
+            response->lastStatus = NT_SUCCESS(entry->probeStatus)
+                ? entry->scsiProbeStatus
+                : entry->probeStatus;
         }
         else {
             entry->diskFlags |= KSWORD_ARK_DDMA_DISK_FLAG_PROBE_SKIPPED;
@@ -1009,7 +1309,20 @@ Return Value:
     }
     response->mapStatus = STATUS_SUCCESS;
 
-    status = KswordARKDdmaSessionBegin(&session, device, Request->scratchLba, backupBuffer);
+    {
+        // 先用一次只读探测确定这块盘走哪条直通（ATA 还是 SCSI/NVMe）。
+        // 两条都不通就当作没有可用磁盘，而不是硬发一条注定被拒的命令。
+        const ULONG sectorSize = KswordARKDdmaQuerySectorSize(device);
+        const ULONG transport = KswordARKDdmaSelectTransport(
+            device, Request->scratchLba, sectorSize, transferBuffer);
+        if (transport == KSWORD_ARK_DDMA_TRANSPORT_NONE) {
+            response->readStatus = KSWORD_ARK_DDMA_READ_STATUS_DISK_NOT_FOUND;
+            response->backupStatus = STATUS_NOT_SUPPORTED;
+            goto Cleanup;
+        }
+        status = KswordARKDdmaSessionBegin(
+            &session, device, Request->scratchLba, backupBuffer, transport, sectorSize);
+    }
     response->backupStatus = status;
     if (!NT_SUCCESS(status)) {
         // 备份失败就完全不碰暂存扇区，宁可这次读不到也不能毁用户数据。
@@ -1247,7 +1560,19 @@ Return Value:
     }
     response->mapStatus = STATUS_SUCCESS;
 
-    status = KswordARKDdmaSessionBegin(&session, device, Request->scratchLba, backupBuffer);
+    {
+        // 与读路径同理：先判定传输，判不出来就不要往下走。
+        const ULONG sectorSize = KswordARKDdmaQuerySectorSize(device);
+        const ULONG transport = KswordARKDdmaSelectTransport(
+            device, Request->scratchLba, sectorSize, transferBuffer);
+        if (transport == KSWORD_ARK_DDMA_TRANSPORT_NONE) {
+            response->writeStatus = KSWORD_ARK_DDMA_WRITE_STATUS_DISK_NOT_FOUND;
+            response->backupStatus = STATUS_NOT_SUPPORTED;
+            goto Cleanup;
+        }
+        status = KswordARKDdmaSessionBegin(
+            &session, device, Request->scratchLba, backupBuffer, transport, sectorSize);
+    }
     response->backupStatus = status;
     if (!NT_SUCCESS(status)) {
         response->writeStatus = KSWORD_ARK_DDMA_WRITE_STATUS_BACKUP_FAILED;

@@ -209,13 +209,30 @@
 // 磁盘条目 diskFlags
 // ------------------------------------------------------------
 
-// ATA_DMA_READY：探测阶段真的用 ATA DMA 读到了暂存扇区，
-// 这块盘可以作为 DDMA 通道。没有这一位的盘不要拿来读写。
+// ATA_DMA_READY：探测阶段真的用 ATA 直通读到了暂存扇区。
 #define KSWORD_ARK_DDMA_DISK_FLAG_ATA_DMA_READY 0x00000001UL
 // PROBE_SKIPPED：请求没带 PROBE_TRANSFER，本条只做了设备枚举。
 #define KSWORD_ARK_DDMA_DISK_FLAG_PROBE_SKIPPED 0x00000002UL
 // NAME_PRESENT：deviceName 字段有效。
 #define KSWORD_ARK_DDMA_DISK_FLAG_NAME_PRESENT 0x00000004UL
+// SCSI_DMA_READY：探测阶段用 SCSI 直通读到了暂存扇区。
+//
+// 这一位存在的理由：DDMA 需要的是"能把指定物理页当 DMA 目标的直通通道"，
+// 而不是"ATA"。现代机器基本都是 NVMe，ATA 直通直接返回 STATUS_NOT_SUPPORTED，
+// 只认 ATA 会让这条通路在绝大多数机器上毫无意义。
+// IOCTL_SCSI_PASS_THROUGH_DIRECT 同样走 MDL 直接 DMA，而 stornvme 会把 SCSI
+// READ/WRITE 翻译成 NVMe 命令，因此它同时覆盖 NVMe、SAS/SATA 与合成 SCSI。
+#define KSWORD_ARK_DDMA_DISK_FLAG_SCSI_DMA_READY 0x00000008UL
+
+// 任意一条传输可用即可作为 DDMA 通道。
+#define KSWORD_ARK_DDMA_DISK_FLAG_ANY_DMA_READY \
+    (KSWORD_ARK_DDMA_DISK_FLAG_ATA_DMA_READY | \
+     KSWORD_ARK_DDMA_DISK_FLAG_SCSI_DMA_READY)
+
+// 传输通道标识，用于响应里说明这次实际走了哪条路。
+#define KSWORD_ARK_DDMA_TRANSPORT_NONE 0UL
+#define KSWORD_ARK_DDMA_TRANSPORT_ATA 1UL
+#define KSWORD_ARK_DDMA_TRANSPORT_SCSI 2UL
 
 // ------------------------------------------------------------
 // 结构体
@@ -237,9 +254,9 @@ typedef struct _KSWORD_ARK_DDMA_DISK_ENTRY
     unsigned long entrySize;
     unsigned long deviceIndex;
     unsigned long diskFlags;
-    long probeStatus;
-    unsigned long sectorSize;
-    unsigned long reserved0;
+    long probeStatus;       // ATA 直通探测的 NTSTATUS。
+    unsigned long sectorSize; // 该盘真实逻辑扇区大小，SCSI CDB 的块数按它换算。
+    long scsiProbeStatus;   // SCSI 直通探测的 NTSTATUS，与 ATA 那条分开记。
     wchar_t deviceName[KSWORD_ARK_DDMA_DEVICE_NAME_CHARS];
 } KSWORD_ARK_DDMA_DISK_ENTRY;
 

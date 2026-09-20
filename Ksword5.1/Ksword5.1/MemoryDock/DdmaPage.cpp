@@ -7,6 +7,7 @@
 
 #include <QCheckBox>
 #include <QEvent>
+#include <QFile>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -123,7 +124,9 @@ QGroupBox* DdmaPage::buildIntroGroup()
         "一、必须借用一块磁盘扇区当中转站。本工具不提供默认扇区，必须由你显式指定 LBA 并确认；"
         "每次读写都在同一次请求内完成“备份→使用→还原”，但还原失败时磁盘上会留下脏扇区。\n"
         "二、开启内核调试的机器上会命中 MiShowBadMapper 直接蓝屏，此时整条通道被禁用。\n"
-        "三、只支持 ATA 通道；部分 HBA 不支持 64 位寻址，高物理内存可能访问不到。");
+        "三、需要磁盘驱动栈接受直通命令。优先试 ATA 直通，不通再试 SCSI 直通"
+        "（Windows 的 stornvme 会把它翻译成 NVMe 命令，所以 NVMe、SAS/SATA 与合成 SCSI 都走这条）；"
+        "两条都被拒绝的盘用不了。另外部分 HBA 不支持 64 位寻址，高物理内存可能访问不到。");
     layout->addWidget(introLabel);
 
     return group;
@@ -176,6 +179,9 @@ QGroupBox* DdmaPage::buildChannelGroup()
     // 用 setRawText 写入，磁盘上的字节不参与语言包翻译。
     m_scratchContextView = new CodeEditorWidget(group);
     m_scratchContextView->setReadOnly(true);
+    // 关掉内置的"结构视图"切换：这段内容是定宽对齐的十六进制转储，
+    // 被解析成属性/值表格之后行内的字节列会被拆散，反而看不出扇区里是什么。
+    m_scratchContextView->setStructuredReportViewEnabled(false);
     m_scratchContextView->setMinimumHeight(150);
     m_scratchContextView->setRawText(
         QStringLiteral("尚未侦测。选中一块磁盘后点击“侦测候选扇区”。"));
@@ -189,7 +195,7 @@ QGroupBox* DdmaPage::buildChannelGroup()
 
     m_clearButton = new QPushButton(
         QIcon(QStringLiteral(":/Icon/log_clear.svg")), "清除通道配置", group);
-    m_clearButton->setToolTip("清空 DDMA 会话，所有页面立刻退回标准驱动通道。");
+    m_clearButton->setToolTip("清空 DDMA 会话，所有页面立刻退回标准驱动通道。本页创建过专属暂存文件时会问你是否一并删除。");
 
     formLayout->addWidget(new QLabel("暂存扇区 LBA", group), 0, 0);
     formLayout->addWidget(m_scratchLbaEdit, 0, 1);
@@ -455,6 +461,22 @@ void DdmaPage::probeChannels()
         m_capabilityLabel->setText(QStringLiteral("正在探测 DDMA 通道..."));
     }
 
+    // 选中的那块盘要在重建表格后还原回去。"侦测候选扇区"填好 LBA 之后会自动
+    // 重探一次，如果这里不记住选择，用户刚选好的盘会被取消选中，紧接着点
+    // "启用"只会得到一句"请先选中一块磁盘"。必须在 m_diskCache 被新结果覆盖
+    // **之前**读，否则读到的是新表里同一行号上的另一块盘。
+    std::uint32_t previousDeviceIndex = 0U;
+    bool hadSelection = false;
+    if (m_diskTable != nullptr)
+    {
+        const int previousRow = m_diskTable->currentRow();
+        if (previousRow >= 0 && previousRow < static_cast<int>(m_diskCache.size()))
+        {
+            previousDeviceIndex = m_diskCache[static_cast<std::size_t>(previousRow)].deviceIndex;
+            hadSelection = true;
+        }
+    }
+
     const ksword::ark::DriverClient client;
     const ksword::ark::DdmaCapabilityResult result =
         client.queryDdmaCapability(lbaValid, scratchLba, lbaValid);
@@ -494,10 +516,20 @@ void DdmaPage::probeChannels()
         {
             const ksword::ark::DdmaDiskEntry& entry = m_diskCache[static_cast<std::size_t>(row)];
 
+            // 状态里写清楚"走哪条直通"：ATA 与 SCSI 是两条完全不同的路，
+            // 只说"可用"会让人无法判断这块盘到底是怎么通的。
             QString stateText;
-            if (entry.ready())
+            if (entry.ataReady() && entry.scsiReady())
             {
-                stateText = QStringLiteral("可用");
+                stateText = QStringLiteral("可用（ATA 与 SCSI 均可）");
+            }
+            else if (entry.ataReady())
+            {
+                stateText = QStringLiteral("可用（ATA 直通）");
+            }
+            else if (entry.scsiReady())
+            {
+                stateText = QStringLiteral("可用（SCSI 直通，覆盖 NVMe）");
             }
             else if ((entry.diskFlags & KSWORD_ARK_DDMA_DISK_FLAG_PROBE_SKIPPED) != 0UL)
             {
@@ -505,7 +537,7 @@ void DdmaPage::probeChannels()
             }
             else
             {
-                stateText = QStringLiteral("不可用");
+                stateText = QStringLiteral("不可用（两条直通都被拒绝）");
             }
 
             m_diskTable->setItem(row, static_cast<int>(DiskColumn::Index),
@@ -516,12 +548,28 @@ void DdmaPage::probeChannels()
                     : QString::fromStdWString(entry.deviceName)));
             m_diskTable->setItem(row, static_cast<int>(DiskColumn::State),
                 new QTableWidgetItem(stateText));
+            // 两条探测各自的状态都要看得见：只显示一个会让"哪条不行"变成猜。
             m_diskTable->setItem(row, static_cast<int>(DiskColumn::ProbeStatus),
-                new QTableWidgetItem(formatNtStatus(entry.probeStatus)));
+                new QTableWidgetItem(QStringLiteral("ATA %1 / SCSI %2")
+                    .arg(formatNtStatus(entry.probeStatus))
+                    .arg(formatNtStatus(entry.scsiProbeStatus))));
             m_diskTable->setItem(row, static_cast<int>(DiskColumn::SectorSize),
                 new QTableWidgetItem(QString::number(entry.sectorSize)));
         }
         m_diskTable->resizeColumnsToContents();
+
+        // 按 deviceIndex 还原选择，而不是按行号：枚举顺序在两次探测之间不保证不变。
+        if (hadSelection)
+        {
+            for (int row = 0; row < static_cast<int>(m_diskCache.size()); ++row)
+            {
+                if (m_diskCache[static_cast<std::size_t>(row)].deviceIndex == previousDeviceIndex)
+                {
+                    m_diskTable->selectRow(row);
+                    break;
+                }
+            }
+        }
     }
 
     QString capabilityText = QStringLiteral(
@@ -1279,7 +1327,12 @@ void DdmaPage::detectScratchFromUi()
     {
         m_scratchLbaEdit->setText(QString::number(detection.suggestedLba));
     }
-    refreshSessionState();
+
+    // 填完 LBA 立刻重探一次。没有这一步，磁盘表里留着的还是"未探测（需先填写
+    // 暂存 LBA）"的旧结果，用户接着点"启用选中磁盘"就会撞上一句
+    // "这块磁盘没有通过 DMA 探测"——而他刚刚才把 LBA 填好，那句话只会让人困惑。
+    // probeChannels 内部会还原选中行，并在末尾刷新会话状态。
+    probeChannels();
 }
 
 void DdmaPage::activateSelectedDisk()
@@ -1298,13 +1351,17 @@ void DdmaPage::activateSelectedDisk()
     const ksword::ark::DdmaDiskEntry& entry = m_diskCache[static_cast<std::size_t>(row)];
     if (!entry.ready())
     {
-        QMessageBox::warning(
-            this,
-            QStringLiteral("DDMA"),
-            QStringLiteral(
-                "这块磁盘没有通过 DMA 探测，不能作为 DDMA 通道。\n"
-                "请先填写暂存扇区 LBA 再重新探测；探测 NTSTATUS=%1。")
-                .arg(formatNtStatus(entry.probeStatus)));
+        // "压根没探测过"与"探测跑了但被拒绝"是两回事，给的下一步也完全不同：
+        // 前者去填 LBA 再探一次就行，后者说明这块盘根本不接受 ATA 直通，
+        // 再探多少次也没用。把两者混成一句话会让用户在死路上反复尝试。
+        const bool probeSkipped =
+            (entry.diskFlags & KSWORD_ARK_DDMA_DISK_FLAG_PROBE_SKIPPED) != 0UL;
+        const QString message = probeSkipped
+            ? QStringLiteral("这块磁盘还没有做过 DMA 传输探测。请先填写或侦测暂存扇区 LBA，再点“探测可用磁盘”。")
+            : QStringLiteral("这块磁盘的两条直通都被拒绝，不能作为 DDMA 通道，重复探测也不会改变结果。ATA 直通 NTSTATUS=%1，SCSI 直通 NTSTATUS=%2。SCSI 直通覆盖 NVMe 与 SAS/SATA；两条都不通通常意味着这块盘的驱动栈不接受任何直通命令。")
+                  .arg(formatNtStatus(entry.probeStatus))
+                  .arg(formatNtStatus(entry.scsiProbeStatus));
+        QMessageBox::warning(this, QStringLiteral("DDMA"), message);
         return;
     }
 
@@ -1332,6 +1389,46 @@ void DdmaPage::activateSelectedDisk()
 
 void DdmaPage::clearSession()
 {
+    // 侦测会在磁盘上留下一个专属暂存文件。既然那是本页造成的副作用，就必须有
+    // 一条撤销路径——否则用户只能自己去 D 盘找一个隐藏文件。删除放在"清除通道
+    // 配置"里是因为这正是这个文件生命周期的终点：通道都不用了，它也没必要留着。
+    if (!m_scratchFilePath.isEmpty() && QFile::exists(m_scratchFilePath))
+    {
+        const QMessageBox::StandardButton answer = QMessageBox::question(
+            this,
+            QStringLiteral("DDMA"),
+            QStringLiteral("是否同时删除本页创建的专属暂存文件？\n%1\n\n删除后这些簇会交还系统。如果还有别处正在用这个 LBA，请选择“否”。")
+                .arg(m_scratchFilePath),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+        if (answer == QMessageBox::Yes)
+        {
+            if (QFile::remove(m_scratchFilePath))
+            {
+                if (m_scratchDetectLabel != nullptr)
+                {
+                    m_scratchDetectLabel->setText(
+                        QStringLiteral("已删除专属暂存文件 %1。").arg(m_scratchFilePath));
+                    m_scratchDetectLabel->setStyleSheet(
+                        QStringLiteral("color:%1;").arg(KswordTheme::TextSecondaryHex()));
+                }
+            }
+            else if (m_scratchDetectLabel != nullptr)
+            {
+                m_scratchDetectLabel->setText(
+                    QStringLiteral("删除专属暂存文件失败：%1。").arg(m_scratchFilePath));
+                m_scratchDetectLabel->setStyleSheet(
+                    QStringLiteral("color:%1;").arg(KswordTheme::WarningHex()));
+            }
+        }
+    }
+    m_scratchFilePath.clear();
+    if (m_scratchContextView != nullptr)
+    {
+        m_scratchContextView->setRawText(
+            QStringLiteral("尚未侦测。选中一块磁盘后点击“侦测候选扇区”。"));
+    }
+
     m_session = ksword::memory_backend::DdmaSession{};
     // 探测出来的机器属性与会话是否启用无关，保留下来供状态展示继续使用。
     m_session.kernelDebuggerEnabled = m_kernelDebuggerEnabled;

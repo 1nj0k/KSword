@@ -164,6 +164,123 @@ KswordArkDdmaEncodeTaskFile(
     return taskFile;
 }
 
+// ------------------------------------------------------------
+// SCSI 直通（覆盖 NVMe / SAS / SATA / 合成 SCSI）
+// ------------------------------------------------------------
+//
+// 为什么必须有第二条传输：DDMA 真正需要的不是"ATA"，而是一条能把我们指定的
+// 物理页当 DMA 目标的直通通道。IOCTL_ATA_PASS_THROUGH_DIRECT 只是其中一条，
+// 而现代机器基本都是 NVMe，那条路直接返回 STATUS_NOT_SUPPORTED。
+//
+// IOCTL_SCSI_PASS_THROUGH_DIRECT 同样带 _DIRECT（走 MDL，控制器直接 DMA 到
+// 我们给的物理页），而 Windows 的 stornvme.sys 会把 SCSI READ/WRITE 翻译成
+// NVMe 命令。它同时覆盖 NVMe、SAS/SATA 与 Hyper-V 的合成 SCSI 盘。
+//
+// 注意 CDB 里的传输长度单位是**块**（逻辑扇区），不是字节——用字节数去填会让
+// 控制器读写出上百倍的范围。所以编码函数必须拿到真实扇区大小。
+
+#define KSWORD_ARK_SCSI_CMD_READ_10 0x28
+#define KSWORD_ARK_SCSI_CMD_WRITE_10 0x2A
+#define KSWORD_ARK_SCSI_CMD_READ_16 0x88
+#define KSWORD_ARK_SCSI_CMD_WRITE_16 0x8A
+
+#define KSWORD_ARK_SCSI_CDB_BYTES 16
+
+// READ(10)/WRITE(10) 的 LBA 是 32 位、块数是 16 位；超出就必须换 16 字节 CDB。
+#define KSWORD_ARK_DDMA_LBA32_LIMIT 0x100000000ULL
+
+// KSWORD_ARK_DDMA_CDB：一条 SCSI 命令描述块。
+typedef struct _KSWORD_ARK_DDMA_CDB
+{
+    unsigned char cdb[KSWORD_ARK_SCSI_CDB_BYTES];
+    unsigned char cdbLength;    // 实际有效长度：10 或 16。
+    unsigned char valid;        // 0 表示参数被拒绝，其余字段无意义。
+} KSWORD_ARK_DDMA_CDB;
+
+/*
+ * KswordArkDdmaEncodeCdb：把 LBA、传输字节数与读写方向编码成 SCSI CDB。
+ *
+ * 输入：Lba 为起始逻辑块号；TransferBytes 为本次传输字节数；SectorSize 为该盘
+ * 的逻辑扇区大小；IsWrite 非零表示写盘。
+ *
+ * 处理：TransferBytes 必须是 SectorSize 的整数倍——CDB 里填的是块数，除不尽就
+ * 说明调用方拿字节数当块数用了。LBA 与块数放得进 32/16 位时用 10 字节 CDB，
+ * 否则用 16 字节 CDB。两种 CDB 里的多字节字段都是**大端**，这是 SCSI 的规定，
+ * 与 x86 相反，写反了就会去读写一个完全不同的扇区。
+ *
+ * 返回：填好的 CDB；参数越界或除不尽时 valid 为 0。
+ */
+static __inline KSWORD_ARK_DDMA_CDB
+KswordArkDdmaEncodeCdb(
+    unsigned long long Lba,
+    unsigned long TransferBytes,
+    unsigned long SectorSize,
+    int IsWrite
+    )
+{
+    KSWORD_ARK_DDMA_CDB command;
+    unsigned long long blocks = 0ULL;
+    int index = 0;
+
+    for (index = 0; index < KSWORD_ARK_SCSI_CDB_BYTES; ++index) {
+        command.cdb[index] = 0;
+    }
+    command.cdbLength = 0;
+    command.valid = 0;
+
+    if (SectorSize == 0UL || TransferBytes == 0UL) {
+        return command;
+    }
+    if ((TransferBytes % SectorSize) != 0UL) {
+        /* 除不尽说明调用方把字节数当块数用了，拒绝而不是四舍五入。 */
+        return command;
+    }
+    blocks = (unsigned long long)(TransferBytes / SectorSize);
+    if (blocks == 0ULL || blocks > 0xFFFFFFFFULL) {
+        return command;
+    }
+    /* 区间不得跨过 64 位块号上限。 */
+    if ((0xFFFFFFFFFFFFFFFFULL - Lba) < blocks) {
+        return command;
+    }
+
+    if (Lba < KSWORD_ARK_DDMA_LBA32_LIMIT && blocks <= 0xFFFFULL) {
+        /* READ(10)/WRITE(10)：LBA 在 [2..5]，块数在 [7..8]，均为大端。 */
+        command.cdb[0] = (unsigned char)(IsWrite
+            ? KSWORD_ARK_SCSI_CMD_WRITE_10
+            : KSWORD_ARK_SCSI_CMD_READ_10);
+        command.cdb[2] = (unsigned char)((Lba >> 24) & 0xFFULL);
+        command.cdb[3] = (unsigned char)((Lba >> 16) & 0xFFULL);
+        command.cdb[4] = (unsigned char)((Lba >> 8) & 0xFFULL);
+        command.cdb[5] = (unsigned char)(Lba & 0xFFULL);
+        command.cdb[7] = (unsigned char)((blocks >> 8) & 0xFFULL);
+        command.cdb[8] = (unsigned char)(blocks & 0xFFULL);
+        command.cdbLength = 10U;
+    }
+    else {
+        /* READ(16)/WRITE(16)：LBA 在 [2..9]，块数在 [10..13]，均为大端。 */
+        command.cdb[0] = (unsigned char)(IsWrite
+            ? KSWORD_ARK_SCSI_CMD_WRITE_16
+            : KSWORD_ARK_SCSI_CMD_READ_16);
+        command.cdb[2] = (unsigned char)((Lba >> 56) & 0xFFULL);
+        command.cdb[3] = (unsigned char)((Lba >> 48) & 0xFFULL);
+        command.cdb[4] = (unsigned char)((Lba >> 40) & 0xFFULL);
+        command.cdb[5] = (unsigned char)((Lba >> 32) & 0xFFULL);
+        command.cdb[6] = (unsigned char)((Lba >> 24) & 0xFFULL);
+        command.cdb[7] = (unsigned char)((Lba >> 16) & 0xFFULL);
+        command.cdb[8] = (unsigned char)((Lba >> 8) & 0xFFULL);
+        command.cdb[9] = (unsigned char)(Lba & 0xFFULL);
+        command.cdb[10] = (unsigned char)((blocks >> 24) & 0xFFULL);
+        command.cdb[11] = (unsigned char)((blocks >> 16) & 0xFFULL);
+        command.cdb[12] = (unsigned char)((blocks >> 8) & 0xFFULL);
+        command.cdb[13] = (unsigned char)(blocks & 0xFFULL);
+        command.cdbLength = 16U;
+    }
+
+    command.valid = 1;
+    return command;
+}
+
 /*
  * KswordArkDdmaIsPhysicalRangeValid：校验一次 DDMA 传输的物理区间。
  *

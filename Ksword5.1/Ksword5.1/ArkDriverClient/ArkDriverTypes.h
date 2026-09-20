@@ -1207,14 +1207,27 @@ namespace ksword::ark
     {
         std::uint32_t deviceIndex = 0;  // deviceIndex：\Driver\Disk 设备列表下标，读写请求按它定位。
         std::uint32_t diskFlags = 0;    // diskFlags：KSWORD_ARK_DDMA_DISK_FLAG_*。
-        long probeStatus = 0;           // probeStatus：探测用 ATA DMA 读命令的 NTSTATUS。
-        std::uint32_t sectorSize = 0;   // sectorSize：扇区字节数。
+        long probeStatus = 0;           // probeStatus：ATA 直通探测的 NTSTATUS。
+        long scsiProbeStatus = 0;       // scsiProbeStatus：SCSI 直通探测的 NTSTATUS。
+        std::uint32_t sectorSize = 0;   // sectorSize：真实逻辑扇区字节数。
         std::wstring deviceName;        // deviceName：设备对象名，例如 \Device\Harddisk0\DR0。
 
-        // ready：这块盘真的完成过一次 ATA DMA 传输，可以拿来做 DDMA。
+        // ready：这块盘至少有一条直通真的完成过一次 DMA 传输。
+        // 判据刻意不是"ATA 可用"——DDMA 要的是能把指定物理页当 DMA 目标的通道，
+        // 而现代机器基本都是 NVMe，只认 ATA 会把绝大多数机器直接判死。
         bool ready() const
         {
+            return (diskFlags & KSWORD_ARK_DDMA_DISK_FLAG_ANY_DMA_READY) != 0UL;
+        }
+
+        // ataReady / scsiReady：分别说明哪条通道成立，供界面解释"走的是哪条"。
+        bool ataReady() const
+        {
             return (diskFlags & KSWORD_ARK_DDMA_DISK_FLAG_ATA_DMA_READY) != 0UL;
+        }
+        bool scsiReady() const
+        {
+            return (diskFlags & KSWORD_ARK_DDMA_DISK_FLAG_SCSI_DMA_READY) != 0UL;
         }
     };
 
