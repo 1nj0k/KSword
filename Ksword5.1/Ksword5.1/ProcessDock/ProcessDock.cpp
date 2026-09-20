@@ -11204,10 +11204,28 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
     advancedTerminateSubMenu->setToolTipsVisible(true);
     std::vector<QAction*> advancedTerminateActions;
     advancedTerminateActions.reserve(terminateMethodTable().size());
-    // 两条分节线按权限等级画：这一条管下面整张表（十四条全在用户态），R0 那条
-    // 在表跑完之后。分类不画线，见 TerminateMethodEntry::groupName 的说明。
-    advancedTerminateSubMenu->addSection(
-        ks::i18n::sourceText(QStringLiteral("R3（用户态）")));
+    // addRingHeader：画一条带字的分组标题。
+    //
+    // **不能用 QMenu::addSection。** 本菜单的样式表（buildThreadContextMenuStyle）
+    // 接管了 QMenu::separator 并把高度写死成 1px，而 addSection 本质就是"带文字
+    // 的分隔符"——文字没有地方渲染，画出来跟普通分隔线一模一样。这一点很难在
+    // 代码里看出来：addSection 调用成功、字符串也确实编进了二进制，只是永远不
+    // 显示。本文件另外那处 r0PplLevelSubMenu 的 addSection 多半也是这个下场。
+    //
+    // 禁用项则走 QMenu::item:disabled，那条规则在同一份样式表里明确给了颜色，
+    // 所以一定看得见；禁用项也不参与键盘导航，不会被误点。
+    const auto addRingHeader = [advancedTerminateSubMenu](const QString& title) {
+        if (!advancedTerminateSubMenu->isEmpty())
+        {
+            advancedTerminateSubMenu->addSeparator();
+        }
+        QAction* const headerAction = advancedTerminateSubMenu->addAction(title);
+        headerAction->setEnabled(false);
+    };
+
+    // 两条标题按权限等级分：这一条管下面整张表（十四条全在用户态），R0 那条在
+    // 表跑完之后。分类不单独起标题，见 TerminateMethodEntry::groupName 的说明。
+    addRingHeader(ks::i18n::sourceText(QStringLiteral("R3（用户态）")));
     for (std::size_t methodIndex = 0; methodIndex < terminateMethodTable().size(); ++methodIndex)
     {
         const TerminateMethodEntry& entry = terminateMethodTable()[methodIndex];
@@ -11228,9 +11246,8 @@ void ProcessDock::showTableContextMenu(const QPoint& localPosition)
     // R0 那一节。这几条不走上面的循环，是因为它们不在 terminateMethodTable()
     // 里：表里每条的签名是 (pid, detail*)，而 R0 这条要带上创建时间做 PID 复用
     // 校验，塞进表就得把那个参数丢掉——校验没了不会报错，只会在 PID 被复用时
-    // 结束错进程。分节标题写法与表里一致，换语言时两节走同一条翻译路径。
-    advancedTerminateSubMenu->addSection(
-        ks::i18n::sourceText(QStringLiteral("R0（内核驱动）")));
+    // 结束错进程。
+    addRingHeader(ks::i18n::sourceText(QStringLiteral("R0（内核驱动）")));
     QAction* advancedR0OnlyAction = advancedTerminateSubMenu->addAction(
         buildR0ActionIcon(":/Icon/process_terminate.svg"),
         processContextText("process.menu.advanced_terminate_r0",
