@@ -14,6 +14,7 @@
 #include "../UI/WindowPickerButton.h" // ks::ui::WindowPickerButton：十字准星拾取按钮，按值出现在成员指针里。
 #include "MemoryAccessBackend.h" // 访问后端枚举与 DDMA 会话：按值出现在成员与返回类型里。
 #include "TamperDetectionPage.h" // ksword::memory_dock::TamperDetectionPage：按值出现在成员指针与模块同步调用里。
+#include "DmaProcessOpPage.h" // ksword::memory_dock::DmaProcessOpPage：同上。
 
 #include <QVector>     // QVector：保存反汇编解码结果行。
 #include <QWidget>
@@ -400,6 +401,10 @@ private:
     // initializeTamperDetectionTab：
     // - 作用：挂载“篡改检测”页，并把附加进程与模块列表同步给它。
     void initializeTamperDetectionTab();
+
+    // initializeDmaProcessOpTab：
+    // - 作用：挂载“DMA 进程操作”页并同步附加进程。
+    void initializeDmaProcessOpTab();
 
     // createBackendSelector：
     // - 作用：创建一个统一样式的"访问后端"下拉框；
@@ -1255,6 +1260,7 @@ private:
 
     DdmaPage* m_ddmaPage = nullptr;           // DDMA 通道配置与自检页面。
     ksword::memory_dock::TamperDetectionPage* m_tamperDetectionPage = nullptr; // 多路径交叉篡改检测页。
+    ksword::memory_dock::DmaProcessOpPage* m_dmaProcessOpPage = nullptr; // 基于 DMA 的进程操作页。
 
     // 三个"访问后端"下拉分别挂在搜索、查看器与驱动读写页上。
     // 它们共享 m_ddmaPage 里的同一份会话配置，切换互不影响。

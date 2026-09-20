@@ -310,6 +310,7 @@
     <ClCompile Include="MemoryDock\MemoryAccessBackend.cpp" />
     <ClCompile Include="MemoryDock\DdmaPage.cpp" />
     <ClCompile Include="MemoryDock\TamperDetectionPage.cpp" />
+    <ClCompile Include="MemoryDock\DmaProcessOpPage.cpp" />
     <ClCompile Include="MemoryDock\MemoryDock.ViewBreakpointUtil.cpp" />
     <ClCompile Include="MiscDock\BootEditor\BootEditorTab.cpp" />
     <ClCompile Include="MiscDock\MiscDock.cpp" />
@@ -546,6 +547,7 @@
     <ClCompile Include="..\..\shared\evidence\MemoryRegionEvidence.cpp" />
     <ClCompile Include="..\..\shared\evidence\DdmaScratchPlan.cpp" />
     <ClCompile Include="..\..\shared\evidence\MemoryTamperCrossView.cpp" />
+    <ClCompile Include="..\..\shared\evidence\DmaProcessOpPlan.cpp" />
     <ClCompile Include="..\..\shared\evidence\InjectionSurvey.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverCapability.cpp" />
     <ClCompile Include="ArkDriverClient\ArkDriverDynData.cpp" />
@@ -726,6 +728,7 @@
     <ClInclude Include="MemoryDock\MemoryAccessBackend.h" />
     <ClInclude Include="MemoryDock\DdmaPage.h" />
     <ClInclude Include="MemoryDock\TamperDetectionPage.h" />
+    <ClInclude Include="MemoryDock\DmaProcessOpPage.h" />
     <QtMoc Include="MiscDock\BootEditor\BootEditorTab.h" />
     <ClInclude Include="MiscDock\ApplicationControlPage.h" />
     <ClInclude Include="MiscDock\SoundSource\SoundSourceDetector.h" />

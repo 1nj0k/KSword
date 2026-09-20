@@ -77,6 +77,8 @@
     <ClCompile Include="DdmaPlanTests.cpp" />
     <ClCompile Include="NumericTextParseTests.cpp" />
     <ClCompile Include="MemoryTamperCrossViewTests.cpp" />
+    <ClCompile Include="DmaProcessOpPlanTests.cpp" />
+    <ClCompile Include="..\shared\evidence\DmaProcessOpPlan.cpp" />
     <ClCompile Include="..\shared\evidence\MemoryTamperCrossView.cpp" />
     <ClCompile Include="HookPatchComposeTests.cpp" />
     <ClCompile Include="..\shared\evidence\HookPatchCompose.cpp" />

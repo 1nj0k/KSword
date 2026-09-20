@@ -28,6 +28,7 @@
     { "name": "DDMA plan",           "minAssertions": 97 },
     { "name": "ADDR numeric text",   "minAssertions": 60 },
     { "name": "T memory tamper cross-view", "minAssertions": 40 },
+    { "name": "DMA process op plan", "minAssertions": 35 },
     { "name": "HOOK patch compose",  "minAssertions": 182 }
   ]
 }
