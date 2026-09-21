@@ -1325,6 +1325,7 @@
     "process.table.header.gpu_shared_memory": "Shared GPU memory",
     "process.table.header.process_type": "Type",
     "process.table.header.cpu_core": "CPU cores",
+    "process.table.header.injection_surface": "Injection surface",
     "process.table.cell.status_running": "Running",
     "process.table.cell.status_suspended": "Suspended",
     "process.table.cell.job_object_member": "In job",

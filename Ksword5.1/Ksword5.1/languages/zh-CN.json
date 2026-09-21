@@ -1325,6 +1325,7 @@
     "process.table.header.gpu_shared_memory": "共享 GPU 内存",
     "process.table.header.process_type": "类型",
     "process.table.header.cpu_core": "CPU核心",
+    "process.table.header.injection_surface": "注入面",
     "process.table.cell.status_running": "正在运行",
     "process.table.cell.status_suspended": "已挂起",
     "process.table.cell.job_object_member": "归属作业",
